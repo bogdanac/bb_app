@@ -7,7 +7,7 @@ import 'dart:convert';
 import 'fasting_notifier.dart';
 
 class FastingCard extends StatefulWidget {
-  const FastingCard({Key? key}) : super(key: key);
+  const FastingCard({super.key});
 
   @override
   State<FastingCard> createState() => _FastingCardState();
@@ -41,7 +41,7 @@ class _FastingCardState extends State<FastingCard> {
   }
 
   // Load fasting state from SharedPreferences (sincronizat cu FastingScreen)
-  _loadFastingState() async {
+  Future<void> _loadFastingState() async {
     final prefs = await SharedPreferences.getInstance();
 
     // Folosim aceleași chei ca în FastingScreen pentru sincronizare perfectă
@@ -79,7 +79,7 @@ class _FastingCardState extends State<FastingCard> {
   }
 
   // Save fasting state (sincronizat cu FastingScreen)
-  _saveFastingState() async {
+  Future<void> _saveFastingState() async {
     final prefs = await SharedPreferences.getInstance();
 
     await prefs.setBool('is_fasting', isFasting);
@@ -132,7 +132,7 @@ class _FastingCardState extends State<FastingCard> {
   }
 
   // Start fasting timer
-  _startTimer() {
+  void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (fastingStartTime != null && fastingEndTime != null) {
@@ -147,7 +147,7 @@ class _FastingCardState extends State<FastingCard> {
   }
 
   // Start fasting (compatible cu FastingScreen)
-  _startFast() {
+  void _startFast() {
     HapticFeedback.mediumImpact();
 
     final recommendedType = _getRecommendedFastType();
@@ -184,7 +184,7 @@ class _FastingCardState extends State<FastingCard> {
   }
 
   // Stop fasting (compatible cu FastingScreen)
-  _stopFast() {
+  void _stopFast() {
     HapticFeedback.mediumImpact();
     _timer?.cancel();
 
@@ -203,7 +203,7 @@ class _FastingCardState extends State<FastingCard> {
   }
 
   // Save to history (compatible cu FastingScreen)
-  _saveToHistory() async {
+  Future<void> _saveToHistory() async {
     if (fastingStartTime == null) return;
 
     final prefs = await SharedPreferences.getInstance();

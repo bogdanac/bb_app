@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:math';
 
 class MenstrualCycleCard extends StatefulWidget {
   final VoidCallback? onTap;
@@ -20,7 +19,6 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
   DateTime? _lastPeriodStart;
   DateTime? _lastPeriodEnd;
   int _averageCycleLength = 31;
-  List<Map<String, DateTime>> _periodRanges = [];
   bool _isExpanded = false; // New state for expansion
 
   late AnimationController _animationController;
@@ -44,7 +42,8 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
     _animationController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
-    )..repeat();
+    )
+      ..repeat();
 
     _scaleAnimation = Tween<double>(
       begin: 1.0,
@@ -77,16 +76,6 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
     // Load average cycle length
     _averageCycleLength = prefs.getInt('average_cycle_length') ?? 31;
 
-    // Load period ranges (same format as CycleScreen)
-    final rangesStr = prefs.getStringList('period_ranges') ?? [];
-    _periodRanges = rangesStr.map((range) {
-      final parts = range.split('|');
-      return {
-        'start': DateTime.parse(parts[0]),
-        'end': DateTime.parse(parts[1]),
-      };
-    }).toList();
-
     if (mounted) setState(() {});
   }
 
@@ -99,15 +88,20 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
     if (_lastPeriodStart == null) return "No data available";
 
     final now = DateTime.now();
-    final daysSinceStart = now.difference(_lastPeriodStart!).inDays;
+    final daysSinceStart = now
+        .difference(_lastPeriodStart!)
+        .inDays;
 
     if (_isCurrentlyOnPeriod()) {
       return "Menstruation (Day ${daysSinceStart + 1})";
     }
 
     if (_lastPeriodEnd != null) {
-      final daysSinceEnd = now.difference(_lastPeriodEnd!).inDays;
-      final totalCycleDays = _lastPeriodEnd!.difference(_lastPeriodStart!).inDays + daysSinceEnd + 1;
+      final daysSinceEnd = now
+          .difference(_lastPeriodEnd!)
+          .inDays;
+      final totalCycleDays = _lastPeriodEnd!.difference(_lastPeriodStart!)
+          .inDays + daysSinceEnd + 1;
 
       return _getPhaseFromCycleDays(totalCycleDays);
     } else {
@@ -137,8 +131,11 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
   String _getCycleInfo() {
     if (_lastPeriodStart == null) return "Track your first period to begin";
 
-    final nextPeriodStart = _lastPeriodStart!.add(Duration(days: _averageCycleLength));
-    final daysUntilPeriod = nextPeriodStart.difference(DateTime.now()).inDays;
+    final nextPeriodStart = _lastPeriodStart!.add(
+        Duration(days: _averageCycleLength));
+    final daysUntilPeriod = nextPeriodStart
+        .difference(DateTime.now())
+        .inDays;
 
     // Period expected today or overdue
     if (daysUntilPeriod <= 0) {
@@ -165,12 +162,18 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
 
     // Current period info
     if (_isCurrentlyOnPeriod()) {
-      final currentDay = DateTime.now().difference(_lastPeriodStart!).inDays + 1;
+      final currentDay = DateTime
+          .now()
+          .difference(_lastPeriodStart!)
+          .inDays + 1;
       return "Day $currentDay of period";
     }
 
     // Cycle day info
-    final daysSinceStart = DateTime.now().difference(_lastPeriodStart!).inDays + 1;
+    final daysSinceStart = DateTime
+        .now()
+        .difference(_lastPeriodStart!)
+        .inDays + 1;
 
     if (daysSinceStart <= 11) {
       return "Back in the game";
@@ -331,64 +334,6 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
                     ),
                   ],
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatChip(String label, String value, IconData icon) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: _getPhaseColor().withOpacity(0.3),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: _getPhaseColor().withOpacity(0.1),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: _getPhaseColor(),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade800,
-                    ),
-                  ),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
               ),
             ),
           ],

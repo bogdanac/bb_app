@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
-import 'dart:async';
-import 'dart:math';
 
 // FAST EDIT DIALOG
 class FastEditDialog extends StatefulWidget {
@@ -12,11 +8,11 @@ class FastEditDialog extends StatefulWidget {
   final Function(DateTime, DateTime) onSave;
 
   const FastEditDialog({
-    Key? key,
+    super.key,
     required this.startTime,
     required this.endTime,
     required this.onSave,
-  }) : super(key: key);
+  });
 
   @override
   State<FastEditDialog> createState() => _FastEditDialogState();

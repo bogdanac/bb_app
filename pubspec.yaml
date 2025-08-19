@@ -55,7 +55,9 @@ dependencies:
 flutter_icons:
   android: true
   ios: true
-  image_path: "assets/icon/ic_launcher.png"
+  image_path: "assets/icon/bb_app_icon.png"
+  adaptive_icon_background: "#000000" # sau o culoare dorită
+  adaptive_icon_foreground: "assets/icon/bb_app_icon.png" # poți folosi aceeași imagine
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

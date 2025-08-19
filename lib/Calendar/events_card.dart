@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
-import 'dart:async';
-import 'dart:math';
 
 // CALENDAR EVENTS CARD
 class CalendarEventsCard extends StatelessWidget {
-  const CalendarEventsCard({Key? key}) : super(key: key);
+  const CalendarEventsCard({super.key});
 
   @override
   Widget build(BuildContext context) {

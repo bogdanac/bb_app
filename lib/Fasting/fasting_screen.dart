@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
-import 'dart:math' as math;
 import 'fasting_history_screen.dart';
 import 'fasting_notifier.dart';
 
@@ -289,7 +288,6 @@ class _FastingScreenState extends State<FastingScreen>
     }
 
     final hoursElapsed = _elapsedTime.inHours;
-    final totalHours = _totalFastDuration.inHours;
 
     if (hoursElapsed < 4) {
       return {

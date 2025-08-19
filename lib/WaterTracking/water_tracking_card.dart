@@ -71,7 +71,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
   }
 
   void _updateProgressAnimation() {
-    const int goal = 1800;
+    const int goal = 1500;
     final double currentProgress = _progressAnimation.value;
     final double newProgress = (widget.waterIntake / goal).clamp(0.0, 1.0);
 
@@ -108,10 +108,9 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
 
   @override
   Widget build(BuildContext context) {
-    const int goal = 1750;
-    const int hideThreshold = 1750;
+    const int hideThreshold = 1500;
 
-    // Hide card if water intake is over 1700ml
+    // Hide card if water intake is over 1500ml
     if (widget.waterIntake > hideThreshold) {
       return const SizedBox.shrink();
     }
@@ -140,25 +139,89 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                   color: Colors.blue,
                   size: 28,
                 ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Water Tracking',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                Text(
-                  '${widget.waterIntake}ml',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.blue,
+                const SizedBox(width: 16),
+                // Înlocuiește partea cu progress bar din WaterTrackingCard
+
+                Expanded(
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Progress bar container - păstrează întotdeauna width-ul complet
+                      Container(
+                        height: 32,
+                        width: double.infinity, // Forțează width complet
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          color: Colors.red.withOpacity(0.3),
+                        ),
+                        child: AnimatedBuilder(
+                          animation: _progressAnimation,
+                          builder: (context, child) {
+                            return Align(
+                              alignment: Alignment.centerLeft,
+                              child: FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: _progressAnimation.value,
+                                child: Container(
+                                  height: 32, // Menține înălțimea
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16), // Ajustat pentru înălțimea de 32
+                                    gradient: LinearGradient(
+                                      colors: _progressAnimation.value > 0.9
+                                          ? [Colors.green, Colors.lightGreen]
+                                          : [Colors.blue, Colors.lightBlue],
+                                    ),
+                                    boxShadow: _progressAnimation.value > 0.0
+                                        ? [
+                                      BoxShadow(
+                                        color: Colors.blue.withOpacity(0.3),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      // Progress text overlay
+                      AnimatedBuilder(
+                        animation: _progressAnimation,
+                        builder: (context, child) {
+                          const int goal = 1500;
+                          final int percentage = (_progressAnimation.value * 100).round();
+                          final int remaining = (goal - widget.waterIntake).clamp(0, goal);
+
+                          return Text(
+                            remaining > 0
+                                ? '${remaining}ml left'
+                                : '🎉 Goal reached!',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _progressAnimation.value > 0.5
+                                  ? Colors.white
+                                  : Colors.grey[400],
+                              shadows: _progressAnimation.value > 0.5
+                                  ? [
+                                Shadow(
+                                  offset: const Offset(0, 1),
+                                  blurRadius: 2,
+                                  color: Colors.black.withOpacity(0.3),
+                                ),
+                              ]
+                                  : null,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
+                const SizedBox(width: 16),
                 ScaleTransition(
                   scale: _buttonScaleAnimation,
                   child: ElevatedButton(
@@ -182,43 +245,6 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                   ),
                 ),
                 const SizedBox(width: 16),
-                Expanded(
-                  child: Container(
-                    height: 32,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      color: Colors.red.withOpacity(0.3),
-                    ),
-                    child: AnimatedBuilder(
-                      animation: _progressAnimation,
-                      builder: (context, child) {
-                        return FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: _progressAnimation.value,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10),
-                              gradient: LinearGradient(
-                                colors: _progressAnimation.value > 0.9
-                                    ? [Colors.green, Colors.lightGreen]
-                                    : [Colors.blue, Colors.lightBlue],
-                              ),
-                              boxShadow: _progressAnimation.value > 0.0
-                                  ? [
-                                BoxShadow(
-                                  color: Colors.blue.withOpacity(0.3),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
-                                  : null,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
               ],
             ),
           ],

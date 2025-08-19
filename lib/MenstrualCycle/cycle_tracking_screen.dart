@@ -192,14 +192,6 @@ class _CycleScreenState extends State<CycleScreen> {
         date.isBefore(nextPeriodEnd.add(const Duration(days: 1)));
   }
 
-  bool _isPrePeriodWarning(DateTime date) {
-    if (_lastPeriodStart == null) return false;
-
-    final nextPeriodStart = _lastPeriodStart!.add(Duration(days: _averageCycleLength));
-    final daysBefore = nextPeriodStart.difference(date).inDays;
-    return daysBefore >= 0 && daysBefore <= 6;
-  }
-
   String _getCyclePhase() {
     if (_lastPeriodStart == null) return "No data available";
 
@@ -961,26 +953,6 @@ class _CycleScreenState extends State<CycleScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildLegendItem(Color color, String label) {
-    return Row(
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 10, color: Colors.grey),
-        ),
-      ],
     );
   }
 

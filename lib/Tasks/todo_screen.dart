@@ -1,13 +1,10 @@
 import 'dart:convert';
-
 import 'package:bb_app/Tasks/task_card_widget.dart';
 import 'package:bb_app/Tasks/task_categories_screen.dart';
 import 'package:bb_app/Tasks/task_edit_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
-import 'dart:async';
 import 'dart:math';
 import 'tasks_data_models.dart';
 
