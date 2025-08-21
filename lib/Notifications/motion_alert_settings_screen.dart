@@ -1,0 +1,463 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import '../theme/app_colors.dart';
+import 'notification_listener_service.dart';
+
+class MotionAlertSettingsScreen extends StatefulWidget {
+  const MotionAlertSettingsScreen({Key? key}) : super(key: key);
+
+  @override
+  State<MotionAlertSettingsScreen> createState() => _MotionAlertSettingsScreenState();
+}
+
+class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
+  bool _isEnabled = false;
+  bool _hasPermission = false;
+  List<Map<String, dynamic>> _monitoredApps = [];
+  List<Map<String, String>> _availableApps = [];
+  bool _isLoading = true;
+  bool _isLoadingApps = false;
+  bool _isRefreshingPermission = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeEverything();
+  }
+
+  Future<void> _initializeEverything() async {
+    try {
+      await _loadSettings();
+      await _checkPermission();
+      
+      // If we have permission, load all apps immediately
+      if (_hasPermission) {
+        setState(() {
+          _isLoadingApps = true;
+        });
+        await _loadAllAvailableApps();
+      } else {
+        // Show common camera apps as fallback
+        setState(() {
+          _availableApps = NotificationListenerService.getCommonCameraApps();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error initializing motion alert settings: $e');
+      // Fallback to common apps if initialization fails
+      if (mounted) {
+        setState(() {
+          _availableApps = NotificationListenerService.getCommonCameraApps();
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final settingsJson = prefs.getString('notification_alarm_settings');
+      
+      if (settingsJson != null) {
+        final settings = json.decode(settingsJson) as Map<String, dynamic>;
+        setState(() {
+          _isEnabled = settings['enabled'] ?? false;
+          _monitoredApps = List<Map<String, dynamic>>.from(settings['monitoredApps'] ?? []);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading settings: $e');
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final settings = {
+        'enabled': _isEnabled,
+        'nightModeOnly': true,
+        'monitoredApps': _monitoredApps,
+        'keywords': ['person', 'detected'],
+      };
+      
+      await prefs.setString('notification_alarm_settings', json.encode(settings));
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Settings saved successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error saving settings: $e');
+    }
+  }
+
+  Future<void> _checkPermission() async {
+    try {
+      final hasPermission = await NotificationListenerService.isPermissionGranted();
+      setState(() {
+        _hasPermission = hasPermission;
+      });
+    } catch (e) {
+      debugPrint('Error checking permission: $e');
+    }
+  }
+
+  Future<void> _requestPermission() async {
+    try {
+      setState(() {
+        _isRefreshingPermission = true;
+      });
+      
+      await NotificationListenerService.requestPermission();
+      
+      // Wait a bit longer for user to grant permission
+      await Future.delayed(const Duration(seconds: 2));
+      
+      // Check permission status
+      await _checkPermission();
+      
+      // If permission granted, load all apps
+      if (_hasPermission) {
+        setState(() {
+          _isLoadingApps = true;
+        });
+        await _loadAllAvailableApps();
+      }
+      
+    } catch (e) {
+      debugPrint('Error requesting permission: $e');
+    } finally {
+      setState(() {
+        _isRefreshingPermission = false;
+      });
+    }
+  }
+
+  Future<void> _loadAllAvailableApps() async {
+    try {
+      final apps = await NotificationListenerService.getInstalledApps();
+      setState(() {
+        _availableApps = apps;
+        _isLoadingApps = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading apps: $e');
+      setState(() {
+        _isLoadingApps = false;
+      });
+    }
+  }
+
+  void _toggleApp(String packageName, String appName) {
+    setState(() {
+      final existingIndex = _monitoredApps.indexWhere((app) => app['packageName'] == packageName);
+      
+      if (existingIndex >= 0) {
+        _monitoredApps[existingIndex]['enabled'] = !_monitoredApps[existingIndex]['enabled'];
+      } else {
+        _monitoredApps.add({
+          'packageName': packageName,
+          'appName': appName,
+          'enabled': true,
+        });
+      }
+    });
+    _saveSettings();
+  }
+
+  bool _isAppMonitored(String packageName) {
+    final app = _monitoredApps.firstWhere(
+      (app) => app['packageName'] == packageName,
+      orElse: () => {'enabled': false},
+    );
+    return app['enabled'] ?? false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Night Motion Alerts'),
+          backgroundColor: Colors.transparent,
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Night Motion Alerts'),
+        backgroundColor: Colors.transparent,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Simple description
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(Icons.nightlight_round, color: AppColors.purple, size: 28),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Get loud alerts when your security cameras detect motion at night (22:00-08:00)',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 20),
+            
+            // Step 1: Permission
+            Card(
+              color: _hasPermission ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _hasPermission ? Icons.check_circle : Icons.looks_one_rounded,
+                          color: _hasPermission ? Colors.green : AppColors.orange,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          _hasPermission ? 'Permission Granted ✓' : 'Step 1: Grant Permission',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    if (!_hasPermission) ...[
+                      const SizedBox(height: 12),
+                      _isRefreshingPermission
+                        ? const Row(
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              SizedBox(width: 12),
+                              Text('Checking permission...')
+                            ],
+                          )
+                        : ElevatedButton(
+                            onPressed: _requestPermission,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.orange,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('Grant Notification Access'),
+                          ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Step 2: Enable alerts
+            Card(
+              color: _isEnabled ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _isEnabled ? Icons.check_circle : Icons.looks_two_rounded,
+                          color: _isEnabled ? Colors.green : (_hasPermission ? AppColors.purple : Colors.grey),
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Step 2: Enable Night Alerts',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      title: const Text('Enable Night Alerts'),
+                      subtitle: const Text('Trigger loud alarm when motion detected'),
+                      value: _isEnabled,
+                      onChanged: _hasPermission ? (value) {
+                        setState(() {
+                          _isEnabled = value;
+                        });
+                        _saveSettings();
+                      } : null,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Step 3: Select app
+            Card(
+              color: _monitoredApps.any((app) => app['enabled'] == true) 
+                ? Colors.green.withOpacity(0.1) 
+                : Colors.grey.withOpacity(0.1),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _monitoredApps.any((app) => app['enabled'] == true) 
+                            ? Icons.check_circle 
+                            : Icons.looks_3_rounded,
+                          color: _monitoredApps.any((app) => app['enabled'] == true) 
+                            ? Colors.green 
+                            : (_hasPermission && _isEnabled ? AppColors.coral : Colors.grey),
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Step 3: Select Security Camera App',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    if (!_hasPermission || !_isEnabled)
+                      const Text(
+                        'Complete steps above first',
+                        style: TextStyle(color: Colors.grey),
+                      )
+                    else if (_isLoadingApps)
+                      const Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Loading apps...')
+                        ],
+                      )
+                    else if (_availableApps.isEmpty)
+                      const Text(
+                        'No apps found. Try refreshing by toggling permission.',
+                        style: TextStyle(color: Colors.grey),
+                      )
+                    else
+                      // Scrollable app list
+                      Container(
+                        height: 200,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ListView.builder(
+                          itemCount: _availableApps.length,
+                          itemBuilder: (context, index) {
+                            final app = _availableApps[index];
+                            final isMonitored = _isAppMonitored(app['packageName'] ?? '');
+                            return CheckboxListTile(
+                              title: Text(app['appName'] ?? 'Unknown'),
+                              subtitle: Text(app['packageName'] ?? ''),
+                              value: isMonitored,
+                              onChanged: (value) {
+                                _toggleApp(app['packageName'] ?? '', app['appName'] ?? '');
+                              },
+                              dense: true,
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Test button
+            if (_isEnabled && _hasPermission && _monitoredApps.any((app) => app['enabled'] == true))
+              Card(
+                color: Colors.blue.withOpacity(0.1),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Test Your Setup',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                NotificationListenerService.triggerLoudAlarm(
+                                  'Person Detected', 
+                                  'Motion detected in camera view'
+                                );
+                              },
+                              icon: const Icon(Icons.volume_up_rounded),
+                              label: const Text('Test Alarm'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.orange,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: () {
+                              NotificationListenerService.stopAlarm();
+                            },
+                            icon: const Icon(Icons.stop_rounded),
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

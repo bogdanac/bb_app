@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
@@ -92,7 +93,7 @@ class _CycleScreenState extends State<CycleScreen> {
 
     await _saveCycleData();
     _calculateAverageCycleLength();
-    _showSnackBar('Period started! End it manually when finished.', Colors.red);
+    _showSnackBar('Period started! End it manually when finished.', AppColors.successGreen); // Keep green for success
   }
 
   Future<void> _endPeriod() async {
@@ -112,7 +113,7 @@ class _CycleScreenState extends State<CycleScreen> {
 
     await _saveCycleData();
     _calculateAverageCycleLength();
-    _showSnackBar('Period ended successfully.', Colors.green);
+    _showSnackBar('Period ended successfully.', AppColors.successGreen); // Keep green for success
   }
 
   void _calculateAverageCycleLength() {
@@ -255,13 +256,13 @@ class _CycleScreenState extends State<CycleScreen> {
 
   Color _getPhaseColor() {
     final phase = _getCyclePhase();
-    if (phase.startsWith("Menstruation")) return Colors.red.shade300;
-    if (phase == "Follicular Phase") return Colors.green.shade300;
-    if (phase == "Ovulation") return Colors.orange.shade300;
-    if (phase.contains("Early Luteal")) return Colors.purple.shade200;
-    if (phase.contains("Middle Luteal")) return Colors.purple.shade300;
-    if (phase.contains("Late Luteal")) return Colors.purple.shade400;
-    if (phase.contains("Luteal")) return Colors.purple.shade300;
+    if (phase.startsWith("Menstruation")) return Color(0xFFF43148).withOpacity(0.8);
+    if (phase == "Follicular Phase") return AppColors.pastelCoral; // Coral instead of yellow
+    if (phase == "Ovulation") return Color(0xFFF98834).withOpacity(0.8);
+    if (phase.contains("Early Luteal")) return Color(0xFFBD3AA6).withOpacity(0.6);
+    if (phase.contains("Middle Luteal")) return Color(0xFFBD3AA6).withOpacity(0.8);
+    if (phase.contains("Late Luteal")) return Color(0xFFBD3AA6);
+    if (phase.contains("Luteal")) return Color(0xFFBD3AA6).withOpacity(0.8);
     return Colors.grey;
   }
 
@@ -688,13 +689,13 @@ class _CycleScreenState extends State<CycleScreen> {
                   'Average Cycle',
                   '$_averageCycleLength days',
                   Icons.calendar_month_rounded,
-                  Colors.blue,
+                  AppColors.purple, // Purple instead of blue
                 ),
                 _buildStatItem(
                   'Tracked Periods',
                   '${_periodRanges.length}',
                   Icons.timeline_rounded,
-                  Colors.green,
+                  AppColors.successGreen, // Green for success
                 ),
               ],
             ),

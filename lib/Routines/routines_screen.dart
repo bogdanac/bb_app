@@ -6,6 +6,7 @@ import 'package:bb_app/Notifications/notification_settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'routine_data_models.dart';
+import '../theme/app_colors.dart';
 
 // ROUTINES SCREEN - UPDATED WITH NOTIFICATION SETTINGS
 class RoutinesScreen extends StatefulWidget {
@@ -97,30 +98,27 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
   }
 
   _deleteRoutine(Routine routine) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Routine'),
-        content: Text('Are you sure you want to delete "${routine.title}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
+    setState(() {
+      _routines.removeWhere((r) => r.id == routine.id);
+    });
+    _saveRoutines();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Routine "${routine.title}" deleted'),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () async {
               setState(() {
-                _routines.removeWhere((r) => r.id == routine.id);
+                _routines.add(routine);
               });
-              _saveRoutines();
-              Navigator.pop(context);
+              await _saveRoutines();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
-        ],
-      ),
-    );
+        ),
+      );
+    }
   }
 
   _startRoutine(Routine routine) {
@@ -178,95 +176,169 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
           ],
         ),
       )
-          : ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _routines.length,
+          : Column(
+        children: [
+          // Header with instructions
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Tap to edit • Swipe left to delete',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Routines list
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _routines.length,
         itemBuilder: (context, index) {
           final routine = _routines[index];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+          return Dismissible(
+            key: ValueKey(routine.id),
+            direction: DismissDirection.endToStart,
+            confirmDismiss: (direction) async {
+              return await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: Row(
                     children: [
-                      Expanded(
-                        child: Text(
-                          routine.title,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      Icon(
+                        Icons.delete_outline_rounded,
+                        color: Colors.red,
+                        size: 28,
+                      ),
+                      const SizedBox(width: 12),
+                      const Text('Delete Routine'),
+                    ],
+                  ),
+                  content: Text('Are you sure you want to delete "${routine.title}"?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      PopupMenuButton<String>(
-                        onSelected: (value) {
-                          switch (value) {
-                            case 'edit':
-                              _editRoutine(routine);
-                              break;
-                            case 'delete':
-                              _deleteRoutine(routine);
-                              break;
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit_rounded),
-                                SizedBox(width: 8),
-                                Text('Edit'),
-                              ],
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              ) ?? false;
+            },
+            onDismissed: (direction) {
+              _deleteRoutine(routine);
+            },
+            background: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 24),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.delete_rounded,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Delete',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            child: Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: InkWell(
+                onTap: () => _editRoutine(routine),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              routine.title,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete_rounded, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text('Delete', style: TextStyle(color: Colors.red)),
-                              ],
+                          Icon(
+                            Icons.edit_rounded,
+                            color: Colors.grey[600],
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${routine.items.length} steps',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => _startRoutine(routine),
+                              icon: const Icon(Icons.play_arrow_rounded),
+                              label: const Text('Start Routine'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.coral,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${routine.items.length} steps',
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _startRoutine(routine),
-                      icon: const Icon(Icons.play_arrow_rounded),
-                      label: const Text('Start Routine'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Colors.black87,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           );
         },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addRoutine,

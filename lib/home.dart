@@ -1,5 +1,6 @@
 import 'package:bb_app/MenstrualCycle/cycle_tracking_screen.dart';
 import 'package:flutter/material.dart';
+import 'theme/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:bb_app/Calendar/events_card.dart';
@@ -86,13 +87,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!_isDisposed && mounted && state == AppLifecycleState.resumed) {
+      // Refresh water intake in case widget updated it
+      _loadWaterIntake();
       // Refresh the menstrual cycle card when returning to the app
       _refreshMenstrualCycleData();
     }
   }
 
   bool get _shouldShowWaterTracking {
-    return waterIntake <= 1750;
+    return waterIntake < 1500; // Changed to match the goal in WaterTrackingCard
   }
 
   Future<void> _loadWaterIntake() async {
@@ -171,12 +174,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _checkMorningRoutineVisibility() {
+  void _checkMorningRoutineVisibility() async {
     final now = DateTime.now();
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateFormat('yyyy-MM-dd').format(now);
+    final hiddenToday = prefs.getBool('morning_routine_hidden_$today') ?? false;
 
     if (!_isDisposed && mounted) {
       setState(() {
-        showMorningRoutine = now.hour < 12; // Show until noon
+        // Show if it's between 4 AM and 5 PM and not manually hidden today
+        showMorningRoutine = now.hour >= 4 && now.hour < 17 && !hiddenToday;
       });
     }
   }
@@ -205,13 +212,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final prefs = await SharedPreferences.getInstance();
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final oldIntake = waterIntake;
       final newIntake = waterIntake + 125;
+      const int goal = 1500;
 
       if (!_isDisposed && mounted) {
         setState(() {
           waterIntake = newIntake;
         });
         await prefs.setInt('water_$today', newIntake);
+
+        // Show congratulations when goal is reached
+        if (oldIntake < goal && newIntake >= goal) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🎉 Daily water goal achieved! Great job!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
 
         // Verifică și anulează notificările pe baza noului progres
         final notificationService = NotificationService();
@@ -230,6 +250,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  void _onMorningRoutineHiddenForToday() async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    await prefs.setBool('morning_routine_hidden_$today', true);
+    
+    if (!_isDisposed && mounted) {
+      setState(() {
+        showMorningRoutine = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -240,7 +272,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
         body: const Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFB74D)),
+            valueColor: AlwaysStoppedAnimation<Color>(AppColors.coral),
           ),
         ),
       );
@@ -248,14 +280,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('BBetter', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('bbetter', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
       ),
       body: RefreshIndicator(
         onRefresh: _onRefresh,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12), // Slightly tighter overall padding
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -271,7 +303,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   );
                 },
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12), // Reduced spacing
+
+              // Calendar Events Section
+              const CalendarEventsCard(),
+              const SizedBox(height: 12), // Reduced spacing
+
+
+              // Fasting Section (conditional)
+              if (showFastingSection) ...[
+                const FastingCard(),
+                const SizedBox(height: 12), // Reduced spacing
+              ],
 
               // Water Tracking Section (conditional)
               if (_shouldShowWaterTracking) ...[
@@ -279,26 +322,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   waterIntake: waterIntake,
                   onWaterAdded: _onWaterAdded,
                 ),
-                const SizedBox(height: 20),
-              ],
-
-              // Fasting Section (conditional)
-              if (showFastingSection) ...[
-                const FastingCard(),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12), // Reduced spacing
               ],
 
               // Morning Routine Section (conditional)
               if (showMorningRoutine) ...[
                 MorningRoutineCard(
                   onCompleted: _onMorningRoutineCompleted,
+                  onHiddenForToday: _onMorningRoutineHiddenForToday,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12), // Reduced spacing
               ],
-
-              // Calendar Events Section
-              const CalendarEventsCard(),
-              const SizedBox(height: 20),
 
               // Daily Tasks Section
               const DailyTasksCard(),

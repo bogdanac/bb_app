@@ -1,5 +1,6 @@
 // fasting_card.dart - Actualizat cu sincronizare
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
@@ -155,7 +156,7 @@ class _FastingCardState extends State<FastingCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No fast scheduled for today'),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppColors.orange,
         ),
       );
       return;
@@ -178,7 +179,7 @@ class _FastingCardState extends State<FastingCard> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('🚀 $recommendedType started!'),
-        backgroundColor: Colors.green,
+        backgroundColor: AppColors.successGreen, // Green for success
       ),
     );
   }
@@ -253,17 +254,9 @@ class _FastingCardState extends State<FastingCard> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: isFasting
-                ? [
-              Colors.orange.withOpacity(0.3),
-              Colors.orange.withOpacity(0.1),
-            ]
-                : [
-              Theme.of(context).colorScheme.primary.withOpacity(0.3),
-              Theme.of(context).colorScheme.primary.withOpacity(0.1),
-            ],
-          ),
+          color: isFasting 
+              ? AppColors.orange.withOpacity(0.08) // More subtle orange
+              : AppColors.purple.withOpacity(0.08), // More subtle purple
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,7 +265,7 @@ class _FastingCardState extends State<FastingCard> {
               children: [
                 Icon(
                   isFasting ? Icons.timer : Icons.timer_rounded,
-                  color: isFasting ? Colors.orange : Theme.of(context).colorScheme.primary,
+                  color: isFasting ? AppColors.orange : AppColors.pink,
                   size: 28,
                 ),
                 const SizedBox(width: 12),
@@ -288,7 +281,7 @@ class _FastingCardState extends State<FastingCard> {
               // Progress section when fasting
               Text(
                 '${_formatDuration(fastingDuration)} / ${currentFastType}',
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
+                style: const TextStyle(fontSize: 14, color: Colors.white70),
               ),
               const SizedBox(height: 12),
 
@@ -296,7 +289,7 @@ class _FastingCardState extends State<FastingCard> {
               LinearProgressIndicator(
                 value: _getProgress(),
                 backgroundColor: Colors.grey[300],
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.orange),
+                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.orange),
                 minHeight: 12,
               ),
               const SizedBox(height: 16),
@@ -330,7 +323,7 @@ class _FastingCardState extends State<FastingCard> {
                 icon: const Icon(Icons.stop_rounded),
                 label: const Text('Finish fasting'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red[400],
+                  backgroundColor: AppColors.error, // Red for stop action
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -361,7 +354,7 @@ class _FastingCardState extends State<FastingCard> {
                 const SizedBox(height: 8),
                 const Text(
                   'Fasts are available on Sundays and the 25th',
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                  style: TextStyle(fontSize: 14, color: Colors.white70),
                 ),
               ],
             ],

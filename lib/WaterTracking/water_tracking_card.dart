@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 import 'package:flutter/services.dart';
 
 // WATER TRACKING CARD
@@ -48,7 +49,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
     ));
 
     // Initialize progress animation with initial value
-    const int goal = 1800;
+    const int goal = 1500;
     final double initialProgress = (widget.waterIntake / goal).clamp(0.0, 1.0);
     _progressAnimation = Tween<double>(
       begin: 0.0,
@@ -108,10 +109,10 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
 
   @override
   Widget build(BuildContext context) {
-    const int hideThreshold = 1500;
+    const int goal = 1500;
 
-    // Hide card if water intake is over 1500ml
-    if (widget.waterIntake > hideThreshold) {
+    // Hide card if water intake reaches or exceeds the goal
+    if (widget.waterIntake >= goal) {
       return const SizedBox.shrink();
     }
 
@@ -122,12 +123,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: [
-              Colors.blue.withOpacity(0.3),
-              Colors.blue.withOpacity(0.1),
-            ],
-          ),
+          color: AppColors.purple.withOpacity(0.08), // More subtle purple
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,7 +132,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
               children: [
                 const Icon(
                   Icons.water_drop_rounded,
-                  color: Colors.blue,
+                  color: AppColors.waterBlue, // Special water blue
                   size: 28,
                 ),
                 const SizedBox(width: 16),
@@ -168,13 +164,13 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                                     borderRadius: BorderRadius.circular(16), // Ajustat pentru înălțimea de 32
                                     gradient: LinearGradient(
                                       colors: _progressAnimation.value > 0.9
-                                          ? [Colors.green, Colors.lightGreen]
-                                          : [Colors.blue, Colors.lightBlue],
+                                          ? [AppColors.successGreen, AppColors.pastelGreen] // Keep green for success
+                                          : [AppColors.purple, AppColors.pastelPurple], // Purple for progress
                                     ),
                                     boxShadow: _progressAnimation.value > 0.0
                                         ? [
                                       BoxShadow(
-                                        color: Colors.blue.withOpacity(0.3),
+                                        color: AppColors.purple.withOpacity(0.3),
                                         blurRadius: 4,
                                         offset: const Offset(0, 2),
                                       ),
@@ -204,7 +200,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                               fontWeight: FontWeight.w600,
                               color: _progressAnimation.value > 0.5
                                   ? Colors.white
-                                  : Colors.grey[400],
+                                  : Colors.white54,
                               shadows: _progressAnimation.value > 0.5
                                   ? [
                                 Shadow(
@@ -227,7 +223,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                   child: ElevatedButton(
                     onPressed: _handleWaterAdded,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
+                      backgroundColor: AppColors.purple,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),

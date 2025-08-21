@@ -5,12 +5,20 @@ import 'Routines/routines_screen.dart';
 import 'Tasks/todo_screen.dart';
 import 'home.dart';
 import 'Notifications/notification_service.dart';
+import 'Notifications/notification_listener_service.dart';
+import 'theme/app_colors.dart';
 import 'dart:io';
+import 'dart:math';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Reset notification service on hot reload in debug mode
+  if (kDebugMode) {
+    NotificationListenerService.reset();
+  }
 
   runApp(const BBetterApp());
 }
@@ -22,33 +30,15 @@ class BBetterApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'I am fabulous',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: const Color(0xC11A1A1A),
-        cardColor: const Color(0x6B2D2D2D),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xF272BDEC), // Pastel orange
-          secondary: Color(0xFFFFF176), // Pastel yellow
-          tertiary: Color(0xFFFFC774), // Pastel orange
-          surface: Color(0xFF2D2D2D),
-          surfaceContainerHighest: Color(0xC11A1A1A),
-          onPrimary: Colors.black87,
-          onSecondary: Colors.black87,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xE8FF0000),
-          elevation: 0,
-          centerTitle: true,
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0x6B2D2D2D),
-          selectedItemColor: Color(0xF272BDEC),
-          unselectedItemColor: Colors.grey,
-          type: BottomNavigationBarType.fixed,
-        ),
-      ),
-      home: const LauncherScreen(),
+      builder: (BuildContext context, Widget? child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+          child: child!,
+        );
+      },
+      theme: AppTheme.theme,
+      // Skip launcher in debug mode to avoid hot reload issues
+      home: kDebugMode ? const MainScreen() : const LauncherScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -129,7 +119,7 @@ class _LauncherScreenState extends State<LauncherScreen>
 
     _backgroundColor = ColorTween(
       begin: const Color(0xFF1A1A1A),
-      end: const Color(0xFF4A1B4A), // Dark fuchsia background
+      end: const Color(0xFF2A1B2A), // Dark background with your palette
     ).animate(CurvedAnimation(
       parent: _backgroundController,
       curve: Curves.easeInOut,
@@ -139,45 +129,55 @@ class _LauncherScreenState extends State<LauncherScreen>
   }
 
   void _startAnimationSequence() async {
-    // Start background animation
-    _backgroundController.forward();
+    try {
+      // Start background animation
+      if (mounted) _backgroundController.forward();
 
-    // Start logo animation
-    await Future.delayed(const Duration(milliseconds: 300));
-    _logoController.forward();
+      // Start logo animation
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (mounted) _logoController.forward();
 
-    // Start text animation
-    await Future.delayed(const Duration(milliseconds: 800));
-    _textController.forward();
+      // Start text animation
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (mounted) _textController.forward();
 
-    // Initialize notifications and navigate
-    await Future.delayed(const Duration(milliseconds: 1200));
-    await _initializeApp();
+      // Initialize notifications and navigate
+      await Future.delayed(const Duration(milliseconds: 1200));
+      if (mounted) await _initializeApp();
 
-    // Navigate to main screen
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const MainScreen(),
-          transitionDuration: const Duration(milliseconds: 800),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.0, 0.1),
-                  end: Offset.zero,
-                ).animate(CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOut,
-                )),
-                child: child,
-              ),
-            );
-          },
-        ),
-      );
+      // Navigate to main screen
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted && Navigator.of(context).canPop() == false) {
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => const MainScreen(),
+            transitionDuration: const Duration(milliseconds: 800),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.0, 0.1),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOut,
+                  )),
+                  child: child,
+                ),
+              );
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) print("Error in animation sequence: $e");
+      // Fallback to main screen
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+        );
+      }
     }
   }
 
@@ -187,6 +187,20 @@ class _LauncherScreenState extends State<LauncherScreen>
       final notificationService = NotificationService();
       await notificationService.initializeNotifications();
       await notificationService.scheduleWaterReminders();
+      
+      // Initialize notification listener service for motion alerts with debug protection
+      try {
+        await NotificationListenerService.initialize();
+        if (kDebugMode) {
+          print("NotificationListenerService initialized successfully in debug mode");
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print("Warning: NotificationListenerService failed to initialize: $e");
+          print("Motion alerts may not work, but app will continue normally");
+        }
+        // Don't throw - let the app continue without motion alerts
+      }
 
       // Request notification permissions (non-blocking)
       if (Platform.isAndroid) {
@@ -218,19 +232,19 @@ class _LauncherScreenState extends State<LauncherScreen>
       animation: Listenable.merge([_logoController, _textController, _backgroundController]),
       builder: (context, child) {
         return Scaffold(
-          backgroundColor: _backgroundColor.value ?? const Color(0xFF1A1A1A),
+          backgroundColor: _backgroundColor.value ?? AppColors.darkBackground,
           body: Container(
             decoration: BoxDecoration(
               gradient: RadialGradient(
                 center: const Alignment(0.0, -0.3),
                 radius: 1.2,
                 colors: [
-                  const Color(0xFFFF6B9D), // Bright fuchsia
-                  const Color(0xFFE91E63), // Deep pink
-                  const Color(0xFF9C27B0), // Purple
-                  const Color(0xFF673AB7), // Deep purple
+                  AppColors.redPrimary, // Red/Pink
+                  AppColors.orange, // Orange
+                  AppColors.purple, // Purple
+                  AppColors.darkBackground, // Dark background
                 ],
-                stops: const [0.0, 0.3, 0.7, 1.0],
+                stops: const [0.0, 0.4, 0.7, 1.0],
               ),
             ),
             child: Center(
@@ -241,40 +255,34 @@ class _LauncherScreenState extends State<LauncherScreen>
                   Transform.scale(
                     scale: _logoScale.value,
                     child: Transform.rotate(
-                      angle: _logoRotation.value * 0.1,
+                      angle: (_logoRotation.value * 0.1) - 0.1, //rotate a bit to the left
                       child: Container(
                         width: 120,
                         height: 120,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [
-                              Color(0xFFFF9800), // Bright orange
-                              Color(0xFFFF6B35), // Orange-red
-                              Color(0xFFFF1744), // Bright red-pink
-                              Color(0xFFE91E63), // Fuchsia
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            stops: [0.0, 0.3, 0.7, 1.0],
-                          ),
-                          borderRadius: BorderRadius.circular(30),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFFF6B9D).withOpacity(0.4),
+                              color: AppColors.redPrimary.withOpacity(0.4),
                               blurRadius: 25,
                               spreadRadius: 8,
                             ),
                             BoxShadow(
-                              color: const Color(0xFFFF9800).withOpacity(0.3),
+                              color: AppColors.orange.withOpacity(0.3),
                               blurRadius: 15,
                               spreadRadius: 3,
                             ),
                           ],
                         ),
-                        child: const Icon(
-                          Icons.apps_rounded, // Changed to a cube-like icon
-                          color: Colors.white,
-                          size: 60,
+                        child: ClipPath(
+                          clipper: HexagonClipper(),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              image: DecorationImage(
+                                image: AssetImage('assets/icon/ic_launcher.png'),
+                                fit: BoxFit.cover, // Use cover to fill the hexagon shape
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -290,7 +298,7 @@ class _LauncherScreenState extends State<LauncherScreen>
                       child: Column(
                         children: [
                           Text(
-                            'BBetter',
+                            'bbetter',
                             style: TextStyle(
                               fontSize: 42,
                               fontWeight: FontWeight.bold,
@@ -303,7 +311,7 @@ class _LauncherScreenState extends State<LauncherScreen>
                             'Fabulous every day',
                             style: TextStyle(
                               fontSize: 16,
-                              color: const Color(0xFFFF9800).withOpacity(_textOpacity.value), // Orange color
+                              color: AppColors.orange.withOpacity(_textOpacity.value), // Orange color
                               fontWeight: FontWeight.w300,
                               letterSpacing: 1,
                             ),
@@ -323,7 +331,7 @@ class _LauncherScreenState extends State<LauncherScreen>
                       height: 30,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B9D)), // Fuchsia loading
+                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.pink), // Pink loading
                       ),
                     ),
                   ),
@@ -356,28 +364,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
     const RoutinesScreen(),
   ];
 
-  final List<BottomNavigationBarItem> _navItems = [
-    const BottomNavigationBarItem(
-      icon: Icon(Icons.timer_rounded),
-      label: 'Fasting',
-    ),
-    const BottomNavigationBarItem(
-      icon: Icon(Icons.favorite_rounded),
-      label: 'Cycle',
-    ),
-    const BottomNavigationBarItem(
-      icon: Icon(Icons.home_rounded),
-      label: 'Home',
-    ),
-    const BottomNavigationBarItem(
-      icon: Icon(Icons.task_alt_rounded),
-      label: 'Tasks',
-    ),
-    const BottomNavigationBarItem(
-      icon: Icon(Icons.auto_awesome_rounded),
-      label: 'Routines',
-    ),
-  ];
+// Custom navbar implementation below - no need for _navItems
 
   @override
   void initState() {
@@ -402,7 +389,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
     super.didChangeAppLifecycleState(state);
 
     // Reset to Home when app resumes (without infinite loop)
-    if (state == AppLifecycleState.resumed && _selectedIndex != 2) {
+    if (mounted && state == AppLifecycleState.resumed && _selectedIndex != 2) {
       setState(() {
         _selectedIndex = 2;
       });
@@ -410,12 +397,14 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
   }
 
   void _onItemTapped(int index) {
-    if (index != _selectedIndex) {
+    if (mounted && index != _selectedIndex) {
       _animationController.forward().then((_) {
-        setState(() {
-          _selectedIndex = index;
-        });
-        _animationController.reverse();
+        if (mounted) {
+          setState(() {
+            _selectedIndex = index;
+          });
+          _animationController.reverse();
+        }
       });
     }
   }
@@ -428,7 +417,9 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
         child: _screens[_selectedIndex],
       ),
       bottomNavigationBar: Container(
+        height: 60 + MediaQuery.of(context).padding.bottom, // Add safe area height
         decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.3),
@@ -437,13 +428,91 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
             ),
           ],
         ),
-        child: BottomNavigationBar(
-          items: _navItems,
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          elevation: 0,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(5, (index) {
+            final colors = [
+              AppColors.orange, // Orange for Fasting
+              AppColors.pink, // Pink for Cycle  
+              AppColors.coral, // Coral for Home (instead of yellow)
+              AppColors.purple, // Purple for Tasks
+              AppColors.yellow, // Yellow for Routines (morning routines)
+            ];
+            
+            final icons = [
+              Icons.timer_rounded,
+              Icons.favorite_rounded, 
+              Icons.home_rounded,
+              Icons.task_alt_rounded,
+              Icons.auto_awesome_rounded,
+            ];
+            
+            final labels = ['Fasting', 'Cycle', 'Home', 'Tasks', 'Routines'];
+            
+            final isSelected = _selectedIndex == index;
+            
+            return GestureDetector(
+              onTap: () => _onItemTapped(index),
+              child: Container(
+                width: 50,
+                height: 50, // Smaller icons containers
+                margin: const EdgeInsets.symmetric(vertical: 5),
+                decoration: BoxDecoration(
+                  color: isSelected 
+                      ? colors[index].withOpacity(0.25) // More subtle selected state
+                      : colors[index].withOpacity(0.08), // Very subtle unselected
+                  borderRadius: BorderRadius.circular(20),
+                  border: isSelected 
+                      ? Border.all(color: colors[index].withOpacity(0.6), width: 1.5) // Subtle border when selected
+                      : null,
+                ),
+                child: Center(
+                  child: Icon(
+                    icons[index],
+                    color: isSelected ? colors[index] : colors[index].withOpacity(0.7), // Colored icons
+                    size: isSelected ? 28 : 26, // Slightly larger since no text
+                  ),
+                ),
+              ),
+            );
+          }),
+          ),
         ),
       ),
     );
   }
+}
+
+// Custom clipper for hexagon shape
+class HexagonClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    final width = size.width;
+    final height = size.height;
+    final centerX = width / 2;
+    final centerY = height / 2;
+    final radius = min(width, height) / 2 * 0.85; // Slightly smaller to fit nicely
+
+    // Create hexagon path
+    for (int i = 0; i < 6; i++) {
+      final angle = (i * pi / 3) - (pi / 2); // Start from top
+      final x = centerX + radius * cos(angle);
+      final y = centerY + radius * sin(angle);
+      
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }

@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
-import 'package:bb_app/Routines/routines_screen.dart';
 import 'package:bb_app/Routines/routine_data_models.dart';
 
-// MORNING ROUTINE CARD - UPDATED
 class MorningRoutineCard extends StatefulWidget {
   final VoidCallback onCompleted;
+  final VoidCallback onHiddenForToday;
 
-  const MorningRoutineCard({Key? key, required this.onCompleted}) : super(key: key);
+  const MorningRoutineCard({
+    Key? key, 
+    required this.onCompleted,
+    required this.onHiddenForToday,
+  }) : super(key: key);
 
   @override
   State<MorningRoutineCard> createState() => _MorningRoutineCardState();
@@ -30,9 +35,6 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
     final prefs = await SharedPreferences.getInstance();
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-    // Load current routine progress for today
-    final progressJson = prefs.getString('morning_routine_progress_$today');
-
     // Load routines to get the morning routine
     final routinesJson = prefs.getStringList('routines') ?? [];
 
@@ -47,8 +49,12 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
         orElse: () => routines.first,
       );
 
-      if (progressJson != null) {
-        // Load today's progress
+      // Check if we have progress saved for today
+      final progressJson = prefs.getString('morning_routine_progress_$today');
+      final lastSavedDate = prefs.getString('morning_routine_last_date');
+      
+      if (progressJson != null && lastSavedDate == today) {
+        // Load today's progress - resume from where we left off
         final progressData = jsonDecode(progressJson);
         _currentStepIndex = progressData['currentStepIndex'] ?? 0;
 
@@ -57,11 +63,23 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
         for (int i = 0; i < _currentRoutine!.items.length && i < completedSteps.length; i++) {
           _currentRoutine!.items[i].isCompleted = completedSteps[i];
         }
+        
+        if (kDebugMode) {
+          print('Resumed morning routine from step $_currentStepIndex');
+        }
       } else {
-        // Reset for new day
+        // Reset for new day or first time today
         _currentStepIndex = 0;
         for (var item in _currentRoutine!.items) {
           item.isCompleted = false;
+        }
+        
+        // Clear old progress and set today's date
+        await prefs.remove('morning_routine_progress_$today');
+        await prefs.setString('morning_routine_last_date', today);
+        
+        if (kDebugMode) {
+          print('Started fresh morning routine for $today');
         }
       }
     }
@@ -74,16 +92,27 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
   _saveProgress() async {
     if (_currentRoutine == null) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-    final progressData = {
-      'currentStepIndex': _currentStepIndex,
-      'completedSteps': _currentRoutine!.items.map((item) => item.isCompleted).toList(),
-      'lastUpdated': DateTime.now().toIso8601String(),
-    };
+      final progressData = {
+        'currentStepIndex': _currentStepIndex,
+        'completedSteps': _currentRoutine!.items.map((item) => item.isCompleted).toList(),
+        'lastUpdated': DateTime.now().toIso8601String(),
+      };
 
-    await prefs.setString('morning_routine_progress_$today', jsonEncode(progressData));
+      await prefs.setString('morning_routine_progress_$today', jsonEncode(progressData));
+      await prefs.setString('morning_routine_last_date', today);
+      
+      if (kDebugMode) {
+        print('Saved morning routine progress: step $_currentStepIndex');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving progress: $e');
+      }
+    }
   }
 
   _completeCurrentStep() async {
@@ -96,6 +125,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
       }
     });
 
+    // Save progress after each step
     await _saveProgress();
 
     // Check if all steps are completed
@@ -117,28 +147,10 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
       _currentStepIndex++;
     });
 
+    // Save progress after skipping
     await _saveProgress();
   }
 
-  _completeEntireRoutine() async {
-    if (_currentRoutine == null) return;
-
-    setState(() {
-      for (var item in _currentRoutine!.items) {
-        item.isCompleted = true;
-      }
-    });
-
-    await _saveProgress();
-    widget.onCompleted();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🎉 Morning routine completed! Great job!'),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -150,12 +162,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              colors: [
-                Theme.of(context).colorScheme.secondary.withOpacity(0.3),
-                Theme.of(context).colorScheme.secondary.withOpacity(0.1),
-              ],
-            ),
+            color: AppColors.orange.withOpacity(0.08), // More subtle orange
           ),
           child: const Center(
             child: CircularProgressIndicator(),
@@ -172,12 +179,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              colors: [
-                Theme.of(context).colorScheme.secondary.withOpacity(0.3),
-                Theme.of(context).colorScheme.secondary.withOpacity(0.1),
-              ],
-            ),
+            color: AppColors.orange.withOpacity(0.08), // More subtle orange
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -217,12 +219,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: [
-              Theme.of(context).colorScheme.secondary.withOpacity(0.3),
-              Theme.of(context).colorScheme.secondary.withOpacity(0.1),
-            ],
-          ),
+          color: AppColors.yellow.withOpacity(0.08), // More subtle yellow
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,7 +240,23 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
                 ),
                 Text(
                   '$completedCount/${_currentRoutine!.items.length}',
-                  style: const TextStyle(fontSize: 16, color: Colors.grey),
+                  style: const TextStyle(fontSize: 16, color: Colors.white70),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: widget.onHiddenForToday,
+                  icon: const Icon(Icons.close_rounded, size: 14),
+                  label: const Text(
+                    'Not Today',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey[700],
+                    side: BorderSide(color: Colors.grey[400]!, width: 1),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
               ],
             ),
@@ -277,109 +290,60 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
                 ),
               ),
             ] else if (currentStep != null) ...[
-              // Current step
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.secondary.withOpacity(0.5),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Next step:',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      currentStep.text,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Action buttons
+              // Current step with buttons on the right
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    flex: 2,
-                    child: ElevatedButton.icon(
-                      onPressed: _completeCurrentStep,
-                      icon: const Icon(Icons.check_rounded),
-                      label: const Text('Complete'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                    flex: 3,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.secondary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
                         ),
+                      ),
+                      child: Text(
+                        currentStep.text,
+                        style: const TextStyle(fontSize: 16),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _skipCurrentStep,
-                      child: const Text('Skip'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                  const SizedBox(width: 12),
+                  // Action buttons on the right
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: _completeCurrentStep,
+                        icon: const Icon(Icons.check_rounded, size: 20),
+                        tooltip: 'Complete',
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(32, 32),
+                          padding: const EdgeInsets.all(4),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        onPressed: _skipCurrentStep,
+                        icon: const Icon(Icons.skip_next_rounded, size: 20),
+                        tooltip: 'Skip',
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.grey,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(32, 32),
+                          padding: const EdgeInsets.all(4),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ],
-
-            const SizedBox(height: 12),
-
-            // Bottom buttons
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const RoutinesScreen(),
-                        ),
-                      );
-                      // Refresh routine data when returning
-                      _loadCurrentRoutine();
-                    },
-                    icon: const Icon(Icons.edit_rounded),
-                    label: const Text('Edit Routines'),
-                  ),
-                ),
-                if (!allCompleted) ...[
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextButton.icon(
-                      onPressed: _completeEntireRoutine,
-                      icon: const Icon(Icons.done_all_rounded),
-                      label: const Text('Complete All'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.orange,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
           ],
         ),
       ),

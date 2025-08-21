@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'notification_service.dart';
+import '../theme/app_colors.dart';
+import 'motion_alert_settings_screen.dart';
+import 'motion_alert_quick_setup.dart';
 
 // NOTIFICATION SETTINGS SCREEN
 class NotificationSettingsScreen extends StatefulWidget {
@@ -47,7 +50,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
               ? 'Morning notification set for ${_hour.toString().padLeft(2, '0')}:${_minute.toString().padLeft(2, '0')}'
               : 'Morning notifications disabled',
         ),
-        backgroundColor: _isEnabled ? Colors.green : Colors.grey,
+        backgroundColor: _isEnabled ? AppColors.successGreen : Colors.grey, // Green for enabled
       ),
     );
   }
@@ -134,6 +137,36 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
 
             const SizedBox(height: 20),
 
+            // Motion Alert Quick Setup Card
+            Card(
+              child: ListTile(
+                leading: Icon(
+                  Icons.security_rounded,
+                  color: AppColors.coral,
+                  size: 28,
+                ),
+                title: const Text(
+                  'Motion Alert Setup',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text(
+                  'Quick setup: Night mode or 24/7 vacation mode',
+                  style: TextStyle(color: Colors.grey),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const MotionAlertQuickSetup(),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
             // Instructions card
             Card(
               child: Padding(
@@ -145,7 +178,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                       children: [
                         Icon(
                           Icons.info_outline_rounded,
-                          color: Colors.blue,
+                          color: AppColors.purple, // Purple for info
                           size: 20,
                         ),
                         const SizedBox(width: 8),

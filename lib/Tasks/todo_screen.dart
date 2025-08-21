@@ -1,14 +1,14 @@
 import 'dart:convert';
-import 'package:bb_app/Tasks/task_card_widget.dart';
-import 'package:bb_app/Tasks/task_categories_screen.dart';
-import 'package:bb_app/Tasks/task_edit_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:math';
 import 'tasks_data_models.dart';
+import 'task_card_widget.dart';
+import 'task_categories_screen.dart';
+import 'task_edit_screen.dart';
+import 'task_service.dart';
 
-// TODO SCREEN
 class TodoScreen extends StatefulWidget {
   const TodoScreen({super.key});
 
@@ -21,6 +21,8 @@ class _TodoScreenState extends State<TodoScreen> {
   List<TaskCategory> _categories = [];
   List<String> _selectedCategoryFilters = [];
   bool _showCompleted = false;
+  final TaskService _taskService = TaskService();
+  TaskSettings _taskSettings = TaskSettings();
 
   @override
   void initState() {
@@ -28,114 +30,120 @@ class _TodoScreenState extends State<TodoScreen> {
     _loadData();
   }
 
-  _loadData() async {
+  Future<void> _loadData() async {
     await _loadCategories();
     await _loadTasks();
+    await _loadTaskSettings();
   }
 
-  _loadCategories() async {
-    final prefs = await SharedPreferences.getInstance();
-    final categoriesJson = prefs.getStringList('task_categories') ?? [];
-
-    if (categoriesJson.isEmpty) {
-      // Default categories
-      _categories = [
-        TaskCategory(id: '1', name: 'Cleaning', color: Colors.blue, order: 0),
-        TaskCategory(id: '2', name: 'At Home', color: Colors.green, order: 1),
-        TaskCategory(id: '3', name: 'Research', color: Colors.purple, order: 2),
-        TaskCategory(id: '4', name: 'Travel', color: Colors.orange, order: 3),
-      ];
-      await _saveCategories();
-    } else {
-      _categories = categoriesJson
-          .map((json) => TaskCategory.fromJson(jsonDecode(json)))
-          .toList();
+  Future<void> _loadCategories() async {
+    final categories = await _taskService.loadCategories();
+    if (mounted) {
+      setState(() {
+        _categories = categories;
+      });
     }
-
-    if (mounted) setState(() {});
   }
 
-  _saveCategories() async {
-    final prefs = await SharedPreferences.getInstance();
-    final categoriesJson = _categories
-        .map((category) => jsonEncode(category.toJson()))
-        .toList();
-    await prefs.setStringList('task_categories', categoriesJson);
+  Future<void> _loadTasks() async {
+    final tasks = await _taskService.loadTasks();
+    if (mounted) {
+      setState(() {
+        _tasks = tasks;
+      });
+    }
   }
 
-  _loadTasks() async {
-    final prefs = await SharedPreferences.getInstance();
-    final tasksJson = prefs.getStringList('tasks') ?? [];
-
-    _tasks = tasksJson
-        .map((json) => Task.fromJson(jsonDecode(json)))
-        .toList();
-
-    if (mounted) setState(() {});
+  Future<void> _loadTaskSettings() async {
+    final settings = await _taskService.loadTaskSettings();
+    if (mounted) {
+      setState(() {
+        _taskSettings = settings;
+      });
+    }
   }
 
-  _saveTasks() async {
-    final prefs = await SharedPreferences.getInstance();
-    final tasksJson = _tasks
-        .map((task) => jsonEncode(task.toJson()))
-        .toList();
-    await prefs.setStringList('tasks', tasksJson);
+  Future<void> _saveTasks() async {
+    await _taskService.saveTasks(_tasks);
   }
 
-  _addTask() {
+  Future<void> _saveCategories() async {
+    await _taskService.saveCategories(_categories);
+  }
+
+  void _addTask() {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => TaskEditScreen(
           categories: _categories,
-          onSave: (task) {
+          onSave: (task) async {
             setState(() {
               _tasks.add(task);
             });
-            _saveTasks();
+            await _saveTasks();
+            // Priority ordering will be recalculated automatically in build method
           },
         ),
       ),
     );
   }
 
-  _editTask(Task task) {
+  void _editTask(Task task) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => TaskEditScreen(
           task: task,
           categories: _categories,
-          onSave: (updatedTask) {
+          onSave: (updatedTask) async {
             setState(() {
               final index = _tasks.indexWhere((t) => t.id == task.id);
               if (index != -1) {
                 _tasks[index] = updatedTask;
               }
             });
-            _saveTasks();
+            await _saveTasks();
+            // Priority ordering will be recalculated automatically in build method
           },
         ),
       ),
     );
   }
 
-  _toggleTaskCompletion(Task task) {
+  void _toggleTaskCompletion(Task task) async {
     setState(() {
       task.isCompleted = !task.isCompleted;
       task.completedAt = task.isCompleted ? DateTime.now() : null;
     });
-    _saveTasks();
+    await _saveTasks();
   }
 
-  _deleteTask(Task task) {
+  void _deleteTask(Task task) async {
     setState(() {
       _tasks.removeWhere((t) => t.id == task.id);
     });
-    _saveTasks();
+    await _saveTasks();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Task "${task.title}" deleted'),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () async {
+              setState(() {
+                _tasks.add(task);
+              });
+              await _saveTasks();
+            },
+          ),
+        ),
+      );
+    }
   }
 
-  _duplicateTask(Task task) {
+  void _duplicateTask(Task task) async {
     final duplicatedTask = Task(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: '${task.title} (Copy)',
@@ -151,10 +159,17 @@ class _TodoScreenState extends State<TodoScreen> {
     setState(() {
       _tasks.add(duplicatedTask);
     });
-    _saveTasks();
+    await _saveTasks();
+    // Priority ordering will be recalculated automatically in build method
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Task "${task.title}" duplicated')),
+      );
+    }
   }
 
-  _selectRandomTask() {
+  void _selectRandomTask() {
     final availableTasks = _getFilteredTasks().where((task) => !task.isCompleted).toList();
 
     if (availableTasks.isEmpty) {
@@ -182,6 +197,16 @@ class _TodoScreenState extends State<TodoScreen> {
               const SizedBox(height: 8),
               Text(randomTask.description),
             ],
+            if (randomTask.deadline != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.schedule_rounded, size: 16),
+                  const SizedBox(width: 4),
+                  Text('Due: ${DateFormat('MMM dd, yyyy').format(randomTask.deadline!)}'),
+                ],
+              ),
+            ],
           ],
         ),
         actions: [
@@ -197,6 +222,64 @@ class _TodoScreenState extends State<TodoScreen> {
             child: const Text('Mark Done'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showTaskSettings() {
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Task Settings'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Max tasks on home page: ${_taskSettings.maxTasksOnHomePage}'),
+              Slider(
+                value: _taskSettings.maxTasksOnHomePage.toDouble(),
+                min: 1,
+                max: 10,
+                divisions: 9,
+                label: _taskSettings.maxTasksOnHomePage.toString(),
+                onChanged: (value) {
+                  setDialogState(() {
+                    _taskSettings.maxTasksOnHomePage = value.round();
+                  });
+                },
+              ),
+              SwitchListTile(
+                title: const Text('Show completed tasks on home'),
+                value: _taskSettings.showCompletedTasks,
+                onChanged: (value) {
+                  setDialogState(() {
+                    _taskSettings.showCompletedTasks = value;
+                  });
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await _taskService.saveTaskSettings(_taskSettings);
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Settings saved')),
+                  );
+                  // Update the main widget state after saving
+                  setState(() {});
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -218,62 +301,7 @@ class _TodoScreenState extends State<TodoScreen> {
   }
 
   List<Task> _getPrioritizedTasks() {
-    final filtered = _getFilteredTasks();
-    final now = DateTime.now();
-
-    filtered.sort((a, b) {
-      // 1. Deadline is today
-      final aDeadlineToday = a.deadline != null &&
-          DateFormat('yyyy-MM-dd').format(a.deadline!) ==
-              DateFormat('yyyy-MM-dd').format(now);
-      final bDeadlineToday = b.deadline != null &&
-          DateFormat('yyyy-MM-dd').format(b.deadline!) ==
-              DateFormat('yyyy-MM-dd').format(now);
-
-      if (aDeadlineToday && !bDeadlineToday) return -1;
-      if (!aDeadlineToday && bDeadlineToday) return 1;
-
-      // 2. Has reminder time and it's approaching/passed
-      if (a.reminderTime != null && b.reminderTime == null) return -1;
-      if (a.reminderTime == null && b.reminderTime != null) return 1;
-
-      // 3. Deadline is tomorrow
-      final aDeadlineTomorrow = a.deadline != null &&
-          a.deadline!.difference(now).inDays == 1;
-      final bDeadlineTomorrow = b.deadline != null &&
-          b.deadline!.difference(now).inDays == 1;
-
-      if (aDeadlineTomorrow && !bDeadlineTomorrow) return -1;
-      if (!aDeadlineTomorrow && bDeadlineTomorrow) return 1;
-
-      // 4. Important flag
-      if (a.isImportant && !b.isImportant) return -1;
-      if (!a.isImportant && b.isImportant) return 1;
-
-      // 5. Category importance (based on order)
-      final aCategoryOrder = _getCategoryImportance(a.categoryIds);
-      final bCategoryOrder = _getCategoryImportance(b.categoryIds);
-
-      return aCategoryOrder.compareTo(bCategoryOrder);
-    });
-
-    return filtered;
-  }
-
-  int _getCategoryImportance(List<String> categoryIds) {
-    if (categoryIds.isEmpty) return 999;
-
-    int minOrder = 999;
-    for (final categoryId in categoryIds) {
-      final category = _categories.firstWhere(
-            (cat) => cat.id == categoryId,
-        orElse: () => TaskCategory(id: '', name: '', color: Colors.grey, order: 999),
-      );
-      if (category.order < minOrder) {
-        minOrder = category.order;
-      }
-    }
-    return minOrder;
+    return _taskService.getPrioritizedTasks(_getFilteredTasks(), _categories, 100);
   }
 
   @override
@@ -286,6 +314,10 @@ class _TodoScreenState extends State<TodoScreen> {
         backgroundColor: Colors.transparent,
         actions: [
           IconButton(
+            icon: const Icon(Icons.tune_rounded),
+            onPressed: _showTaskSettings,
+          ),
+          IconButton(
             icon: const Icon(Icons.settings_rounded),
             onPressed: () {
               Navigator.push(
@@ -293,11 +325,11 @@ class _TodoScreenState extends State<TodoScreen> {
                 MaterialPageRoute(
                   builder: (context) => TaskCategoriesScreen(
                     categories: _categories,
-                    onCategoriesUpdated: (updatedCategories) {
+                    onCategoriesUpdated: (updatedCategories) async {
                       setState(() {
                         _categories = updatedCategories;
                       });
-                      _saveCategories();
+                      await _saveCategories();
                     },
                   ),
                 ),
@@ -321,34 +353,42 @@ class _TodoScreenState extends State<TodoScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: Wrap(
-                        spacing: 8,
-                        children: [
-                          FilterChip(
-                            label: const Text('All'),
-                            selected: _selectedCategoryFilters.isEmpty,
-                            onSelected: (selected) {
-                              setState(() {
-                                _selectedCategoryFilters.clear();
-                              });
-                            },
-                          ),
-                          ..._categories.map((category) => FilterChip(
-                            label: Text(category.name),
-                            selected: _selectedCategoryFilters.contains(category.id),
-                            backgroundColor: category.color.withOpacity(0.2),
-                            selectedColor: category.color.withOpacity(0.5),
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) {
-                                  _selectedCategoryFilters.add(category.id);
-                                } else {
-                                  _selectedCategoryFilters.remove(category.id);
-                                }
-                              });
-                            },
-                          )),
-                        ],
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            FilterChip(
+                              label: const Text('All'),
+                              selected: _selectedCategoryFilters.isEmpty,
+                              onSelected: (selected) {
+                                setState(() {
+                                  _selectedCategoryFilters.clear();
+                                });
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            ..._categories.map((category) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: FilterChip(
+                                label: Text(category.name),
+                                selected: _selectedCategoryFilters.contains(category.id),
+                                backgroundColor: category.color.withOpacity(0.1),
+                                selectedColor: category.color.withOpacity(0.3),
+                                checkmarkColor: category.color,
+                                side: BorderSide(color: category.color.withOpacity(0.5)),
+                                onSelected: (selected) {
+                                  setState(() {
+                                    if (selected) {
+                                      _selectedCategoryFilters.add(category.id);
+                                    } else {
+                                      _selectedCategoryFilters.remove(category.id);
+                                    }
+                                  });
+                                },
+                              ),
+                            )),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -364,6 +404,23 @@ class _TodoScreenState extends State<TodoScreen> {
                           _showCompleted = selected;
                         });
                       },
+                    ),
+                    const Spacer(),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${prioritizedTasks.where((task) => !task.isCompleted).length} active tasks',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        Text(
+                          'Swipe left to delete',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontSize: 10,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -400,6 +457,8 @@ class _TodoScreenState extends State<TodoScreen> {
                   final task = prioritizedTasks.removeAt(oldIndex);
                   prioritizedTasks.insert(newIndex, task);
                 });
+                // Note: This doesn't change the actual priority logic,
+                // just the visual order temporarily
               },
               itemBuilder: (context, index) {
                 final task = prioritizedTasks[index];
@@ -417,10 +476,11 @@ class _TodoScreenState extends State<TodoScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: _addTask,
         backgroundColor: Theme.of(context).colorScheme.primary,
-        child: const Icon(Icons.add_rounded),
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Add Task'),
       ),
     );
   }

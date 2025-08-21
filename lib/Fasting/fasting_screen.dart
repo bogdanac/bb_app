@@ -238,7 +238,7 @@ class _FastingScreenState extends State<FastingScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Fast postponed to tomorrow at 2 PM'),
-        backgroundColor: Colors.orange,
+        backgroundColor: Color(0xFFF98834),
       ),
     );
   }
@@ -307,14 +307,14 @@ class _FastingScreenState extends State<FastingScreen>
       return {
         'phase': 'Fat Burning Begins',
         'message': 'Your body starts burning fat for fuel',
-        'color': Colors.orange,
+        'color': Color(0xFFF98834),
         'progress': ((hoursElapsed - 8) / 4).clamp(0.0, 1.0),
       };
     } else if (hoursElapsed < 16) {
       return {
         'phase': 'Ketosis Initiation',
         'message': 'Ketone production is ramping up',
-        'color': Colors.purple,
+        'color': Color(0xFFBD3AA6),
         'progress': ((hoursElapsed - 12) / 4).clamp(0.0, 1.0),
       };
     } else if (hoursElapsed < 20) {
@@ -342,14 +342,14 @@ class _FastingScreenState extends State<FastingScreen>
       return {
         'phase': 'Enhanced Autophagy',
         'message': 'Peak cellular cleanup and renewal',
-        'color': Colors.pink,
+        'color': Color(0xFFFB3380),
         'progress': ((hoursElapsed - 36) / 12).clamp(0.0, 1.0),
       };
     } else {
       return {
         'phase': 'Maximum Benefits',
         'message': 'Ultimate metabolic transformation',
-        'color': Colors.deepPurple,
+        'color': Color(0xFFBD3AA6),
         'progress': 1.0,
       };
     }

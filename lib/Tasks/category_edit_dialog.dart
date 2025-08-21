@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 
 // CATEGORY EDIT DIALOG
 class CategoryEditDialog extends StatefulWidget {
@@ -22,8 +23,12 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   late Color _selectedColor;
 
   final List<Color> _availableColors = [
-    Colors.red,
-    Colors.pink,
+    AppColors.error, // Red for important categories only
+    AppColors.pink,
+    AppColors.purple,
+    AppColors.coral,
+    AppColors.orange,
+    AppColors.yellow,
     Colors.purple,
     Colors.deepPurple,
     Colors.indigo,
@@ -34,9 +39,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     Colors.green,
     Colors.lightGreen,
     Colors.lime,
-    Colors.yellow,
     Colors.amber,
-    Colors.orange,
     Colors.deepOrange,
   ];
 
@@ -44,7 +47,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   void initState() {
     super.initState();
     _nameController.text = widget.initialName ?? '';
-    _selectedColor = widget.initialColor ?? Colors.blue;
+    _selectedColor = widget.initialColor ?? AppColors.purple; // Default to purple
   }
 
   @override

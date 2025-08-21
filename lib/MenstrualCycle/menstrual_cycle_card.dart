@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MenstrualCycleCard extends StatefulWidget {
@@ -201,22 +202,36 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
   Color _getPhaseColor() {
     final phase = _getCyclePhase();
 
-    if (phase.startsWith("Menstruation")) return Colors.red.shade400;
-    if (phase == "Follicular Phase") return Colors.green.shade400;
-    if (phase == "Ovulation") return Colors.orange.shade400;
-    if (phase.contains("Early Luteal")) return Colors.purple.shade300;
-    if (phase.contains("Middle Luteal")) return Colors.purple.shade400;
-    if (phase.contains("Late Luteal")) return Colors.purple.shade500;
-    if (phase.contains("Luteal")) return Colors.purple.shade400;
+    if (phase.startsWith("Menstruation")) return AppColors.error; // Red for menstruation (important)
+    if (phase == "Follicular Phase") return AppColors.coral; // Coral instead of yellow
+    if (phase == "Ovulation") return AppColors.orange;
+    if (phase.contains("Early Luteal")) return AppColors.purple;
+    if (phase.contains("Middle Luteal")) return AppColors.purple;
+    if (phase.contains("Late Luteal")) return AppColors.purple;
+    if (phase.contains("Luteal")) return AppColors.purple;
 
-    return Colors.grey.shade500;
+    return AppColors.coral;
+  }
+  
+  Color _getPastelPhaseColor() {
+    final phase = _getCyclePhase();
+
+    if (phase.startsWith("Menstruation")) return AppColors.pastelRed; // Pastel red for menstruation
+    if (phase == "Follicular Phase") return AppColors.pastelCoral; // Pastel coral instead of yellow
+    if (phase == "Ovulation") return AppColors.pastelOrange; // Pastel orange
+    if (phase.contains("Early Luteal")) return AppColors.lightPurple; // Light purple
+    if (phase.contains("Middle Luteal")) return AppColors.pastelPurple; // Pastel purple
+    if (phase.contains("Late Luteal")) return AppColors.pastelPurple; // Pastel purple
+    if (phase.contains("Luteal")) return AppColors.pastelPurple; // Pastel purple
+
+    return AppColors.pastelCoral; // Default pastel coral
   }
 
   IconData _getPhaseIcon() {
     final phase = _getCyclePhase();
 
     if (phase.startsWith("Menstruation")) return Icons.water_drop_rounded;
-    if (phase == "Follicular Phase") return Icons.eco_rounded;
+    if (phase == "Follicular Phase") return Icons.energy_savings_leaf; // Energy/growth icon - perfect for follicular phase renewal
     if (phase == "Ovulation") return Icons.favorite_rounded;
     if (phase.contains("Luteal")) return Icons.nights_stay_rounded;
 
@@ -237,106 +252,77 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
     return "📅";
   }
 
-  Widget _buildAnimatedEmoji() {
-    return AnimatedBuilder(
-      animation: _animationController,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: _scaleAnimation.value,
-          child: Transform.rotate(
-            angle: _rotationAnimation.value,
-            child: Text(
-              _getPhaseEmoji(),
-              style: const TextStyle(fontSize: 36),
-            ),
-          ),
-        );
-      },
-    );
-  }
+  // Removed animated emoji method
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        width: double.infinity,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              _getPhaseColor().withOpacity(0.15),
-              _getPhaseColor().withOpacity(0.05),
-              Colors.white,
-            ],
-            stops: const [0.0, 0.4, 1.0],
-          ),
+          borderRadius: BorderRadius.circular(16),
+          color: _getPhaseColor().withOpacity(0.08), // More subtle like other cards
         ),
-        child: Column(
-          children: [
-            // Header - Always tappable for expansion
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  _isExpanded = !_isExpanded;
-                });
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: _getPhaseColor().withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        _getPhaseIcon(),
-                        color: _getPhaseColor(),
-                        size: 28,
-                      ),
+      child: Column(
+        children: [
+          // Header - Always tappable for expansion
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _isExpanded = !_isExpanded;
+              });
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // Better padding
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10), // Better icon padding
+                    decoration: BoxDecoration(
+                      color: _getPhaseColor().withOpacity(0.15), // Slightly more visible for icon
+                      borderRadius: BorderRadius.circular(10), // Smaller radius
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _getCyclePhase(),
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white70,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _getCycleInfo(),
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
+                    child: Icon(
+                      _getPhaseIcon(),
+                      color: _getPhaseColor(),
+                      size: 24, // Smaller icon
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
+                  ),
+                  const SizedBox(width: 12), // Better spacing
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildAnimatedEmoji()
+                        Text(
+                          _getCyclePhase(),
+                          style: TextStyle(
+                            fontSize: 16, // Smaller font
+                            fontWeight: FontWeight.w600, // Less bold
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 3), // Better text spacing
+                        Text(
+                          _getCycleInfo(),
+                          style: TextStyle(
+                            fontSize: 13, // Smaller
+                            color: Colors.white60, // More subtle
+                            fontWeight: FontWeight.w400,
+                          ),
+                          maxLines: 1, // Single line
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  // Removed animated emoji
+                ],
               ),
             ),
-          ],
+          ),
+        ],
         ),
       ),
     );
