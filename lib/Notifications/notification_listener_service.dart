@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 
 class NotificationListenerService {
   static const MethodChannel _channel = MethodChannel('notification_listener');
@@ -17,6 +19,9 @@ class NotificationListenerService {
         debugPrint('NotificationListenerService already initialized, skipping...');
         return;
       }
+      
+      // Initialize audio player for alarm functionality
+      await _initializeAudioPlayer();
       
       // Set up method call handler with error protection
       _channel.setMethodCallHandler((call) async {
@@ -141,28 +146,87 @@ class NotificationListenerService {
     }
   }
   
-  // Play loud alarm sound
+  // Initialize audio player with basic settings
+  static Future<void> _initializeAudioPlayer() async {
+    try {
+      debugPrint('Initializing audio player...');
+      
+      // Don't set audio context during initialization - do it when playing
+      // Just verify the player is ready
+      await _audioPlayer.setVolume(0.0); // Silent test
+      await _audioPlayer.stop(); // Ensure stopped
+      
+      debugPrint('Audio player ready');
+    } catch (e) {
+      debugPrint('Error initializing audio player: $e');
+    }
+  }
+  
+  // Play loud alarm sound - AUDIO PLAYER PRIORITY
   static Future<void> _playLoudAlarm() async {
     try {
-      // Stop any current sound
+      debugPrint('Starting alarm with audio player priority...');
+      
+      // PRIORITY 1: Audio player with alarm stream (this works!)
       await _audioPlayer.stop();
       
-      // Set volume to maximum and play alarm
+      await _audioPlayer.setAudioContext(AudioContext(
+        android: AudioContextAndroid(
+          isSpeakerphoneOn: true,
+          stayAwake: true,
+          contentType: AndroidContentType.sonification,
+          usageType: AndroidUsageType.alarm, // This bypasses media volume
+          audioFocus: AndroidAudioFocus.gain,
+        ),
+      ));
+      
       await _audioPlayer.setVolume(1.0);
       await _audioPlayer.setReleaseMode(ReleaseMode.loop);
       
-      // Use system alarm sound or custom sound
       await _audioPlayer.play(AssetSource('sounds/alarm.mp3'));
+      debugPrint('Audio player alarm started (uses ALARM volume)');
       
-      // Stop alarm after 30 seconds
-      Future.delayed(const Duration(seconds: 30), () {
-        _audioPlayer.stop();
+      // Stop after 30 seconds
+      Future.delayed(const Duration(seconds: 30), () async {
+        await _audioPlayer.stop();
+        debugPrint('Alarm stopped');
       });
       
+      // PRIORITY 2: Vibration (always works)
+      await _triggerVibration();
+      
+      // PRIORITY 3: Show notification (for visibility, not sound)
+      await _showLoudNotification();
+      
+      debugPrint('Full alarm sequence activated');
+      
     } catch (e) {
-      debugPrint('Error playing alarm: $e');
-      // Fallback to system sound
-      await SystemSound.play(SystemSoundType.alert);
+      debugPrint('Audio player alarm failed: $e');
+      
+      // Emergency fallback
+      await _triggerVibration();
+      await _showLoudNotification();
+      
+      // System sound backup
+      for (int i = 0; i < 10; i++) {
+        await SystemSound.play(SystemSoundType.alert);
+        await Future.delayed(const Duration(milliseconds: 800));
+      }
+    }
+  }
+  
+  // Trigger vibration
+  static Future<void> _triggerVibration() async {
+    try {
+      debugPrint('Triggering vibration...');
+      await HapticFeedback.heavyImpact();
+      // Add additional vibration patterns for more noticeable feedback
+      await Future.delayed(const Duration(milliseconds: 200));
+      await HapticFeedback.heavyImpact();
+      await Future.delayed(const Duration(milliseconds: 200));
+      await HapticFeedback.heavyImpact();
+    } catch (e) {
+      debugPrint('Vibration failed: $e');
     }
   }
   
@@ -238,12 +302,111 @@ class NotificationListenerService {
     ];
   }
   
+  // Show loud notification with alarm sound
+  static Future<void> _showLoudNotification() async {
+    try {
+      final FlutterLocalNotificationsPlugin notifications = FlutterLocalNotificationsPlugin();
+      
+      await notifications.show(
+        9999, // High priority ID
+        '🚨 MOTION DETECTED!',
+        'Security alert - Check your cameras immediately!',
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'motion_alert_loud',
+            'Security Motion Alerts',
+            channelDescription: 'Critical security motion detection alerts',
+            importance: Importance.max,
+            priority: Priority.max,
+            category: AndroidNotificationCategory.alarm,
+            fullScreenIntent: true,
+            enableLights: true,
+            enableVibration: true,
+            playSound: true,
+            sound: const RawResourceAndroidNotificationSound('alarm'), // Use system alarm sound
+            ledColor: Colors.red,
+            ledOnMs: 300,
+            ledOffMs: 300,
+            vibrationPattern: Int64List.fromList([0, 1000, 500, 1000]),
+            audioAttributesUsage: AudioAttributesUsage.alarm, // CRITICAL: Use alarm audio stream
+            ongoing: true,
+            autoCancel: false,
+            actions: [
+              const AndroidNotificationAction(
+                'stop_alarm',
+                'STOP ALARM',
+                showsUserInterface: true,
+              ),
+            ],
+          ),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            sound: 'alarm.aiff',
+            interruptionLevel: InterruptionLevel.critical,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error showing loud notification: $e');
+    }
+  }
+
   // Stop alarm
   static Future<void> stopAlarm() async {
     try {
       await _audioPlayer.stop();
+      
+      // Also dismiss the alarm notification
+      final FlutterLocalNotificationsPlugin notifications = FlutterLocalNotificationsPlugin();
+      await notifications.cancel(9999);
     } catch (e) {
       debugPrint('Error stopping alarm: $e');
+    }
+  }
+  
+  
+  // Simple test to verify basic audio functionality
+  static Future<void> testAlarmSound() async {
+    debugPrint('=== SIMPLE ALARM TEST ===');
+    debugPrint('Make sure ALARM volume is up (not media volume)');
+    
+    try {
+      // Simple test - just try to play the sound
+      await _audioPlayer.stop();
+      
+      await _audioPlayer.setAudioContext(AudioContext(
+        android: AudioContextAndroid(
+          isSpeakerphoneOn: true,
+          stayAwake: true,
+          contentType: AndroidContentType.sonification,
+          usageType: AndroidUsageType.alarm,
+          audioFocus: AndroidAudioFocus.gain,
+        ),
+      ));
+      
+      await _audioPlayer.setVolume(1.0);
+      await _audioPlayer.setReleaseMode(ReleaseMode.stop);
+      
+      final source = AssetSource('sounds/alarm.mp3');
+      await _audioPlayer.play(source);
+      
+      debugPrint('Playing test sound for 5 seconds...');
+      
+      // Stop after 5 seconds
+      Future.delayed(const Duration(seconds: 5), () async {
+        await _audioPlayer.stop();
+        debugPrint('Test sound stopped');
+      });
+      
+      debugPrint('If you hear sound, the alarm should work');
+      debugPrint('If no sound, check your ALARM volume setting');
+      
+    } catch (e) {
+      debugPrint('Audio test failed: $e');
+      // Try system sound as backup
+      await SystemSound.play(SystemSoundType.alert);
     }
   }
   

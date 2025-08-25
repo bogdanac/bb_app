@@ -2,11 +2,12 @@ import 'dart:convert';
 
 import 'package:bb_app/Routines/routine_edit_screen.dart';
 import 'package:bb_app/Routines/routine_execution_screen.dart';
-import 'package:bb_app/Notifications/notification_settings_screen.dart';
+import 'package:bb_app/Routines/routine_reminder_settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'routine_data_models.dart';
 import '../theme/app_colors.dart';
+import '../Notifications/notification_service.dart';
 
 // ROUTINES SCREEN - UPDATED WITH NOTIFICATION SETTINGS
 class RoutinesScreen extends StatefulWidget {
@@ -59,6 +60,21 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
         .map((routine) => jsonEncode(routine.toJson()))
         .toList();
     await prefs.setStringList('routines', routinesJson);
+    
+    // Update notification schedules
+    final notificationService = NotificationService();
+    for (final routine in _routines) {
+      if (routine.reminderEnabled) {
+        await notificationService.scheduleRoutineNotification(
+          routine.id,
+          routine.title,
+          routine.reminderHour,
+          routine.reminderMinute,
+        );
+      } else {
+        await notificationService.cancelRoutineNotification(routine.id);
+      }
+    }
   }
 
   _addRoutine() {
@@ -97,7 +113,11 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     );
   }
 
-  _deleteRoutine(Routine routine) {
+  _deleteRoutine(Routine routine) async {
+    // Cancel the routine's notification first
+    final notificationService = NotificationService();
+    await notificationService.cancelRoutineNotification(routine.id);
+    
     setState(() {
       _routines.removeWhere((r) => r.id == routine.id);
     });
@@ -135,14 +155,23 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     );
   }
 
-  _openNotificationSettings() {
+  _openReminderSettings() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => const NotificationSettingsScreen(),
+        builder: (context) => RoutineReminderSettingsScreen(
+          routines: _routines,
+          onSave: (updatedRoutines) {
+            setState(() {
+              _routines = updatedRoutines;
+            });
+            _saveRoutines();
+          },
+        ),
       ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -152,9 +181,9 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
         backgroundColor: Colors.transparent,
         actions: [
           IconButton(
+            onPressed: _openReminderSettings,
             icon: const Icon(Icons.notifications_outlined),
-            onPressed: _openNotificationSettings,
-            tooltip: 'Notification Settings',
+            tooltip: 'Reminder Settings',
           ),
         ],
       ),
@@ -298,6 +327,41 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                               ),
                             ),
                           ),
+                          if (routine.reminderEnabled) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.coral.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.coral.withOpacity(0.3),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.notifications_active_rounded,
+                                    color: AppColors.coral,
+                                    size: 14,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${routine.reminderHour.toString().padLeft(2, '0')}:${routine.reminderMinute.toString().padLeft(2, '0')}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.coral,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
                           Icon(
                             Icons.edit_rounded,
                             color: Colors.grey[600],
@@ -342,7 +406,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addRoutine,
-        backgroundColor: Theme.of(context).colorScheme.primary,
+        backgroundColor: AppColors.successGreen,
         child: const Icon(Icons.add_rounded),
       ),
     );

@@ -85,6 +85,30 @@ class NotificationService {
         print('Notifications initialized: $initialized');
       }
 
+      // Create critical alarm notification channel for motion alerts
+      final androidImpl = flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      if (androidImpl != null) {
+        const AndroidNotificationChannel alarmChannel = AndroidNotificationChannel(
+          'motion_alert_loud',
+          'Security Motion Alerts',
+          description: 'Critical security motion detection alerts that bypass Do Not Disturb',
+          importance: Importance.max,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound('alarm'),
+          enableLights: true,
+          enableVibration: true,
+          ledColor: Color(0xFFFF0000), // Red
+          audioAttributesUsage: AudioAttributesUsage.alarm, // CRITICAL: Use alarm audio stream
+        );
+        
+        await androidImpl.createNotificationChannel(alarmChannel);
+            
+        if (kDebugMode) {
+          print('Created critical alarm notification channel');
+        }
+      }
+
       // Request permissions for iOS
       final iosImplementation = flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
@@ -119,8 +143,8 @@ class NotificationService {
       // Test immediate notification to verify setup
       //await _sendTestNotification();
       
-      // Schedule default notifications
-      await _scheduleDefaultMorningNotification();
+      // Cancel any legacy morning notifications that might still be scheduled
+      await _cancelLegacyMorningNotifications();
       
     } catch (e) {
       if (kDebugMode) {
@@ -176,94 +200,48 @@ class NotificationService {
       // You can add navigation logic here if needed
     } else if (payload == 'morning_routine') {
       // Morning routine notification tapped
+    } else if (payload.startsWith('routine_reminder_')) {
+      // Routine reminder notification tapped
+      // You can add navigation logic here if needed
     } else if (payload.contains('water_')) {
       // Water reminder notification tapped
+    } else if (payload == 'fasting_progress') {
+      // Fasting progress notification tapped - navigate to fasting screen
+      // You can add navigation logic here if needed
+    } else if (payload == 'fasting_completed') {
+      // Fasting completed notification tapped
     }
   }
 
-  Future<void> _scheduleDefaultMorningNotification() async {
-    final prefs = await SharedPreferences.getInstance();
-    final isEnabled = prefs.getBool('morning_notification_enabled') ?? true;
-    final hour = prefs.getInt('morning_notification_hour') ?? 8;
-    final minute = prefs.getInt('morning_notification_minute') ?? 0;
-
-    if (isEnabled) {
-      await scheduleMorningNotification(hour, minute);
+  // Cancel legacy morning notifications and clean up old preferences
+  Future<void> _cancelLegacyMorningNotifications() async {
+    try {
+      // Cancel notification ID 0 which was used for morning notifications
+      await flutterLocalNotificationsPlugin.cancel(0);
+      
+      // Cancel some other potential legacy IDs, but AVOID water notification IDs (1, 2, 3)
+      // and fasting notification ID (100)
+      for (int i = 4; i < 10; i++) {
+        await flutterLocalNotificationsPlugin.cancel(i);
+      }
+      
+      // Clean up old preferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('morning_notification_enabled');
+      await prefs.remove('morning_notification_hour');
+      await prefs.remove('morning_notification_minute');
+      
+      // After cleanup, reschedule water notifications to make sure they're active
+      await scheduleWaterReminders();
+      
+      if (kDebugMode) {
+        print('Legacy morning notifications cancelled, preferences cleaned up, and water notifications rescheduled');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error cancelling legacy morning notifications: $e');
+      }
     }
-  }
-
-  Future<void> scheduleMorningNotification(int hour, int minute) async {
-    if (kDebugMode) {
-      print('Scheduling morning notification for $hour:${minute.toString().padLeft(2, '0')}');
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('morning_notification_enabled', true);
-    await prefs.setInt('morning_notification_hour', hour);
-    await prefs.setInt('morning_notification_minute', minute);
-
-    // Cancel existing notifications
-    await flutterLocalNotificationsPlugin.cancel(0);
-
-    // Schedule new notification
-    final now = DateTime.now();
-    var scheduledDate = DateTime(now.year, now.month, now.day, hour, minute);
-
-    // If the time has passed today, schedule for tomorrow
-    if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
-    }
-
-    // Use UTC timezone to avoid initialization issues
-    final location = tz.UTC;
-    await flutterLocalNotificationsPlugin.zonedSchedule(
-      0,
-      '🌅 Good Morning!',
-      'Time to start your morning routine! ☀️',
-      tz.TZDateTime.from(scheduledDate, location),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'morning_routine',
-          'Morning Routine',
-          channelDescription: 'Daily morning routine reminders',
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time, // Repeat daily
-      payload: 'morning_routine',
-    );
-
-    if (kDebugMode) {
-      print('Morning notification scheduled successfully!');
-    }
-  }
-
-  Future<void> cancelMorningNotification() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('morning_notification_enabled', false);
-
-    await flutterLocalNotificationsPlugin.cancel(0);
-
-    if (kDebugMode) {
-      print('Morning notification cancelled');
-    }
-  }
-
-  Future<bool> isMorningNotificationEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('morning_notification_enabled') ?? true;
-  }
-
-  Future<Map<String, int>> getMorningNotificationTime() async {
-    final prefs = await SharedPreferences.getInstance();
-    return {
-      'hour': prefs.getInt('morning_notification_hour') ?? 8,
-      'minute': prefs.getInt('morning_notification_minute') ?? 0,
-    };
   }
 
   // Task notification methods
@@ -287,8 +265,18 @@ class NotificationService {
         scheduledDate = scheduledDate.add(const Duration(days: 1));
       }
 
-      // Use UTC timezone to avoid initialization issues
-      final location = tz.UTC;
+      // Use local timezone instead of UTC for proper scheduling
+      tz.Location location;
+      try {
+        location = tz.local;
+      } catch (e) {
+        // Fallback to UTC if local timezone is not available
+        location = tz.UTC;
+        if (kDebugMode) {
+          print('Using UTC fallback for task notification: $e');
+        }
+      }
+
       await flutterLocalNotificationsPlugin.zonedSchedule(
         notificationId,
         '📋 Task Reminder',
@@ -303,16 +291,23 @@ class NotificationService {
             priority: Priority.high,
             icon: '@mipmap/ic_launcher',
             color: Color(0xFFF98834), // Orange
+            enableVibration: true,
+            playSound: true,
           ),
-          iOS: DarwinNotificationDetails(),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: isRecurring ? DateTimeComponents.time : null,
         payload: 'task_reminder_$taskId',
       );
 
       if (kDebugMode) {
-        print('Scheduled task notification: $title at $scheduledDate (ID: $notificationId)');
+        print('Scheduled task notification: $title at $scheduledDate (ID: $notificationId) - Location: ${location.name}');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -413,6 +408,7 @@ class NotificationService {
           iOS: DarwinNotificationDetails(),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
         payload: 'water_gentle_9am',
       );
@@ -462,6 +458,7 @@ class NotificationService {
           ),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
         payload: 'water_aggressive_10am',
       );
@@ -510,6 +507,7 @@ class NotificationService {
           ),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
         payload: 'water_behind_2pm',
       );
@@ -568,5 +566,243 @@ class NotificationService {
       print('Rescheduling water notifications for tomorrow...');
     }
     await scheduleWaterReminders();
+  }
+
+  // Routine notification methods
+  Future<void> scheduleRoutineNotification(String routineId, String routineTitle, int hour, int minute) async {
+    try {
+      final notificationId = 2000 + routineId.hashCode.abs() % 8000; // Keep routine notifications in 2000-9999 range
+      
+      // Cancel existing notification
+      await flutterLocalNotificationsPlugin.cancel(notificationId);
+      
+      // Schedule new notification
+      final now = DateTime.now();
+      var scheduledDate = DateTime(now.year, now.month, now.day, hour, minute);
+
+      // If the time has passed today, schedule for tomorrow
+      if (scheduledDate.isBefore(now)) {
+        scheduledDate = scheduledDate.add(const Duration(days: 1));
+      }
+
+      // Use UTC timezone like other notifications
+      final location = tz.UTC;
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        notificationId,
+        '✨ $routineTitle',
+        'Time to start your routine! Let\'s make today amazing! 🌟',
+        tz.TZDateTime.from(scheduledDate, location),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'routine_reminders',
+            'Routine Reminders',
+            channelDescription: 'Daily reminders for your routines',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+            color: Color(0xFFF98834), // Coral color
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time, // Repeat daily
+        payload: 'routine_reminder_$routineId',
+      );
+      
+      if (kDebugMode) {
+        print('Scheduled routine notification: $routineTitle at $scheduledDate (ID: $notificationId)');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error scheduling routine notification: $e');
+      }
+    }
+  }
+
+  Future<void> cancelRoutineNotification(String routineId) async {
+    try {
+      final notificationId = 2000 + routineId.hashCode.abs() % 8000;
+      await flutterLocalNotificationsPlugin.cancel(notificationId);
+      
+      if (kDebugMode) {
+        print('Cancelled routine notification for routine: $routineId (ID: $notificationId)');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error cancelling routine notification: $e');
+      }
+    }
+  }
+
+  Future<void> cancelAllRoutineNotifications() async {
+    try {
+      // Cancel all routine notifications (IDs 2000-9999)
+      for (int i = 2000; i < 10000; i++) {
+        await flutterLocalNotificationsPlugin.cancel(i);
+      }
+
+      if (kDebugMode) {
+        print('Cancelled all routine notifications');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error cancelling routine notifications: $e');
+      }
+    }
+  }
+
+  // Method to clean up all duplicate morning routine notifications
+  Future<void> cleanupDuplicateMorningNotifications() async {
+    try {
+      // Cancel potential duplicate notification IDs, but preserve water (1,2,3) and fasting (100)
+      await flutterLocalNotificationsPlugin.cancel(0);
+      for (int i = 4; i < 100; i++) {
+        await flutterLocalNotificationsPlugin.cancel(i);
+      }
+      for (int i = 101; i < 200; i++) {
+        await flutterLocalNotificationsPlugin.cancel(i);
+      }
+      
+      // Also cancel routine notifications that might contain "morning"
+      for (int i = 2000; i < 2100; i++) {
+        await flutterLocalNotificationsPlugin.cancel(i);
+      }
+
+      // Reschedule water notifications to ensure they're active
+      await scheduleWaterReminders();
+
+      if (kDebugMode) {
+        print('Cleaned up duplicate morning notifications while preserving water notifications');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error cleaning up duplicate notifications: $e');
+      }
+    }
+  }
+
+  // Fasting notification methods
+  static const int _fastingProgressNotificationId = 100;
+
+  Future<void> showFastingProgressNotification({
+    required String fastType,
+    required Duration elapsedTime,
+    required Duration totalDuration,
+    required String currentPhase,
+  }) async {
+    try {
+      final hours = elapsedTime.inHours;
+      final minutes = elapsedTime.inMinutes.remainder(60);
+      
+      final progress = totalDuration.inMinutes > 0 
+          ? (elapsedTime.inMinutes / totalDuration.inMinutes * 100).round()
+          : 0;
+
+      final title = '🔥 $fastType in Progress';
+      final body = '${hours}h ${minutes}m • $currentPhase • ${progress}%';
+
+      await flutterLocalNotificationsPlugin.show(
+        _fastingProgressNotificationId,
+        title,
+        body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'fasting_progress',
+            'Fasting Progress',
+            channelDescription: 'Ongoing fasting progress updates',
+            importance: Importance.low,
+            priority: Priority.low,
+            icon: '@mipmap/ic_launcher',
+            color: const Color(0xFFF98834), // Orange
+            ongoing: true, // Makes it a permanent notification
+            autoCancel: false, // Prevents swipe to dismiss
+            showProgress: true,
+            maxProgress: 100,
+            progress: progress,
+            enableVibration: false,
+            playSound: false,
+            actions: [
+              const AndroidNotificationAction(
+                'stop_fast',
+                'Stop Fast',
+                titleColor: Color(0xFFFF0000),
+              ),
+            ],
+          ),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: false,
+            presentBadge: true,
+            presentSound: false,
+          ),
+        ),
+        payload: 'fasting_progress',
+      );
+
+      if (kDebugMode) {
+        print('Updated fasting progress notification: $progress%');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error showing fasting progress notification: $e');
+      }
+    }
+  }
+
+  Future<void> cancelFastingProgressNotification() async {
+    try {
+      await flutterLocalNotificationsPlugin.cancel(_fastingProgressNotificationId);
+      
+      if (kDebugMode) {
+        print('Cancelled fasting progress notification');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error cancelling fasting progress notification: $e');
+      }
+    }
+  }
+
+  Future<void> showFastingCompletedNotification({
+    required String fastType,
+    required Duration actualDuration,
+  }) async {
+    try {
+      final hours = actualDuration.inHours;
+      final minutes = actualDuration.inMinutes.remainder(60);
+
+      await flutterLocalNotificationsPlugin.show(
+        _fastingProgressNotificationId + 1,
+        '🎉 Fast Completed!',
+        'Congratulations! You completed your $fastType in ${hours}h ${minutes}m',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'fasting_completed',
+            'Fasting Completed',
+            channelDescription: 'Notifications when fasting is completed',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+            color: Color(0xFF4CAF50), // Green
+            enableVibration: true,
+            playSound: true,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: 'fasting_completed',
+      );
+
+      if (kDebugMode) {
+        print('Showed fasting completed notification');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error showing fasting completed notification: $e');
+      }
+    }
   }
 }

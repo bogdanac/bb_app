@@ -203,7 +203,7 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
     final phase = _getCyclePhase();
 
     if (phase.startsWith("Menstruation")) return AppColors.error; // Red for menstruation (important)
-    if (phase == "Follicular Phase") return AppColors.coral; // Coral instead of yellow
+    if (phase == "Follicular Phase") return AppColors.successGreen; // Green leaf color for growth phase
     if (phase == "Ovulation") return AppColors.orange;
     if (phase.contains("Early Luteal")) return AppColors.purple;
     if (phase.contains("Middle Luteal")) return AppColors.purple;
@@ -217,7 +217,7 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
     final phase = _getCyclePhase();
 
     if (phase.startsWith("Menstruation")) return AppColors.pastelRed; // Pastel red for menstruation
-    if (phase == "Follicular Phase") return AppColors.pastelCoral; // Pastel coral instead of yellow
+    if (phase == "Follicular Phase") return AppColors.successGreen.withOpacity(0.3); // Pastel green for growth phase
     if (phase == "Ovulation") return AppColors.pastelOrange; // Pastel orange
     if (phase.contains("Early Luteal")) return AppColors.lightPurple; // Light purple
     if (phase.contains("Middle Luteal")) return AppColors.pastelPurple; // Pastel purple
@@ -260,69 +260,49 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: _getPhaseColor().withOpacity(0.08), // More subtle like other cards
+          color: _getPhaseColor().withOpacity(0.08),
         ),
-      child: Column(
-        children: [
-          // Header - Always tappable for expansion
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _isExpanded = !_isExpanded;
-              });
-            },
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // Better padding
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10), // Better icon padding
-                    decoration: BoxDecoration(
-                      color: _getPhaseColor().withOpacity(0.15), // Slightly more visible for icon
-                      borderRadius: BorderRadius.circular(10), // Smaller radius
-                    ),
-                    child: Icon(
-                      _getPhaseIcon(),
-                      color: _getPhaseColor(),
-                      size: 24, // Smaller icon
-                    ),
-                  ),
-                  const SizedBox(width: 12), // Better spacing
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _getCyclePhase(),
-                          style: TextStyle(
-                            fontSize: 16, // Smaller font
-                            fontWeight: FontWeight.w600, // Less bold
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 3), // Better text spacing
-                        Text(
-                          _getCycleInfo(),
-                          style: TextStyle(
-                            fontSize: 13, // Smaller
-                            color: Colors.white60, // More subtle
-                            fontWeight: FontWeight.w400,
-                          ),
-                          maxLines: 1, // Single line
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Removed animated emoji
-                ],
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Row(
+            children: [
+              Icon(
+                _getPhaseIcon(),
+                color: _getPhaseColor(),
+                size: 24,
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _getCyclePhase(),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _getCycleInfo(),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white60,
+                        fontWeight: FontWeight.w400,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
         ),
       ),
     );

@@ -19,6 +19,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
   bool _isLoading = true;
   bool _isLoadingApps = false;
   bool _isRefreshingPermission = false;
+  bool _showAllCameraApps = false;
 
   @override
   void initState() {
@@ -184,6 +185,33 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
     return app['enabled'] ?? false;
   }
 
+  List<Map<String, String>> _getFilteredApps() {
+    if (_showAllCameraApps) {
+      return _availableApps;
+    }
+    
+    // Show only Tapo app and other selected apps
+    final tapoApps = _availableApps.where((app) => 
+      app['appName']?.toLowerCase().contains('tapo') == true ||
+      app['packageName']?.toLowerCase().contains('tapo') == true
+    ).toList();
+    
+    // Also include any apps that are already monitored/enabled
+    final monitoredApps = _availableApps.where((app) => 
+      _isAppMonitored(app['packageName'] ?? '')
+    ).toList();
+    
+    // Combine both lists and remove duplicates
+    final combined = <Map<String, String>>[...tapoApps];
+    for (final app in monitoredApps) {
+      if (!combined.any((existing) => existing['packageName'] == app['packageName'])) {
+        combined.add(app);
+      }
+    }
+    
+    return combined;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -208,6 +236,41 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Motion Alerts Status Card (on top)
+            if (_isEnabled && _hasPermission && _monitoredApps.any((app) => app['enabled'] == true))
+              Card(
+                color: Colors.green.withOpacity(0.15),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(Icons.security_rounded, color: Colors.green, size: 28),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Motion Alerts Active ✓',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Security alerts enabled for night hours (22:00-08:00)',
+                              style: TextStyle(color: Colors.black54),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.check_circle, color: Colors.green, size: 24),
+                    ],
+                  ),
+                ),
+              ),
+            
+            if (_isEnabled && _hasPermission && _monitoredApps.any((app) => app['enabled'] == true))
+              const SizedBox(height: 16),
+            
             // Simple description
             Card(
               child: Padding(
@@ -229,29 +292,29 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
             
             const SizedBox(height: 20),
             
-            // Step 1: Permission
-            Card(
-              color: _hasPermission ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          _hasPermission ? Icons.check_circle : Icons.looks_one_rounded,
-                          color: _hasPermission ? Colors.green : AppColors.orange,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          _hasPermission ? 'Permission Granted ✓' : 'Step 1: Grant Permission',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    if (!_hasPermission) ...[
+            // Step 1: Permission (only show if not granted)
+            if (!_hasPermission)
+              Card(
+                color: Colors.orange.withOpacity(0.1),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.looks_one_rounded,
+                            color: AppColors.orange,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'Step 1: Grant Permission',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 12),
                       _isRefreshingPermission
                         ? const Row(
@@ -274,12 +337,11 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
                             child: const Text('Grant Notification Access'),
                           ),
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
             
-            const SizedBox(height: 16),
+            if (!_hasPermission) const SizedBox(height: 16),
             
             // Step 2: Enable alerts
             Card(
@@ -375,86 +437,43 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
                         'No apps found. Try refreshing by toggling permission.',
                         style: TextStyle(color: Colors.grey),
                       )
-                    else
-                      // Scrollable app list
-                      Container(
-                        height: 200,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: ListView.builder(
-                          itemCount: _availableApps.length,
-                          itemBuilder: (context, index) {
-                            final app = _availableApps[index];
-                            final isMonitored = _isAppMonitored(app['packageName'] ?? '');
-                            return CheckboxListTile(
-                              title: Text(app['appName'] ?? 'Unknown'),
-                              subtitle: Text(app['packageName'] ?? ''),
-                              value: isMonitored,
-                              onChanged: (value) {
-                                _toggleApp(app['packageName'] ?? '', app['appName'] ?? '');
-                              },
-                              dense: true,
-                            );
-                          },
+                    else ...[
+                      // Filtered app list
+                      ..._getFilteredApps().map((app) {
+                        final isMonitored = _isAppMonitored(app['packageName'] ?? '');
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          child: CheckboxListTile(
+                            title: Text(app['appName'] ?? 'Unknown'),
+                            subtitle: Text(app['packageName'] ?? ''),
+                            value: isMonitored,
+                            onChanged: (value) {
+                              _toggleApp(app['packageName'] ?? '', app['appName'] ?? '');
+                            },
+                            dense: true,
+                          ),
+                        );
+                      }).toList(),
+                      
+                      // Show/Hide all apps button
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _showAllCameraApps = !_showAllCameraApps;
+                          });
+                        },
+                        icon: Icon(_showAllCameraApps ? Icons.expand_less : Icons.expand_more),
+                        label: Text(_showAllCameraApps ? 'Show Less' : 'Show All Camera Apps'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.purple,
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),
             ),
-            
-            const SizedBox(height: 16),
-            
-            // Test button
-            if (_isEnabled && _hasPermission && _monitoredApps.any((app) => app['enabled'] == true))
-              Card(
-                color: Colors.blue.withOpacity(0.1),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Test Your Setup',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                NotificationListenerService.triggerLoudAlarm(
-                                  'Person Detected', 
-                                  'Motion detected in camera view'
-                                );
-                              },
-                              icon: const Icon(Icons.volume_up_rounded),
-                              label: const Text('Test Alarm'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.orange,
-                                foregroundColor: Colors.white,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            onPressed: () {
-                              NotificationListenerService.stopAlarm();
-                            },
-                            icon: const Icon(Icons.stop_rounded),
-                            style: IconButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
           ],
         ),
       ),

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
 import 'package:intl/intl.dart';
+import '../theme/app_colors.dart';
 import '../Tasks/tasks_data_models.dart';
 import '../Tasks/task_service.dart';
 import '../Tasks/todo_screen.dart';
@@ -80,7 +80,6 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
       debugPrint('Toggling task completion for: ${task.title}');
       
       // Update task completion status
-      final wasCompleted = task.isCompleted;
       task.isCompleted = !task.isCompleted;
       task.completedAt = task.isCompleted ? DateTime.now() : null;
 
@@ -152,13 +151,25 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
           task: task,
           categories: _categories,
           onSave: (updatedTask) async {
+            debugPrint('Updating task - Original ID: ${task.id}, Updated ID: ${updatedTask.id}');
+            
             // Update the task in the list
             final allTasks = await _taskService.loadTasks();
             final taskIndex = allTasks.indexWhere((t) => t.id == task.id);
+            
+            debugPrint('Found task at index: $taskIndex out of ${allTasks.length} tasks');
+            
             if (taskIndex != -1) {
               allTasks[taskIndex] = updatedTask;
               await _taskService.saveTasks(allTasks);
+              debugPrint('Task updated successfully');
+            } else {
+              // This shouldn't happen, but handle it just in case
+              debugPrint('Task not found for update: ${task.id}. Adding as new task.');
+              allTasks.add(updatedTask);
+              await _taskService.saveTasks(allTasks);
             }
+            
             // Reload the tasks display
             await _loadTasks();
           },
@@ -274,40 +285,20 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: AppColors.coral.withOpacity(0.08), // More subtle coral
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const TodoScreen()),
-          ).then((_) => _loadTasks()); // Reload when returning
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+      child: Stack(
+        children: [
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const TodoScreen()),
+              ).then((_) => _loadTasks()); // Reload when returning
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 48), // Extra bottom padding for plus button
+              child: Column(
                 children: [
-                  Icon(
-                    Icons.task_alt_rounded,
-                    color: AppColors.coral, // Coral instead of pink
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Today\'s Priority Tasks',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: Colors.white54,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
 
               if (_isLoading)
                 const Center(
@@ -352,8 +343,8 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                         duration: const Duration(milliseconds: 300),
                         opacity: task.isCompleted ? 0.0 : 1.0,
                         child: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
                             borderRadius: BorderRadius.circular(12),
@@ -485,21 +476,58 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                   }).toList(),
                 ),
 
-              if (_prioritizedTasks.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Center(
-                  child: Text(
-                    'Tap to view all tasks',
-                    style: TextStyle(
-                      color: Colors.white60,
-                      fontSize: 12,
-                    ),
+                ],
+              ),
+            ),
+          ),
+          // Discreet plus button in bottom right corner
+          Positioned(
+            bottom: 8,
+            right: 8,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.coral.withOpacity(0.7),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TaskEditScreen(
+                          categories: _categories,
+                          onSave: (newTask) async {
+                            final allTasks = await _taskService.loadTasks();
+                            allTasks.add(newTask);
+                            await _taskService.saveTasks(allTasks);
+                            await _loadTasks();
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Icon(
+                    Icons.add_rounded,
+                    color: Colors.white,
+                    size: 20,
                   ),
                 ),
-              ],
-            ],
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

@@ -1,3 +1,16 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(flutter pub:*)",
+      "Bash(flutter build:*)",
+      "Bash(flutter clean:*)",
+      "WebSearch",
+      "Bash(sed:*)",
+      "Bash(flutter logs:*)",
+      "Bash(copy:*)",
+      "Bash(powershell:*)",
+      "Bash(flutter analyze:*)"
+    ]
+  },
   "outputStyle": "default"
 }

@@ -6,9 +6,12 @@ import 'Tasks/todo_screen.dart';
 import 'home.dart';
 import 'Notifications/notification_service.dart';
 import 'Notifications/notification_listener_service.dart';
+import 'Data/backup_service.dart';
+import 'Tasks/task_service.dart';
 import 'theme/app_colors.dart';
 import 'dart:io';
 import 'dart:math';
+import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
 
@@ -57,6 +60,7 @@ class _LauncherScreenState extends State<LauncherScreen>
   late AnimationController _logoController;
   late AnimationController _textController;
   late AnimationController _backgroundController;
+  Timer? _emergencyTimer;
 
   late Animation<double> _logoScale;
   late Animation<double> _logoRotation;
@@ -130,6 +134,18 @@ class _LauncherScreenState extends State<LauncherScreen>
 
   void _startAnimationSequence() async {
     try {
+      // Emergency failsafe - navigate to main screen after maximum 15 seconds regardless of what happens
+      _emergencyTimer = Timer(const Duration(seconds: 15), () {
+        if (mounted && Navigator.of(context).canPop() == false) {
+          if (kDebugMode) {
+            print("Emergency navigation triggered - launcher took too long");
+          }
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+          );
+        }
+      });
+
       // Start background animation
       if (mounted) _backgroundController.forward();
 
@@ -141,13 +157,23 @@ class _LauncherScreenState extends State<LauncherScreen>
       await Future.delayed(const Duration(milliseconds: 800));
       if (mounted) _textController.forward();
 
-      // Initialize notifications and navigate
+      // Initialize notifications and navigate with timeout protection
       await Future.delayed(const Duration(milliseconds: 1200));
-      if (mounted) await _initializeApp();
+      if (mounted) {
+        // Wrap entire initialization in a timeout
+        await _initializeApp().timeout(Duration(seconds: 10)).catchError((error) {
+          if (kDebugMode) {
+            print("App initialization failed or timed out: $error");
+          }
+        });
+      }
 
       // Navigate to main screen
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted && Navigator.of(context).canPop() == false) {
+        // Cancel emergency timer since we're navigating normally
+        _emergencyTimer?.cancel();
+        
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => const MainScreen(),
@@ -169,6 +195,9 @@ class _LauncherScreenState extends State<LauncherScreen>
             },
           ),
         );
+      } else {
+        // Cancel emergency timer if we can't navigate (shouldn't happen)
+        _emergencyTimer?.cancel();
       }
     } catch (e) {
       if (kDebugMode) print("Error in animation sequence: $e");
@@ -183,33 +212,49 @@ class _LauncherScreenState extends State<LauncherScreen>
 
   Future<void> _initializeApp() async {
     try {
-      // Initialize notifications
-      final notificationService = NotificationService();
-      await notificationService.initializeNotifications();
-      await notificationService.scheduleWaterReminders();
+      // Initialize notifications with timeout protection
+      await (() async {
+        final notificationService = NotificationService();
+        await notificationService.initializeNotifications();
+        await notificationService.scheduleWaterReminders();
+        
+        // Initialize task notifications
+        final taskService = TaskService();
+        await taskService.forceRescheduleAllNotifications();
+      })().timeout(Duration(seconds: 10)).catchError((error) {
+        if (kDebugMode) {
+          print("Notification initialization failed or timed out: $error");
+        }
+      });
       
-      // Initialize notification listener service for motion alerts with debug protection
-      try {
+      // Initialize notification listener service for motion alerts with debug protection and timeout
+      (() async {
         await NotificationListenerService.initialize();
         if (kDebugMode) {
           print("NotificationListenerService initialized successfully in debug mode");
         }
-      } catch (e) {
+      })().timeout(Duration(seconds: 5)).catchError((error) {
         if (kDebugMode) {
-          print("Warning: NotificationListenerService failed to initialize: $e");
+          print("Warning: NotificationListenerService failed to initialize or timed out: $error");
           print("Motion alerts may not work, but app will continue normally");
         }
-        // Don't throw - let the app continue without motion alerts
-      }
+      });
 
-      // Request notification permissions (non-blocking)
+      // Perform auto-backup check (non-blocking with timeout)
+      BackupService.performAutoBackup().timeout(Duration(seconds: 8)).catchError((error) {
+        if (kDebugMode) {
+          print("Auto backup check failed or timed out: $error");
+        }
+      });
+
+      // Request notification permissions (non-blocking with timeout)
       if (Platform.isAndroid) {
-        Permission.notification.request().then((status) {
+        Permission.notification.request().timeout(Duration(seconds: 5)).then((status) {
           if (!status.isGranted && kDebugMode) {
             print("Notifications permission denied");
           }
         }).catchError((error) {
-          if (kDebugMode) print("Error requesting notification permission: $error");
+          if (kDebugMode) print("Error requesting notification permission or timed out: $error");
         });
       }
     } catch (e) {
@@ -220,6 +265,7 @@ class _LauncherScreenState extends State<LauncherScreen>
 
   @override
   void dispose() {
+    _emergencyTimer?.cancel();
     _logoController.dispose();
     _textController.dispose();
     _backgroundController.dispose();
@@ -417,7 +463,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
         child: _screens[_selectedIndex],
       ),
       bottomNavigationBar: Container(
-        height: 60 + MediaQuery.of(context).padding.bottom, // Add safe area height
+        height: 70 + MediaQuery.of(context).padding.bottom, // Increased from 60 to 70
         decoration: BoxDecoration(
           color: const Color(0xFF1A1A1A),
           boxShadow: [
@@ -449,16 +495,14 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
               Icons.auto_awesome_rounded,
             ];
             
-            final labels = ['Fasting', 'Cycle', 'Home', 'Tasks', 'Routines'];
-            
             final isSelected = _selectedIndex == index;
             
             return GestureDetector(
               onTap: () => _onItemTapped(index),
               child: Container(
-                width: 50,
-                height: 50, // Smaller icons containers
-                margin: const EdgeInsets.symmetric(vertical: 5),
+                width: 56, // Increased from 50 to 56
+                height: 56, // Increased from 50 to 56
+                margin: const EdgeInsets.symmetric(vertical: 7), // Increased margin slightly
                 decoration: BoxDecoration(
                   color: isSelected 
                       ? colors[index].withOpacity(0.25) // More subtle selected state
@@ -472,7 +516,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
                   child: Icon(
                     icons[index],
                     color: isSelected ? colors[index] : colors[index].withOpacity(0.7), // Colored icons
-                    size: isSelected ? 28 : 26, // Slightly larger since no text
+                    size: isSelected ? 32 : 30, // Increased from 28/26 to 32/30
                   ),
                 ),
               ),

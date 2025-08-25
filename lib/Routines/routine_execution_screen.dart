@@ -30,6 +30,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
       id: item.id,
       text: item.text,
       isCompleted: false,
+      isSkipped: false,
     )).toList();
     _loadProgress();
   }
@@ -43,10 +44,14 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     if (progressJson != null) {
       final progressData = jsonDecode(progressJson);
       final completedSteps = List<bool>.from(progressData['completedSteps'] ?? []);
+      final skippedSteps = List<bool>.from(progressData['skippedSteps'] ?? []);
 
       setState(() {
         for (int i = 0; i < _items.length && i < completedSteps.length; i++) {
           _items[i].isCompleted = completedSteps[i];
+        }
+        for (int i = 0; i < _items.length && i < skippedSteps.length; i++) {
+          _items[i].isSkipped = skippedSteps[i];
         }
       });
     }
@@ -59,6 +64,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
 
     final progressData = {
       'completedSteps': _items.map((item) => item.isCompleted).toList(),
+      'skippedSteps': _items.map((item) => item.isSkipped).toList(),
       'lastUpdated': DateTime.now().toIso8601String(),
     };
 
@@ -68,12 +74,37 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
   _toggleItem(int index) async {
     setState(() {
       _items[index].isCompleted = !_items[index].isCompleted;
+      if (_items[index].isCompleted) {
+        _items[index].isSkipped = false; // If completed, it's no longer skipped
+      }
+    });
+    await _saveProgress();
+  }
+
+  _skipItem(int index) async {
+    setState(() {
+      _items[index].isSkipped = !_items[index].isSkipped;
+      if (_items[index].isSkipped) {
+        _items[index].isCompleted = false; // If skipped, it's not completed
+      }
     });
     await _saveProgress();
   }
 
   _isAllCompleted() {
     return _items.every((item) => item.isCompleted);
+  }
+
+  _areAllNonSkippedCompleted() {
+    return _items.where((item) => !item.isSkipped).every((item) => item.isCompleted);
+  }
+
+  _getSkippedItems() {
+    return _items.where((item) => item.isSkipped).toList();
+  }
+
+  _hasSkippedItems() {
+    return _items.any((item) => item.isSkipped);
   }
 
   _completeRoutine() async {
@@ -123,6 +154,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
   @override
   Widget build(BuildContext context) {
     final completedCount = _items.where((item) => item.isCompleted).length;
+    final skippedCount = _items.where((item) => item.isSkipped).length;
     final allCompleted = _isAllCompleted();
 
     return Scaffold(
@@ -180,9 +212,18 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                         style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        'Progress: $completedCount/${_items.length}',
-                        style: const TextStyle(fontSize: 16, color: Colors.grey),
+                      Column(
+                        children: [
+                          Text(
+                            'Progress: $completedCount/${_items.length}',
+                            style: const TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
+                          if (skippedCount > 0)
+                            Text(
+                              'Skipped: $skippedCount in queue',
+                              style: TextStyle(fontSize: 14, color: Colors.orange[600]),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 20),
                       LinearProgressIndicator(
@@ -199,29 +240,78 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
               const SizedBox(height: 20),
 
               Expanded(
-                child: ListView.builder(
-                  itemCount: _items.length,
-                  itemBuilder: (context, index) {
-                    final item = _items[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: CheckboxListTile(
-                        title: Text(
-                          item.text,
-                          style: TextStyle(
-                            fontSize: 16,
-                            decoration: item.isCompleted
-                                ? TextDecoration.lineThrough
-                                : null,
+                child: Column(
+                  children: [
+                    // Show notification if non-skipped items are complete but skipped items remain
+                    if (_areAllNonSkippedCompleted() && _hasSkippedItems()) ...[
+                      Card(
+                        color: Colors.orange.withOpacity(0.1),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Icon(Icons.queue, color: Colors.orange),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Great job! You have ${_getSkippedItems().length} skipped steps in your queue. Complete them when ready!',
+                                  style: TextStyle(color: Colors.orange[700]),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        value: item.isCompleted,
-                        onChanged: (_) => _toggleItem(index),
-                        activeColor: Theme.of(context).colorScheme.secondary,
-                        controlAffinity: ListTileControlAffinity.leading,
                       ),
-                    );
-                  },
+                      SizedBox(height: 12),
+                    ],
+                    
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: _items.length,
+                        itemBuilder: (context, index) {
+                          final item = _items[index];
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            color: item.isSkipped ? Colors.orange.withOpacity(0.1) : null,
+                            child: ListTile(
+                              leading: Checkbox(
+                                value: item.isCompleted,
+                                onChanged: (_) => _toggleItem(index),
+                                activeColor: Theme.of(context).colorScheme.secondary,
+                              ),
+                              title: Text(
+                                item.text,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  decoration: item.isCompleted
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                  color: item.isSkipped ? Colors.orange[700] : null,
+                                ),
+                              ),
+                              subtitle: item.isSkipped
+                                  ? Text(
+                                      'Skipped - In Queue',
+                                      style: TextStyle(
+                                        color: Colors.orange[600],
+                                        fontSize: 12,
+                                      ),
+                                    )
+                                  : null,
+                              trailing: IconButton(
+                                icon: Icon(
+                                  item.isSkipped ? Icons.undo : Icons.skip_next,
+                                  color: item.isSkipped ? Colors.orange : Colors.grey,
+                                ),
+                                onPressed: () => _skipItem(index),
+                                tooltip: item.isSkipped ? 'Unskip' : 'Skip for later',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
 

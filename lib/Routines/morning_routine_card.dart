@@ -38,16 +38,28 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
     // Load routines to get the morning routine
     final routinesJson = prefs.getStringList('routines') ?? [];
 
+    if (kDebugMode) {
+      print('Loading morning routine - Found ${routinesJson.length} routines');
+    }
+
     if (routinesJson.isNotEmpty) {
       final routines = routinesJson
           .map((json) => Routine.fromJson(jsonDecode(json)))
           .toList();
+
+      if (kDebugMode) {
+        print('Available routines: ${routines.map((r) => r.title).toList()}');
+      }
 
       // Find morning routine (assuming it's the first one or has "morning" in title)
       _currentRoutine = routines.firstWhere(
             (routine) => routine.title.toLowerCase().contains('morning'),
         orElse: () => routines.first,
       );
+
+      if (kDebugMode) {
+        print('Selected morning routine: ${_currentRoutine?.title}');
+      }
 
       // Check if we have progress saved for today
       final progressJson = prefs.getString('morning_routine_progress_$today');
@@ -58,10 +70,19 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
         final progressData = jsonDecode(progressJson);
         _currentStepIndex = progressData['currentStepIndex'] ?? 0;
 
+        // Initialize all items properly first
+        for (int i = 0; i < _currentRoutine!.items.length; i++) {
+          _currentRoutine!.items[i].isSkipped = false; // Ensure isSkipped is always initialized
+        }
+        
         // Update completion status from saved progress
         final completedSteps = List<bool>.from(progressData['completedSteps'] ?? []);
+        final skippedSteps = List<bool>.from(progressData['skippedSteps'] ?? []);
         for (int i = 0; i < _currentRoutine!.items.length && i < completedSteps.length; i++) {
           _currentRoutine!.items[i].isCompleted = completedSteps[i];
+        }
+        for (int i = 0; i < _currentRoutine!.items.length && i < skippedSteps.length; i++) {
+          _currentRoutine!.items[i].isSkipped = skippedSteps[i];
         }
         
         if (kDebugMode) {
@@ -72,6 +93,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
         _currentStepIndex = 0;
         for (var item in _currentRoutine!.items) {
           item.isCompleted = false;
+          item.isSkipped = false;
         }
         
         // Clear old progress and set today's date
@@ -99,6 +121,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
       final progressData = {
         'currentStepIndex': _currentStepIndex,
         'completedSteps': _currentRoutine!.items.map((item) => item.isCompleted).toList(),
+        'skippedSteps': _currentRoutine!.items.map((item) => item.isSkipped).toList(),
         'lastUpdated': DateTime.now().toIso8601String(),
       };
 
@@ -116,13 +139,21 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
   }
 
   _completeCurrentStep() async {
-    if (_currentRoutine == null || _currentStepIndex >= _currentRoutine!.items.length) return;
+    if (_currentRoutine == null || _currentStepIndex >= _currentRoutine!.items.length) {
+      if (kDebugMode) {
+        print('Cannot complete step: currentRoutine=${_currentRoutine != null}, currentStepIndex=$_currentStepIndex, length=${_currentRoutine?.items.length}');
+      }
+      return;
+    }
+
+    if (kDebugMode) {
+      print('Completing step $_currentStepIndex: ${_currentRoutine!.items[_currentStepIndex].text}');
+    }
 
     setState(() {
       _currentRoutine!.items[_currentStepIndex].isCompleted = true;
-      if (_currentStepIndex < _currentRoutine!.items.length - 1) {
-        _currentStepIndex++;
-      }
+      _currentRoutine!.items[_currentStepIndex].isSkipped = false; // Unmark as skipped if it was
+      _moveToNextUnfinishedStep();
     });
 
     // Save progress after each step
@@ -141,14 +172,57 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
   }
 
   _skipCurrentStep() async {
-    if (_currentRoutine == null || _currentStepIndex >= _currentRoutine!.items.length - 1) return;
+    if (_currentRoutine == null || _currentStepIndex >= _currentRoutine!.items.length) return;
 
     setState(() {
-      _currentStepIndex++;
+      _currentRoutine!.items[_currentStepIndex].isSkipped = true;
+      if (_currentStepIndex < _currentRoutine!.items.length - 1) {
+        _currentStepIndex++;
+      } else {
+        // If we're on the last step and skip it, check for skipped items to show
+        _moveToNextUnfinishedStep();
+      }
     });
 
     // Save progress after skipping
     await _saveProgress();
+  }
+
+  _moveToNextUnfinishedStep() {
+    if (kDebugMode) {
+      print('Moving to next unfinished step. Current index: $_currentStepIndex');
+    }
+    
+    // Find the first unfinished (not completed and not skipped) step
+    for (int i = 0; i < _currentRoutine!.items.length; i++) {
+      if (!_currentRoutine!.items[i].isCompleted && !_currentRoutine!.items[i].isSkipped) {
+        if (kDebugMode) {
+          print('Found unfinished step at index $i: ${_currentRoutine!.items[i].text}');
+        }
+        _currentStepIndex = i;
+        return;
+      }
+    }
+    
+    // If all active steps are done, check for skipped items
+    for (int i = 0; i < _currentRoutine!.items.length; i++) {
+      if (_currentRoutine!.items[i].isSkipped && !_currentRoutine!.items[i].isCompleted) {
+        if (kDebugMode) {
+          print('Found skipped step at index $i: ${_currentRoutine!.items[i].text}');
+        }
+        _currentStepIndex = i;
+        return;
+      }
+    }
+    
+    // All done - keep at last valid index
+    if (_currentRoutine!.items.isNotEmpty) {
+      _currentStepIndex = _currentRoutine!.items.length - 1;
+    }
+    
+    if (kDebugMode) {
+      print('All steps finished. Final index: $_currentStepIndex');
+    }
   }
 
 
@@ -207,7 +281,9 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
     }
 
     final completedCount = _currentRoutine!.items.where((item) => item.isCompleted).length;
+    final skippedCount = _currentRoutine!.items.where((item) => item.isSkipped).length;
     final allCompleted = completedCount == _currentRoutine!.items.length;
+    final allNonSkippedCompleted = _currentRoutine!.items.where((item) => !item.isSkipped).every((item) => item.isCompleted);
     final currentStep = _currentStepIndex < _currentRoutine!.items.length
         ? _currentRoutine!.items[_currentStepIndex]
         : null;
@@ -238,9 +314,19 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ),
-                Text(
-                  '$completedCount/${_currentRoutine!.items.length}',
-                  style: const TextStyle(fontSize: 16, color: Colors.white70),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '$completedCount/${_currentRoutine!.items.length}',
+                      style: const TextStyle(fontSize: 16, color: Colors.white70),
+                    ),
+                    if (skippedCount > 0)
+                      Text(
+                        '$skippedCount queued',
+                        style: TextStyle(fontSize: 12, color: Colors.orange[600]),
+                      ),
+                  ],
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton.icon(
@@ -273,6 +359,30 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
 
             const SizedBox(height: 16),
 
+            // Show queue notification if non-skipped items are done
+            if (!allCompleted && allNonSkippedCompleted && skippedCount > 0) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.queue, color: Colors.orange[700]),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Great! You have $skippedCount queued steps to complete.',
+                        style: TextStyle(color: Colors.orange[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 12),
+            ],
+
             if (allCompleted) ...[
               // All completed
               Container(
@@ -299,15 +409,36 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.secondary.withOpacity(0.1),
+                        color: currentStep.isSkipped 
+                            ? Colors.orange.withOpacity(0.1)
+                            : Theme.of(context).colorScheme.secondary.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+                          color: currentStep.isSkipped
+                              ? Colors.orange.withOpacity(0.3)
+                              : Theme.of(context).colorScheme.secondary.withOpacity(0.3),
                         ),
                       ),
-                      child: Text(
-                        currentStep.text,
-                        style: const TextStyle(fontSize: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (currentStep.isSkipped)
+                            Text(
+                              'From Queue:',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          Text(
+                            currentStep.text,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: currentStep.isSkipped ? Colors.orange[700] : null,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

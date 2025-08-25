@@ -153,50 +153,28 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Card(
-              color: AppColors.purple.withOpacity(0.1),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Icon(Icons.security_rounded, color: AppColors.purple, size: 28),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        'Get loud alerts when your security cameras detect motion',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            // Permission Step - only show if permission not granted
+            if (!_hasPermission)
+              Card(
+                color: Colors.red.withOpacity(0.1),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.warning,
+                            color: Colors.red,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Permission Required',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Permission Step
-            Card(
-              color: _hasPermission ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          _hasPermission ? Icons.check_circle : Icons.warning,
-                          color: _hasPermission ? Colors.green : Colors.red,
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          _hasPermission ? 'Permission Granted ✓' : 'Permission Required',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    if (!_hasPermission) ...[
                       const SizedBox(height: 12),
                       ElevatedButton(
                         onPressed: _requestPermission,
@@ -207,20 +185,11 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
                         child: const Text('Grant Notification Access'),
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
 
             if (_hasPermission) ...[
-              const SizedBox(height: 20),
-
-              // Quick Setup Options
-              const Text(
-                'Quick Setup',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
 
               // Night Mode
               Card(
@@ -250,7 +219,7 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
                 ),
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
 
               // Vacation Mode
               Card(
@@ -280,113 +249,30 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
                 ),
               ),
 
-              if (_isEnabled) ...[
-                const SizedBox(height: 24),
-
-                // App Selection
-                const Text(
-                  'Select Camera Apps',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
+              // Status Summary - show after mode selection when enabled
+              if (_hasPermission && _isEnabled && _selectedApps.isNotEmpty) ...[
                 const SizedBox(height: 16),
-
                 Card(
+                  color: Colors.green.withOpacity(0.1),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ...['Tapo', 'Alfred Home Security Camera', 'IP Webcam', 'AtHome Camera', 'WardenCam']
-                            .map((app) => CheckboxListTile(
-                                  title: Text(app),
-                                  value: _selectedApps.contains(app),
-                                  onChanged: (value) {
-                                    _toggleApp(app);
-                                    _saveSettings();
-                                  },
-                                  dense: true,
-                                )),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Test Button
-                if (_selectedApps.isNotEmpty) ...[
-                  Card(
-                    color: Colors.green.withOpacity(0.1),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          const Text(
-                            'Test Your Setup',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () {
-                                    NotificationListenerService.triggerLoudAlarm(
-                                      'Motion Detected!',
-                                      'Test alarm from your security setup',
-                                    );
-                                  },
-                                  icon: const Icon(Icons.volume_up),
-                                  label: const Text('Test Alarm'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                onPressed: () {
-                                  NotificationListenerService.stopAlarm();
-                                },
-                                icon: const Icon(Icons.stop),
-                                style: IconButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                  foregroundColor: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-
-              // Status Summary
-              const SizedBox(height: 24),
-              Card(
-                color: _isEnabled ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            _isEnabled ? Icons.check_circle : Icons.info,
-                            color: _isEnabled ? Colors.green : Colors.grey,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            _isEnabled ? 'Motion Alerts Active' : 'Motion Alerts Disabled',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      if (_isEnabled) ...[
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.check_circle,
+                              color: Colors.green,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Motion Alerts Active',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
                         Text('Mode: ${_nightMode ? "Night Mode (22:00-08:00)" : "24/7 Vacation Mode"}'),
                         Text('Monitored apps: ${_selectedApps.join(", ")}'),
                         const SizedBox(height: 8),
@@ -399,13 +285,86 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
                             fontSize: 12,
                           ),
                         ),
-                      ] else ...[
-                        const Text('Select a mode above to activate motion alerts'),
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
+              ],
+
+              if (_isEnabled) ...[
+
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        // Show Tapo prominently
+                        CheckboxListTile(
+                          title: const Text('Tapo', style: TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: const Text('TP-Link Security Camera (Recommended)'),
+                          value: _selectedApps.contains('Tapo'),
+                          onChanged: (value) {
+                            _toggleApp('Tapo');
+                            _saveSettings();
+                          },
+                          dense: true,
+                        ),
+                        // Show any other already selected apps
+                        ..._selectedApps.where((app) => app != 'Tapo').map((app) => CheckboxListTile(
+                              title: Text(app),
+                              value: true,
+                              onChanged: (value) {
+                                _toggleApp(app);
+                                _saveSettings();
+                              },
+                              dense: true,
+                            )),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Test Setup (compact version)
+                if (_selectedApps.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            NotificationListenerService.triggerLoudAlarm(
+                              'Motion Detected!',
+                              'Test alarm from your security setup',
+                            );
+                          },
+                          icon: const Icon(Icons.volume_up, size: 18),
+                          label: const Text('Test Alarm'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.green,
+                            side: const BorderSide(color: Colors.green),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () {
+                          NotificationListenerService.stopAlarm();
+                        },
+                        icon: const Icon(Icons.stop, size: 18),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.red.withOpacity(0.1),
+                          foregroundColor: Colors.red,
+                        ),
+                        tooltip: 'Stop Alarm',
+                      ),
+                    ],
+                  ),
+                ],
+                
+                const SizedBox(height: 16),
+              ],
+
             ],
           ],
         ),

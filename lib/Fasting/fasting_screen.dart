@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'fasting_history_screen.dart';
 import 'fasting_notifier.dart';
+import '../Notifications/notification_service.dart';
 
 class FastingScreen extends StatefulWidget {
   const FastingScreen({super.key});
@@ -25,6 +26,7 @@ class _FastingScreenState extends State<FastingScreen>
   late AnimationController _progressController;
   late AnimationController _pulseController;
   final FastingNotifier _notifier = FastingNotifier();
+  final NotificationService _notificationService = NotificationService();
 
   @override
   void initState() {
@@ -79,9 +81,13 @@ class _FastingScreenState extends State<FastingScreen>
     // Start/stop pulse animation based on fasting state
     if (_isFasting && !_pulseController.isAnimating) {
       _pulseController.repeat(reverse: true);
+      // Show notification if fasting is in progress
+      _updateFastingNotification();
     } else if (!_isFasting && _pulseController.isAnimating) {
       _pulseController.stop();
       _pulseController.reset();
+      // Cancel notification if not fasting
+      _notificationService.cancelFastingProgressNotification();
     }
 
     if (mounted) setState(() {});
@@ -130,24 +136,158 @@ class _FastingScreenState extends State<FastingScreen>
     _fastingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_isFasting) {
         _calculateFastingProgress();
+        _updateFastingNotification();
         if (mounted) setState(() {});
       }
     });
   }
 
+  _updateFastingNotification() {
+    if (_isFasting && _currentFastStart != null) {
+      final phaseInfo = _getFastingPhaseInfo();
+      _notificationService.showFastingProgressNotification(
+        fastType: _currentFastType,
+        elapsedTime: _elapsedTime,
+        totalDuration: _totalFastDuration,
+        currentPhase: phaseInfo['phase'],
+      );
+    }
+  }
+
   String _getRecommendedFastType() {
     final now = DateTime.now();
-    final isSunday = now.weekday == 7;
+    final isFriday = now.weekday == 5;
     final is25th = now.day == 25;
 
-    if (isSunday) return '24h Weekly Fast';
+    // Smart scheduling: combine Friday and 25th fasts when close
+    if (isFriday || is25th) {
+      return _getSmartFastRecommendation(now, isFriday, is25th);
+    }
+
+    // Fasting screen has a 5-day grace period - check recent fasting days
+    return _getRecommendedFastWithGracePeriod(now);
+  }
+
+  // Smart scheduling logic to avoid double fasts when Friday and 25th are close
+  String _getSmartFastRecommendation(DateTime now, bool isFriday, bool is25th) {
+    // If today is the 25th, check if there was a recent Friday or upcoming Friday
     if (is25th) {
       final month = now.month;
-      if (month % 3 == 1) return '48h Quarterly Fast';
-      return '36h Monthly Fast';
+      String longerFastType;
+      if (month == 1 || month == 9) {
+        longerFastType = '3-Day Water Fast';
+      } else if (month % 3 == 1) {
+        longerFastType = '48h Quarterly Fast';
+      } else {
+        longerFastType = '36h Monthly Fast';
+      }
+      
+      // Check if Friday was within the last 4-6 days or will be within next 4-6 days
+      final daysUntilFriday = (5 - now.weekday + 7) % 7; // Days until next Friday (0 if today is Friday)
+      final daysSinceLastFriday = now.weekday >= 5 ? now.weekday - 5 : now.weekday + 2; // Days since last Friday
+      
+      // If Friday is close (within 6 days either way), skip Friday fast and do the longer fast on 25th
+      if (daysSinceLastFriday <= 6 || daysUntilFriday <= 6) {
+        return longerFastType; // Do the longer fast on the 25th
+      }
+      
+      return longerFastType;
     }
-    if (now.month == 1 && is25th) return '3-Day Water Fast';
-    if (now.month == 9 && is25th) return '3-Day Water Fast';
+    
+    // If today is Friday, check if 25th is close
+    if (isFriday) {
+      final daysUntil25th = 25 - now.day;
+      
+      // If 25th is within 4-6 days, do the longer fast on Friday instead
+      if (daysUntil25th >= 0 && daysUntil25th <= 6) {
+        final month = now.month;
+        
+        // Use the appropriate longer fast type
+        if (month == 1 || month == 9) {
+          return '3-Day Water Fast';
+        } else if (month % 3 == 1) {
+          return '48h Quarterly Fast';
+        } else {
+          return '36h Monthly Fast';
+        }
+      }
+      
+      // Check if 25th was recent (within last 6 days) 
+      if (now.day < 25 && (25 - now.day) > 25) { // 25th was last month
+        final lastMonth = now.month == 1 ? 12 : now.month - 1;
+        final daysSince25thLastMonth = now.day + (DateTime(now.year, now.month, 0).day - 25);
+        
+        if (daysSince25thLastMonth <= 6) {
+          // 25th was recent, do the longer fast type on Friday
+          if (lastMonth == 1 || lastMonth == 9) {
+            return '3-Day Water Fast';
+          } else if (lastMonth % 3 == 1) {
+            return '48h Quarterly Fast';
+          } else {
+            return '36h Monthly Fast';
+          }
+        }
+      }
+      
+      return '24h Weekly Fast'; // Normal Friday fast
+    }
+    
+    return '';
+  }
+
+  // Get recommended fast with 5-day grace period (for fasting screen only)
+  String _getRecommendedFastWithGracePeriod(DateTime now) {
+    // Check if Friday was within the last 5 days
+    final daysSinceLastFriday = now.weekday >= 5 ? now.weekday - 5 : now.weekday + 2;
+    if (daysSinceLastFriday <= 5 && daysSinceLastFriday > 0) {
+      // Calculate what the fast would have been on that Friday
+      final lastFriday = now.subtract(Duration(days: daysSinceLastFriday));
+      final daysUntil25thFromLastFriday = 25 - lastFriday.day;
+      
+      // Check if 25th was close to that Friday
+      if (daysUntil25thFromLastFriday >= 0 && daysUntil25thFromLastFriday <= 6) {
+        final month = lastFriday.month;
+        if (month == 1 || month == 9) {
+          return '3-Day Water Fast';
+        } else if (month % 3 == 1) {
+          return '48h Quarterly Fast';
+        } else {
+          return '36h Monthly Fast';
+        }
+      } else {
+        return '24h Weekly Fast';
+      }
+    }
+    
+    // Check if 25th was within the last 5 days
+    final daysSince25th = now.day > 25 ? now.day - 25 : 0;
+    if (daysSince25th <= 5 && daysSince25th > 0) {
+      final month = now.month;
+      if (month == 1 || month == 9) {
+        return '3-Day Water Fast';
+      } else if (month % 3 == 1) {
+        return '48h Quarterly Fast';
+      } else {
+        return '36h Monthly Fast';
+      }
+    }
+    
+    // Check if 25th was in the previous month within 5 days
+    if (now.day <= 5) {
+      final lastMonth = now.month == 1 ? 12 : now.month - 1;
+      final daysInLastMonth = DateTime(now.year, now.month, 0).day;
+      final daysSince25thLastMonth = now.day + (daysInLastMonth - 25);
+      
+      if (daysSince25thLastMonth <= 5) {
+        if (lastMonth == 1 || lastMonth == 9) {
+          return '3-Day Water Fast';
+        } else if (lastMonth % 3 == 1) {
+          return '48h Quarterly Fast';
+        } else {
+          return '36h Monthly Fast';
+        }
+      }
+    }
 
     return '';
   }
@@ -184,9 +324,42 @@ class _FastingScreenState extends State<FastingScreen>
     _progressController.forward();
     _pulseController.repeat(reverse: true);
 
+    // Show initial notification
+    _updateFastingNotification();
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('🚀 $fastType started! You got this!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  // Start quick fast (12h or 16h)
+  _startQuickFast(int hours) {
+    final now = DateTime.now();
+    final duration = Duration(hours: hours);
+    final fastType = '${hours}h Fast';
+
+    setState(() {
+      _isFasting = true;
+      _currentFastStart = now;
+      _currentFastEnd = now.add(duration);
+      _currentFastType = fastType;
+      _elapsedTime = Duration.zero;
+      _totalFastDuration = duration;
+    });
+
+    _saveFastingData();
+    _progressController.forward();
+    _pulseController.repeat(reverse: true);
+
+    // Show initial notification
+    _updateFastingNotification();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('🚀 $fastType started!'),
         backgroundColor: Colors.green,
       ),
     );
@@ -218,6 +391,13 @@ class _FastingScreenState extends State<FastingScreen>
       _progressController.reset();
       _pulseController.stop();
       _pulseController.reset();
+
+      // Cancel progress notification and show completion notification
+      _notificationService.cancelFastingProgressNotification();
+      _notificationService.showFastingCompletedNotification(
+        fastType: _currentFastType,
+        actualDuration: actualDuration,
+      );
 
       _showCongratulationDialog(actualDuration);
     }
@@ -539,6 +719,56 @@ class _FastingScreenState extends State<FastingScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Quick start buttons - always visible at top
+            if (!_isFasting) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      // Quick start buttons row
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => _startQuickFast(12),
+                              icon: const Icon(Icons.timer_outlined),
+                              label: const Text('12h Fast'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => _startQuickFast(16),
+                              icon: const Icon(Icons.timer_outlined),
+                              label: const Text('16h Fast'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.deepOrange,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
+            
             // Enhanced Current Fast Status Card
             Card(
               elevation: 8,
@@ -615,7 +845,7 @@ class _FastingScreenState extends State<FastingScreen>
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
 
             // Control Buttons
             if (_isFasting) ...[
@@ -636,70 +866,43 @@ class _FastingScreenState extends State<FastingScreen>
                 ),
               ),
             ] else if (recommendedFast.isNotEmpty) ...[
-              Column(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _startFast(recommendedFast),
-                      icon: const Icon(Icons.play_arrow_rounded),
-                      label: Text('Start $recommendedFast'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
+              // Show scheduled fast start button if available  
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _startFast(recommendedFast),
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: Text('Start $recommendedFast'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ),
-                  if (showPostponeButton) ...[
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _postponeFast,
-                        icon: const Icon(Icons.schedule_rounded),
-                        label: const Text('Postpone to Tomorrow'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ] else ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.schedule_rounded,
-                          size: 48, color: Colors.grey),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'No fast scheduled for today',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Fasts are scheduled for Sundays and the 25th of each month',
-                        style: TextStyle(color: Colors.grey),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
                   ),
                 ),
               ),
+              if (showPostponeButton) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _postponeFast,
+                    icon: const Icon(Icons.schedule_rounded),
+                    label: const Text('Postpone to Tomorrow'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
 
             // Statistics Card
             Card(

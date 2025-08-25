@@ -117,13 +117,12 @@ class TaskService {
   }
 
   // Get prioritized tasks for home page
-  List<Task> getPrioritizedTasks(List<Task> tasks, List<TaskCategory> categories, int maxTasks) {
+  List<Task> getPrioritizedTasks(List<Task> tasks, List<TaskCategory> categories, int maxTasks, {bool includeCompleted = false}) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(const Duration(days: 1));
 
-    // Filter out completed tasks and get only relevant tasks
-    final availableTasks = tasks.where((task) => !task.isCompleted).toList();
+    // Filter tasks based on completion status
+    final availableTasks = includeCompleted ? tasks : tasks.where((task) => !task.isCompleted).toList();
 
     // Sort by priority with enhanced logic
     availableTasks.sort((a, b) {
@@ -278,6 +277,15 @@ class TaskService {
             task.reminderTime!.hour,
             task.reminderTime!.minute,
           );
+        } else {
+          // If no next due date, schedule for tomorrow at the same time
+          scheduledDate = DateTime(
+            now.year,
+            now.month,
+            now.day + 1,
+            task.reminderTime!.hour,
+            task.reminderTime!.minute,
+          );
         }
       }
 
@@ -289,6 +297,9 @@ class TaskService {
         return;
       }
 
+      // Cancel existing notification first to avoid duplicates
+      await _notificationService.cancelTaskNotification(task.id);
+      
       // Use NotificationService to schedule the notification
       await _notificationService.scheduleTaskNotification(
         task.id,
@@ -298,7 +309,7 @@ class TaskService {
       );
 
       if (kDebugMode) {
-        print('Scheduled task notification: ${task.title} at $scheduledDate');
+        print('Scheduled task notification: ${task.title} at $scheduledDate (recurring: ${task.recurrence != null})');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -330,6 +341,22 @@ class TaskService {
     } catch (e) {
       if (kDebugMode) {
         print('Error canceling task notification: $e');
+      }
+    }
+  }
+
+  // Force reschedule all task notifications (useful for debugging)
+  Future<void> forceRescheduleAllNotifications() async {
+    try {
+      final tasks = await loadTasks();
+      await _scheduleAllTaskNotifications(tasks);
+      
+      if (kDebugMode) {
+        print('Force rescheduled all task notifications');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error force rescheduling notifications: $e');
       }
     }
   }

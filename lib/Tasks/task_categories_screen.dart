@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'category_edit_dialog.dart';
 import 'tasks_data_models.dart';
+import '../theme/app_colors.dart';
 
 // TASK CATEGORIES SCREEN
 class TaskCategoriesScreen extends StatefulWidget {
@@ -154,7 +155,7 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addCategory,
-        backgroundColor: Theme.of(context).colorScheme.primary,
+        backgroundColor: AppColors.successGreen,
         child: const Icon(Icons.add_rounded),
       ),
     );

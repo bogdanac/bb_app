@@ -26,41 +26,7 @@ class TaskCard extends StatelessWidget {
       key: ValueKey(task.id),
       direction: DismissDirection.endToStart,
       confirmDismiss: (direction) async {
-        return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Row(
-              children: [
-                Icon(
-                  Icons.delete_outline_rounded,
-                  color: Colors.red,
-                  size: 28,
-                ),
-                const SizedBox(width: 12),
-                const Text('Delete Task'),
-              ],
-            ),
-            content: Text('Are you sure you want to delete "${task.title}"?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        ) ?? false;
+        return true; // Skip confirmation dialog
       },
       onDismissed: (direction) {
         onDelete();

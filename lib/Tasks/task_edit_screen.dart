@@ -30,10 +30,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   TaskRecurrence? _recurrence;
   Timer? _saveTimer;
   bool _hasUnsavedChanges = false;
+  Task? _currentTask; // Track the current task to prevent duplicates
 
   @override
   void initState() {
     super.initState();
+    _currentTask = widget.task; // Initialize current task reference
     if (widget.task != null) {
       final task = widget.task!;
       _titleController.text = task.title;
@@ -76,7 +78,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     if (_titleController.text.trim().isEmpty) return;
     
     final task = Task(
-      id: widget.task?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
       categoryIds: _selectedCategoryIds,
@@ -84,12 +86,16 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
       reminderTime: _reminderTime,
       isImportant: _isImportant,
       recurrence: _recurrence,
-      isCompleted: widget.task?.isCompleted ?? false,
-      completedAt: widget.task?.completedAt,
-      createdAt: widget.task?.createdAt ?? DateTime.now(),
+      isCompleted: _currentTask?.isCompleted ?? false,
+      completedAt: _currentTask?.completedAt,
+      createdAt: _currentTask?.createdAt ?? DateTime.now(),
     );
 
     widget.onSave(task);
+    
+    // Update current task reference after first save to prevent duplicates
+    _currentTask = task;
+    
     setState(() {
       _hasUnsavedChanges = false;
     });
@@ -144,30 +150,72 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Title
+            // TOP (hard to reach - less used options)
+            // Deadline (less frequently used)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.calendar_today_rounded),
+                title: const Text('Deadline'),
+                subtitle: _deadline != null
+                    ? Text(DateFormat('EEE, MMM dd, yyyy').format(_deadline!))
+                    : const Text('No deadline set'),
+                trailing: _deadline != null
+                    ? IconButton(
+                  icon: const Icon(Icons.clear_rounded),
+                  onPressed: () {
+                    setState(() => _deadline = null);
+                    _onFieldChanged();
+                  },
+                )
+                    : const Icon(Icons.chevron_right_rounded),
+                onTap: _selectDeadline,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Recurrence (less frequently used)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.repeat_rounded),
+                title: const Text('Recurrence'),
+                subtitle: _recurrence != null
+                    ? Text(_recurrence!.getDisplayText())
+                    : const Text('No recurrence set'),
+                trailing: _recurrence != null
+                    ? IconButton(
+                  icon: const Icon(Icons.clear_rounded),
+                  onPressed: () {
+                    setState(() => _recurrence = null);
+                    _onFieldChanged();
+                  },
+                )
+                    : const Icon(Icons.chevron_right_rounded),
+                onTap: _selectRecurrence,
+              ),
+            ),
+            const SizedBox(height: 40),
+
+            // MIDDLE (easy reach zone - most used options)
+            // Title (main focus - easy to reach)
             TextField(
               controller: _titleController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Task Title',
-                border: OutlineInputBorder(),
+                border: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.grey),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.grey),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Theme.of(context).primaryColor),
+                ),
               ),
               style: const TextStyle(fontSize: 16),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // Description
-            TextField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-
-            // Categories
+            // Categories (frequently used)
             const Text('Categories', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Wrap(
@@ -196,7 +244,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Important
+            // Important (frequently used)
             Card(
               child: SwitchListTile(
                 title: const Text('Important'),
@@ -214,27 +262,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Deadline
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.calendar_today_rounded),
-                title: const Text('Deadline'),
-                subtitle: _deadline != null
-                    ? Text(DateFormat('EEE, MMM dd, yyyy').format(_deadline!))
-                    : const Text('No deadline set'),
-                trailing: _deadline != null
-                    ? IconButton(
-                  icon: const Icon(Icons.clear_rounded),
-                  onPressed: () {
-                    setState(() => _deadline = null);
-                    _onFieldChanged();
-                  },
-                )
-                    : const Icon(Icons.chevron_right_rounded),
-                onTap: _selectDeadline,
-              ),
-            ),
-            const SizedBox(height: 8),
 
             // Reminder Time
             Card(
@@ -256,28 +283,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 onTap: _selectReminderTime,
               ),
             ),
-            const SizedBox(height: 8),
-
-            // Recurrence
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.repeat_rounded),
-                title: const Text('Recurrence'),
-                subtitle: _recurrence != null
-                    ? Text(_recurrence!.getDisplayText())
-                    : const Text('No recurrence set'),
-                trailing: _recurrence != null
-                    ? IconButton(
-                  icon: const Icon(Icons.clear_rounded),
-                  onPressed: () {
-                    setState(() => _recurrence = null);
-                    _onFieldChanged();
-                  },
-                )
-                    : const Icon(Icons.chevron_right_rounded),
-                onTap: _selectRecurrence,
-              ),
-            ),
+            const SizedBox(height: 16),
 
             if (_recurrence != null) ...[
               const SizedBox(height: 16),
@@ -343,7 +349,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   }
 
   Future<TimeOfDay?> _showFriendlyTimePicker() async {
-    final now = DateTime.now();
     final currentTime = TimeOfDay.now();
     
     return showDialog<TimeOfDay?>(

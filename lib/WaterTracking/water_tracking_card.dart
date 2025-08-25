@@ -120,10 +120,10 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.purple.withOpacity(0.08), // More subtle purple
+          color: AppColors.waterBlue.withOpacity(0.08), // Water blue theme
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -165,12 +165,12 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                                     gradient: LinearGradient(
                                       colors: _progressAnimation.value > 0.9
                                           ? [AppColors.successGreen, AppColors.pastelGreen] // Keep green for success
-                                          : [AppColors.purple, AppColors.pastelPurple], // Purple for progress
+                                          : [AppColors.waterBlue, AppColors.waterBlue.withOpacity(0.7)], // Water blue for progress
                                     ),
                                     boxShadow: _progressAnimation.value > 0.0
                                         ? [
                                       BoxShadow(
-                                        color: AppColors.purple.withOpacity(0.3),
+                                        color: AppColors.waterBlue.withOpacity(0.3),
                                         blurRadius: 4,
                                         offset: const Offset(0, 2),
                                       ),
@@ -188,7 +188,6 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                         animation: _progressAnimation,
                         builder: (context, child) {
                           const int goal = 1500;
-                          final int percentage = (_progressAnimation.value * 100).round();
                           final int remaining = (goal - widget.waterIntake).clamp(0, goal);
 
                           return Text(
@@ -223,7 +222,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                   child: ElevatedButton(
                     onPressed: _handleWaterAdded,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.purple,
+                      backgroundColor: AppColors.waterBlue,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),

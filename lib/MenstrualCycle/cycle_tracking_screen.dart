@@ -4,6 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'dart:math';
+import '../Notifications/notification_service.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class CycleScreen extends StatefulWidget {
   const CycleScreen({Key? key}) : super(key: key);
@@ -77,6 +80,9 @@ class _CycleScreenState extends State<CycleScreen> {
       return '${range['start']!.toIso8601String()}|${range['end']!.toIso8601String()}';
     }).toList();
     await prefs.setStringList('period_ranges', rangesStr);
+    
+    // Schedule cycle notifications whenever data is updated
+    await _scheduleCycleNotifications();
   }
 
   // PERIOD MANAGEMENT METHODS
@@ -166,20 +172,38 @@ class _CycleScreenState extends State<CycleScreen> {
   }
 
   bool _isOvulationDay(DateTime date) {
+    // Check completed periods in _periodRanges
     for (final range in _periodRanges) {
       final daysSinceStart = date.difference(range['start']!).inDays;
       if (daysSinceStart >= 10 && daysSinceStart <= 14 && daysSinceStart != 13) {
         return true;
       }
     }
+    
+    // Check current period even if not ended
+    if (_lastPeriodStart != null) {
+      final daysSinceStart = date.difference(_lastPeriodStart!).inDays;
+      if (daysSinceStart >= 10 && daysSinceStart <= 14 && daysSinceStart != 13) {
+        return true;
+      }
+    }
+    
     return false;
   }
 
   bool _isPeakOvulationDay(DateTime date) {
+    // Check completed periods in _periodRanges
     for (final range in _periodRanges) {
       final daysSinceStart = date.difference(range['start']!).inDays;
       if (daysSinceStart == 13) return true;
     }
+    
+    // Check current period even if not ended
+    if (_lastPeriodStart != null) {
+      final daysSinceStart = date.difference(_lastPeriodStart!).inDays;
+      if (daysSinceStart == 13) return true;
+    }
+    
     return false;
   }
 
@@ -210,6 +234,68 @@ class _CycleScreenState extends State<CycleScreen> {
       return _getPhaseFromCycleDays(totalCycleDays);
     } else {
       return _getPhaseFromCycleDays(daysSinceStart);
+    }
+  }
+
+  String _getCycleInfo() {
+    if (_lastPeriodStart == null) return "Track your first period to begin";
+
+    final now = DateTime.now();
+    final nextPeriodStart = _lastPeriodStart!.add(Duration(days: _averageCycleLength));
+    final daysUntilPeriod = nextPeriodStart.difference(now).inDays;
+
+    // Period expected today or overdue
+    if (daysUntilPeriod <= 0) {
+      if (daysUntilPeriod == 0) {
+        return "Period expected today! 🩸";
+      } else {
+        final daysOverdue = -daysUntilPeriod;
+        return "Period is $daysOverdue days overdue";
+      }
+    }
+
+    // Pre-period warnings (1-6 days) with personalized messages
+    if (daysUntilPeriod <= 6) {
+      final messages = {
+        1: "Period expected tomorrow! Take care of yourself 💝",
+        2: "Period in 2 days. Rest and stay comfortable 🛋️",
+        3: "Period in 3 days. Listen to your body 🤗",
+        4: "Period in 4 days. Symptoms may begin 😌",
+        5: "Period in 5 days. Stay hydrated 💧",
+        6: "Period in 6 days. Self-care time 🌸"
+      };
+      return messages[daysUntilPeriod] ?? "$daysUntilPeriod days until period";
+    }
+
+    // Current period info
+    if (_isCurrentlyOnPeriod()) {
+      final currentDay = now.difference(_lastPeriodStart!).inDays + 1;
+      return "Day $currentDay of period";
+    }
+
+    // Cycle day info with ovulation focus
+    final daysSinceStart = now.difference(_lastPeriodStart!).inDays + 1;
+
+    if (daysSinceStart <= 11) {
+      return "Back in the game";
+    } else if (daysSinceStart <= 15) {
+      final ovulationDay = 14;
+      final daysToOvulation = ovulationDay - daysSinceStart;
+
+      if (daysToOvulation == 0) {
+        return "Ovulation day! 🥚";
+      } else if (daysToOvulation == 1) {
+        return "Ovulation tomorrow";
+      } else if (daysToOvulation == -1) {
+        return "Ovulation was yesterday";
+      } else {
+        return "Ovulation window";
+      }
+    } else {
+      if (daysUntilPeriod <= 3) {
+        return "$daysUntilPeriod days until next period";
+      }
+      return "Just keep swimming";
     }
   }
 
@@ -257,7 +343,7 @@ class _CycleScreenState extends State<CycleScreen> {
   Color _getPhaseColor() {
     final phase = _getCyclePhase();
     if (phase.startsWith("Menstruation")) return Color(0xFFF43148).withOpacity(0.8);
-    if (phase == "Follicular Phase") return AppColors.pastelCoral; // Coral instead of yellow
+    if (phase == "Follicular Phase") return AppColors.successGreen; // Green for growth phase
     if (phase == "Ovulation") return Color(0xFFF98834).withOpacity(0.8);
     if (phase.contains("Early Luteal")) return Color(0xFFBD3AA6).withOpacity(0.6);
     if (phase.contains("Middle Luteal")) return Color(0xFFBD3AA6).withOpacity(0.8);
@@ -597,13 +683,27 @@ class _CycleScreenState extends State<CycleScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    _getCyclePhase(),
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: _getPhaseColor(),
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _getCyclePhase(),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: _getPhaseColor(),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _getCycleInfo(),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _getPhaseColor().withOpacity(0.7),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 _buildAnimatedPet(),
@@ -646,6 +746,20 @@ class _CycleScreenState extends State<CycleScreen> {
     );
   }
 
+  String _getPhaseBasedPet() {
+    final phase = _getCyclePhase();
+    
+    if (phase.startsWith("Menstruation")) return '🐾'; // Tired/resting pet
+    if (phase == "Follicular Phase") return '😸'; // Growing/playful pet  
+    if (phase == "Ovulation") return '🦋'; // Beautiful/fertile butterfly
+    if (phase.contains("Early Luteal")) return '🐰'; // Energetic bunny
+    if (phase.contains("Middle Luteal")) return '🦊'; // Wise fox
+    if (phase.contains("Late Luteal")) return '🐻'; // Sleepy bear
+    if (phase.contains("Luteal")) return '🐰'; // Default bunny
+    
+    return '😸'; // Default cat
+  }
+
   Widget _buildAnimatedPet() {
     return Padding(
       padding: const EdgeInsets.only(right: 16),
@@ -657,9 +771,9 @@ class _CycleScreenState extends State<CycleScreen> {
             scale: 1.0 + (sin(value) * 0.2),
             child: Transform.rotate(
               angle: sin(value * 0.5) * 0.15,
-              child: const Text(
-                '😸',
-                style: TextStyle(fontSize: 50),
+              child: Text(
+                _getPhaseBasedPet(),
+                style: const TextStyle(fontSize: 50),
               ),
             ),
           );
@@ -764,18 +878,37 @@ class _CycleScreenState extends State<CycleScreen> {
         ],
       );
     } else {
-      return SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: _startPeriod,
-          icon: const Icon(Icons.play_arrow_rounded),
-          label: const Text('Start Period'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red.shade300,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+      return Center(
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.35, // Even narrower - about 1/3 screen width
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.red.shade400, Colors.red.shade600],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ElevatedButton.icon(
+            onPressed: _startPeriod,
+            icon: const Icon(Icons.water_drop_rounded),
+            label: const Text('Start Period', style: TextStyle(fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
             ),
           ),
         ),
@@ -806,19 +939,19 @@ class _CycleScreenState extends State<CycleScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          ElevatedButton(
+          IconButton(
             onPressed: () {
               setState(() {
                 _calendarDate = DateTime(_calendarDate.year, _calendarDate.month - 1, 1);
               });
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue.shade400,
-              foregroundColor: Colors.white,
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.white.withOpacity(0.1),
+              foregroundColor: Colors.white70,
               shape: const CircleBorder(),
               padding: const EdgeInsets.all(12),
             ),
-            child: const Icon(Icons.chevron_left, size: 24),
+            icon: const Icon(Icons.chevron_left, size: 24),
           ),
           GestureDetector(
             onTap: () {
@@ -838,19 +971,19 @@ class _CycleScreenState extends State<CycleScreen> {
               ),
             ),
           ),
-          ElevatedButton(
+          IconButton(
             onPressed: () {
               setState(() {
                 _calendarDate = DateTime(_calendarDate.year, _calendarDate.month + 1, 1);
               });
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue.shade400,
-              foregroundColor: Colors.white,
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.white.withOpacity(0.1),
+              foregroundColor: Colors.white70,
               shape: const CircleBorder(),
               padding: const EdgeInsets.all(12),
             ),
-            child: const Icon(Icons.chevron_right, size: 24),
+            icon: const Icon(Icons.chevron_right, size: 24),
           ),
         ],
       ),
@@ -955,6 +1088,81 @@ class _CycleScreenState extends State<CycleScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _scheduleCycleNotifications() async {
+    if (_lastPeriodStart == null) return;
+
+    final now = DateTime.now();
+    final notificationService = NotificationService();
+
+    try {
+      // Cancel existing cycle notifications first to avoid duplicates
+      await notificationService.flutterLocalNotificationsPlugin.cancel(1001);
+      await notificationService.flutterLocalNotificationsPlugin.cancel(1002);
+      // Schedule ovulation notification (day before ovulation = day 13)
+      final ovulationDate = _lastPeriodStart!.add(const Duration(days: 13));
+      final ovulationNotificationDate = ovulationDate.subtract(const Duration(days: 1));
+      
+      if (ovulationNotificationDate.isAfter(now)) {
+        await notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
+          1001, // Unique ID for ovulation notification
+          'Ovulation Tomorrow! 🥚',
+          'Your ovulation window is starting tomorrow. Time to pay attention to your body!',
+          tz.TZDateTime.from(ovulationNotificationDate, tz.UTC),
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'cycle_reminders',
+              'Cycle Reminders',
+              channelDescription: 'Important menstrual cycle reminders',
+              importance: Importance.high,
+              priority: Priority.high,
+            ),
+          ),
+          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        );
+      }
+
+      // Schedule menstruation notification (day before expected period)
+      final nextPeriodDate = _lastPeriodStart!.add(Duration(days: _averageCycleLength));
+      final menstruationNotificationDate = nextPeriodDate.subtract(const Duration(days: 1));
+      
+      if (menstruationNotificationDate.isAfter(now)) {
+        await notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
+          1002, // Unique ID for menstruation notification
+          'Period Expected Tomorrow 🩸',
+          'Your period is expected to start tomorrow. Make sure you\'re prepared!',
+          tz.TZDateTime.from(menstruationNotificationDate, tz.UTC),
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'cycle_reminders',
+              'Cycle Reminders',
+              channelDescription: 'Important menstrual cycle reminders',
+              importance: Importance.high,
+              priority: Priority.high,
+            ),
+          ),
+          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        );
+      }
+      debugPrint('Cycle notifications scheduled successfully');
+    } catch (e) {
+      debugPrint('Error scheduling cycle notifications: $e');
+    }
+  }
+
+  // Cancel cycle notifications (can be called when needed)
+  Future<void> _cancelCycleNotifications() async {
+    try {
+      final notificationService = NotificationService();
+      await notificationService.flutterLocalNotificationsPlugin.cancel(1001);
+      await notificationService.flutterLocalNotificationsPlugin.cancel(1002);
+      debugPrint('Cycle notifications cancelled');
+    } catch (e) {
+      debugPrint('Error cancelling cycle notifications: $e');
+    }
   }
 
   Widget _buildStatItem(String label, String value, IconData icon, Color color) {

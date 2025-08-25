@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:math';
 import 'tasks_data_models.dart';
@@ -8,6 +6,7 @@ import 'task_card_widget.dart';
 import 'task_categories_screen.dart';
 import 'task_edit_screen.dart';
 import 'task_service.dart';
+import '../theme/app_colors.dart';
 
 class TodoScreen extends StatefulWidget {
   const TodoScreen({super.key});
@@ -79,7 +78,13 @@ class _TodoScreenState extends State<TodoScreen> {
           categories: _categories,
           onSave: (task) async {
             setState(() {
-              _tasks.add(task);
+              // Check if task already exists (to prevent duplicates during auto-save)
+              final existingIndex = _tasks.indexWhere((t) => t.id == task.id);
+              if (existingIndex != -1) {
+                _tasks[existingIndex] = task;
+              } else {
+                _tasks.add(task);
+              }
             });
             await _saveTasks();
             // Priority ordering will be recalculated automatically in build method
@@ -126,9 +131,11 @@ class _TodoScreenState extends State<TodoScreen> {
     await _saveTasks();
 
     if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Task "${task.title}" deleted'),
+          duration: const Duration(seconds: 3),
           action: SnackBarAction(
             label: 'Undo',
             onPressed: () async {
@@ -136,6 +143,7 @@ class _TodoScreenState extends State<TodoScreen> {
                 _tasks.add(task);
               });
               await _saveTasks();
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
             },
           ),
         ),
@@ -163,8 +171,12 @@ class _TodoScreenState extends State<TodoScreen> {
     // Priority ordering will be recalculated automatically in build method
 
     if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Task "${task.title}" duplicated')),
+        SnackBar(
+          content: Text('Task "${task.title}" duplicated'),
+          duration: const Duration(seconds: 3),
+        ),
       );
     }
   }
@@ -301,7 +313,7 @@ class _TodoScreenState extends State<TodoScreen> {
   }
 
   List<Task> _getPrioritizedTasks() {
-    return _taskService.getPrioritizedTasks(_getFilteredTasks(), _categories, 100);
+    return _taskService.getPrioritizedTasks(_getFilteredTasks(), _categories, 100, includeCompleted: _showCompleted);
   }
 
   @override
@@ -476,11 +488,10 @@ class _TodoScreenState extends State<TodoScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: _addTask,
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Task'),
+        backgroundColor: AppColors.successGreen,
+        child: const Icon(Icons.add_rounded),
       ),
     );
   }
