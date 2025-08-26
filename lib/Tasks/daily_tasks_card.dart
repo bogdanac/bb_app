@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../theme/app_colors.dart';
 import '../Tasks/tasks_data_models.dart';
 import '../Tasks/task_service.dart';
@@ -8,7 +7,7 @@ import '../Tasks/todo_screen.dart';
 import '../Tasks/task_edit_screen.dart';
 
 class DailyTasksCard extends StatefulWidget {
-  const DailyTasksCard({Key? key}) : super(key: key);
+  const DailyTasksCard({super.key});
 
   @override
   State<DailyTasksCard> createState() => _DailyTasksCardState();
@@ -18,7 +17,6 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
   List<Task> _prioritizedTasks = [];
   List<TaskCategory> _categories = [];
   final TaskService _taskService = TaskService();
-  TaskSettings _taskSettings = TaskSettings();
   bool _isLoading = true;
 
   @override
@@ -51,17 +49,20 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
       final categories = await _taskService.loadCategories();
       final settings = await _taskService.loadTaskSettings();
 
+      // Filter to only show non-completed tasks (like TodoScreen's default behavior)
+      final filteredTasks = tasks.where((task) => !task.isCompleted).toList();
+
       final prioritized = _taskService.getPrioritizedTasks(
-          tasks,
+          filteredTasks,
           categories,
-          settings.maxTasksOnHomePage
+          settings.maxTasksOnHomePage,
+          includeCompleted: false
       );
 
       if (mounted) {
         setState(() {
           _prioritizedTasks = prioritized;
           _categories = categories;
-          _taskSettings = settings;
           _isLoading = false;
         });
       }
@@ -284,7 +285,7 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: AppColors.coral.withOpacity(0.08), // More subtle coral
+      color: AppColors.coral.withValues(alpha: 0.08), // More subtle coral
       child: Stack(
         children: [
           InkWell(
@@ -346,10 +347,10 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
+                            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: priorityColor.withOpacity(0.3),
+                              color: priorityColor.withValues(alpha: 0.3),
                               width: 1,
                             ),
                           ),
@@ -385,7 +386,7 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                                                   vertical: 2
                                               ),
                                               decoration: BoxDecoration(
-                                                color: priorityColor.withOpacity(0.15),
+                                                color: priorityColor.withValues(alpha: 0.15),
                                                 borderRadius: BorderRadius.circular(6),
                                               ),
                                               child: Text(
@@ -418,7 +419,7 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                                                       vertical: 1
                                                   ),
                                                   decoration: BoxDecoration(
-                                                    color: category.color.withOpacity(0.15),
+                                                    color: category.color.withValues(alpha: 0.15),
                                                     borderRadius: BorderRadius.circular(4),
                                                   ),
                                                   child: Text(
@@ -488,11 +489,11 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: AppColors.coral.withOpacity(0.7),
+                color: AppColors.coral.withValues(alpha: 0.7),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -510,7 +511,15 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                           categories: _categories,
                           onSave: (newTask) async {
                             final allTasks = await _taskService.loadTasks();
-                            allTasks.add(newTask);
+                            
+                            // Check if task already exists (to prevent duplicates)
+                            final existingIndex = allTasks.indexWhere((t) => t.id == newTask.id);
+                            if (existingIndex != -1) {
+                              allTasks[existingIndex] = newTask;
+                            } else {
+                              allTasks.add(newTask);
+                            }
+                            
                             await _taskService.saveTasks(allTasks);
                             await _loadTasks();
                           },

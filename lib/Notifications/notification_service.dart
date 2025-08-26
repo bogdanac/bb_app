@@ -153,40 +153,6 @@ class NotificationService {
     }
   }
 
-  Future<void> _sendTestNotification() async {
-    try {
-      await flutterLocalNotificationsPlugin.show(
-        999,
-        '✅ Notifications Setup Complete',
-        'Your notifications are working! You should see reminders soon.',
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'setup_test',
-            'Setup Test',
-            channelDescription: 'Test notification to verify setup',
-            importance: Importance.high,
-            priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
-          ),
-          iOS: DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-          ),
-        ),
-        payload: 'test_notification',
-      );
-      
-      if (kDebugMode) {
-        print('Test notification sent successfully');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error sending test notification: $e');
-      }
-    }
-  }
-
   void _handleNotificationTap(String? payload) {
     if (payload == null) return;
 
@@ -352,6 +318,7 @@ class NotificationService {
   static const int _waterReminder9AM = 1;
   static const int _waterReminder10AM = 2;
   static const int _waterReminder2PM = 3;
+  static const int _waterReminder4PM = 4;
 
   // Schedulează toate notificările de apă
   Future<void> scheduleWaterReminders() async {
@@ -363,6 +330,7 @@ class NotificationService {
       await _scheduleWaterReminder9AM();
       await _scheduleWaterReminder10AM();
       await _scheduleWaterReminder2PM();
+      await _scheduleWaterReminder4PM();
       if (kDebugMode) {
         print('All water reminders scheduled successfully');
       }
@@ -519,6 +487,56 @@ class NotificationService {
     }
   }
 
+  // Reminder la 16:00 dacă nu s-au băut 1.2L
+  Future<void> _scheduleWaterReminder4PM() async {
+    try {
+      await flutterLocalNotificationsPlugin.cancel(_waterReminder4PM);
+
+      final now = DateTime.now();
+      var scheduledDate = DateTime(now.year, now.month, now.day, 16, 0);
+
+      if (scheduledDate.isBefore(now)) {
+        scheduledDate = scheduledDate.add(const Duration(days: 1));
+      }
+
+      // Use UTC timezone to avoid initialization issues
+      final location = tz.UTC;
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        _waterReminder4PM,
+        '⚡ Afternoon Hydration Check!',
+        'You should have 1.2L by now! Only 300ml left to reach your goal! 💪💧',
+        tz.TZDateTime.from(scheduledDate, location),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'water_behind',
+            'Hydration Progress Reminders',
+            channelDescription: 'Reminders when behind daily hydration goals',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+            color: AppColors.waterBlue,
+            enableVibration: true,
+            playSound: true,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+        payload: 'water_behind_4pm',
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error scheduling 4PM water reminder: $e');
+      }
+      rethrow; // Let parent method handle the error
+    }
+  }
+
   // Verifică și anulează notificările pe bază de progres
   Future<void> checkAndCancelWaterNotifications(int currentWaterIntake) async {
     final now = DateTime.now();
@@ -547,6 +565,14 @@ class NotificationService {
         print('Cancelled 2PM water reminder - 1L goal reached');
       }
     }
+
+    // Anulează notificarea de la 16:00 dacă s-au băut 1.2L
+    if (currentWaterIntake >= 1200 && currentHour <= 16) {
+      await flutterLocalNotificationsPlugin.cancel(_waterReminder4PM);
+      if (kDebugMode) {
+        print('Cancelled 4PM water reminder - 1.2L goal reached');
+      }
+    }
   }
 
   // Anulează toate notificările de apă
@@ -554,6 +580,7 @@ class NotificationService {
     await flutterLocalNotificationsPlugin.cancel(_waterReminder9AM);
     await flutterLocalNotificationsPlugin.cancel(_waterReminder10AM);
     await flutterLocalNotificationsPlugin.cancel(_waterReminder2PM);
+    await flutterLocalNotificationsPlugin.cancel(_waterReminder4PM);
 
     if (kDebugMode) {
       print('All water notifications cancelled');
@@ -700,7 +727,7 @@ class NotificationService {
           : 0;
 
       final title = '🔥 $fastType in Progress';
-      final body = '${hours}h ${minutes}m • $currentPhase • ${progress}%';
+      final body = '${hours}h ${minutes}m • $currentPhase • $progress%';
 
       await flutterLocalNotificationsPlugin.show(
         _fastingProgressNotificationId,

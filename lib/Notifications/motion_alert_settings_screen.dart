@@ -5,7 +5,7 @@ import '../theme/app_colors.dart';
 import 'notification_listener_service.dart';
 
 class MotionAlertSettingsScreen extends StatefulWidget {
-  const MotionAlertSettingsScreen({Key? key}) : super(key: key);
+  const MotionAlertSettingsScreen({super.key});
 
   @override
   State<MotionAlertSettingsScreen> createState() => _MotionAlertSettingsScreenState();
@@ -239,7 +239,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
             // Motion Alerts Status Card (on top)
             if (_isEnabled && _hasPermission && _monitoredApps.any((app) => app['enabled'] == true))
               Card(
-                color: Colors.green.withOpacity(0.15),
+                color: Colors.green.withValues(alpha: 0.15),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
@@ -295,7 +295,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
             // Step 1: Permission (only show if not granted)
             if (!_hasPermission)
               Card(
-                color: Colors.orange.withOpacity(0.1),
+                color: Colors.orange.withValues(alpha: 0.1),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -345,7 +345,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
             
             // Step 2: Enable alerts
             Card(
-              color: _isEnabled ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+              color: _isEnabled ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -388,8 +388,8 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
             // Step 3: Select app
             Card(
               color: _monitoredApps.any((app) => app['enabled'] == true) 
-                ? Colors.green.withOpacity(0.1) 
-                : Colors.grey.withOpacity(0.1),
+                ? Colors.green.withValues(alpha: 0.1) 
+                : Colors.grey.withValues(alpha: 0.1),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -453,7 +453,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
                             dense: true,
                           ),
                         );
-                      }).toList(),
+                      }),
                       
                       // Show/Hide all apps button
                       const SizedBox(height: 8),

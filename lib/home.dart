@@ -190,8 +190,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       
       // If the last reset date is not today, we need to check if it's time to reset
       if (lastResetDate != today) {
-        final lastReset = DateTime.parse(lastResetDate);
-        
         // Calculate the last 2 AM reset time for today
         final today2AM = DateTime(now.year, now.month, now.day, 2, 0);
         
@@ -218,16 +216,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     bool shouldShow = false;
     
-    // Check if fasting was hidden for today
-    final isHiddenToday = prefs.getBool('fasting_hidden_$today') ?? false;
-    if (isHiddenToday) {
-      shouldShow = false;
-    } else if (isFriday || is25th) {
-      // Check if there's a recommended fast for today
-      shouldShow = _hasRecommendedFastForToday(now, isFriday, is25th);
+    // First, check if there's an active fast
+    final isFasting = prefs.getBool('is_fasting') ?? false;
+    final fastingStartTime = prefs.getString('current_fast_start');
+    final fastingEndTime = prefs.getString('current_fast_end');
+    
+    bool hasActiveFast = false;
+    if (isFasting && fastingStartTime != null && fastingEndTime != null) {
+      final endTime = DateTime.parse(fastingEndTime);
+      hasActiveFast = now.isBefore(endTime);
+    }
+    
+    // If there's an active fast, always show the card
+    if (hasActiveFast) {
+      shouldShow = true;
     } else {
-      // Check grace period for recent fasting days
-      shouldShow = _hasRecentFastingWithGracePeriod(now);
+      // Check if fasting was hidden for today
+      final isHiddenToday = prefs.getBool('fasting_hidden_$today') ?? false;
+      if (isHiddenToday) {
+        shouldShow = false;
+      } else if (isFriday || is25th) {
+        // Check if there's a recommended fast for today
+        shouldShow = _hasRecommendedFastForToday(now, isFriday, is25th);
+      } else {
+        // Check grace period for recent fasting days
+        shouldShow = _hasRecentFastingWithGracePeriod(now);
+      }
     }
 
     if (!_isDisposed && mounted) {
@@ -279,45 +293,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Check recent fasting days with variable grace periods based on fast duration
   bool _hasRecentFastingWithGracePeriod(DateTime now) {
-    // Check if Friday was within grace period
+    // For home screen, be very restrictive - only show grace period for very recent fasts
+    // where the user might still want to start them
+    
+    // Check if Friday was within grace period (only for 24h fasts, max 2 days grace)
     final daysSinceLastFriday = now.weekday >= 5 ? now.weekday - 5 : now.weekday + 2;
-    if (daysSinceLastFriday > 0) {
+    if (daysSinceLastFriday > 0 && daysSinceLastFriday <= 2) { // Show grace for up to 2 days after Friday
       final lastFriday = now.subtract(Duration(days: daysSinceLastFriday));
       final fastType = _getFastTypeForDate(lastFriday, true, false); // Friday, not 25th
       final graceDays = _getGracePeriodForFastType(fastType);
       
-      if (daysSinceLastFriday <= graceDays) {
+      // Only show if it's a 24h fast and within 2 day grace period
+      if (daysSinceLastFriday <= graceDays && daysSinceLastFriday <= 2 && fastType == '24h') {
         return true;
       }
     }
     
-    // Check if 25th was within grace period
-    final daysSince25th = now.day > 25 ? now.day - 25 : 0;
-    if (daysSince25th > 0) {
-      final fastType = _getFastTypeForDate(DateTime(now.year, now.month, 25), false, true);
-      final graceDays = _getGracePeriodForFastType(fastType);
-      
-      if (daysSince25th <= graceDays) {
-        return true;
-      }
-    }
+    // Don't show grace period for 25th on home screen - too disruptive
+    // Grace period is available in the fasting screen itself if user wants to access it
     
-    // Check if 25th was in previous month within grace period
-    if (now.day <= 10) { // Only check first 10 days of month
-      final lastMonth = now.month == 1 ? 12 : now.month - 1;
-      final lastYear = now.month == 1 ? now.year - 1 : now.year;
-      final last25th = DateTime(lastYear, lastMonth, 25);
-      final daysSince25thLastMonth = now.difference(last25th).inDays;
-      
-      if (daysSince25thLastMonth > 0) {
-        final fastType = _getFastTypeForDate(last25th, false, true);
-        final graceDays = _getGracePeriodForFastType(fastType);
-        
-        if (daysSince25thLastMonth <= graceDays) {
-          return true;
-        }
-      }
-    }
+    // Remove previous month check for home screen - too confusing
     
     return false;
   }
@@ -493,7 +488,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await prefs.setInt('flutter.water_$today', newIntake);
 
         // Show congratulations when goal is reached
-        if (oldIntake < goal && newIntake >= goal) {
+        if (oldIntake < goal && newIntake >= goal && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('🎉 Daily water goal achieved! Great job!'),

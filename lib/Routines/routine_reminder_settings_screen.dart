@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'routine_data_models.dart';
 import '../theme/app_colors.dart';
 import '../Notifications/notification_service.dart';
-import 'package:timezone/timezone.dart' as tz;
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class RoutineReminderSettingsScreen extends StatefulWidget {
   final List<Routine> routines;
@@ -107,7 +104,7 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
                                   routine.reminderEnabled = value;
                                 });
                               },
-                              activeColor: AppColors.coral,
+                              activeThumbColor: AppColors.coral,
                             ),
                           ],
                         ),
@@ -144,10 +141,10 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
                                     vertical: 8,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.coral.withOpacity(0.1),
+                                    color: AppColors.coral.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
-                                      color: AppColors.coral.withOpacity(0.3),
+                                      color: AppColors.coral.withValues(alpha: 0.3),
                                     ),
                                   ),
                                   child: Text(
@@ -212,7 +209,9 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
     }
 
     widget.onSave(_routines);
-    Navigator.pop(context);
+    if (mounted) {
+      Navigator.pop(context);
+    }
   }
 
   Future<void> _scheduleRoutineNotification(Routine routine, NotificationService notificationService) async {

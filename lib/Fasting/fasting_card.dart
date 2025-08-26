@@ -335,8 +335,8 @@ class _FastingCardState extends State<FastingCard> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           color: isFasting 
-              ? AppColors.orange.withOpacity(0.08) // More subtle orange
-              : AppColors.yellow.withOpacity(0.08), // Yellow theme when not fasting
+              ? AppColors.orange.withValues(alpha: 0.08) // More subtle orange
+              : AppColors.yellow.withValues(alpha: 0.08), // Yellow theme when not fasting
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -353,7 +353,7 @@ class _FastingCardState extends State<FastingCard> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      '${_formatDuration(fastingDuration)} / ${currentFastType}',
+                      '${_formatDuration(fastingDuration)} / $currentFastType',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),

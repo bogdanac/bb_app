@@ -125,10 +125,10 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.coral.withOpacity(0.08),
+                        color: AppColors.coral.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: AppColors.coral.withOpacity(0.2),
+                          color: AppColors.coral.withValues(alpha: 0.2),
                         ),
                       ),
                       child: Column(
@@ -167,7 +167,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                               Expanded(
                                 flex: 2,
                                 child: DropdownButtonFormField<RecurrenceType>(
-                                  value: _selectedType,
+                                  initialValue: _selectedType,
                                   decoration: InputDecoration(
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
@@ -205,10 +205,10 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppColors.orange.withOpacity(0.08),
+                          color: AppColors.orange.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: AppColors.orange.withOpacity(0.2),
+                            color: AppColors.orange.withValues(alpha: 0.2),
                           ),
                         ),
                         child: Column(
@@ -239,7 +239,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                   selectedColor: AppColors.orange,
                                   checkmarkColor: Colors.white,
                                   side: BorderSide(
-                                    color: isSelected ? AppColors.orange : Colors.grey.withOpacity(0.5),
+                                    color: isSelected ? AppColors.orange : Colors.grey.withValues(alpha: 0.5),
                                   ),
                                   onSelected: (selected) {
                                     setState(() {
@@ -265,10 +265,10 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppColors.purple.withOpacity(0.08),
+                          color: AppColors.purple.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: AppColors.purple.withOpacity(0.2),
+                            color: AppColors.purple.withValues(alpha: 0.2),
                           ),
                         ),
                         child: Column(
@@ -285,13 +285,13 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: !_isLastDayOfMonth 
-                                    ? AppColors.purple.withOpacity(0.1) 
+                                    ? AppColors.purple.withValues(alpha: 0.1) 
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: !_isLastDayOfMonth 
-                                      ? AppColors.purple.withOpacity(0.3)
-                                      : Colors.grey.withOpacity(0.3),
+                                      ? AppColors.purple.withValues(alpha: 0.3)
+                                      : Colors.grey.withValues(alpha: 0.3),
                                 ),
                               ),
                               child: InkWell(
@@ -303,15 +303,25 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                 },
                                 child: Row(
                                   children: [
-                                    Radio<bool>(
-                                      value: false,
-                                      groupValue: _isLastDayOfMonth,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _isLastDayOfMonth = false;
-                                          _dayOfMonth ??= DateTime.now().day;
-                                        });
-                                      },
+                                    Container(
+                                      width: 20,
+                                      height: 20,
+                                      margin: const EdgeInsets.only(right: 8),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: !_isLastDayOfMonth ? AppColors.purple : Colors.grey,
+                                          width: 2,
+                                        ),
+                                        color: !_isLastDayOfMonth ? AppColors.purple : Colors.transparent,
+                                      ),
+                                      child: !_isLastDayOfMonth
+                                          ? const Icon(
+                                              Icons.circle,
+                                              size: 12,
+                                              color: Colors.white,
+                                            )
+                                          : null,
                                     ),
                                     const Text('Day '),
                                     SizedBox(
@@ -351,13 +361,13 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: _isLastDayOfMonth 
-                                    ? AppColors.purple.withOpacity(0.1) 
+                                    ? AppColors.purple.withValues(alpha: 0.1) 
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: _isLastDayOfMonth 
-                                      ? AppColors.purple.withOpacity(0.3)
-                                      : Colors.grey.withOpacity(0.3),
+                                      ? AppColors.purple.withValues(alpha: 0.3)
+                                      : Colors.grey.withValues(alpha: 0.3),
                                 ),
                               ),
                               child: InkWell(
@@ -369,15 +379,25 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                 },
                                 child: Row(
                                   children: [
-                                    Radio<bool>(
-                                      value: true,
-                                      groupValue: _isLastDayOfMonth,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _isLastDayOfMonth = true;
-                                          _dayOfMonth = null;
-                                        });
-                                      },
+                                    Container(
+                                      width: 20,
+                                      height: 20,
+                                      margin: const EdgeInsets.only(right: 8),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: _isLastDayOfMonth ? AppColors.purple : Colors.grey,
+                                          width: 2,
+                                        ),
+                                        color: _isLastDayOfMonth ? AppColors.purple : Colors.transparent,
+                                      ),
+                                      child: _isLastDayOfMonth
+                                          ? const Icon(
+                                              Icons.circle,
+                                              size: 12,
+                                              color: Colors.white,
+                                            )
+                                          : null,
                                     ),
                                     const Text('Last day of each month'),
                                   ],
@@ -395,10 +415,10 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.08),
+                        color: Colors.grey.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.grey.withOpacity(0.2),
+                          color: Colors.grey.withValues(alpha: 0.2),
                         ),
                       ),
                       child: Column(
@@ -414,9 +434,9 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                             child: Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                                border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
                                 borderRadius: BorderRadius.circular(8),
-                                color: Colors.white.withOpacity(0.05),
+                                color: Colors.white.withValues(alpha: 0.05),
                               ),
                               child: Row(
                                 children: [
@@ -546,7 +566,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
           color: isSelected ? AppColors.coral : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? AppColors.coral : Colors.grey.withOpacity(0.3),
+            color: isSelected ? AppColors.coral : Colors.grey.withValues(alpha: 0.3),
             width: 2,
           ),
         ),

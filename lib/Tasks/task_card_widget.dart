@@ -11,14 +11,14 @@ class TaskCard extends StatelessWidget {
   final VoidCallback? onDuplicate;
 
   const TaskCard({
-    Key? key,
+    super.key,
     required this.task,
     required this.categories,
     required this.onToggleCompletion,
     required this.onEdit,
     required this.onDelete,
     this.onDuplicate,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +32,7 @@ class TaskCard extends StatelessWidget {
         onDelete();
       },
       background: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 6),
         decoration: BoxDecoration(
           color: Colors.red,
           borderRadius: BorderRadius.circular(16),
@@ -60,7 +60,7 @@ class TaskCard extends StatelessWidget {
         ),
       ),
       child: Card(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 6),
         elevation: task.isImportant ? 6 : 3,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -79,8 +79,8 @@ class TaskCard extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Theme.of(context).colorScheme.primary.withOpacity(0.05),
-                  Theme.of(context).colorScheme.primary.withOpacity(0.02),
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.02),
                 ],
               )
                   : null,
@@ -92,17 +92,19 @@ class TaskCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Transform.scale(
-                        scale: 1.2,
-                        child: Checkbox(
-                          value: task.isCompleted,
-                          onChanged: (_) => onToggleCompletion(),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
+                      // Duplicate button on the left
+                      if (onDuplicate != null) ...[
+                        IconButton(
+                          onPressed: onDuplicate,
+                          icon: const Icon(Icons.copy_rounded),
+                          tooltip: 'Duplicate',
+                          iconSize: 20,
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(8),
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 8),
+                      ],
+                      // Title and content in the middle (expanded)
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,7 +131,7 @@ class TaskCard extends StatelessWidget {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Row(
@@ -173,18 +175,18 @@ class TaskCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      // Add duplicate button if callback is provided
-                      if (onDuplicate != null) ...[
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: onDuplicate,
-                          icon: const Icon(Icons.copy_rounded),
-                          tooltip: 'Duplicate',
-                          iconSize: 20,
-                          constraints: const BoxConstraints(),
-                          padding: const EdgeInsets.all(8),
+                      // Checkbox on the right
+                      const SizedBox(width: 8),
+                      Transform.scale(
+                        scale: 1.2,
+                        child: Checkbox(
+                          value: task.isCompleted,
+                          onChanged: (_) => onToggleCompletion(),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
                         ),
-                      ],
+                      ),
                     ],
                   ),
 
@@ -236,10 +238,10 @@ class TaskCard extends StatelessWidget {
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: category.color.withOpacity(0.15),
+                        color: category.color.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: category.color.withOpacity(0.4),
+                          color: category.color.withValues(alpha: 0.4),
                           width: 1,
                         ),
                       ),
@@ -268,7 +270,7 @@ class TaskCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(

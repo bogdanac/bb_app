@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 class MorningRoutineScreen extends StatefulWidget {
   final VoidCallback onCompleted;
 
-  const MorningRoutineScreen({Key? key, required this.onCompleted}) : super(key: key);
+  const MorningRoutineScreen({super.key, required this.onCompleted});
 
   @override
   State<MorningRoutineScreen> createState() => _MorningRoutineScreenState();
@@ -24,7 +24,7 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Morning Routine'),
-        backgroundColor: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+        backgroundColor: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -32,7 +32,7 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+              Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
               Theme.of(context).scaffoldBackgroundColor,
             ],
           ),
@@ -59,7 +59,7 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
                       const SizedBox(height: 20),
                       LinearProgressIndicator(
                         value: completedCount / _routineItems.length,
-                        backgroundColor: Colors.grey.withOpacity(0.3),
+                        backgroundColor: Colors.grey.withValues(alpha: 0.3),
                         valueColor: AlwaysStoppedAnimation<Color>(
                           Theme.of(context).colorScheme.secondary,
                         ),

@@ -29,7 +29,7 @@ class _FastEditDialogState extends State<FastEditDialog> {
     _endTime = widget.endTime;
   }
 
-  _selectDateTime(bool isStart) async {
+  Future<void> _selectDateTime(bool isStart) async {
     final currentTime = isStart ? _startTime : _endTime;
 
     final date = await showDatePicker(
@@ -39,7 +39,7 @@ class _FastEditDialogState extends State<FastEditDialog> {
       lastDate: DateTime(2030),
     );
 
-    if (date != null) {
+    if (date != null && mounted) {
       final time = await showTimePicker(
         context: context,
         initialTime: TimeOfDay.fromDateTime(currentTime),

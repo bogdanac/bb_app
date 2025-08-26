@@ -8,10 +8,10 @@ class WaterTrackingCard extends StatefulWidget {
   final VoidCallback onWaterAdded;
 
   const WaterTrackingCard({
-    Key? key,
+    super.key,
     required this.waterIntake,
     required this.onWaterAdded,
-  }) : super(key: key);
+  });
 
   @override
   State<WaterTrackingCard> createState() => _WaterTrackingCardState();
@@ -123,7 +123,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.waterBlue.withOpacity(0.08), // Water blue theme
+          color: AppColors.waterBlue.withValues(alpha: 0.08), // Water blue theme
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,7 +148,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                         width: double.infinity, // Forțează width complet
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20),
-                          color: Colors.red.withOpacity(0.3),
+                          color: Colors.red.withValues(alpha: 0.3),
                         ),
                         child: AnimatedBuilder(
                           animation: _progressAnimation,
@@ -165,12 +165,12 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                                     gradient: LinearGradient(
                                       colors: _progressAnimation.value > 0.9
                                           ? [AppColors.successGreen, AppColors.pastelGreen] // Keep green for success
-                                          : [AppColors.waterBlue, AppColors.waterBlue.withOpacity(0.7)], // Water blue for progress
+                                          : [AppColors.waterBlue, AppColors.waterBlue.withValues(alpha: 0.7)], // Water blue for progress
                                     ),
                                     boxShadow: _progressAnimation.value > 0.0
                                         ? [
                                       BoxShadow(
-                                        color: AppColors.waterBlue.withOpacity(0.3),
+                                        color: AppColors.waterBlue.withValues(alpha: 0.3),
                                         blurRadius: 4,
                                         offset: const Offset(0, 2),
                                       ),
@@ -205,7 +205,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                                 Shadow(
                                   offset: const Offset(0, 1),
                                   blurRadius: 2,
-                                  color: Colors.black.withOpacity(0.3),
+                                  color: Colors.black.withValues(alpha: 0.3),
                                 ),
                               ]
                                   : null,

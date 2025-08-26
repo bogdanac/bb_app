@@ -6,9 +6,9 @@ class MenstrualCycleCard extends StatefulWidget {
   final VoidCallback? onTap;
 
   const MenstrualCycleCard({
-    Key? key,
+    super.key,
     this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   State<MenstrualCycleCard> createState() => _MenstrualCycleCardState();
@@ -20,11 +20,8 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
   DateTime? _lastPeriodStart;
   DateTime? _lastPeriodEnd;
   int _averageCycleLength = 31;
-  bool _isExpanded = false; // New state for expansion
 
   late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _rotationAnimation;
 
   @override
   void initState() {
@@ -45,22 +42,6 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
       vsync: this,
     )
       ..repeat();
-
-    _scaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 1.2,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
-
-    _rotationAnimation = Tween<double>(
-      begin: -0.1,
-      end: 0.1,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
   }
 
   // DATA LOADING - Compatible with CycleScreen
@@ -212,20 +193,6 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
 
     return AppColors.coral;
   }
-  
-  Color _getPastelPhaseColor() {
-    final phase = _getCyclePhase();
-
-    if (phase.startsWith("Menstruation")) return AppColors.pastelRed; // Pastel red for menstruation
-    if (phase == "Follicular Phase") return AppColors.successGreen.withOpacity(0.3); // Pastel green for growth phase
-    if (phase == "Ovulation") return AppColors.pastelOrange; // Pastel orange
-    if (phase.contains("Early Luteal")) return AppColors.lightPurple; // Light purple
-    if (phase.contains("Middle Luteal")) return AppColors.pastelPurple; // Pastel purple
-    if (phase.contains("Late Luteal")) return AppColors.pastelPurple; // Pastel purple
-    if (phase.contains("Luteal")) return AppColors.pastelPurple; // Pastel purple
-
-    return AppColors.pastelCoral; // Default pastel coral
-  }
 
   IconData _getPhaseIcon() {
     final phase = _getCyclePhase();
@@ -238,22 +205,6 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
     return Icons.timeline_rounded;
   }
 
-  String _getPhaseEmoji() {
-    final phase = _getCyclePhase();
-
-    if (phase.startsWith("Menstruation")) return "🩸";
-    if (phase == "Follicular Phase") return "🌱";
-    if (phase == "Ovulation") return "🥚";
-    if (phase.contains("Early Luteal")) return "🌸";
-    if (phase.contains("Middle Luteal")) return "🌺";
-    if (phase.contains("Late Luteal")) return "🌙";
-    if (phase.contains("Luteal")) return "🌸";
-
-    return "📅";
-  }
-
-  // Removed animated emoji method
-
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -263,7 +214,7 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: _getPhaseColor().withOpacity(0.08),
+          color: _getPhaseColor().withValues(alpha: 0.08),
         ),
         child: GestureDetector(
           onTap: widget.onTap,

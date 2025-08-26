@@ -10,11 +10,11 @@ class TaskEditScreen extends StatefulWidget {
   final Function(Task) onSave;
 
   const TaskEditScreen({
-    Key? key,
+    super.key,
     this.task,
     required this.categories,
     required this.onSave,
-  }) : super(key: key);
+  });
 
   @override
   State<TaskEditScreen> createState() => _TaskEditScreenState();
@@ -22,7 +22,6 @@ class TaskEditScreen extends StatefulWidget {
 
 class _TaskEditScreenState extends State<TaskEditScreen> {
   final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
   List<String> _selectedCategoryIds = [];
   DateTime? _deadline;
   DateTime? _reminderTime;
@@ -39,7 +38,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     if (widget.task != null) {
       final task = widget.task!;
       _titleController.text = task.title;
-      _descriptionController.text = task.description;
       _selectedCategoryIds = List.from(task.categoryIds);
       _deadline = task.deadline;
       _reminderTime = task.reminderTime;
@@ -49,14 +47,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     
     // Add listeners for auto-save
     _titleController.addListener(_onFieldChanged);
-    _descriptionController.addListener(_onFieldChanged);
   }
 
   @override
   void dispose() {
     _saveTimer?.cancel();
     _titleController.dispose();
-    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -80,7 +76,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     final task = Task(
       id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
-      description: _descriptionController.text.trim(),
+      description: '',
       categoryIds: _selectedCategoryIds,
       deadline: _deadline,
       reminderTime: _reminderTime,
@@ -103,13 +99,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
         // Auto-save before leaving if there are unsaved changes
         if (_hasUnsavedChanges && _titleController.text.trim().isNotEmpty) {
           _autoSaveTask();
         }
-        return true;
       },
       child: Scaffold(
       appBar: AppBar(
@@ -150,127 +145,195 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // TOP (hard to reach - less used options)
-            // Deadline (less frequently used)
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.calendar_today_rounded),
-                title: const Text('Deadline'),
-                subtitle: _deadline != null
-                    ? Text(DateFormat('EEE, MMM dd, yyyy').format(_deadline!))
-                    : const Text('No deadline set'),
-                trailing: _deadline != null
-                    ? IconButton(
-                  icon: const Icon(Icons.clear_rounded),
-                  onPressed: () {
-                    setState(() => _deadline = null);
-                    _onFieldChanged();
-                  },
-                )
-                    : const Icon(Icons.chevron_right_rounded),
-                onTap: _selectDeadline,
-              ),
+            // TOP - Advanced/optional features (hard to reach)
+            Row(
+              children: [
+                Expanded(
+                  child: Card(
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(
+                        Icons.event_rounded,
+                        color: _deadline != null ? Theme.of(context).primaryColor : Colors.grey,
+                        size: 20,
+                      ),
+                      title: const Text('Deadline', style: TextStyle(fontSize: 14)),
+                      subtitle: _deadline != null
+                          ? Text(DateFormat('MMM dd').format(_deadline!), style: const TextStyle(fontSize: 12))
+                          : const Text('Optional', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      trailing: _deadline != null
+                          ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        onPressed: () {
+                          setState(() => _deadline = null);
+                          _onFieldChanged();
+                        },
+                      )
+                          : const Icon(Icons.chevron_right_rounded, size: 18),
+                      onTap: _selectDeadline,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Card(
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(
+                        Icons.repeat_rounded,
+                        color: _recurrence != null ? Theme.of(context).primaryColor : Colors.grey,
+                        size: 20,
+                      ),
+                      title: const Text('Recurrence', style: TextStyle(fontSize: 14)),
+                      subtitle: _recurrence != null
+                          ? Text(_recurrence!.getDisplayText(), style: const TextStyle(fontSize: 12))
+                          : const Text('Optional', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      trailing: _recurrence != null
+                          ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        onPressed: () {
+                          setState(() => _recurrence = null);
+                          _onFieldChanged();
+                        },
+                      )
+                          : const Icon(Icons.chevron_right_rounded, size: 18),
+                      onTap: _selectRecurrence,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
 
-            // Recurrence (less frequently used)
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.repeat_rounded),
-                title: const Text('Recurrence'),
-                subtitle: _recurrence != null
-                    ? Text(_recurrence!.getDisplayText())
-                    : const Text('No recurrence set'),
-                trailing: _recurrence != null
-                    ? IconButton(
-                  icon: const Icon(Icons.clear_rounded),
-                  onPressed: () {
-                    setState(() => _recurrence = null);
-                    _onFieldChanged();
-                  },
-                )
-                    : const Icon(Icons.chevron_right_rounded),
-                onTap: _selectRecurrence,
+            if (_recurrence != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This task will repeat according to the schedule',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 40),
+            ],
+            
+            const SizedBox(height: 24),
 
-            // MIDDLE (easy reach zone - most used options)
-            // Title (main focus - easy to reach)
+            // MIDDLE - Essential content
             TextField(
               controller: _titleController,
               decoration: InputDecoration(
                 labelText: 'Task Title',
+                hintText: 'What do you need to do?',
                 border: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Theme.of(context).primaryColor),
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2),
                 ),
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.3),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               ),
               style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 24),
-
-            // Categories (frequently used)
-            const Text('Categories', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: widget.categories.map((category) {
-                final isSelected = _selectedCategoryIds.contains(category.id);
-                return FilterChip(
-                  label: Text(category.name),
-                  selected: isSelected,
-                  backgroundColor: category.color.withOpacity(0.1),
-                  selectedColor: category.color.withOpacity(0.3),
-                  checkmarkColor: category.color,
-                  side: BorderSide(color: category.color.withOpacity(0.5)),
-                  onSelected: (selected) {
-                    setState(() {
-                      if (selected) {
-                        _selectedCategoryIds.add(category.id);
-                      } else {
-                        _selectedCategoryIds.remove(category.id);
-                      }
-                    });
-                    _onFieldChanged();
-                  },
-                );
-              }).toList(),
+              autofocus: true,
             ),
             const SizedBox(height: 16),
 
-            // Important (frequently used)
-            Card(
-              child: SwitchListTile(
-                title: const Text('Important'),
-                subtitle: const Text('Mark this task as high priority'),
-                value: _isImportant,
-                onChanged: (value) {
-                  setState(() => _isImportant = value);
-                  _onFieldChanged();
-                },
-                secondary: Icon(
-                  Icons.star_rounded,
-                  color: _isImportant ? Theme.of(context).colorScheme.primary : Colors.grey,
+
+            // Categories
+            if (widget.categories.isNotEmpty) ...[
+              Card(
+                elevation: 1,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.category_rounded, color: Theme.of(context).primaryColor, size: 18),
+                          const SizedBox(width: 8),
+                          const Text('Categories', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: widget.categories.map((category) {
+                          final isSelected = _selectedCategoryIds.contains(category.id);
+                          return FilterChip(
+                            label: Text(category.name),
+                            selected: isSelected,
+                            backgroundColor: category.color.withValues(alpha: 0.1),
+                            selectedColor: category.color.withValues(alpha: 0.3),
+                            checkmarkColor: category.color,
+                            side: BorderSide(color: category.color.withValues(alpha: 0.5)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _selectedCategoryIds.add(category.id);
+                                } else {
+                                  _selectedCategoryIds.remove(category.id);
+                                }
+                              });
+                              _onFieldChanged();
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ],
 
-
-            // Reminder Time
+            // BOTTOM - Thumb-reachable zone (most frequently used)
             Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: ListTile(
-                leading: const Icon(Icons.notifications_rounded),
+                leading: Icon(
+                  Icons.notifications_rounded,
+                  color: _reminderTime != null ? Theme.of(context).primaryColor : Colors.grey,
+                ),
                 title: const Text('Reminder Time'),
                 subtitle: _reminderTime != null
                     ? Text(DateFormat('HH:mm').format(_reminderTime!))
-                    : const Text('No reminder set'),
+                    : const Text('Set a reminder to get notified'),
                 trailing: _reminderTime != null
                     ? IconButton(
                   icon: const Icon(Icons.clear_rounded),
@@ -283,40 +346,28 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 onTap: _selectReminderTime,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-            if (_recurrence != null) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                  ),
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: SwitchListTile(
+                title: const Text('Important'),
+                subtitle: const Text('Mark this task as high priority'),
+                value: _isImportant,
+                onChanged: (value) {
+                  setState(() => _isImportant = value);
+                  _onFieldChanged();
+                },
+                secondary: Icon(
+                  Icons.star_rounded,
+                  color: _isImportant ? Theme.of(context).colorScheme.primary : Colors.grey,
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'This task will repeat according to the schedule above',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                activeThumbColor: Theme.of(context).primaryColor,
               ),
-            ],
+            ),
+
+            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -434,6 +485,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () async {
+                          final navigator = Navigator.of(context);
                           final time = await showTimePicker(
                             context: context,
                             initialTime: _reminderTime != null
@@ -447,7 +499,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             },
                           );
                           if (time != null && mounted) {
-                            Navigator.pop(context, time);
+                            navigator.pop(time);
                           }
                         },
                         icon: const Icon(Icons.schedule_rounded),
@@ -475,9 +527,9 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     return ActionChip(
       label: Text(label),
       onPressed: () => Navigator.pop(context, time),
-      backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+      backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
       side: BorderSide(
-        color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
       ),
       labelStyle: TextStyle(
         color: Theme.of(context).colorScheme.primary,

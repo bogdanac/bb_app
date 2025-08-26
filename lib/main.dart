@@ -27,7 +27,7 @@ void main() async {
 }
 
 class BBetterApp extends StatelessWidget {
-  const BBetterApp({Key? key}) : super(key: key);
+  const BBetterApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -251,7 +251,9 @@ class _LauncherScreenState extends State<LauncherScreen>
       if (Platform.isAndroid) {
         Permission.notification.request().timeout(Duration(seconds: 5)).then((status) {
           if (!status.isGranted && kDebugMode) {
-            print("Notifications permission denied");
+            if (kDebugMode) {
+              print("Notifications permission denied");
+            }
           }
         }).catchError((error) {
           if (kDebugMode) print("Error requesting notification permission or timed out: $error");
@@ -308,12 +310,12 @@ class _LauncherScreenState extends State<LauncherScreen>
                         decoration: BoxDecoration(
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.redPrimary.withOpacity(0.4),
+                              color: AppColors.redPrimary.withValues(alpha: 0.4),
                               blurRadius: 25,
                               spreadRadius: 8,
                             ),
                             BoxShadow(
-                              color: AppColors.orange.withOpacity(0.3),
+                              color: AppColors.orange.withValues(alpha: 0.3),
                               blurRadius: 15,
                               spreadRadius: 3,
                             ),
@@ -348,7 +350,7 @@ class _LauncherScreenState extends State<LauncherScreen>
                             style: TextStyle(
                               fontSize: 42,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white.withOpacity(_textOpacity.value),
+                              color: Colors.white.withValues(alpha: _textOpacity.value),
                               letterSpacing: 2,
                             ),
                           ),
@@ -357,7 +359,7 @@ class _LauncherScreenState extends State<LauncherScreen>
                             'Fabulous every day',
                             style: TextStyle(
                               fontSize: 16,
-                              color: AppColors.orange.withOpacity(_textOpacity.value), // Orange color
+                              color: AppColors.orange.withValues(alpha: _textOpacity.value), // Orange color
                               fontWeight: FontWeight.w300,
                               letterSpacing: 1,
                             ),
@@ -468,7 +470,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
           color: const Color(0xFF1A1A1A),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               blurRadius: 10,
               offset: const Offset(0, -2),
             ),
@@ -505,17 +507,17 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
                 margin: const EdgeInsets.symmetric(vertical: 7), // Increased margin slightly
                 decoration: BoxDecoration(
                   color: isSelected 
-                      ? colors[index].withOpacity(0.25) // More subtle selected state
-                      : colors[index].withOpacity(0.08), // Very subtle unselected
+                      ? colors[index].withValues(alpha: 0.25) // More subtle selected state
+                      : colors[index].withValues(alpha: 0.08), // Very subtle unselected
                   borderRadius: BorderRadius.circular(20),
                   border: isSelected 
-                      ? Border.all(color: colors[index].withOpacity(0.6), width: 1.5) // Subtle border when selected
+                      ? Border.all(color: colors[index].withValues(alpha: 0.6), width: 1.5) // Subtle border when selected
                       : null,
                 ),
                 child: Center(
                   child: Icon(
                     icons[index],
-                    color: isSelected ? colors[index] : colors[index].withOpacity(0.7), // Colored icons
+                    color: isSelected ? colors[index] : colors[index].withValues(alpha: 0.7), // Colored icons
                     size: isSelected ? 32 : 30, // Increased from 28/26 to 32/30
                   ),
                 ),

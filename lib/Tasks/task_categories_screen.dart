@@ -9,10 +9,10 @@ class TaskCategoriesScreen extends StatefulWidget {
   final Function(List<TaskCategory>) onCategoriesUpdated;
 
   const TaskCategoriesScreen({
-    Key? key,
+    super.key,
     required this.categories,
     required this.onCategoriesUpdated,
-  }) : super(key: key);
+  });
 
   @override
   State<TaskCategoriesScreen> createState() => _TaskCategoriesScreenState();
@@ -27,7 +27,7 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
     _categories = List.from(widget.categories);
   }
 
-  _addCategory() {
+  void _addCategory() {
     showDialog(
       context: context,
       builder: (context) => CategoryEditDialog(
@@ -46,7 +46,7 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
     );
   }
 
-  _editCategory(TaskCategory category) {
+  void _editCategory(TaskCategory category) {
     showDialog(
       context: context,
       builder: (context) => CategoryEditDialog(
@@ -63,7 +63,7 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
     );
   }
 
-  _deleteCategory(TaskCategory category) {
+  void _deleteCategory(TaskCategory category) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -94,7 +94,7 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
     );
   }
 
-  _saveCategories() {
+  void _saveCategories() {
     widget.onCategoriesUpdated(_categories);
   }
 

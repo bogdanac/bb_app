@@ -101,7 +101,7 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.lightPurple.withOpacity(0.08),
+          color: AppColors.lightPurple.withValues(alpha: 0.08),
         ),
         child: Stack(
           children: [
@@ -159,7 +159,7 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
                                       Navigator.pop(context);
                                       // Try to open app settings
                                       try {
-                                        await Permission.calendar.request();
+                                        await Permission.calendarFullAccess.request();
                                       } catch (e) {
                                         // If that doesn't work, just close dialog
                                       }

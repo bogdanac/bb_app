@@ -8,11 +8,11 @@ class CategoryEditDialog extends StatefulWidget {
   final Function(String, Color) onSave;
 
   const CategoryEditDialog({
-    Key? key,
+    super.key,
     this.initialName,
     this.initialColor,
     required this.onSave,
-  }) : super(key: key);
+  });
 
   @override
   State<CategoryEditDialog> createState() => _CategoryEditDialogState();
@@ -83,7 +83,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                         ? Border.all(color: Colors.white, width: 3)
                         : null,
                     boxShadow: _selectedColor == color
-                        ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 8)]
+                        ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 8)]
                         : null,
                   ),
                 ),

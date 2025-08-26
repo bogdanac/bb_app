@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../theme/app_colors.dart';
 import 'notification_listener_service.dart';
 
 class MotionAlertQuickSetup extends StatefulWidget {
-  const MotionAlertQuickSetup({Key? key}) : super(key: key);
+  const MotionAlertQuickSetup({super.key});
 
   @override
   State<MotionAlertQuickSetup> createState() => _MotionAlertQuickSetupState();
@@ -156,7 +155,7 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
             // Permission Step - only show if permission not granted
             if (!_hasPermission)
               Card(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha: 0.1),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -193,7 +192,7 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
 
               // Night Mode
               Card(
-                color: _nightMode && _isEnabled ? Colors.blue.withOpacity(0.1) : null,
+                color: _nightMode && _isEnabled ? Colors.blue.withValues(alpha: 0.1) : null,
                 child: ListTile(
                   leading: Icon(
                     Icons.nightlight_round,
@@ -223,7 +222,7 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
 
               // Vacation Mode
               Card(
-                color: _vacationMode && _isEnabled ? Colors.orange.withOpacity(0.1) : null,
+                color: _vacationMode && _isEnabled ? Colors.orange.withValues(alpha: 0.1) : null,
                 child: ListTile(
                   leading: Icon(
                     Icons.luggage_rounded,
@@ -253,7 +252,7 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
               if (_hasPermission && _isEnabled && _selectedApps.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Card(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -348,12 +347,25 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
                       ),
                       const SizedBox(width: 8),
                       IconButton(
+                        onPressed: () async {
+                          debugPrint('=== MANUAL ALARM TEST ===');
+                          await NotificationListenerService.triggerLoudAlarm('Test Motion Alert', 'Person detected in camera - Manual Test');
+                        },
+                        icon: const Icon(Icons.volume_up, size: 18),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.orange.withValues(alpha: 0.1),
+                          foregroundColor: Colors.orange,
+                        ),
+                        tooltip: 'Test Full Alarm',
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
                         onPressed: () {
                           NotificationListenerService.stopAlarm();
                         },
                         icon: const Icon(Icons.stop, size: 18),
                         style: IconButton.styleFrom(
-                          backgroundColor: Colors.red.withOpacity(0.1),
+                          backgroundColor: Colors.red.withValues(alpha: 0.1),
                           foregroundColor: Colors.red,
                         ),
                         tooltip: 'Stop Alarm',

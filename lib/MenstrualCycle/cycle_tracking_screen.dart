@@ -9,7 +9,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class CycleScreen extends StatefulWidget {
-  const CycleScreen({Key? key}) : super(key: key);
+  const CycleScreen({super.key});
 
   @override
   State<CycleScreen> createState() => _CycleScreenState();
@@ -342,13 +342,13 @@ class _CycleScreenState extends State<CycleScreen> {
 
   Color _getPhaseColor() {
     final phase = _getCyclePhase();
-    if (phase.startsWith("Menstruation")) return Color(0xFFF43148).withOpacity(0.8);
+    if (phase.startsWith("Menstruation")) return Color(0xFFF43148).withValues(alpha: 0.8);
     if (phase == "Follicular Phase") return AppColors.successGreen; // Green for growth phase
-    if (phase == "Ovulation") return Color(0xFFF98834).withOpacity(0.8);
-    if (phase.contains("Early Luteal")) return Color(0xFFBD3AA6).withOpacity(0.6);
-    if (phase.contains("Middle Luteal")) return Color(0xFFBD3AA6).withOpacity(0.8);
+    if (phase == "Ovulation") return Color(0xFFF98834).withValues(alpha: 0.8);
+    if (phase.contains("Early Luteal")) return Color(0xFFBD3AA6).withValues(alpha: 0.6);
+    if (phase.contains("Middle Luteal")) return Color(0xFFBD3AA6).withValues(alpha: 0.8);
     if (phase.contains("Late Luteal")) return Color(0xFFBD3AA6);
-    if (phase.contains("Luteal")) return Color(0xFFBD3AA6).withOpacity(0.8);
+    if (phase.contains("Luteal")) return Color(0xFFBD3AA6).withValues(alpha: 0.8);
     return Colors.grey;
   }
 
@@ -496,7 +496,9 @@ class _CycleScreenState extends State<CycleScreen> {
 
       await _saveCycleData();
       _calculateAverageCycleLength();
-      Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+      }
     }
   }
 
@@ -616,7 +618,9 @@ class _CycleScreenState extends State<CycleScreen> {
 
       await _saveCycleData();
       _calculateAverageCycleLength();
-      Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+      }
     }
   }
 
@@ -661,13 +665,13 @@ class _CycleScreenState extends State<CycleScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
             colors: [
-              _getPhaseColor().withOpacity(0.3),
-              _getPhaseColor().withOpacity(0.1),
+              _getPhaseColor().withValues(alpha: 0.3),
+              _getPhaseColor().withValues(alpha: 0.1),
             ],
           ),
         ),
@@ -699,7 +703,7 @@ class _CycleScreenState extends State<CycleScreen> {
                         _getCycleInfo(),
                         style: TextStyle(
                           fontSize: 14,
-                          color: _getPhaseColor().withOpacity(0.7),
+                          color: _getPhaseColor().withValues(alpha: 0.7),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -891,7 +895,7 @@ class _CycleScreenState extends State<CycleScreen> {
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.red.withOpacity(0.3),
+                color: Colors.red.withValues(alpha: 0.3),
                 blurRadius: 8,
                 offset: const Offset(0, 4),
               ),
@@ -946,7 +950,7 @@ class _CycleScreenState extends State<CycleScreen> {
               });
             },
             style: IconButton.styleFrom(
-              backgroundColor: Colors.white.withOpacity(0.1),
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
               foregroundColor: Colors.white70,
               shape: const CircleBorder(),
               padding: const EdgeInsets.all(12),
@@ -978,7 +982,7 @@ class _CycleScreenState extends State<CycleScreen> {
               });
             },
             style: IconButton.styleFrom(
-              backgroundColor: Colors.white.withOpacity(0.1),
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
               foregroundColor: Colors.white70,
               shape: const CircleBorder(),
               padding: const EdgeInsets.all(12),
@@ -1150,18 +1154,6 @@ class _CycleScreenState extends State<CycleScreen> {
       debugPrint('Cycle notifications scheduled successfully');
     } catch (e) {
       debugPrint('Error scheduling cycle notifications: $e');
-    }
-  }
-
-  // Cancel cycle notifications (can be called when needed)
-  Future<void> _cancelCycleNotifications() async {
-    try {
-      final notificationService = NotificationService();
-      await notificationService.flutterLocalNotificationsPlugin.cancel(1001);
-      await notificationService.flutterLocalNotificationsPlugin.cancel(1002);
-      debugPrint('Cycle notifications cancelled');
-    } catch (e) {
-      debugPrint('Error cancelling cycle notifications: $e');
     }
   }
 

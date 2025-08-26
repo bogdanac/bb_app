@@ -6,7 +6,7 @@ class CalendarService {
   factory CalendarService() => _instance;
   CalendarService._internal();
 
-  DeviceCalendarPlugin _deviceCalendarPlugin = DeviceCalendarPlugin();
+  final DeviceCalendarPlugin _deviceCalendarPlugin = DeviceCalendarPlugin();
 
   // Check if calendar permission is granted
   Future<bool> hasCalendarPermission() async {

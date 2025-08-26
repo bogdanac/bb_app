@@ -9,7 +9,7 @@ import 'fasting_notifier.dart';
 class FastingHistoryScreen extends StatefulWidget {
   final List<Map<String, dynamic>> history;
 
-  const FastingHistoryScreen({Key? key, required this.history}) : super(key: key);
+  const FastingHistoryScreen({super.key, required this.history});
 
   @override
   State<FastingHistoryScreen> createState() => _FastingHistoryScreenState();
@@ -25,7 +25,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
     _editableHistory = List.from(widget.history);
   }
 
-  _editFast(int index) {
+  void _editFast(int index) {
     final fast = _editableHistory[index];
     final startTime = DateTime.parse(fast['startTime']);
     final endTime = DateTime.parse(fast['endTime']);
@@ -47,7 +47,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
     );
   }
 
-  _deleteFast(int index) {
+  void _deleteFast(int index) {
     final fast = _editableHistory[index];
     final fastType = fast['type'] ?? 'Fast';
 
@@ -98,7 +98,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
     );
   }
 
-  _performDelete(int index) {
+  void _performDelete(int index) {
     final deletedFast = _editableHistory[index];
 
     setState(() {
@@ -125,7 +125,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
     );
   }
 
-  _saveHistory() async {
+  Future<void> _saveHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final historyStr = _editableHistory.map((item) => jsonEncode(item)).toList();
     await prefs.setStringList('fasting_history', historyStr);
@@ -158,8 +158,8 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
           borderRadius: BorderRadius.circular(12),
           gradient: LinearGradient(
             colors: isCompleted
-                ? [Colors.green.withOpacity(0.1), Colors.green.withOpacity(0.05)]
-                : [Colors.orange.withOpacity(0.1), Colors.orange.withOpacity(0.05)],
+                ? [Colors.green.withValues(alpha: 0.1), Colors.green.withValues(alpha: 0.05)]
+                : [Colors.orange.withValues(alpha: 0.1), Colors.orange.withValues(alpha: 0.05)],
           ),
         ),
         child: ListTile(
@@ -273,7 +273,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.2),
+                color: Colors.grey.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: const Icon(Icons.more_vert_rounded, size: 20),
@@ -354,7 +354,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.blue.withOpacity(0.2), Colors.purple.withOpacity(0.2)],
+                colors: [Colors.blue.withValues(alpha: 0.2), Colors.purple.withValues(alpha: 0.2)],
               ),
               borderRadius: BorderRadius.circular(12),
             ),

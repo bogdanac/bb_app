@@ -7,10 +7,10 @@ class RoutineEditScreen extends StatefulWidget {
   final Function(Routine) onSave;
 
   const RoutineEditScreen({
-    Key? key,
+    super.key,
     this.routine,
     required this.onSave,
-  }) : super(key: key);
+  });
 
   @override
   State<RoutineEditScreen> createState() => _RoutineEditScreenState();
@@ -29,7 +29,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     }
   }
 
-  _addItem() {
+  void _addItem() {
     setState(() {
       _items.add(RoutineItem(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -39,13 +39,13 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     });
   }
 
-  _removeItem(int index) {
+  void _removeItem(int index) {
     setState(() {
       _items.removeAt(index);
     });
   }
 
-  _saveRoutine() {
+  void _saveRoutine() {
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a routine title')),

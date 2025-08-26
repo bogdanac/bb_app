@@ -68,13 +68,21 @@ class NotificationListenerService {
       final String title = notification['title'] ?? '';
       final String text = notification['text'] ?? '';
       
-      debugPrint('Notification received from: $packageName');
+      debugPrint('=== NOTIFICATION RECEIVED ===');
+      debugPrint('Package: $packageName');
       debugPrint('Title: $title');
       debugPrint('Text: $text');
+      debugPrint('Full notification data: $notification');
       
       // Check if this notification should trigger an alarm
-      if (await _shouldTriggerAlarm(packageName, title, text)) {
+      final shouldTrigger = await _shouldTriggerAlarm(packageName, title, text);
+      debugPrint('Should trigger alarm: $shouldTrigger');
+      
+      if (shouldTrigger) {
+        debugPrint('🚨 TRIGGERING ALARM NOW! 🚨');
         await triggerLoudAlarm(title, text);
+      } else {
+        debugPrint('Not triggering alarm - conditions not met');
       }
     } catch (e) {
       debugPrint('Error handling notification: $e');
@@ -84,25 +92,43 @@ class NotificationListenerService {
   // Check if notification should trigger alarm
   static Future<bool> _shouldTriggerAlarm(String packageName, String title, String text) async {
     try {
+      debugPrint('=== CHECKING ALARM TRIGGER CONDITIONS ===');
+      
       final prefs = await SharedPreferences.getInstance();
       final settingsJson = prefs.getString('notification_alarm_settings');
       
-      if (settingsJson == null) return false;
+      debugPrint('Settings JSON: $settingsJson');
+      
+      if (settingsJson == null) {
+        debugPrint('❌ No settings found - alarm disabled');
+        return false;
+      }
       
       final settings = json.decode(settingsJson) as Map<String, dynamic>;
       final List<dynamic> monitoredApps = settings['monitoredApps'] ?? [];
       final bool isEnabled = settings['enabled'] ?? false;
       final bool nightModeOnly = settings['nightModeOnly'] ?? true;
       
-      if (!isEnabled) return false;
+      debugPrint('Enabled: $isEnabled');
+      debugPrint('Night mode only: $nightModeOnly');
+      debugPrint('Monitored apps: $monitoredApps');
+      
+      if (!isEnabled) {
+        debugPrint('❌ Feature is disabled');
+        return false;
+      }
       
       // Check if it's night time (if night mode only)
       if (nightModeOnly) {
         final now = DateTime.now();
         final hour = now.hour;
+        debugPrint('Current hour: $hour');
         // Consider night time as 22:00 to 08:00
         if (!(hour >= 22 || hour <= 8)) {
+          debugPrint('❌ Not night time (22:00-08:00)');
           return false;
+        } else {
+          debugPrint('✅ Night time check passed');
         }
       }
       
@@ -111,15 +137,33 @@ class NotificationListenerService {
         app['packageName'] == packageName && app['enabled'] == true
       );
       
-      if (!isMonitored) return false;
+      debugPrint('Is $packageName monitored: $isMonitored');
+      
+      if (!isMonitored) {
+        debugPrint('❌ App not monitored');
+        return false;
+      }
       
       // Check for motion detection keywords
       final keywords = settings['keywords'] ?? ['motion', 'detected', 'movement', 'alert'];
       final contentToCheck = '$title $text'.toLowerCase();
       
-      return keywords.any((keyword) => 
+      debugPrint('Keywords: $keywords');
+      debugPrint('Content to check: "$contentToCheck"');
+      
+      final hasKeyword = keywords.any((keyword) => 
         contentToCheck.contains(keyword.toString().toLowerCase())
       );
+      
+      debugPrint('Contains keyword: $hasKeyword');
+      
+      if (hasKeyword) {
+        debugPrint('✅ All conditions met - will trigger alarm');
+      } else {
+        debugPrint('❌ No matching keywords found');
+      }
+      
+      return hasKeyword;
       
     } catch (e) {
       debugPrint('Error checking alarm trigger: $e');

@@ -137,7 +137,7 @@ class BackupService {
           }
         }
         
-        if (directory == null || !await directory.exists()) {
+        if (!await directory.exists()) {
           directory = await getApplicationDocumentsDirectory();
         }
       } catch (e) {
@@ -145,7 +145,7 @@ class BackupService {
         directory = await getApplicationDocumentsDirectory();
       }
       
-      final file = File('${directory!.path}${Platform.pathSeparator}$fileName');
+      final file = File('${directory.path}${Platform.pathSeparator}$fileName');
       await file.writeAsString(jsonString);
       
       debugPrint('Backup exported to: ${file.path}');

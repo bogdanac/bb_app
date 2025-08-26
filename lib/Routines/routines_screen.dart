@@ -26,7 +26,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     _loadRoutines();
   }
 
-  _loadRoutines() async {
+  Future<void> _loadRoutines() async {
     final prefs = await SharedPreferences.getInstance();
     final routinesJson = prefs.getStringList('routines') ?? [];
 
@@ -54,7 +54,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     if (mounted) setState(() {});
   }
 
-  _saveRoutines() async {
+  Future<void> _saveRoutines() async {
     final prefs = await SharedPreferences.getInstance();
     final routinesJson = _routines
         .map((routine) => jsonEncode(routine.toJson()))
@@ -77,7 +77,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     }
   }
 
-  _addRoutine() {
+  void _addRoutine() {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -93,7 +93,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     );
   }
 
-  _editRoutine(Routine routine) {
+  void _editRoutine(Routine routine) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -113,7 +113,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     );
   }
 
-  _deleteRoutine(Routine routine) async {
+  Future<void> _deleteRoutine(Routine routine) async {
     // Cancel the routine's notification first
     final notificationService = NotificationService();
     await notificationService.cancelRoutineNotification(routine.id);
@@ -141,7 +141,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     }
   }
 
-  _startRoutine(Routine routine) {
+  void _startRoutine(Routine routine) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -155,7 +155,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     );
   }
 
-  _openReminderSettings() {
+  void _openReminderSettings() {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -334,10 +334,10 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: AppColors.coral.withOpacity(0.1),
+                                color: AppColors.coral.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: AppColors.coral.withOpacity(0.3),
+                                  color: AppColors.coral.withValues(alpha: 0.3),
                                 ),
                               ),
                               child: Row(

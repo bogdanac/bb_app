@@ -5,7 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'backup_service.dart';
 
 class BackupScreen extends StatefulWidget {
-  const BackupScreen({Key? key}) : super(key: key);
+  const BackupScreen({super.key});
 
   @override
   State<BackupScreen> createState() => _BackupScreenState();
@@ -178,10 +178,11 @@ class _BackupScreenState extends State<BackupScreen> {
 
   Future<void> _shareBackupFile(String filePath) async {
     try {
-      await Share.shareXFiles(
-        [XFile(filePath)],
+      await SharePlus.instance.share(
+        ShareParams(
+        files: [XFile(filePath)],
         text: 'BBetter App Backup - ${DateTime.now().toString().split(' ')[0]}',
-        subject: 'BBetter Backup File',
+        subject: 'BBetter Backup File')
       );
     } catch (e) {
       if (mounted) {

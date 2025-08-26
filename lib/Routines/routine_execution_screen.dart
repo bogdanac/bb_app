@@ -10,10 +10,10 @@ class RoutineExecutionScreen extends StatefulWidget {
   final VoidCallback onCompleted;
 
   const RoutineExecutionScreen({
-    Key? key,
+    super.key,
     required this.routine,
     required this.onCompleted,
-  }) : super(key: key);
+  });
 
   @override
   State<RoutineExecutionScreen> createState() => _RoutineExecutionScreenState();
@@ -35,7 +35,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     _loadProgress();
   }
 
-  _loadProgress() async {
+  Future<void> _loadProgress() async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final progressKey = 'routine_progress_${widget.routine.id}_$today';
@@ -57,7 +57,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     }
   }
 
-  _saveProgress() async {
+  Future<void> _saveProgress() async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final progressKey = 'routine_progress_${widget.routine.id}_$today';
@@ -71,7 +71,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     await prefs.setString(progressKey, jsonEncode(progressData));
   }
 
-  _toggleItem(int index) async {
+  Future<void> _toggleItem(int index) async {
     setState(() {
       _items[index].isCompleted = !_items[index].isCompleted;
       if (_items[index].isCompleted) {
@@ -81,7 +81,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     await _saveProgress();
   }
 
-  _skipItem(int index) async {
+  Future<void> _skipItem(int index) async {
     setState(() {
       _items[index].isSkipped = !_items[index].isSkipped;
       if (_items[index].isSkipped) {
@@ -91,23 +91,23 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     await _saveProgress();
   }
 
-  _isAllCompleted() {
+  bool _isAllCompleted() {
     return _items.every((item) => item.isCompleted);
   }
 
-  _areAllNonSkippedCompleted() {
+  bool _areAllNonSkippedCompleted() {
     return _items.where((item) => !item.isSkipped).every((item) => item.isCompleted);
   }
 
-  _getSkippedItems() {
+  List<RoutineItem> _getSkippedItems() {
     return _items.where((item) => item.isSkipped).toList();
   }
 
-  _hasSkippedItems() {
+  bool _hasSkippedItems() {
     return _items.any((item) => item.isSkipped);
   }
 
-  _completeRoutine() async {
+  Future<void> _completeRoutine() async {
     // Mark all items as completed
     setState(() {
       for (var item in _items) {
@@ -117,38 +117,42 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     await _saveProgress();
 
     widget.onCompleted();
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('🎉 ${widget.routine.title} completed! Great job!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🎉 ${widget.routine.title} completed! Great job!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
-  _completePartialRoutine() async {
+  Future<void> _completePartialRoutine() async {
     await _saveProgress();
 
     final completedCount = _items.where((item) => item.isCompleted).length;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Save Progress'),
-        content: Text(
-          'You completed $completedCount out of ${_items.length} steps. Your progress has been saved!',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Close routine screen
-            },
-            child: const Text('OK'),
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Save Progress'),
+          content: Text(
+            'You completed $completedCount out of ${_items.length} steps. Your progress has been saved!',
           ),
-        ],
-      ),
-    );
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                Navigator.pop(context); // Close routine screen
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
@@ -160,7 +164,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.routine.title),
-        backgroundColor: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+        backgroundColor: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
         actions: [
           IconButton(
             icon: Icon(
@@ -192,7 +196,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+              Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
               Theme.of(context).scaffoldBackgroundColor,
             ],
           ),
@@ -228,7 +232,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                       const SizedBox(height: 20),
                       LinearProgressIndicator(
                         value: completedCount / _items.length,
-                        backgroundColor: Colors.grey.withOpacity(0.3),
+                        backgroundColor: Colors.grey.withValues(alpha: 0.3),
                         valueColor: AlwaysStoppedAnimation<Color>(
                           Theme.of(context).colorScheme.secondary,
                         ),
@@ -245,7 +249,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                     // Show notification if non-skipped items are complete but skipped items remain
                     if (_areAllNonSkippedCompleted() && _hasSkippedItems()) ...[
                       Card(
-                        color: Colors.orange.withOpacity(0.1),
+                        color: Colors.orange.withValues(alpha: 0.1),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Row(
@@ -272,7 +276,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                           final item = _items[index];
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
-                            color: item.isSkipped ? Colors.orange.withOpacity(0.1) : null,
+                            color: item.isSkipped ? Colors.orange.withValues(alpha: 0.1) : null,
                             child: ListTile(
                               leading: Checkbox(
                                 value: item.isCompleted,

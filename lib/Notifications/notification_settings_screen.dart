@@ -1,13 +1,11 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
-import 'motion_alert_settings_screen.dart';
 import 'motion_alert_quick_setup.dart';
 import '../Data/backup_screen.dart';
 
 // NOTIFICATION SETTINGS SCREEN
 class NotificationSettingsScreen extends StatefulWidget {
-  const NotificationSettingsScreen({Key? key}) : super(key: key);
+  const NotificationSettingsScreen({super.key});
 
   @override
   State<NotificationSettingsScreen> createState() => _NotificationSettingsScreenState();

@@ -18,7 +18,7 @@ class TodoScreen extends StatefulWidget {
 class _TodoScreenState extends State<TodoScreen> {
   List<Task> _tasks = [];
   List<TaskCategory> _categories = [];
-  List<String> _selectedCategoryFilters = [];
+  final List<String> _selectedCategoryFilters = [];
   bool _showCompleted = false;
   final TaskService _taskService = TaskService();
   TaskSettings _taskSettings = TaskSettings();
@@ -143,7 +143,9 @@ class _TodoScreenState extends State<TodoScreen> {
                 _tasks.add(task);
               });
               await _saveTasks();
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              if (mounted) {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              }
             },
           ),
         ),
@@ -155,7 +157,7 @@ class _TodoScreenState extends State<TodoScreen> {
     final duplicatedTask = Task(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: '${task.title} (Copy)',
-      description: task.description,
+      description: '',
       categoryIds: List.from(task.categoryIds),
       deadline: task.deadline,
       reminderTime: task.reminderTime,
@@ -278,10 +280,12 @@ class _TodoScreenState extends State<TodoScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
+                final navigator = Navigator.of(context);
+                final scaffoldMessenger = ScaffoldMessenger.of(context);
                 await _taskService.saveTaskSettings(_taskSettings);
                 if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  navigator.pop();
+                  scaffoldMessenger.showSnackBar(
                     const SnackBar(content: Text('Settings saved')),
                   );
                   // Update the main widget state after saving
@@ -384,10 +388,10 @@ class _TodoScreenState extends State<TodoScreen> {
                               child: FilterChip(
                                 label: Text(category.name),
                                 selected: _selectedCategoryFilters.contains(category.id),
-                                backgroundColor: category.color.withOpacity(0.1),
-                                selectedColor: category.color.withOpacity(0.3),
+                                backgroundColor: category.color.withValues(alpha: 0.1),
+                                selectedColor: category.color.withValues(alpha: 0.3),
                                 checkmarkColor: category.color,
-                                side: BorderSide(color: category.color.withOpacity(0.5)),
+                                side: BorderSide(color: category.color.withValues(alpha: 0.5)),
                                 onSelected: (selected) {
                                   setState(() {
                                     if (selected) {
@@ -461,7 +465,7 @@ class _TodoScreenState extends State<TodoScreen> {
               ),
             )
                 : ReorderableListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               itemCount: prioritizedTasks.length,
               onReorder: (oldIndex, newIndex) {
                 setState(() {

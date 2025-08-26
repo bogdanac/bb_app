@@ -58,7 +58,7 @@ class _FastingScreenState extends State<FastingScreen>
     _loadFastingData();
   }
 
-  _loadFastingData() async {
+  Future<void> _loadFastingData() async {
     final prefs = await SharedPreferences.getInstance();
 
     _isFasting = prefs.getBool('is_fasting') ?? false;
@@ -93,7 +93,7 @@ class _FastingScreenState extends State<FastingScreen>
     if (mounted) setState(() {});
   }
 
-  _saveFastingData() async {
+  Future<void> _saveFastingData() async {
     final prefs = await SharedPreferences.getInstance();
 
     await prefs.setBool('is_fasting', _isFasting);
@@ -119,7 +119,7 @@ class _FastingScreenState extends State<FastingScreen>
     _notifier.notifyFastingStateChanged();
   }
 
-  _calculateFastingProgress() {
+  void _calculateFastingProgress() {
     if (_isFasting && _currentFastStart != null) {
       final now = DateTime.now();
       _elapsedTime = now.difference(_currentFastStart!);
@@ -132,7 +132,7 @@ class _FastingScreenState extends State<FastingScreen>
     }
   }
 
-  _startFastingTimer() {
+  void _startFastingTimer() {
     _fastingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_isFasting) {
         _calculateFastingProgress();
@@ -142,7 +142,7 @@ class _FastingScreenState extends State<FastingScreen>
     });
   }
 
-  _updateFastingNotification() {
+  void _updateFastingNotification() {
     if (_isFasting && _currentFastStart != null) {
       final phaseInfo = _getFastingPhaseInfo();
       _notificationService.showFastingProgressNotification(
@@ -307,7 +307,7 @@ class _FastingScreenState extends State<FastingScreen>
     }
   }
 
-  _startFast(String fastType) {
+  void _startFast(String fastType) {
     final now = DateTime.now();
     final duration = _getFastDuration(fastType);
 
@@ -336,7 +336,7 @@ class _FastingScreenState extends State<FastingScreen>
   }
 
   // Start quick fast (12h or 16h)
-  _startQuickFast(int hours) {
+  void _startQuickFast(int hours) {
     final now = DateTime.now();
     final duration = Duration(hours: hours);
     final fastType = '${hours}h Fast';
@@ -365,7 +365,7 @@ class _FastingScreenState extends State<FastingScreen>
     );
   }
 
-  _endFast() {
+  void _endFast() {
     if (_currentFastStart != null) {
       final endTime = DateTime.now();
       final actualDuration = endTime.difference(_currentFastStart!);
@@ -403,7 +403,7 @@ class _FastingScreenState extends State<FastingScreen>
     }
   }
 
-  _postponeFast() {
+  void _postponeFast() {
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     final newStartTime =
     DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 14, 0);
@@ -423,7 +423,7 @@ class _FastingScreenState extends State<FastingScreen>
     );
   }
 
-  _showCongratulationDialog(Duration actualDuration) {
+  void _showCongratulationDialog(Duration actualDuration) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -556,7 +556,7 @@ class _FastingScreenState extends State<FastingScreen>
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) {
-        return Container(
+        return SizedBox(
           width: 280,
           height: 280,
           child: Stack(
@@ -571,7 +571,7 @@ class _FastingScreenState extends State<FastingScreen>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: phaseInfo['color'].withOpacity(0.3 * _pulseController.value),
+                        color: phaseInfo['color'].withValues(alpha: 0.3 * _pulseController.value),
                         blurRadius: 20,
                         spreadRadius: 5,
                       ),
@@ -585,7 +585,7 @@ class _FastingScreenState extends State<FastingScreen>
                 height: 240,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: phaseInfo['color'].withOpacity(0.1),
+                  color: phaseInfo['color'].withValues(alpha: 0.1),
                 ),
               ),
 
@@ -596,7 +596,7 @@ class _FastingScreenState extends State<FastingScreen>
                 child: CircularProgressIndicator(
                   value: totalProgress.clamp(0.0, 1.0),
                   strokeWidth: 12,
-                  backgroundColor: Colors.grey.withOpacity(0.2),
+                  backgroundColor: Colors.grey.withValues(alpha: 0.2),
                   valueColor: AlwaysStoppedAnimation<Color>(phaseInfo['color']),
                 ),
               ),
@@ -610,7 +610,7 @@ class _FastingScreenState extends State<FastingScreen>
                   strokeWidth: 8,
                   backgroundColor: Colors.transparent,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                      phaseInfo['color'].withOpacity(0.6)
+                      phaseInfo['color'].withValues(alpha: 0.6)
                   ),
                 ),
               ),
@@ -624,7 +624,7 @@ class _FastingScreenState extends State<FastingScreen>
                   color: Theme.of(context).scaffoldBackgroundColor,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 10,
                       spreadRadius: 2,
                     ),
@@ -783,8 +783,8 @@ class _FastingScreenState extends State<FastingScreen>
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      phaseInfo['color'].withOpacity(0.2),
-                      phaseInfo['color'].withOpacity(0.05),
+                      phaseInfo['color'].withValues(alpha: 0.2),
+                      phaseInfo['color'].withValues(alpha: 0.05),
                     ],
                   ),
                 ),
@@ -799,10 +799,10 @@ class _FastingScreenState extends State<FastingScreen>
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: phaseInfo['color'].withOpacity(0.15),
+                        color: phaseInfo['color'].withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: phaseInfo['color'].withOpacity(0.3),
+                          color: phaseInfo['color'].withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),
