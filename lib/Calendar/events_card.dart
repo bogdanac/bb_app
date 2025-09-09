@@ -95,13 +95,18 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
 
   @override
   Widget build(BuildContext context) {
+    // Hide the entire card if no events are available and not loading/error states
+    if (!_isLoading && _hasPermission && _errorMessage.isEmpty && _events.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.lightPurple.withValues(alpha: 0.08),
+          color: AppColors.lightPink.withValues(alpha: 0.1),
         ),
         child: Stack(
           children: [
@@ -121,7 +126,7 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
                   children: [
                     const Text(
                       'Calendar access needed to show your events',
-                      style: TextStyle(fontSize: 16, color: Colors.white70),
+                      style: TextStyle(fontSize: 16, color: AppColors.white70),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -130,8 +135,8 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
                           child: ElevatedButton(
                             onPressed: _requestPermission,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.lightPurple,
-                              foregroundColor: Colors.white,
+                              backgroundColor: AppColors.pink,
+                              foregroundColor: AppColors.white,
                             ),
                             child: const Text('Grant Calendar Access'),
                           ),
@@ -171,7 +176,7 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
                             );
                           },
                           icon: const Icon(Icons.help_outline),
-                          color: AppColors.lightPurple,
+                          color: AppColors.pink,
                           tooltip: 'Help',
                         ),
                       ],
@@ -181,7 +186,7 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
               else if (_errorMessage.isNotEmpty)
                 Text(
                   _errorMessage,
-                  style: const TextStyle(fontSize: 16, color: Colors.red),
+                  style: const TextStyle(fontSize: 16, color: AppColors.error),
                 )
               else if (_events.isEmpty)
                 Container(
@@ -189,24 +194,24 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
                   alignment: Alignment.centerLeft,
                   child: const Text(
                     'No events scheduled for today',
-                    style: TextStyle(fontSize: 16, color: Colors.white70),
+                    style: TextStyle(fontSize: 16, color: AppColors.white70),
                   ),
                 )
               else
                 Column(
-                  children: _events.take(3).map((event) {
-                    int index = _events.take(3).toList().indexOf(event);
-                    bool isLast = index == _events.take(3).length - 1;
+                  children: _events.take(4).map((event) {
+                    int index = _events.take(4).toList().indexOf(event);
+                    bool isLast = index == _events.take(4).length - 1;
                     return _buildEventItem(event, isLast: isLast);
                   }).toList(),
                 ),
               
-              if (_events.length > 3)
+              if (_events.length > 4)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    '... and ${_events.length - 3} more events',
-                    style: const TextStyle(fontSize: 12, color: Colors.white60),
+                    '... and ${_events.length - 4} more events',
+                    style: const TextStyle(fontSize: 12, color: AppColors.white60),
                   ),
                 ),
                 ],
@@ -221,13 +226,13 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
 
   Color _getEventColor(Event event) {
     final colors = [
-      AppColors.pastelRed,
-      AppColors.pastelYellow,
-      AppColors.pastelOrange,
-      AppColors.pastelCoral,
-      AppColors.pastelPurple,
-      AppColors.pastelPink,
-      AppColors.pastelGreen,
+      AppColors.lightRed,
+      AppColors.lightYellow,
+      AppColors.lightOrange,
+      AppColors.lightCoral,
+      AppColors.lightPurple,
+      AppColors.lightPink,
+      AppColors.lightGreen,
     ];
     
     final hash = (event.title?.hashCode ?? 0) + (event.eventId?.hashCode ?? 0);
@@ -235,6 +240,8 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
   }
 
   Widget _buildEventItem(Event event, {bool isLast = false}) {
+    final isActive = _calendarService.isEventActive(event);
+    
     return Padding(
       padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
       child: Row(
@@ -244,7 +251,7 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
             width: 4,
             height: 40,
             decoration: BoxDecoration(
-              color: _getEventColor(event),
+              color: isActive ? AppColors.successGreen : _getEventColor(event),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -253,30 +260,54 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  event.title ?? 'Untitled Event',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        event.title ?? 'Untitled Event',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.white,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isActive) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.successGreen,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'NOW',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.access_time,
                       size: 14,
-                      color: Colors.white70,
+                      color: isActive ? AppColors.successGreen : AppColors.white70,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       _calendarService.getEventDuration(event),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: Colors.white70,
+                        color: isActive ? AppColors.successGreen : AppColors.white70,
                       ),
                     ),
                   ],
@@ -285,18 +316,18 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.location_on,
                         size: 14,
-                        color: Colors.white70,
+                        color: isActive ? AppColors.successGreen : AppColors.white70,
                       ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           event.location!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: Colors.white70,
+                            color: isActive ? AppColors.successGreen : AppColors.white70,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

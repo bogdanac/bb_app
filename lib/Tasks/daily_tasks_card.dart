@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../theme/app_colors.dart';
 import '../Tasks/tasks_data_models.dart';
 import '../Tasks/task_service.dart';
 import '../Tasks/todo_screen.dart';
 import '../Tasks/task_edit_screen.dart';
+import '../Tasks/task_card_utils.dart';
+import '../Tasks/task_completion_animation.dart';
 
 class DailyTasksCard extends StatefulWidget {
   const DailyTasksCard({super.key});
@@ -18,6 +21,7 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
   List<TaskCategory> _categories = [];
   final TaskService _taskService = TaskService();
   bool _isLoading = true;
+  final Set<String> _completingTasks = {};
 
   @override
   void initState() {
@@ -25,6 +29,13 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
     _loadTasks();
     // Refresh periodically to update reminders and time-sensitive priorities
     _startPeriodicRefresh();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh data when returning to this screen
+    _loadTasks();
   }
 
   Timer? _refreshTimer;
@@ -51,9 +62,32 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
 
       // Filter to only show non-completed tasks (like TodoScreen's default behavior)
       final filteredTasks = tasks.where((task) => !task.isCompleted).toList();
+      
+      // Further filter to exclude tasks that are clearly postponed (have future deadlines with no current relevance)
+      final today = DateTime.now();
+      final todayDate = DateTime(today.year, today.month, today.day);
+      final relevantTasks = filteredTasks.where((task) {
+        // Always include tasks without deadlines
+        if (task.deadline == null) return true;
+        
+        // Always include overdue tasks
+        final deadlineDate = DateTime(task.deadline!.year, task.deadline!.month, task.deadline!.day);
+        if (deadlineDate.isBefore(todayDate)) return true;
+        
+        // Include tasks due today
+        if (deadlineDate.isAtSameMomentAs(todayDate)) return true;
+        
+        // For recurring tasks with future deadlines, check if they're naturally due today
+        if (task.recurrence != null) {
+          return task.recurrence!.isDueOn(today, taskCreatedAt: task.createdAt);
+        }
+        
+        // Exclude tasks with future deadlines (likely postponed)
+        return false;
+      }).toList();
 
       final prioritized = _taskService.getPrioritizedTasks(
-          filteredTasks,
+          relevantTasks,
           categories,
           settings.maxTasksOnHomePage,
           includeCompleted: false
@@ -78,52 +112,58 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
 
   Future<void> _toggleTaskCompletion(Task task) async {
     try {
-      debugPrint('Toggling task completion for: ${task.title}');
+      debugPrint('=== DAILY TASKS TOGGLE COMPLETION DEBUG ===');
+      debugPrint('Task: ${task.title}');
+      debugPrint('Current completion status: ${task.isCompleted}');
+      debugPrint('Toggling to: ${!task.isCompleted}');
       
-      // Update task completion status
-      task.isCompleted = !task.isCompleted;
-      task.completedAt = task.isCompleted ? DateTime.now() : null;
-
-      // Update the local state immediately for animation
-      setState(() {
-        final localIndex = _prioritizedTasks.indexWhere((t) => t.id == task.id);
-        if (localIndex != -1) {
-          _prioritizedTasks[localIndex] = task;
-        }
-      });
-
-      // Save tasks
-      final allTasks = await _taskService.loadTasks();
-      final taskIndex = allTasks.indexWhere((t) => t.id == task.id);
-      if (taskIndex != -1) {
-        allTasks[taskIndex] = task;
-        await _taskService.saveTasks(allTasks);
-        debugPrint('Task saved successfully: ${task.title} - ${task.isCompleted}');
+      final newCompletionStatus = !task.isCompleted;
+      
+      // If completing a task, start completion animation
+      if (newCompletionStatus) {
+        setState(() {
+          _completingTasks.add(task.id);
+        });
+      }
+      
+      // Handle recurring task completion logic
+      if (!task.isCompleted && task.recurrence != null) {
+        await _handleRecurringTaskCompletion(task);
       } else {
-        debugPrint('Task not found in all tasks list: ${task.id}');
+        // Normal toggle for non-recurring tasks or uncompleting tasks
+        task.isCompleted = !task.isCompleted;
+        task.completedAt = task.isCompleted ? DateTime.now() : null;
+
+        // Update the local state immediately for animation
+        setState(() {
+          final localIndex = _prioritizedTasks.indexWhere((t) => t.id == task.id);
+          if (localIndex != -1) {
+            _prioritizedTasks[localIndex] = task;
+          }
+        });
+
+        // Save tasks - load fresh data to avoid conflicts
+        final allTasks = await _taskService.loadTasks();
+        final taskIndex = allTasks.indexWhere((t) => t.id == task.id);
+        if (taskIndex != -1) {
+          // Update the task with completion status and timestamp
+          allTasks[taskIndex].isCompleted = task.isCompleted;
+          allTasks[taskIndex].completedAt = task.completedAt;
+          await _taskService.saveTasks(allTasks);
+          debugPrint('Task saved successfully: ${task.title} - ${task.isCompleted}');
+          debugPrint('=== END DAILY TASKS TOGGLE DEBUG ===');
+        } else {
+          debugPrint('Task not found in all tasks list: ${task.id}');
+        }
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              task.isCompleted
-                  ? 'Task completed! 🎉'
-                  : 'Task marked as incomplete',
-            ),
-            duration: const Duration(seconds: 2),
-            backgroundColor: task.isCompleted ? Colors.green : Colors.orange,
-          ),
-        );
-      }
 
-      // If task is completed, wait for animation then remove from list
+      // If task is completed, wait for animation then reload full task list
       if (task.isCompleted) {
         await Future.delayed(const Duration(milliseconds: 800));
         if (mounted) {
-          setState(() {
-            _prioritizedTasks.removeWhere((t) => t.id == task.id);
-          });
+          // Reload full task list instead of just removing from local list
+          await _loadTasks();
         }
       } else {
         // If uncompleted, reload to get updated priority list
@@ -144,6 +184,95 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
     }
   }
 
+  void _onCompletionAnimationFinished(String taskId) {
+    if (mounted) {
+      setState(() {
+        _completingTasks.remove(taskId);
+      });
+    }
+  }
+
+  Future<void> _handleRecurringTaskCompletion(Task task) async {
+    // Mark current task as completed
+    task.isCompleted = true;
+    task.completedAt = DateTime.now();
+
+    // Update the local state immediately for animation
+    setState(() {
+      final localIndex = _prioritizedTasks.indexWhere((t) => t.id == task.id);
+      if (localIndex != -1) {
+        _prioritizedTasks[localIndex] = task;
+      }
+    });
+
+    // Get next due date for the recurring task
+    final nextDueDate = task.recurrence!.getNextDueDate(DateTime.now());
+    
+    if (nextDueDate != null) {
+      // Load fresh task list
+      final allTasks = await _taskService.loadTasks();
+      
+      // Update current task
+      final currentTaskIndex = allTasks.indexWhere((t) => t.id == task.id);
+      if (currentTaskIndex != -1) {
+        allTasks[currentTaskIndex] = task;
+      }
+      
+      // Check if next instance already exists to prevent duplicates
+      final existingNextTask = allTasks.where((t) => 
+        t.title == task.title && 
+        t.recurrence != null &&
+        t.deadline != null &&
+        t.deadline!.year == nextDueDate.year &&
+        t.deadline!.month == nextDueDate.month &&
+        t.deadline!.day == nextDueDate.day &&
+        !t.isCompleted
+      ).toList();
+      
+      if (existingNextTask.isEmpty) {
+        // Create new instance for next occurrence only if it doesn't exist
+        final nextTask = Task(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          title: task.title,
+          description: task.description,
+          categoryIds: List.from(task.categoryIds),
+          deadline: nextDueDate,
+          reminderTime: task.reminderTime != null && task.deadline != null
+              ? _calculateNextReminderTime(task.reminderTime!, task.deadline!, nextDueDate)
+              : null,
+          isImportant: task.isImportant,
+          recurrence: task.recurrence,
+          isCompleted: false,
+        );
+        
+        // Add next instance
+        allTasks.add(nextTask);
+        
+        debugPrint('Created next recurring task instance for: ${nextDueDate.toString()}');
+      } else {
+        debugPrint('Next recurring task instance already exists for: ${nextDueDate.toString()}');
+      }
+      
+      await _taskService.saveTasks(allTasks);
+    } else {
+      // Just mark as completed if no next date found
+      final allTasks = await _taskService.loadTasks();
+      final taskIndex = allTasks.indexWhere((t) => t.id == task.id);
+      
+      if (taskIndex != -1) {
+        allTasks[taskIndex] = task;
+        await _taskService.saveTasks(allTasks);
+      }
+    }
+
+
+    // If task is completed, wait for animation then reload full task list
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (mounted) {
+      await _loadTasks();
+    }
+  }
+
   void _editTask(Task task) {
     Navigator.push(
       context,
@@ -153,7 +282,7 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
           categories: _categories,
           onSave: (updatedTask) async {
             debugPrint('Updating task - Original ID: ${task.id}, Updated ID: ${updatedTask.id}');
-            
+
             // Update the task in the list
             final allTasks = await _taskService.loadTasks();
             final taskIndex = allTasks.indexWhere((t) => t.id == task.id);
@@ -173,10 +302,35 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
             
             // Reload the tasks display
             await _loadTasks();
+            
+            // Task updated silently - no snackbar needed
           },
         ),
       ),
     );
+  }
+
+  Future<void> _postponeTask(Task task) async {
+    try {
+      debugPrint('Postponing task: ${task.title}');
+      await _taskService.postponeTaskToTomorrow(task);
+      debugPrint('Task postponed, reloading tasks...');
+      await _loadTasks(); // Reload to reflect changes
+      debugPrint('Tasks reloaded. New task count: ${_prioritizedTasks.length}');
+      
+      // Removed postpone snackbar notification as requested
+    } catch (e) {
+      debugPrint('Error postponing task: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to postpone task: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   String _getTaskPriorityReason(Task task) {
@@ -211,7 +365,12 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
     if (task.deadline != null &&
         DateTime(task.deadline!.year, task.deadline!.month, task.deadline!.day)
             .isAtSameMomentAs(today)) {
-      return 'Due today';
+      // For recurring tasks, it's more of a habit/reminder than a deadline
+      if (task.recurrence != null) {
+        return 'Scheduled today';
+      } else {
+        return 'Due today';
+      }
     }
 
     // Check overdue deadlines
@@ -227,9 +386,14 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
       }
     }
 
-    // Check recurring
+    // Check recurring - but not for postponed tasks
     if (task.recurrence != null && task.isDueToday()) {
-      return 'Recurring today';
+      // If task has deadline for today or future (postponed), don't show as "recurring today"
+      if (task.deadline != null && !task.deadline!.isBefore(today)) {
+        // This is a postponed recurring task, don't show as "recurring today"
+      } else {
+        return 'Recurring today';
+      }
     }
 
     // Check deadline tomorrow
@@ -263,12 +427,14 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
       case 'Due today':
       case 'Reminder now!':
         return Colors.red;
+      case 'Scheduled today':
+        return Colors.blue; // Less urgent than "Due today"
       case 'Recurring today':
         return Colors.orange;
       case 'Due tomorrow':
         return Colors.amber;
       case 'Important':
-        return Theme.of(context).colorScheme.primary;
+        return AppColors.pink;
       default:
         if (reason.contains('Overdue')) {
           return Colors.red.shade700; // Dark red for overdue
@@ -280,12 +446,38 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
     }
   }
 
+  // Calculate reminder time for next recurring instance, preserving the relative offset
+  DateTime? _calculateNextReminderTime(DateTime originalReminder, DateTime originalDeadline, DateTime nextDeadline) {
+    try {
+      // Calculate the offset in days between original reminder and deadline
+      final originalReminderDate = DateTime(originalReminder.year, originalReminder.month, originalReminder.day);
+      final originalDeadlineDate = DateTime(originalDeadline.year, originalDeadline.month, originalDeadline.day);
+      final dayOffset = originalReminderDate.difference(originalDeadlineDate).inDays;
+      
+      // Apply the same offset to the next deadline
+      final nextReminderDate = DateTime(nextDeadline.year, nextDeadline.month, nextDeadline.day + dayOffset);
+      
+      // Keep the same time of day
+      return DateTime(
+        nextReminderDate.year,
+        nextReminderDate.month,
+        nextReminderDate.day,
+        originalReminder.hour,
+        originalReminder.minute,
+      );
+    } catch (e) {
+      // Fallback to simple time transfer if calculation fails
+      return DateTime(nextDeadline.year, nextDeadline.month, nextDeadline.day,
+                     originalReminder.hour, originalReminder.minute);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: AppColors.coral.withValues(alpha: 0.08), // More subtle coral
+      color: AppColors.coral.withValues(alpha: 0.1),
       child: Stack(
         children: [
           InkWell(
@@ -335,19 +527,22 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                   children: _prioritizedTasks.map((task) {
                     final priorityReason = _getTaskPriorityReason(task);
                     final priorityColor = _getPriorityColor(priorityReason);
+                    
+                    // Check if this task is completing
+                    final isCompleting = _completingTasks.contains(task.id);
 
-                    return AnimatedContainer(
+                    Widget taskWidget = AnimatedContainer(
                       duration: const Duration(milliseconds: 500),
                       curve: Curves.easeInOut,
-                      height: task.isCompleted ? 0 : null,
+                      height: task.isCompleted && !isCompleting ? 0 : null,
                       child: AnimatedOpacity(
                         duration: const Duration(milliseconds: 300),
-                        opacity: task.isCompleted ? 0.0 : 1.0,
+                        opacity: task.isCompleted && !isCompleting ? 0.0 : 1.0,
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
+                            color: AppColors.black.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: priorityColor.withValues(alpha: 0.3),
@@ -376,30 +571,35 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(height: 4),
-                                      Row(
+                                      const SizedBox(height: 10),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 3,
                                         children: [
-                                          if (priorityReason.isNotEmpty) ...[
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 2
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: priorityColor.withValues(alpha: 0.15),
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
-                                              child: Text(
-                                                priorityReason,
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: priorityColor,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
+                                          if (priorityReason.isNotEmpty) 
+                                            TaskCardUtils.buildInfoChip(
+                                              Icons.priority_high_rounded,
+                                              priorityReason,
+                                              priorityColor,
                                             ),
-                                            const SizedBox(width: 8),
-                                          ],
+                                          if (task.deadline != null)
+                                            TaskCardUtils.buildInfoChip(
+                                              Icons.schedule_rounded,
+                                              DateFormat('MMM dd').format(task.deadline!),
+                                              TaskCardUtils.getDeadlineColor(task.deadline!),
+                                            ),
+                                          if (task.reminderTime != null)
+                                            TaskCardUtils.buildInfoChip(
+                                              Icons.notifications_rounded,
+                                              DateFormat('HH:mm').format(task.reminderTime!),
+                                              TaskCardUtils.getReminderColor(task.reminderTime!),
+                                            ),
+                                          if (task.recurrence != null)
+                                            TaskCardUtils.buildInfoChip(
+                                              Icons.repeat_rounded,
+                                              TaskCardUtils.getShortRecurrenceText(task.recurrence!),
+                                              AppColors.purple,
+                                            ),
                                           if (task.categoryIds.isNotEmpty) ...[
                                             ...task.categoryIds.take(2).map((categoryId) {
                                               final category = _categories.firstWhere(
@@ -411,26 +611,9 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                                                     order: 0
                                                 ),
                                               );
-                                              return Padding(
-                                                padding: const EdgeInsets.only(right: 4),
-                                                child: Container(
-                                                  padding: const EdgeInsets.symmetric(
-                                                      horizontal: 4,
-                                                      vertical: 1
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color: category.color.withValues(alpha: 0.15),
-                                                    borderRadius: BorderRadius.circular(4),
-                                                  ),
-                                                  child: Text(
-                                                    category.name,
-                                                    style: TextStyle(
-                                                      fontSize: 10,
-                                                      color: category.color,
-                                                      fontWeight: FontWeight.w500,
-                                                    ),
-                                                  ),
-                                                ),
+                                              return TaskCardUtils.buildCategoryChip(
+                                                category.name,
+                                                category.color,
                                               );
                                             }),
                                           ],
@@ -446,8 +629,35 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                                   padding: const EdgeInsets.only(right: 8.0),
                                   child: Icon(
                                     Icons.star_rounded,
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: AppColors.pink,
                                     size: 16,
+                                  ),
+                                ),
+                              // Postpone button for tasks due today
+                              if (TaskService.isTaskDueToday(task) && !task.isCompleted)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 0),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3), width: 1),
+                                    ),
+                                    child: InkWell(
+                                      onTap: () {
+                                        debugPrint('Postpone button tapped for task: ${task.title}');
+                                        _postponeTask(task);
+                                      },
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(6.0),
+                                        child: Icon(
+                                          Icons.skip_next_rounded,
+                                          color: Colors.orange,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               GestureDetector(
@@ -473,6 +683,13 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                           ),
                         ),
                       ),
+                    );
+                    
+                    return TaskCompletionAnimation(
+                      key: ValueKey('animation_${task.id}'),
+                      isCompleting: isCompleting,
+                      onAnimationComplete: () => _onCompletionAnimationFinished(task.id),
+                      child: taskWidget,
                     );
                   }).toList(),
                 ),
@@ -540,4 +757,5 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
       ),
     );
   }
+
 }

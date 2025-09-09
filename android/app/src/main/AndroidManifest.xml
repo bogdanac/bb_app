@@ -68,6 +68,30 @@
                 android:resource="@xml/water_widget_info" />
         </receiver>
         
+        <!-- Task Widget Provider -->
+        <receiver android:name=".TaskWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.bb.bb_app.ADD_TASK" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/task_widget_info" />
+        </receiver>
+        
+        <!-- Routine Widget Provider -->
+        <receiver android:name=".RoutineWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.bb.bb_app.COMPLETE_STEP" />
+                <action android:name="com.bb.bb_app.SKIP_STEP" />
+                <action android:name="com.bb.bb_app.REFRESH_ROUTINE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/routine_widget_info" />
+        </receiver>
+        
         <!-- Notification Listener Service -->
         <service android:name=".NotificationListener"
             android:exported="false"

@@ -17,6 +17,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
     super.initState();
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -58,6 +59,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             ),
 
             const SizedBox(height: 20),
+
 
             // Backup & Restore Card
             Card(

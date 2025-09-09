@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
+import '../theme/app_colors.dart';
 import 'routine_data_models.dart';
 
 // ROUTINE EXECUTION SCREEN - UPDATED WITH SAVE FUNCTIONALITY
@@ -42,33 +44,52 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
 
     final progressJson = prefs.getString(progressKey);
     if (progressJson != null) {
-      final progressData = jsonDecode(progressJson);
-      final completedSteps = List<bool>.from(progressData['completedSteps'] ?? []);
-      final skippedSteps = List<bool>.from(progressData['skippedSteps'] ?? []);
+      try {
+        final progressData = jsonDecode(progressJson);
+        final completedSteps = List<bool>.from(progressData['completedSteps'] ?? []);
+        final skippedSteps = List<bool>.from(progressData['skippedSteps'] ?? []);
+        final savedItemCount = progressData['routineItemCount'] as int?;
 
-      setState(() {
-        for (int i = 0; i < _items.length && i < completedSteps.length; i++) {
-          _items[i].isCompleted = completedSteps[i];
+        // Validate that the saved data matches current routine structure
+        if (savedItemCount != null && savedItemCount != _items.length) {
+          return; // Don't load progress if routine structure changed
         }
-        for (int i = 0; i < _items.length && i < skippedSteps.length; i++) {
-          _items[i].isSkipped = skippedSteps[i];
-        }
-      });
+
+        setState(() {
+          for (int i = 0; i < _items.length; i++) {
+            if (i < completedSteps.length) {
+              _items[i].isCompleted = completedSteps[i];
+            }
+            if (i < skippedSteps.length) {
+              _items[i].isSkipped = skippedSteps[i];
+            }
+          }
+        });
+      } catch (e) {
+        // Continue with default state if loading fails
+      }
     }
   }
 
   Future<void> _saveProgress() async {
-    final prefs = await SharedPreferences.getInstance();
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final progressKey = 'routine_progress_${widget.routine.id}_$today';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final progressKey = 'routine_progress_${widget.routine.id}_$today';
 
-    final progressData = {
-      'completedSteps': _items.map((item) => item.isCompleted).toList(),
-      'skippedSteps': _items.map((item) => item.isSkipped).toList(),
-      'lastUpdated': DateTime.now().toIso8601String(),
-    };
+      final progressData = {
+        'completedSteps': _items.map((item) => item.isCompleted).toList(),
+        'skippedSteps': _items.map((item) => item.isSkipped).toList(),
+        'lastUpdated': DateTime.now().toIso8601String(),
+        'routineItemCount': _items.length, // Store item count for validation
+      };
 
-    await prefs.setString(progressKey, jsonEncode(progressData));
+      await prefs.setString(progressKey, jsonEncode(progressData));
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving routine progress: $e');
+      }
+    }
   }
 
   Future<void> _toggleItem(int index) async {
@@ -164,7 +185,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.routine.title),
-        backgroundColor: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
+        backgroundColor: AppColors.orange.withValues(alpha: 0.3),
         actions: [
           IconButton(
             icon: Icon(
@@ -196,7 +217,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
+              AppColors.orange.withValues(alpha: 0.3),
               Theme.of(context).scaffoldBackgroundColor,
             ],
           ),
@@ -234,7 +255,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                         value: completedCount / _items.length,
                         backgroundColor: Colors.grey.withValues(alpha: 0.3),
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          Theme.of(context).colorScheme.secondary,
+                          AppColors.orange,
                         ),
                       ),
                     ],
@@ -281,7 +302,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                               leading: Checkbox(
                                 value: item.isCompleted,
                                 onChanged: (_) => _toggleItem(index),
-                                activeColor: Theme.of(context).colorScheme.secondary,
+                                activeColor: AppColors.orange,
                               ),
                               title: Text(
                                 item.text,

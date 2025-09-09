@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import '../Fasting/fasting_phases.dart';
+import '../Data/backup_service.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -176,6 +178,19 @@ class NotificationService {
       // You can add navigation logic here if needed
     } else if (payload == 'fasting_completed') {
       // Fasting completed notification tapped
+    } else if (payload == 'fasting_started') {
+      // Fasting started notification tapped
+    } else if (payload == 'fasting_milestone') {
+      // Fasting milestone notification tapped
+    } else if (payload == 'fasting_reminder') {
+      // Fasting reminder notification tapped
+    } else if (payload == 'auto_backup_trigger') {
+      // Auto backup notification triggered - perform backup
+      _handleAutoBackupTrigger();
+    } else if (payload == 'cloud_backup_reminder') {
+      // Cloud backup reminder notification tapped
+    } else if (payload == 'food_tracking_reminder') {
+      // Food tracking reminder notification tapped
     }
   }
 
@@ -201,7 +216,6 @@ class NotificationService {
       await scheduleWaterReminders();
       
       if (kDebugMode) {
-        print('Legacy morning notifications cancelled, preferences cleaned up, and water notifications rescheduled');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -323,7 +337,6 @@ class NotificationService {
   // Schedulează toate notificările de apă
   Future<void> scheduleWaterReminders() async {
     if (kDebugMode) {
-      print('Scheduling water reminders...');
     }
 
     try {
@@ -382,7 +395,7 @@ class NotificationService {
       );
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling 9AM water reminder: $e');
+        print('Error scheduling water reminder: $e');
       }
       rethrow; // Let parent method handle the error
     }
@@ -432,7 +445,7 @@ class NotificationService {
       );
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling 10AM water reminder: $e');
+        print('Error scheduling water reminder: $e');
       }
       rethrow; // Let parent method handle the error
     }
@@ -481,7 +494,7 @@ class NotificationService {
       );
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling 2PM water reminder: $e');
+        print('Error scheduling water reminder: $e');
       }
       rethrow; // Let parent method handle the error
     }
@@ -531,7 +544,7 @@ class NotificationService {
       );
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling 4PM water reminder: $e');
+        print('Error scheduling water reminder: $e');
       }
       rethrow; // Let parent method handle the error
     }
@@ -545,33 +558,21 @@ class NotificationService {
     // Anulează notificarea de la 9 AM dacă s-a băut apă
     if (currentWaterIntake > 0 && currentHour <= 9) {
       await flutterLocalNotificationsPlugin.cancel(_waterReminder9AM);
-      if (kDebugMode) {
-        print('Cancelled 9AM water reminder - water consumed');
-      }
     }
 
     // Anulează notificarea de la 10 AM dacă s-au băut 300ml
     if (currentWaterIntake >= 300 && currentHour <= 10) {
       await flutterLocalNotificationsPlugin.cancel(_waterReminder10AM);
-      if (kDebugMode) {
-        print('Cancelled 10AM water reminder - 300ml goal reached');
-      }
     }
 
     // Anulează notificarea de la 14:00 dacă s-a băut 1L
     if (currentWaterIntake >= 1000 && currentHour <= 14) {
       await flutterLocalNotificationsPlugin.cancel(_waterReminder2PM);
-      if (kDebugMode) {
-        print('Cancelled 2PM water reminder - 1L goal reached');
-      }
     }
 
     // Anulează notificarea de la 16:00 dacă s-au băut 1.2L
     if (currentWaterIntake >= 1200 && currentHour <= 16) {
       await flutterLocalNotificationsPlugin.cancel(_waterReminder4PM);
-      if (kDebugMode) {
-        print('Cancelled 4PM water reminder - 1.2L goal reached');
-      }
     }
   }
 
@@ -581,17 +582,10 @@ class NotificationService {
     await flutterLocalNotificationsPlugin.cancel(_waterReminder10AM);
     await flutterLocalNotificationsPlugin.cancel(_waterReminder2PM);
     await flutterLocalNotificationsPlugin.cancel(_waterReminder4PM);
-
-    if (kDebugMode) {
-      print('All water notifications cancelled');
-    }
   }
 
   // Reprogramează notificările pentru ziua următoare
   Future<void> rescheduleWaterNotificationsForTomorrow() async {
-    if (kDebugMode) {
-      print('Rescheduling water notifications for tomorrow...');
-    }
     await scheduleWaterReminders();
   }
 
@@ -700,7 +694,6 @@ class NotificationService {
       await scheduleWaterReminders();
 
       if (kDebugMode) {
-        print('Cleaned up duplicate morning notifications while preserving water notifications');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -726,8 +719,8 @@ class NotificationService {
           ? (elapsedTime.inMinutes / totalDuration.inMinutes * 100).round()
           : 0;
 
-      final title = '🔥 $fastType in Progress';
-      final body = '${hours}h ${minutes}m • $currentPhase • $progress%';
+      final title = '🔥 $fastType Fast: $currentPhase';
+      final body = '${hours}h ${minutes}m completed • $progress% • Stay strong!';
 
       await flutterLocalNotificationsPlugin.show(
         _fastingProgressNotificationId,
@@ -738,8 +731,8 @@ class NotificationService {
             'fasting_progress',
             'Fasting Progress',
             channelDescription: 'Ongoing fasting progress updates',
-            importance: Importance.low,
-            priority: Priority.low,
+            importance: Importance.max, // Higher importance to survive overnight
+            priority: Priority.high, // High priority to stay active
             icon: '@mipmap/ic_launcher',
             color: const Color(0xFFF98834), // Orange
             ongoing: true, // Makes it a permanent notification
@@ -749,22 +742,21 @@ class NotificationService {
             progress: progress,
             enableVibration: false,
             playSound: false,
-            actions: [
-              const AndroidNotificationAction(
-                'stop_fast',
-                'Stop Fast',
-                titleColor: Color(0xFFFF0000),
-              ),
-            ],
+            category: AndroidNotificationCategory.workout, // Workout category for health apps
+            visibility: NotificationVisibility.public, // Always visible
           ),
           iOS: const DarwinNotificationDetails(
             presentAlert: false,
             presentBadge: true,
             presentSound: false,
+            categoryIdentifier: 'FASTING_CATEGORY',
           ),
         ),
         payload: 'fasting_progress',
       );
+
+      // Schedule multiple follow-up notifications at different intervals
+      await _scheduleProgressReminders(fastType, elapsedTime, totalDuration);
 
       if (kDebugMode) {
         print('Updated fasting progress notification: $progress%');
@@ -776,9 +768,89 @@ class NotificationService {
     }
   }
 
+  // Schedule multiple progress reminder notifications
+  Future<void> _scheduleProgressReminders(
+    String fastType,
+    Duration elapsedTime, 
+    Duration totalDuration,
+  ) async {
+    try {
+      // Cancel existing scheduled reminders
+      for (int i = 1; i <= 20; i++) {
+        await flutterLocalNotificationsPlugin.cancel(_fastingProgressNotificationId + i);
+      }
+      
+      final location = tz.UTC;
+      
+      // Schedule reminders every 30 minutes for the next 10 hours
+      for (int i = 1; i <= 20; i++) {
+        final reminderTime = DateTime.now().add(Duration(minutes: 30 * i));
+        final futureElapsed = elapsedTime + Duration(minutes: 30 * i);
+        
+        // Don't schedule if past the total duration
+        if (futureElapsed >= totalDuration) break;
+        
+        final futureHours = futureElapsed.inHours;
+        final futureMinutes = futureElapsed.inMinutes.remainder(60);
+        final futureProgress = totalDuration.inMinutes > 0 
+            ? (futureElapsed.inMinutes / totalDuration.inMinutes * 100).round()
+            : 0;
+
+        // Determine phase using proper fasting phases utility
+        final phaseInfo = FastingPhases.getFastingPhaseInfo(futureElapsed, true);
+        String phase = phaseInfo['phase'];
+
+        await flutterLocalNotificationsPlugin.zonedSchedule(
+          _fastingProgressNotificationId + i,
+          '🔥 $fastType Fast: $phase',
+          '${futureHours}h ${futureMinutes}m completed • $futureProgress% • Keep going!',
+          tz.TZDateTime.from(reminderTime, location),
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              'fasting_progress',
+              'Fasting Progress',
+              channelDescription: 'Ongoing fasting progress updates',
+              importance: Importance.max,
+              priority: Priority.high,
+              icon: '@mipmap/ic_launcher',
+              color: const Color(0xFFF98834),
+              ongoing: true,
+              autoCancel: false,
+              showProgress: true,
+              progress: futureProgress.clamp(0, 100),
+              maxProgress: 100,
+              enableVibration: false,
+              playSound: false,
+              category: AndroidNotificationCategory.workout,
+              visibility: NotificationVisibility.public,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          payload: 'fasting_progress_reminder',
+        );
+      }
+
+      if (kDebugMode) {
+        print('Scheduled 20 fasting progress reminders');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error scheduling progress reminders: $e');
+      }
+    }
+  }
+
+
   Future<void> cancelFastingProgressNotification() async {
     try {
+      // Cancel main progress notification
       await flutterLocalNotificationsPlugin.cancel(_fastingProgressNotificationId);
+      
+      // Cancel all scheduled reminders
+      for (int i = 1; i <= 20; i++) {
+        await flutterLocalNotificationsPlugin.cancel(_fastingProgressNotificationId + i);
+      }
       
       if (kDebugMode) {
         print('Cancelled fasting progress notification');
@@ -829,6 +901,348 @@ class NotificationService {
     } catch (e) {
       if (kDebugMode) {
         print('Error showing fasting completed notification: $e');
+      }
+    }
+  }
+
+  Future<void> showFastingStartedNotification({
+    required String fastType,
+    required Duration totalDuration,
+  }) async {
+    try {
+      final hours = totalDuration.inHours;
+      
+      await flutterLocalNotificationsPlugin.show(
+        _fastingProgressNotificationId + 2,
+        '🚀 Fast Started!',
+        'Your $fastType has begun! Goal: ${hours}h. You got this! 💪',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'fasting_started',
+            'Fasting Started',
+            channelDescription: 'Notifications when fasting starts',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+            color: Color(0xFF2196F3), // Blue
+            enableVibration: true,
+            playSound: true,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: 'fasting_started',
+      );
+
+      if (kDebugMode) {
+        print('Showed fasting started notification');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error showing fasting started notification: $e');
+      }
+    }
+  }
+
+  Future<void> showFastingMilestoneNotification({
+    required String milestone,
+    required String message,
+    required Duration elapsedTime,
+  }) async {
+    try {
+      final hours = elapsedTime.inHours;
+      final minutes = elapsedTime.inMinutes.remainder(60);
+      
+      await flutterLocalNotificationsPlugin.show(
+        _fastingProgressNotificationId + 3,
+        '🔥 Milestone Reached!',
+        '$milestone achieved after ${hours}h ${minutes}m! $message',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'fasting_milestone',
+            'Fasting Milestones',
+            channelDescription: 'Notifications for fasting phase milestones',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+            color: Color(0xFFFF9800), // Orange
+            enableVibration: true,
+            playSound: true,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: 'fasting_milestone',
+      );
+
+      if (kDebugMode) {
+        print('Showed fasting milestone notification: $milestone');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error showing fasting milestone notification: $e');
+      }
+    }
+  }
+
+  Future<void> scheduleFastingReminderNotification({
+    required String fastType,
+    required DateTime reminderTime,
+  }) async {
+    try {
+      final notificationId = _fastingProgressNotificationId + 10;
+      
+      // Cancel existing reminder
+      await flutterLocalNotificationsPlugin.cancel(notificationId);
+      
+      final now = DateTime.now();
+      if (reminderTime.isBefore(now)) {
+        if (kDebugMode) {
+          print('Fasting reminder time has passed, not scheduling');
+        }
+        return;
+      }
+
+      final location = tz.UTC;
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        notificationId,
+        '⏰ Time to Fast!',
+        'Your scheduled $fastType is about to begin. Are you ready? 🚀',
+        tz.TZDateTime.from(reminderTime, location),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'fasting_reminder',
+            'Fasting Reminders',
+            channelDescription: 'Reminders for scheduled fasting sessions',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+            color: Color(0xFF9C27B0), // Purple
+            enableVibration: true,
+            playSound: true,
+            actions: [
+              AndroidNotificationAction(
+                'start_fast',
+                'Start Now',
+              ),
+              AndroidNotificationAction(
+                'postpone_fast', 
+                'Postpone',
+              ),
+            ],
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'fasting_reminder',
+      );
+
+      if (kDebugMode) {
+        print('Scheduled fasting reminder notification for $fastType at $reminderTime');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error scheduling fasting reminder notification: $e');
+      }
+    }
+  }
+
+  Future<void> cancelFastingReminderNotification() async {
+    try {
+      final notificationId = _fastingProgressNotificationId + 10;
+      await flutterLocalNotificationsPlugin.cancel(notificationId);
+      
+      if (kDebugMode) {
+        print('Cancelled fasting reminder notification');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error cancelling fasting reminder notification: $e');
+      }
+    }
+  }
+
+  // Handle auto backup trigger from notification
+  void _handleAutoBackupTrigger() async {
+    try {
+      if (kDebugMode) {
+        print('Auto backup triggered by notification');
+      }
+      
+      // Perform the backup
+      await BackupService.performAutoBackup();
+      
+      // Show completion notification
+      await flutterLocalNotificationsPlugin.show(
+        8889, // Different ID for completion notification
+        '✅ Backup Complete',
+        'Nightly backup completed successfully',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'auto_backup',
+            'Automatic Backups',
+            channelDescription: 'Automatic nightly data backups',
+            importance: Importance.low,
+            priority: Priority.low,
+            showWhen: false,
+            playSound: false,
+            enableVibration: false,
+            timeoutAfter: 5000, // Auto dismiss after 5 seconds
+          ),
+        ),
+      );
+      
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error handling auto backup trigger: $e');
+      }
+      
+      // Show error notification
+      await flutterLocalNotificationsPlugin.show(
+        8890, // Error notification ID
+        '⚠️ Backup Error',
+        'Nightly backup failed. Try manual backup.',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'auto_backup',
+            'Automatic Backups',
+            channelDescription: 'Automatic nightly data backups',
+            importance: Importance.low,
+            priority: Priority.low,
+            showWhen: false,
+            playSound: false,
+            enableVibration: false,
+            timeoutAfter: 10000, // Auto dismiss after 10 seconds
+          ),
+        ),
+      );
+    }
+  }
+
+  // Schedule daily food tracking reminder at 8 PM
+  Future<void> scheduleFoodTrackingReminder() async {
+    try {
+      // Cancel any existing food tracking reminder
+      await flutterLocalNotificationsPlugin.cancel(7777);
+      
+      // Schedule for 8 PM today (or tomorrow if it's already past 8 PM)
+      final now = DateTime.now();
+      final reminderTime = DateTime(now.year, now.month, now.day, 20, 0); // 8:00 PM
+      final scheduledTime = reminderTime.isBefore(now) 
+          ? reminderTime.add(const Duration(days: 1))
+          : reminderTime;
+      
+      const androidDetails = AndroidNotificationDetails(
+        'food_tracking',
+        'Food Tracking Reminders',
+        channelDescription: 'Daily reminders to track your food intake',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+        showWhen: true,
+        playSound: true,
+        enableVibration: true,
+        icon: '@drawable/ic_restaurant',
+      );
+      
+      const notificationDetails = NotificationDetails(android: androidDetails);
+      
+      // Convert to timezone-aware datetime  
+      final scheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
+      
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        7777, // Unique ID for food tracking reminders
+        '🍽️ Food Tracking Time',
+        'Don\'t forget to log what you ate today! Tap to track your meals.',
+        scheduledDate,
+        notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'food_tracking_reminder',
+      );
+      
+      if (kDebugMode) {
+        print('Food tracking reminder scheduled for: $scheduledTime');
+      }
+      
+      // Schedule the next day's reminder
+      await _scheduleNextFoodTrackingReminder();
+      
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error scheduling food tracking reminder: $e');
+      }
+    }
+  }
+
+  // Schedule the next food tracking reminder (for tomorrow)
+  Future<void> _scheduleNextFoodTrackingReminder() async {
+    try {
+      // Schedule for tomorrow at 8 PM
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      final reminderTime = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 20, 0);
+      
+      const androidDetails = AndroidNotificationDetails(
+        'food_tracking',
+        'Food Tracking Reminders',
+        channelDescription: 'Daily reminders to track your food intake',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+        showWhen: true,
+        playSound: true,
+        enableVibration: true,
+        icon: '@drawable/ic_restaurant',
+      );
+      
+      const notificationDetails = NotificationDetails(android: androidDetails);
+      
+      // Convert to timezone-aware datetime
+      final scheduledDate = tz.TZDateTime.from(reminderTime, tz.local);
+      
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        7776, // Different ID for next day's reminder
+        '🍽️ Food Tracking Time',
+        'Don\'t forget to log what you ate today! Tap to track your meals.',
+        scheduledDate,
+        notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'food_tracking_reminder',
+      );
+      
+      if (kDebugMode) {
+        print('Next food tracking reminder scheduled for: $reminderTime');
+      }
+      
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error scheduling next food tracking reminder: $e');
+      }
+    }
+  }
+
+  // Cancel food tracking reminders
+  Future<void> cancelFoodTrackingReminders() async {
+    try {
+      await flutterLocalNotificationsPlugin.cancel(7777);
+      await flutterLocalNotificationsPlugin.cancel(7776);
+      
+      if (kDebugMode) {
+        print('Cancelled food tracking reminders');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error cancelling food tracking reminders: $e');
       }
     }
   }

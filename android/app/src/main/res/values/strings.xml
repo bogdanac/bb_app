@@ -2,4 +2,6 @@
 <resources>
     <string name="app_name">BBetter</string>
     <string name="water_widget_description">Water tracking widget - tap to add water</string>
+    <string name="task_widget_description">Quick task creation - tap to add task</string>
+    <string name="routine_widget_description">Morning routine tracker - complete your daily steps</string>
 </resources>

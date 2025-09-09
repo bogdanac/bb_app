@@ -29,8 +29,9 @@ class NotificationListener : NotificationListenerService() {
                 
                 val packageName = notification.packageName
                 val extras = notification.notification.extras
-                val title = extras?.getString("android.title") ?: ""
-                val text = extras?.getString("android.text") ?: ""
+                // Handle SpannableString by converting CharSequence to String
+                val title = extras?.getCharSequence("android.title")?.toString() ?: ""
+                val text = extras?.getCharSequence("android.text")?.toString() ?: ""
                 
                 Log.d(TAG, "Processing notification from $packageName: $title - $text")
                 
@@ -79,32 +80,20 @@ class NotificationListener : NotificationListenerService() {
     }
     
     private fun shouldTriggerAlarm(packageName: String, title: String, text: String): Boolean {
-        // Additional checks for specific app and keywords
         try {
             val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             val settingsJson = prefs.getString("flutter.notification_alarm_settings", null)
                 ?: return false
             
             val settings = JSONObject(settingsJson)
-            val monitoredApps = settings.optJSONArray("monitoredApps") ?: return false
             
-            // Check if this app is being monitored
-            var isMonitored = false
-            for (i in 0 until monitoredApps.length()) {
-                val app = monitoredApps.getJSONObject(i)
-                if (app.optString("packageName") == packageName && app.optBoolean("enabled", false)) {
-                    isMonitored = true
-                    break
-                }
-            }
-            
-            if (!isMonitored) return false
-            
-            // Check for motion detection keywords
+            // Skip app monitoring - just check for the keyword "detected" in any notification
             val content = "$title $text".lowercase()
-            val keywords = listOf("motion", "detected", "person", "movement", "alert")
+            val hasDetected = content.contains("detected")
             
-            return keywords.any { content.contains(it) }
+            Log.d(TAG, "Content: '$content', Contains 'detected': $hasDetected")
+            
+            return hasDetected
             
         } catch (e: Exception) {
             Log.e(TAG, "Error checking trigger conditions: $e")
@@ -114,8 +103,20 @@ class NotificationListener : NotificationListenerService() {
     
     private fun triggerAlarm(title: String, text: String) {
         Log.d(TAG, "🚨 MOTION ALERT: $title - $text")
-        // Here you would trigger the actual alarm
-        // For now just log - in full implementation you'd use MediaPlayer, vibration, etc.
+        
+        // Call MainActivity to trigger Flutter alarm
+        try {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                try {
+                    MainActivity.instance?.triggerMotionAlarm(title, text)
+                    Log.d(TAG, "Called MainActivity.triggerMotionAlarm")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error calling MainActivity: $e")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in triggerAlarm: $e")
+        }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {

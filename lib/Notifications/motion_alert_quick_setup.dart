@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'notification_listener_service.dart';
+import '../theme/app_colors.dart';
 
 class MotionAlertQuickSetup extends StatefulWidget {
   const MotionAlertQuickSetup({super.key});
@@ -18,7 +19,6 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
   bool _nightMode = true; // Only at night (22:00-08:00)
   bool _vacationMode = false; // 24/7 mode
   bool _isEnabled = false;
-  List<String> _selectedApps = [];
 
   @override
   void initState() {
@@ -37,16 +37,11 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
       
       if (settingsJson != null) {
         final settings = json.decode(settingsJson) as Map<String, dynamic>;
-        final List<dynamic> monitoredApps = settings['monitoredApps'] ?? [];
         
         setState(() {
           _isEnabled = settings['enabled'] ?? false;
           _nightMode = settings['nightModeOnly'] ?? true;
           _vacationMode = !_nightMode; // Opposite of night mode
-          _selectedApps = monitoredApps
-              .where((app) => app['enabled'] == true)
-              .map<String>((app) => app['appName'] ?? '')
-              .toList();
         });
       }
       
@@ -78,19 +73,11 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
   Future<void> _saveSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
-      // Create monitored apps list
-      final monitoredApps = _selectedApps.map((appName) => {
-        'packageName': _getPackageForApp(appName),
-        'appName': appName,
-        'enabled': true,
-      }).toList();
 
       final settings = {
         'enabled': _isEnabled,
-        'nightModeOnly': _nightMode,
-        'monitoredApps': monitoredApps,
-        'keywords': ['motion', 'detected', 'person', 'movement', 'alert'],
+        'nightModeOnly': _nightMode && _isEnabled, // Only true if both enabled and night mode
+        'keyword': 'detected',
       };
       
       await prefs.setString('notification_alarm_settings', json.encode(settings));
@@ -99,35 +86,13 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_isEnabled ? 'Motion alerts activated! 🔔' : 'Motion alerts disabled'),
-            backgroundColor: _isEnabled ? Colors.green : Colors.orange,
+            backgroundColor: _isEnabled ? AppColors.yellow : AppColors.orange,
           ),
         );
       }
     } catch (e) {
       debugPrint('Error saving settings: $e');
     }
-  }
-
-  String _getPackageForApp(String appName) {
-    // Map common apps to their package names
-    const appPackages = {
-      'Tapo': 'com.tplinkcloud.tapo',
-      'Alfred Home Security Camera': 'com.ivuu',
-      'IP Webcam': 'com.pas.webcam',
-      'AtHome Camera': 'com.ichano.athome.camera',
-      'WardenCam': 'com.wardenapp',
-    };
-    return appPackages[appName] ?? 'unknown';
-  }
-
-  void _toggleApp(String appName) {
-    setState(() {
-      if (_selectedApps.contains(appName)) {
-        _selectedApps.remove(appName);
-      } else {
-        _selectedApps.add(appName);
-      }
-    });
   }
 
   @override
@@ -192,11 +157,11 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
 
               // Night Mode
               Card(
-                color: _nightMode && _isEnabled ? Colors.blue.withValues(alpha: 0.1) : null,
+                color: _nightMode && _isEnabled ? AppColors.yellow.withValues(alpha: 0.1) : null,
                 child: ListTile(
                   leading: Icon(
                     Icons.nightlight_round,
-                    color: _nightMode && _isEnabled ? Colors.blue : Colors.grey,
+                    color: _nightMode && _isEnabled ? AppColors.yellow : Colors.grey,
                   ),
                   title: const Text('Night Mode'),
                   subtitle: const Text('Alerts only between 22:00-08:00 (recommended)'),
@@ -222,11 +187,11 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
 
               // Vacation Mode
               Card(
-                color: _vacationMode && _isEnabled ? Colors.orange.withValues(alpha: 0.1) : null,
+                color: _vacationMode && _isEnabled ? AppColors.orange.withValues(alpha: 0.1) : null,
                 child: ListTile(
                   leading: Icon(
                     Icons.luggage_rounded,
-                    color: _vacationMode && _isEnabled ? Colors.orange : Colors.grey,
+                    color: _vacationMode && _isEnabled ? AppColors.orange : Colors.grey,
                   ),
                   title: const Text('Vacation Mode'),
                   subtitle: const Text('24/7 alerts (higher battery usage)'),
@@ -249,10 +214,10 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
               ),
 
               // Status Summary - show after mode selection when enabled
-              if (_hasPermission && _isEnabled && _selectedApps.isNotEmpty) ...[
+              if (_hasPermission && _isEnabled) ...[
                 const SizedBox(height: 16),
                 Card(
-                  color: Colors.green.withValues(alpha: 0.1),
+                  color: AppColors.yellow.withValues(alpha: 0.1),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -262,7 +227,7 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
                           children: [
                             Icon(
                               Icons.check_circle,
-                              color: Colors.green,
+                              color: AppColors.yellow,
                             ),
                             const SizedBox(width: 12),
                             Text(
@@ -273,14 +238,24 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
                         ),
                         const SizedBox(height: 8),
                         Text('Mode: ${_nightMode ? "Night Mode (22:00-08:00)" : "24/7 Vacation Mode"}'),
-                        Text('Monitored apps: ${_selectedApps.join(", ")}'),
+                        const Text('Triggers on: Any notification containing "detected" OR "motion" OR "alert" OR "movement"'),
                         const SizedBox(height: 8),
                         Text(
                           _nightMode 
                             ? '💡 Battery optimized - only monitors at night'
                             : '⚠️ Higher battery usage - monitors 24/7',
                           style: TextStyle(
-                            color: _nightMode ? Colors.green : Colors.orange,
+                            color: _nightMode ? AppColors.yellow : AppColors.orange,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          NotificationListenerService.isInitialized 
+                            ? '✅ Service initialized and ready'
+                            : '❌ Service not properly initialized',
+                          style: TextStyle(
+                            color: NotificationListenerService.isInitialized ? AppColors.yellow : Colors.red,
                             fontSize: 12,
                           ),
                         ),
@@ -291,89 +266,38 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
               ],
 
               if (_isEnabled) ...[
-
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        // Show Tapo prominently
-                        CheckboxListTile(
-                          title: const Text('Tapo', style: TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: const Text('TP-Link Security Camera (Recommended)'),
-                          value: _selectedApps.contains('Tapo'),
-                          onChanged: (value) {
-                            _toggleApp('Tapo');
-                            _saveSettings();
-                          },
-                          dense: true,
-                        ),
-                        // Show any other already selected apps
-                        ..._selectedApps.where((app) => app != 'Tapo').map((app) => CheckboxListTile(
-                              title: Text(app),
-                              value: true,
-                              onChanged: (value) {
-                                _toggleApp(app);
-                                _saveSettings();
-                              },
-                              dense: true,
-                            )),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Test Setup (compact version)
-                if (_selectedApps.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            NotificationListenerService.triggerLoudAlarm(
-                              'Motion Detected!',
-                              'Test alarm from your security setup',
-                            );
-                          },
-                          icon: const Icon(Icons.volume_up, size: 18),
-                          label: const Text('Test Alarm'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.green,
-                            side: const BorderSide(color: Colors.green),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
+                const SizedBox(height: 16),
+                // Test Alarm Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
                         onPressed: () async {
-                          debugPrint('=== MANUAL ALARM TEST ===');
-                          await NotificationListenerService.triggerLoudAlarm('Test Motion Alert', 'Person detected in camera - Manual Test');
+                          debugPrint('=== TESTING MOTION ALARM ===');
+                          await NotificationListenerService.triggerLoudAlarm('Motion Alert', 'Person detected - Test');
                         },
                         icon: const Icon(Icons.volume_up, size: 18),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.orange.withValues(alpha: 0.1),
-                          foregroundColor: Colors.orange,
+                        label: const Text('Test Alarm'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.orange,
+                          foregroundColor: Colors.white,
                         ),
-                        tooltip: 'Test Full Alarm',
                       ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: () {
-                          NotificationListenerService.stopAlarm();
-                        },
-                        icon: const Icon(Icons.stop, size: 18),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.red.withValues(alpha: 0.1),
-                          foregroundColor: Colors.red,
-                        ),
-                        tooltip: 'Stop Alarm',
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        NotificationListenerService.stopAlarm();
+                      },
+                      icon: const Icon(Icons.stop, size: 18),
+                      label: const Text('Stop'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
                       ),
-                    ],
-                  ),
-                ],
-                
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 16),
               ],
 

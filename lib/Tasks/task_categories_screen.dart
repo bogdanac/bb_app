@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'category_edit_dialog.dart';
 import 'tasks_data_models.dart';
+import 'task_service.dart';
 import '../theme/app_colors.dart';
 
 // TASK CATEGORIES SCREEN
@@ -20,6 +21,7 @@ class TaskCategoriesScreen extends StatefulWidget {
 
 class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
   late List<TaskCategory> _categories;
+  final TaskService _taskService = TaskService();
 
   @override
   void initState() {
@@ -68,14 +70,18 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Category'),
-        content: Text('Are you sure you want to delete "${category.name}"?'),
+        content: Text('Are you sure you want to delete "${category.name}"? Tasks assigned to this category will remain but will no longer be categorized.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
+              final navigator = Navigator.of(context);
+              // Remove category from all tasks before deleting category
+              await _removeCategoryFromTasks(category.id);
+              
               setState(() {
                 _categories.remove(category);
                 // Update order for remaining categories
@@ -84,14 +90,33 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
                 }
               });
               _saveCategories();
-              Navigator.pop(context);
+              navigator.pop();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.lightCoral),
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _removeCategoryFromTasks(String categoryId) async {
+    // Load all tasks
+    final tasks = await _taskService.loadTasks();
+    
+    // Remove the category ID from all tasks that have it
+    bool hasChanges = false;
+    for (final task in tasks) {
+      if (task.categoryIds.contains(categoryId)) {
+        task.categoryIds.remove(categoryId);
+        hasChanges = true;
+      }
+    }
+    
+    // Save tasks only if there were changes
+    if (hasChanges) {
+      await _taskService.saveTasks(tasks);
+    }
   }
 
   void _saveCategories() {
@@ -144,7 +169,7 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
                     onPressed: () => _editCategory(category),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.delete_rounded, color: Colors.red),
+                    icon: const Icon(Icons.delete_rounded, color: AppColors.lightCoral),
                     onPressed: () => _deleteCategory(category),
                   ),
                 ],

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'fast_edit_dialog.dart';
 import 'fasting_notifier.dart';
+import '../theme/app_colors.dart';
 
 class FastingHistoryScreen extends StatefulWidget {
   final List<Map<String, dynamic>> history;
@@ -90,7 +91,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
               Navigator.pop(context);
               _performDelete(index);
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: AppColors.lightCoral),
             child: const Text('Delete'),
           ),
         ],
@@ -99,28 +100,16 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
   }
 
   void _performDelete(int index) {
-    final deletedFast = _editableHistory[index];
-
     setState(() {
       _editableHistory.removeAt(index);
     });
     _saveHistory();
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Fast deleted successfully'),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'Undo',
-          textColor: Colors.white,
-          onPressed: () {
-            setState(() {
-              _editableHistory.insert(index, deletedFast);
-            });
-            _saveHistory();
-          },
-        ),
+      const SnackBar(
+        content: Text('Fast deleted successfully'),
+        backgroundColor: AppColors.lightGreen,
+        duration: Duration(seconds: 2),
       ),
     );
   }
@@ -158,14 +147,14 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
           borderRadius: BorderRadius.circular(12),
           gradient: LinearGradient(
             colors: isCompleted
-                ? [Colors.green.withValues(alpha: 0.1), Colors.green.withValues(alpha: 0.05)]
+                ? [AppColors.successGreen.withValues(alpha: 0.1), AppColors.successGreen.withValues(alpha: 0.05)]
                 : [Colors.orange.withValues(alpha: 0.1), Colors.orange.withValues(alpha: 0.05)],
           ),
         ),
         child: ListTile(
           contentPadding: const EdgeInsets.all(16),
           leading: CircleAvatar(
-            backgroundColor: isCompleted ? Colors.green : Colors.orange,
+            backgroundColor: isCompleted ? AppColors.lightGreen : Colors.orange,
             child: Icon(
               isCompleted ? Icons.check_rounded : Icons.schedule_rounded,
               color: Colors.white,
@@ -183,7 +172,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isCompleted ? Colors.green : Colors.orange,
+                    color: isCompleted ? AppColors.lightGreen : Colors.orange,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -204,7 +193,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Icon(Icons.play_arrow_rounded, size: 16, color: Colors.green),
+                  Icon(Icons.play_arrow_rounded, size: 16, color: AppColors.pastelGreen),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
@@ -263,9 +252,9 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
                 value: 'delete',
                 child: Row(
                   children: [
-                    Icon(Icons.delete_rounded, size: 20, color: Colors.red),
+                    Icon(Icons.delete_rounded, size: 20, color: AppColors.lightCoral),
                     SizedBox(width: 8),
-                    Text('Delete', style: TextStyle(color: Colors.red)),
+                    Text('Delete', style: TextStyle(color: AppColors.lightCoral)),
                   ],
                 ),
               ),
@@ -304,9 +293,9 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
                   value: 'clear_all',
                   child: Row(
                     children: [
-                      Icon(Icons.clear_all_rounded, size: 20, color: Colors.red),
+                      Icon(Icons.clear_all_rounded, size: 20, color: AppColors.lightCoral),
                       SizedBox(width: 8),
-                      Text('Clear All', style: TextStyle(color: Colors.red)),
+                      Text('Clear All', style: TextStyle(color: AppColors.lightCoral)),
                     ],
                   ),
                 ),
@@ -320,7 +309,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.history_rounded, size: 64, color: Colors.grey[400]),
+            Icon(Icons.calendar_month_rounded, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
               'No fasting history yet',
@@ -337,7 +326,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
               icon: const Icon(Icons.arrow_back_rounded),
               label: const Text('Start Fasting'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
+                backgroundColor: AppColors.pastelGreen,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -372,7 +361,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
                   'Success Rate',
                   '${(_editableHistory.where((f) => (f['actualDuration'] as int) >= (f['plannedDuration'] as int) * 0.8).length / _editableHistory.length * 100).round()}%',
                   Icons.trending_up_rounded,
-                  Colors.green,
+                  AppColors.lightGreen,
                 ),
               ],
             ),
@@ -427,7 +416,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
             Icon(
               Icons.warning_rounded,
               size: 48,
-              color: Colors.red,
+              color: AppColors.lightCoral,
             ),
             const SizedBox(height: 16),
             const Text(
@@ -461,11 +450,11 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('All fasting history cleared'),
-                  backgroundColor: Colors.red,
+                  backgroundColor: AppColors.lightCoral,
                 ),
               );
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: AppColors.lightCoral),
             child: const Text('Clear All'),
           ),
         ],

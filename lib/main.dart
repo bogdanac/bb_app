@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'Fasting/fasting_screen.dart';
 import 'MenstrualCycle/cycle_tracking_screen.dart';
-import 'Routines/routines_screen.dart';
+import 'Routines/routines_habits_screen.dart';
 import 'Tasks/todo_screen.dart';
+import 'Tasks/task_widget_service.dart';
 import 'home.dart';
 import 'Notifications/notification_service.dart';
 import 'Notifications/notification_listener_service.dart';
@@ -40,8 +41,7 @@ class BBetterApp extends StatelessWidget {
         );
       },
       theme: AppTheme.theme,
-      // Skip launcher in debug mode to avoid hot reload issues
-      home: kDebugMode ? const MainScreen() : const LauncherScreen(),
+      home: const LauncherScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -134,6 +134,22 @@ class _LauncherScreenState extends State<LauncherScreen>
 
   void _startAnimationSequence() async {
     try {
+      // Check for widget intent early to skip launcher for widget triggers
+      bool hasWidgetIntent = false;
+      try {
+        hasWidgetIntent = await TaskWidgetService.checkForWidgetIntent();
+      } catch (e) {
+        if (kDebugMode) print("Error checking widget intent: $e");
+      }
+      
+      // If widget intent detected, skip launcher and go directly to main screen with task dialog
+      if (hasWidgetIntent && mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+        );
+        return;
+      }
+      
       // Emergency failsafe - navigate to main screen after maximum 15 seconds regardless of what happens
       _emergencyTimer = Timer(const Duration(seconds: 15), () {
         if (mounted && Navigator.of(context).canPop() == false) {
@@ -228,22 +244,43 @@ class _LauncherScreenState extends State<LauncherScreen>
       });
       
       // Initialize notification listener service for motion alerts with debug protection and timeout
-      (() async {
-        await NotificationListenerService.initialize();
+      try {
+        await NotificationListenerService.initialize().timeout(Duration(seconds: 5));
         if (kDebugMode) {
-          print("NotificationListenerService initialized successfully in debug mode");
+          print("✅ NotificationListenerService initialized successfully in debug mode");
         }
-      })().timeout(Duration(seconds: 5)).catchError((error) {
+      } catch (error) {
         if (kDebugMode) {
-          print("Warning: NotificationListenerService failed to initialize or timed out: $error");
+          print("❌ WARNING: NotificationListenerService failed to initialize: $error");
           print("Motion alerts may not work, but app will continue normally");
         }
-      });
+      }
 
       // Perform auto-backup check (non-blocking with timeout)
       BackupService.performAutoBackup().timeout(Duration(seconds: 8)).catchError((error) {
         if (kDebugMode) {
           print("Auto backup check failed or timed out: $error");
+        }
+      });
+
+      // Check for weekly cloud backup reminder
+      BackupService.checkWeeklyCloudBackupReminder().timeout(Duration(seconds: 5)).catchError((error) {
+        if (kDebugMode) {
+          print("Cloud backup reminder check failed or timed out: $error");
+        }
+      });
+
+      // Schedule nightly backups (non-blocking with timeout)
+      BackupService.scheduleNightlyBackups().timeout(Duration(seconds: 5)).catchError((error) {
+        if (kDebugMode) {
+          print("Nightly backup scheduling failed or timed out: $error");
+        }
+      });
+
+      // Schedule daily food tracking reminders (non-blocking with timeout)
+      NotificationService().scheduleFoodTrackingReminder().timeout(Duration(seconds: 5)).catchError((error) {
+        if (kDebugMode) {
+          print("Food tracking reminder scheduling failed or timed out: $error");
         }
       });
 
@@ -350,7 +387,7 @@ class _LauncherScreenState extends State<LauncherScreen>
                             style: TextStyle(
                               fontSize: 42,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white.withValues(alpha: _textOpacity.value),
+                              color: AppColors.white.withValues(alpha: _textOpacity.value),
                               letterSpacing: 2,
                             ),
                           ),
@@ -409,7 +446,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
     const CycleScreen(),
     const HomeScreen(),
     const TodoScreen(),
-    const RoutinesScreen(),
+    const RoutinesHabitsScreen(),
   ];
 
 // Custom navbar implementation below - no need for _navItems
@@ -422,6 +459,31 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+    _checkForWidgetIntent();
+  }
+
+  void _checkForWidgetIntent() async {
+    // Small delay to ensure the widget is ready
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    if (mounted) {
+      try {
+        final hasWidgetIntent = await TaskWidgetService.checkForWidgetIntent();
+        if (hasWidgetIntent && mounted) {
+          // Navigate to tasks screen first, then show dialog
+          setState(() {
+            _selectedIndex = 3; // Tasks screen
+          });
+          // Small delay to ensure navigation completes
+          await Future.delayed(const Duration(milliseconds: 300));
+          if (mounted) {
+            await TaskWidgetService.showQuickTaskDialog(context);
+          }
+        }
+      } catch (e) {
+        debugPrint('Error handling widget intent: $e');
+      }
+    }
   }
 
   @override
@@ -436,11 +498,12 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    // Reset to Home when app resumes (without infinite loop)
-    if (mounted && state == AppLifecycleState.resumed && _selectedIndex != 2) {
-      setState(() {
-        _selectedIndex = 2;
-      });
+    if (mounted && state == AppLifecycleState.resumed) {
+      // Check for widget intent when app resumes
+      _checkForWidgetIntent();
+      
+      // Note: Removed automatic home reset to prevent interrupting user workflow
+      // The app should stay on whatever screen the user was on
     }
   }
 
@@ -470,7 +533,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
           color: const Color(0xFF1A1A1A),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
+              color: AppColors.black.withValues(alpha: 0.3),
               blurRadius: 10,
               offset: const Offset(0, -2),
             ),
@@ -482,21 +545,13 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: List.generate(5, (index) {
             final colors = [
-              AppColors.orange, // Orange for Fasting
-              AppColors.pink, // Pink for Cycle  
-              AppColors.coral, // Coral for Home (instead of yellow)
-              AppColors.purple, // Purple for Tasks
-              AppColors.yellow, // Yellow for Routines (morning routines)
+              AppColors.yellow,
+              AppColors.redPrimary,
+              AppColors.pink,
+              AppColors.coral,
+              AppColors.orange,
             ];
-            
-            final icons = [
-              Icons.timer_rounded,
-              Icons.favorite_rounded, 
-              Icons.home_rounded,
-              Icons.task_alt_rounded,
-              Icons.auto_awesome_rounded,
-            ];
-            
+
             final isSelected = _selectedIndex == index;
             
             return GestureDetector(
@@ -516,9 +571,9 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
                 ),
                 child: Center(
                   child: Icon(
-                    icons[index],
-                    color: isSelected ? colors[index] : colors[index].withValues(alpha: 0.7), // Colored icons
-                    size: isSelected ? 32 : 30, // Increased from 28/26 to 32/30
+                    [Icons.local_fire_department, Icons.local_florist_rounded, Icons.home_rounded, Icons.task_alt_rounded, Icons.auto_awesome_rounded][index],
+                    color: isSelected ? colors[index] : colors[index].withValues(alpha: 0.7),
+                    size: isSelected ? 32 : 30,
                   ),
                 ),
               ),

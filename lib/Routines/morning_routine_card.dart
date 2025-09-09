@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
-import 'dart:convert';
 import 'package:bb_app/Routines/routine_data_models.dart';
+import 'routine_service.dart';
+import 'routine_widget_service.dart';
+import 'dart:async';
 
 class MorningRoutineCard extends StatefulWidget {
   final VoidCallback onCompleted;
@@ -20,7 +20,7 @@ class MorningRoutineCard extends StatefulWidget {
   State<MorningRoutineCard> createState() => _MorningRoutineCardState();
 }
 
-class _MorningRoutineCardState extends State<MorningRoutineCard> {
+class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBindingObserver {
   Routine? _currentRoutine;
   int _currentStepIndex = 0;
   bool _isLoading = true;
@@ -28,81 +28,111 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadCurrentRoutine();
+    
+    // Sync with widget on init
+    RoutineWidgetService.syncWithWidget();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    // Save progress one final time when disposing
+    if (_currentRoutine != null) {
+      _saveProgress();
+    }
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Save progress when app goes to background or when pausing
+    if ((state == AppLifecycleState.paused || 
+         state == AppLifecycleState.inactive ||
+         state == AppLifecycleState.detached) && 
+        _currentRoutine != null) {
+      _saveProgress();
+    }
   }
 
   Future<void> _loadCurrentRoutine() async {
-    final prefs = await SharedPreferences.getInstance();
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-    // Load routines to get the morning routine
-    final routinesJson = prefs.getStringList('routines') ?? [];
-
-    if (kDebugMode) {
-      print('Loading morning routine - Found ${routinesJson.length} routines');
-    }
-
-    if (routinesJson.isNotEmpty) {
-      final routines = routinesJson
-          .map((json) => Routine.fromJson(jsonDecode(json)))
-          .toList();
-
+    try {
       if (kDebugMode) {
-        print('Available routines: ${routines.map((r) => r.title).toList()}');
+        print('Starting _loadCurrentRoutine');
       }
-
-      // Find morning routine (assuming it's the first one or has "morning" in title)
-      _currentRoutine = routines.firstWhere(
-            (routine) => routine.title.toLowerCase().contains('morning'),
-        orElse: () => routines.first,
-      );
-
-      if (kDebugMode) {
-        print('Selected morning routine: ${_currentRoutine?.title}');
-      }
-
-      // Check if we have progress saved for today
-      final progressJson = prefs.getString('morning_routine_progress_$today');
-      final lastSavedDate = prefs.getString('morning_routine_last_date');
       
-      if (progressJson != null && lastSavedDate == today) {
-        // Load today's progress - resume from where we left off
-        final progressData = jsonDecode(progressJson);
-        _currentStepIndex = progressData['currentStepIndex'] ?? 0;
+      // Load all routines
+      final routines = await RoutineService.loadRoutines();
 
-        // Initialize all items properly first
-        for (int i = 0; i < _currentRoutine!.items.length; i++) {
-          _currentRoutine!.items[i].isSkipped = false; // Ensure isSkipped is always initialized
-        }
-        
-        // Update completion status from saved progress
-        final completedSteps = List<bool>.from(progressData['completedSteps'] ?? []);
-        final skippedSteps = List<bool>.from(progressData['skippedSteps'] ?? []);
-        for (int i = 0; i < _currentRoutine!.items.length && i < completedSteps.length; i++) {
-          _currentRoutine!.items[i].isCompleted = completedSteps[i];
-        }
-        for (int i = 0; i < _currentRoutine!.items.length && i < skippedSteps.length; i++) {
-          _currentRoutine!.items[i].isSkipped = skippedSteps[i];
-        }
+      if (kDebugMode) {
+        print('Loading morning routine - Found ${routines.length} routines');
+        print('Available routines: ${routines.map((r) => r.title).toList()}');
+        // Force widget update for debugging
+        await RoutineWidgetService.forceRefreshWidget();
+      }
+
+      // Find morning routine
+      try {
+        _currentRoutine = await RoutineService.findMorningRoutine(routines);
         
         if (kDebugMode) {
-          print('Resumed morning routine from step $_currentStepIndex');
+          print('Selected morning routine: ${_currentRoutine?.title}');
         }
-      } else {
-        // Reset for new day or first time today
-        _currentStepIndex = 0;
-        for (var item in _currentRoutine!.items) {
-          item.isCompleted = false;
-          item.isSkipped = false;
-        }
-        
-        // Clear old progress and set today's date
-        await prefs.remove('morning_routine_progress_$today');
-        await prefs.setString('morning_routine_last_date', today);
-        
+      } catch (e) {
         if (kDebugMode) {
-          print('Started fresh morning routine for $today');
+          print('Error in findMorningRoutine: $e');
         }
+        _currentRoutine = null;
+      }
+
+      if (_currentRoutine != null) {
+        // Check if we have progress saved for today
+        final progressData = await RoutineService.loadMorningRoutineProgress();
+        
+        if (progressData != null) {
+          // Load today's progress - resume from where we left off
+          _currentStepIndex = progressData['currentStepIndex'] ?? 0;
+
+          // Initialize all items properly first
+          for (int i = 0; i < _currentRoutine!.items.length; i++) {
+            _currentRoutine!.items[i].isSkipped = false; // Ensure isSkipped is always initialized
+          }
+          
+          // Update completion status from saved progress
+          final completedSteps = List<bool>.from(progressData['completedSteps'] ?? []);
+          final skippedSteps = List<bool>.from(progressData['skippedSteps'] ?? []);
+          for (int i = 0; i < _currentRoutine!.items.length && i < completedSteps.length; i++) {
+            _currentRoutine!.items[i].isCompleted = completedSteps[i];
+          }
+          for (int i = 0; i < _currentRoutine!.items.length && i < skippedSteps.length; i++) {
+            _currentRoutine!.items[i].isSkipped = skippedSteps[i];
+          }
+          
+          if (kDebugMode) {
+            print('Resumed morning routine from step $_currentStepIndex');
+          }
+        } else {
+          // Reset for new day or first time today
+          _currentStepIndex = 0;
+          for (var item in _currentRoutine!.items) {
+            item.isCompleted = false;
+            item.isSkipped = false;
+          }
+          
+          // Clear old progress
+          await RoutineService.clearMorningRoutineProgress();
+          
+          if (kDebugMode) {
+            print('Started fresh morning routine for ${RoutineService.getTodayString()}');
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading routine: $e');
       }
     }
 
@@ -115,30 +145,39 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
     if (_currentRoutine == null) return;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-      final progressData = {
-        'currentStepIndex': _currentStepIndex,
-        'completedSteps': _currentRoutine!.items.map((item) => item.isCompleted).toList(),
-        'skippedSteps': _currentRoutine!.items.map((item) => item.isSkipped).toList(),
-        'lastUpdated': DateTime.now().toIso8601String(),
-      };
-
-      await prefs.setString('morning_routine_progress_$today', jsonEncode(progressData));
-      await prefs.setString('morning_routine_last_date', today);
-      
-      if (kDebugMode) {
-        print('Saved morning routine progress: step $_currentStepIndex');
+      // Ensure we have valid data before saving
+      if (_currentStepIndex < 0) _currentStepIndex = 0;
+      if (_currentStepIndex >= _currentRoutine!.items.length) {
+        _currentStepIndex = _currentRoutine!.items.length - 1;
       }
+
+      await RoutineService.saveMorningRoutineProgress(
+        currentStepIndex: _currentStepIndex,
+        items: _currentRoutine!.items,
+      );
+      
+      // Update widget after saving progress
+      RoutineWidgetService.updateWidget();
+      
     } catch (e) {
-      if (kDebugMode) {
-        print('Error saving progress: $e');
+      // Retry once after a short delay
+      await Future.delayed(const Duration(milliseconds: 100));
+      try {
+        await RoutineService.saveMorningRoutineProgress(
+          currentStepIndex: _currentStepIndex,
+          items: _currentRoutine!.items,
+        );
+      } catch (retryError) {
+        // Silent fail after retry
       }
     }
   }
 
   Future<void> _completeCurrentStep() async {
+    if (kDebugMode) {
+      print('=== COMPLETE BUTTON PRESSED ===');
+    }
+
     if (_currentRoutine == null || _currentStepIndex >= _currentRoutine!.items.length) {
       if (kDebugMode) {
         print('Cannot complete step: currentRoutine=${_currentRoutine != null}, currentStepIndex=$_currentStepIndex, length=${_currentRoutine?.items.length}');
@@ -147,20 +186,42 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
     }
 
     if (kDebugMode) {
-      print('Completing step $_currentStepIndex: ${_currentRoutine!.items[_currentStepIndex].text}');
+      print('Before completing: $_currentStepIndex: ${_currentRoutine!.items[_currentStepIndex].text}');
+      print('Step status - isCompleted: ${_currentRoutine!.items[_currentStepIndex].isCompleted}, isSkipped: ${_currentRoutine!.items[_currentStepIndex].isSkipped}');
+    }
+
+    // If step is already completed, just move to next step
+    if (_currentRoutine!.items[_currentStepIndex].isCompleted) {
+      if (kDebugMode) {
+        print('Step is already completed, just moving to next step');
+      }
+      setState(() {
+        _moveToNextUnfinishedStep();
+      });
+      return;
     }
 
     setState(() {
       _currentRoutine!.items[_currentStepIndex].isCompleted = true;
       _currentRoutine!.items[_currentStepIndex].isSkipped = false; // Unmark as skipped if it was
+
+      if (kDebugMode) {
+        print('After marking completed: $_currentStepIndex: ${_currentRoutine!.items[_currentStepIndex].text}');
+        print('Step status - isCompleted: ${_currentRoutine!.items[_currentStepIndex].isCompleted}, isSkipped: ${_currentRoutine!.items[_currentStepIndex].isSkipped}');
+      }
+
       _moveToNextUnfinishedStep();
+
+      if (kDebugMode) {
+        print('After moveToNextUnfinishedStep: new currentStepIndex = $_currentStepIndex');
+      }
     });
 
     // Save progress after each step
     await _saveProgress();
 
-    // Check if all steps are completed or skipped
-    if (_currentRoutine!.items.every((item) => item.isCompleted || item.isSkipped)) {
+    // Check if all steps are actually completed (not just skipped)
+    if (_currentRoutine!.items.every((item) => item.isCompleted)) {
       widget.onCompleted();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -171,19 +232,34 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
         );
       }
     }
+
+    if (kDebugMode) {
+      print('=== COMPLETE BUTTON FINISHED ===');
+    }
   }
 
   Future<void> _skipCurrentStep() async {
     if (_currentRoutine == null || _currentStepIndex >= _currentRoutine!.items.length) return;
 
+    if (kDebugMode) {
+      print('Skipping step $_currentStepIndex: ${_currentRoutine!.items[_currentStepIndex].text}');
+    }
+
     setState(() {
-      _currentRoutine!.items[_currentStepIndex].isSkipped = true;
-      // Simply move to the next step in sequence
-      if (_currentStepIndex < _currentRoutine!.items.length - 1) {
-        _currentStepIndex++;
-      } else {
-        _moveToNextUnfinishedStep();
+      // Always move the current item to the end of the list
+      final skippedItem = _currentRoutine!.items.removeAt(_currentStepIndex);
+      // Keep the existing skip status, don't reset it
+      skippedItem.isCompleted = false;
+      _currentRoutine!.items.add(skippedItem);
+      
+      // Current index stays the same since we removed an item from before it
+      // But we need to make sure we don't go out of bounds
+      if (_currentStepIndex >= _currentRoutine!.items.length) {
+        _currentStepIndex = 0; // Start from beginning if we've reached the end
       }
+      
+      // Find the next unfinished step from current position
+      _moveToNextUnfinishedStep();
     });
 
     // Save progress after skipping
@@ -194,35 +270,32 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
     if (kDebugMode) {
       print('Moving to next unfinished step. Current index: $_currentStepIndex');
     }
-    
-    // Find next step that is neither completed nor skipped
-    for (int i = 0; i < _currentRoutine!.items.length; i++) {
-      if (!_currentRoutine!.items[i].isCompleted && !_currentRoutine!.items[i].isSkipped) {
+
+    // Find next step that is not completed (including skipped steps), starting from current position
+    for (int i = _currentStepIndex; i < _currentRoutine!.items.length; i++) {
+      if (!_currentRoutine!.items[i].isCompleted) {
         if (kDebugMode) {
-          print('Found unfinished step at index $i: ${_currentRoutine!.items[i].text}');
+          print('Found unfinished step at index $i: ${_currentRoutine!.items[i].text} (isSkipped: ${_currentRoutine!.items[i].isSkipped})');
         }
         _currentStepIndex = i;
         return;
       }
     }
     
-    // All steps are either completed or skipped - routine is done
-    if (kDebugMode) {
-      print('All steps are completed or skipped. Routine finished.');
+    // If no unfinished step found from current position, search from beginning
+    for (int i = 0; i < _currentStepIndex; i++) {
+      if (!_currentRoutine!.items[i].isCompleted) {
+        if (kDebugMode) {
+          print('Found unfinished step at index $i: ${_currentRoutine!.items[i].text} (isSkipped: ${_currentRoutine!.items[i].isSkipped})');
+        }
+        _currentStepIndex = i;
+        return;
+      }
     }
     
-    // Check if all steps are completed or skipped to trigger completion
-    final allDone = _currentRoutine!.items.every((item) => item.isCompleted || item.isSkipped);
-    if (allDone) {
-      widget.onCompleted();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎉 Morning routine completed! Great job!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+    // No more unfinished steps found - all steps are completed
+    if (kDebugMode) {
+      print('No unfinished steps found. All steps are completed.');
     }
   }
 
@@ -237,7 +310,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            color: AppColors.orange.withValues(alpha: 0.08), // More subtle orange
+            color: AppColors.yellow.withValues(alpha: 0.2), // Orange theme colors
           ),
           child: const Center(
             child: CircularProgressIndicator(),
@@ -254,7 +327,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            color: AppColors.orange.withValues(alpha: 0.08), // More subtle orange
+            color: AppColors.yellow.withValues(alpha: 0.2), // Orange theme colors
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,7 +336,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
                 children: [
                   Icon(
                     Icons.wb_sunny_rounded,
-                    color: Theme.of(context).colorScheme.secondary,
+                    color: AppColors.yellow,
                     size: 28,
                   ),
                   const SizedBox(width: 12),
@@ -291,10 +364,10 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.yellow.withValues(alpha: 0.08), // More subtle yellow
+          color: AppColors.yellow.withValues(alpha: 0.2), // Orange theme colors
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -303,19 +376,15 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
               children: [
                 Icon(
                   Icons.wb_sunny_rounded,
-                  color: Theme.of(context).colorScheme.secondary,
+                  color: AppColors.yellow,
                   size: 28,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     _currentRoutine!.title,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
                   ),
-                ),
-                Text(
-                  '$completedCount/${_currentRoutine!.items.length}',
-                  style: const TextStyle(fontSize: 16, color: Colors.white70),
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton.icon(
@@ -333,20 +402,11 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ),
+                const SizedBox(width: 8),
               ],
             ),
             const SizedBox(height: 12),
 
-            // Progress bar
-            LinearProgressIndicator(
-              value: completedCount / _currentRoutine!.items.length,
-              backgroundColor: Colors.grey.withValues(alpha: 0.3),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                Theme.of(context).colorScheme.secondary,
-              ),
-            ),
-
-            const SizedBox(height: 16),
 
 
             if (allCompleted) ...[
@@ -375,10 +435,10 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
+                        color: AppColors.yellow.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
+                          color: AppColors.yellow.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Text(
@@ -418,6 +478,62 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> {
                     ],
                   ),
                 ],
+              ),
+            ] else ...[
+              // No current step available but not all completed - show skipped steps
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.orange),
+                        SizedBox(width: 8),
+                        Text('You have skipped steps remaining:'),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ...(_currentRoutine!.items
+                        .where((item) => item.isSkipped)
+                        .map((item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.skip_next, size: 16, color: Colors.grey),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(item.text, style: const TextStyle(color: Colors.grey))),
+                            ],
+                          ),
+                        ))),
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          // Reset all skipped steps so they can be retaken
+                          for (var item in _currentRoutine!.items) {
+                            if (item.isSkipped) {
+                              item.isSkipped = false;
+                            }
+                          }
+                          // Find the next unfinished step
+                          _moveToNextUnfinishedStep();
+                        });
+                        _saveProgress();
+                      },
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Do Skipped Steps'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ],

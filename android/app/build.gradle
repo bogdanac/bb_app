@@ -32,9 +32,22 @@ android {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
+    
+    // Ensure Java 11 for all compile tasks
+    gradle.projectsEvaluated {
+        tasks.withType(JavaCompile) {
+            options.compilerArgs += ["-Xlint:-options"]
+            sourceCompatibility = JavaVersion.VERSION_11
+            targetCompatibility = JavaVersion.VERSION_11
+        }
+    }
 
     kotlinOptions {
         jvmTarget = '11'
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     sourceSets {

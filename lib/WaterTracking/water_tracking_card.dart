@@ -120,10 +120,10 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.waterBlue.withValues(alpha: 0.08), // Water blue theme
+          color: AppColors.waterBlue.withValues(alpha: 0.2), // Water blue theme
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,7 +148,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                         width: double.infinity, // Forțează width complet
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20),
-                          color: Colors.red.withValues(alpha: 0.3),
+                          color: AppColors.error.withValues(alpha: 0.3),
                         ),
                         child: AnimatedBuilder(
                           animation: _progressAnimation,
@@ -164,7 +164,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                                     borderRadius: BorderRadius.circular(16), // Ajustat pentru înălțimea de 32
                                     gradient: LinearGradient(
                                       colors: _progressAnimation.value > 0.9
-                                          ? [AppColors.successGreen, AppColors.pastelGreen] // Keep green for success
+                                          ? [AppColors.successGreen, AppColors.lightGreen] // Keep green for success
                                           : [AppColors.waterBlue, AppColors.waterBlue.withValues(alpha: 0.7)], // Water blue for progress
                                     ),
                                     boxShadow: _progressAnimation.value > 0.0
@@ -198,14 +198,14 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: _progressAnimation.value > 0.5
-                                  ? Colors.white
-                                  : Colors.white54,
+                                  ? AppColors.white
+                                  : AppColors.white54,
                               shadows: _progressAnimation.value > 0.5
                                   ? [
                                 Shadow(
                                   offset: const Offset(0, 1),
                                   blurRadius: 2,
-                                  color: Colors.black.withValues(alpha: 0.3),
+                                  color: AppColors.black.withValues(alpha: 0.3),
                                 ),
                               ]
                                   : null,
@@ -223,7 +223,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                     onPressed: _handleWaterAdded,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.waterBlue,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),

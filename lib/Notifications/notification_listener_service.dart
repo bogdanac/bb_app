@@ -4,88 +4,147 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:async';
 
 class NotificationListenerService {
   static const MethodChannel _channel = MethodChannel('notification_listener');
   static final AudioPlayer _audioPlayer = AudioPlayer();
   static bool _isInitialized = false;
+  static Timer? _alarmCheckTimer;
   
   // Initialize the service
   static Future<void> initialize() async {
     try {
+      debugPrint('🔧 Starting NotificationListenerService initialization...');
       // Prevent multiple initialization attempts (helps with hot reload)
       if (_isInitialized) {
         debugPrint('NotificationListenerService already initialized, skipping...');
         return;
       }
       
-      // Initialize audio player for alarm functionality
-      await _initializeAudioPlayer();
-      
-      // Set up method call handler with error protection
+      // Set up method call handler FIRST - this is critical
+      debugPrint('🔧 Setting up method call handler...');
       _channel.setMethodCallHandler((call) async {
         try {
+          debugPrint('🔧 Method call handler triggered for: ${call.method}');
           await _handleMethodCall(call);
-        } catch (e) {
-          debugPrint('Error in method call handler: $e');
+        } catch (e, stackTrace) {
+          debugPrint('❌ Error in method call handler: $e');
+          debugPrint('❌ Stack trace: $stackTrace');
           // Don't rethrow - let the app continue
         }
       });
+      debugPrint('🔧 Method call handler set up successfully');
+      
+      // Initialize notification action handler for stop button
+      await _initializeNotificationActions();
+      
+      // Initialize audio player for alarm functionality
+      await _initializeAudioPlayer();
       
       // Initialize the native service with timeout
-      await _channel.invokeMethod('initialize').timeout(
+      debugPrint('🔧 Calling native initialize...');
+      final result = await _channel.invokeMethod('initialize').timeout(
         const Duration(seconds: 5),
         onTimeout: () {
-          debugPrint('NotificationListener initialization timed out');
-          return null;
+          debugPrint('⚠️ NotificationListener native initialization timed out');
+          return "timeout";
         },
       );
+      debugPrint('🔧 Native initialize result: $result');
       
       _isInitialized = true;
-      debugPrint('NotificationListenerService initialized successfully');
-    } catch (e) {
-      debugPrint('Error initializing notification listener: $e');
+      debugPrint('✅ NotificationListenerService initialized successfully');
+      
+      // Test method channel connectivity
+      await testMethodChannel();
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error initializing notification listener: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
       // Don't rethrow - let the app continue without motion alerts
     }
   }
   
   // Handle calls from native Android code
   static Future<void> _handleMethodCall(MethodCall call) async {
+    debugPrint('🔔 Flutter received method call: ${call.method}');
+    debugPrint('🔔 Arguments: ${call.arguments}');
+    debugPrint('🔔 Arguments type: ${call.arguments.runtimeType}');
+    
     switch (call.method) {
       case 'onNotificationReceived':
-        await _handleNotification(call.arguments);
+        debugPrint('🔔 Processing onNotificationReceived...');
+        try {
+          await _handleNotification(call.arguments);
+          debugPrint('🔔 onNotificationReceived processed successfully');
+        } catch (e, stackTrace) {
+          debugPrint('❌ Error in _handleNotification: $e');
+          debugPrint('❌ Stack trace: $stackTrace');
+          rethrow; // Re-throw to see if Android gets the error
+        }
         break;
       default:
-        debugPrint('Unknown method: ${call.method}');
+        debugPrint('❓ Unknown method: ${call.method}');
     }
   }
   
   // Handle incoming notification
+  // Public method for testing motion alerts
+  static Future<void> testMotionAlert({
+    required String packageName,
+    required String title, 
+    required String text,
+  }) async {
+    debugPrint('🧪 === TESTING MOTION ALERT ===');
+    debugPrint('Simulating notification from: $packageName');
+    debugPrint('Title: $title');
+    debugPrint('Text: $text');
+    
+    // Ensure all strings are plain strings without formatting
+    final notification = {
+      'packageName': packageName.toString().trim(),
+      'title': title.toString().trim(),
+      'text': text.toString().trim(),
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+    };
+    
+    await _handleNotification(notification);
+  }
+
   static Future<void> _handleNotification(Map<dynamic, dynamic> notification) async {
     try {
-      final String packageName = notification['packageName'] ?? '';
-      final String title = notification['title'] ?? '';
-      final String text = notification['text'] ?? '';
+      debugPrint('🔔 _handleNotification started');
+      debugPrint('🔔 Raw notification: $notification');
       
-      debugPrint('=== NOTIFICATION RECEIVED ===');
-      debugPrint('Package: $packageName');
-      debugPrint('Title: $title');
-      debugPrint('Text: $text');
-      debugPrint('Full notification data: $notification');
+      // Safely extract strings, handling potential SpannableString objects
+      final String packageName = (notification['packageName'] ?? '').toString().trim();
+      final String title = (notification['title'] ?? '').toString().trim();
+      final String text = (notification['text'] ?? '').toString().trim();
+      
+      debugPrint('🔔 === NOTIFICATION RECEIVED ===');
+      debugPrint('🔔 Package: $packageName');
+      debugPrint('🔔 Title: $title');
+      debugPrint('🔔 Text: $text');
+      debugPrint('🔔 Full notification data: $notification');
       
       // Check if this notification should trigger an alarm
+      debugPrint('🔔 Checking if should trigger alarm...');
       final shouldTrigger = await _shouldTriggerAlarm(packageName, title, text);
-      debugPrint('Should trigger alarm: $shouldTrigger');
+      debugPrint('🔔 Should trigger alarm: $shouldTrigger');
       
       if (shouldTrigger) {
         debugPrint('🚨 TRIGGERING ALARM NOW! 🚨');
         await triggerLoudAlarm(title, text);
+        debugPrint('🚨 Alarm triggered successfully');
       } else {
-        debugPrint('Not triggering alarm - conditions not met');
+        debugPrint('🔔 Not triggering alarm - conditions not met');
       }
-    } catch (e) {
-      debugPrint('Error handling notification: $e');
+      
+      debugPrint('🔔 _handleNotification completed');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error handling notification: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
+      rethrow;
     }
   }
   
@@ -130,30 +189,24 @@ class NotificationListenerService {
         } else {
           debugPrint('✅ Night time check passed');
         }
+      } else {
+        debugPrint('✅ Vacation mode - 24/7 monitoring active, skipping time check');
       }
       
-      // Check if this app is monitored
-      final isMonitored = monitoredApps.any((app) => 
-        app['packageName'] == packageName && app['enabled'] == true
-      );
+      // Skip app monitoring - trigger for any app with keywords
+      debugPrint('✅ Skipping app monitoring - checking keywords for any notification');
       
-      debugPrint('Is $packageName monitored: $isMonitored');
-      
-      if (!isMonitored) {
-        debugPrint('❌ App not monitored');
-        return false;
-      }
-      
-      // Check for motion detection keywords
-      final keywords = settings['keywords'] ?? ['motion', 'detected', 'movement', 'alert'];
+      // Check for single motion detection keyword
+      final keyword = settings['keyword'] ?? 'detected';
       final contentToCheck = '$title $text'.toLowerCase();
       
-      debugPrint('Keywords: $keywords');
+      debugPrint('Keyword: $keyword');
       debugPrint('Content to check: "$contentToCheck"');
       
-      final hasKeyword = keywords.any((keyword) => 
-        contentToCheck.contains(keyword.toString().toLowerCase())
-      );
+      // Check for single keyword match
+      final hasKeyword = contentToCheck.contains(keyword.toString().toLowerCase());
+      
+      debugPrint('Matched keyword: ${hasKeyword ? keyword : 'none'}');
       
       debugPrint('Contains keyword: $hasKeyword');
       
@@ -190,6 +243,33 @@ class NotificationListenerService {
     }
   }
   
+  // Initialize notification actions to handle stop button
+  static Future<void> _initializeNotificationActions() async {
+    try {
+      debugPrint('🔧 Initializing notification actions...');
+      final FlutterLocalNotificationsPlugin notifications = FlutterLocalNotificationsPlugin();
+      
+      // Handle notification actions (like stop button) - simplified setup
+      await notifications.initialize(
+        const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        ),
+        onDidReceiveNotificationResponse: (NotificationResponse response) async {
+          debugPrint('Notification action received: ${response.actionId}');
+          if (response.actionId == 'stop_alarm') {
+            debugPrint('🛑 Stop button pressed - stopping alarm');
+            await stopAlarm();
+          }
+        },
+      );
+      
+      debugPrint('✅ Notification actions initialized successfully');
+    } catch (e) {
+      debugPrint('❌ Error initializing notification actions: $e');
+      // Don't rethrow - continue without notification actions
+    }
+  }
+
   // Initialize audio player with basic settings
   static Future<void> _initializeAudioPlayer() async {
     try {
@@ -209,7 +289,10 @@ class NotificationListenerService {
   // Play loud alarm sound - AUDIO PLAYER PRIORITY
   static Future<void> _playLoudAlarm() async {
     try {
-      debugPrint('Starting alarm with audio player priority...');
+      debugPrint('Starting LOUD alarm with maximum volume...');
+      
+      // PRIORITY 0: Set system alarm volume to maximum first
+      await _setMaximumAlarmVolume();
       
       // PRIORITY 1: Audio player with alarm stream (this works!)
       await _audioPlayer.stop();
@@ -220,42 +303,36 @@ class NotificationListenerService {
           stayAwake: true,
           contentType: AndroidContentType.sonification,
           usageType: AndroidUsageType.alarm, // This bypasses media volume
-          audioFocus: AndroidAudioFocus.gain,
+          audioFocus: AndroidAudioFocus.gainTransientMayDuck, // More aggressive audio focus
         ),
       ));
       
-      await _audioPlayer.setVolume(1.0);
+      await _audioPlayer.setVolume(1.0); // Maximum volume
       await _audioPlayer.setReleaseMode(ReleaseMode.loop);
       
       await _audioPlayer.play(AssetSource('sounds/alarm.mp3'));
-      debugPrint('Audio player alarm started (uses ALARM volume)');
+      debugPrint('Audio player alarm started at MAXIMUM volume (uses ALARM volume)');
       
       // Stop after 30 seconds
       Future.delayed(const Duration(seconds: 30), () async {
-        await _audioPlayer.stop();
+        await stopAlarm();
         debugPrint('Alarm stopped');
       });
       
       // PRIORITY 2: Vibration (always works)
       await _triggerVibration();
       
-      // PRIORITY 3: Show notification (for visibility, not sound)
-      await _showLoudNotification();
+      // PRIORITY 3: System alarm sound (without problematic notification)
+      await _playSystemAlarmSound();
       
-      debugPrint('Full alarm sequence activated');
+      debugPrint('Full LOUD alarm sequence activated');
       
     } catch (e) {
       debugPrint('Audio player alarm failed: $e');
       
-      // Emergency fallback
+      // Emergency fallback - no notifications due to bugs
       await _triggerVibration();
-      await _showLoudNotification();
-      
-      // System sound backup
-      for (int i = 0; i < 10; i++) {
-        await SystemSound.play(SystemSoundType.alert);
-        await Future.delayed(const Duration(milliseconds: 800));
-      }
+      await _playSystemAlarmSound(); // Use our safe system alarm sound function
     }
   }
   
@@ -346,54 +423,30 @@ class NotificationListenerService {
     ];
   }
   
-  // Show loud notification with alarm sound
-  static Future<void> _showLoudNotification() async {
+  // Play system alarm sound without showing notification (to avoid icon crash)
+  static Future<void> _playSystemAlarmSound() async {
     try {
-      final FlutterLocalNotificationsPlugin notifications = FlutterLocalNotificationsPlugin();
-      
-      await notifications.show(
-        9999, // High priority ID
-        '🚨 MOTION DETECTED!',
-        'Security alert - Check your cameras immediately!',
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            'motion_alert_loud',
-            'Security Motion Alerts',
-            channelDescription: 'Critical security motion detection alerts',
-            importance: Importance.max,
-            priority: Priority.max,
-            category: AndroidNotificationCategory.alarm,
-            fullScreenIntent: true,
-            enableLights: true,
-            enableVibration: true,
-            playSound: true,
-            sound: const RawResourceAndroidNotificationSound('alarm'), // Use system alarm sound
-            ledColor: Colors.red,
-            ledOnMs: 300,
-            ledOffMs: 300,
-            vibrationPattern: Int64List.fromList([0, 1000, 500, 1000]),
-            audioAttributesUsage: AudioAttributesUsage.alarm, // CRITICAL: Use alarm audio stream
-            ongoing: true,
-            autoCancel: false,
-            actions: [
-              const AndroidNotificationAction(
-                'stop_alarm',
-                'STOP ALARM',
-                showsUserInterface: true,
-              ),
-            ],
-          ),
-          iOS: const DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-            sound: 'alarm.aiff',
-            interruptionLevel: InterruptionLevel.critical,
-          ),
-        ),
-      );
+      debugPrint('Playing system alarm sound...');
+      // Use multiple system sound alerts in sequence for louder effect
+      for (int i = 0; i < 10; i++) {
+        await SystemSound.play(SystemSoundType.alert);
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+      debugPrint('System alarm sound completed');
     } catch (e) {
-      debugPrint('Error showing loud notification: $e');
+      debugPrint('Error playing system alarm sound: $e');
+    }
+  }
+
+
+  // Set maximum alarm volume via native method
+  static Future<void> _setMaximumAlarmVolume() async {
+    try {
+      debugPrint('Setting system alarm volume to maximum...');
+      await _channel.invokeMethod('setMaxAlarmVolume');
+      debugPrint('System alarm volume set to maximum');
+    } catch (e) {
+      debugPrint('Error setting maximum alarm volume: $e');
     }
   }
 
@@ -405,12 +458,42 @@ class NotificationListenerService {
       // Also dismiss the alarm notification
       final FlutterLocalNotificationsPlugin notifications = FlutterLocalNotificationsPlugin();
       await notifications.cancel(9999);
+      
+      // Restore original alarm volume
+      await _restoreAlarmVolume();
     } catch (e) {
       debugPrint('Error stopping alarm: $e');
     }
   }
+
+  // Restore original alarm volume
+  static Future<void> _restoreAlarmVolume() async {
+    try {
+      await _channel.invokeMethod('restoreAlarmVolume');
+      debugPrint('Original alarm volume restored');
+    } catch (e) {
+      debugPrint('Error restoring alarm volume: $e');
+    }
+  }
   
   
+  // Test the full loud alarm system
+  static Future<void> testFullAlarm() async {
+    debugPrint('=== TESTING FULL LOUD ALARM SYSTEM ===');
+    await triggerLoudAlarm('TEST ALARM', 'This is a test of the loud alarm system');
+  }
+
+  // Test method channel connectivity
+  static Future<void> testMethodChannel() async {
+    try {
+      debugPrint('Testing method channel...');
+      final result = await _channel.invokeMethod('testMethodChannel');
+      debugPrint('Method channel test result: $result');
+    } catch (e) {
+      debugPrint('Method channel test failed: $e');
+    }
+  }
+
   // Simple test to verify basic audio functionality
   static Future<void> testAlarmSound() async {
     debugPrint('=== SIMPLE ALARM TEST ===');
@@ -454,11 +537,16 @@ class NotificationListenerService {
     }
   }
   
+  // Check if service is initialized
+  static bool get isInitialized => _isInitialized;
+  
   // Reset service (useful for hot reload)
   static void reset() {
     try {
       _isInitialized = false;
       _audioPlayer.stop();
+      _alarmCheckTimer?.cancel();
+      _alarmCheckTimer = null;
       debugPrint('NotificationListenerService reset for hot reload');
     } catch (e) {
       debugPrint('Error resetting service: $e');

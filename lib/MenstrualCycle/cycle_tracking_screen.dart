@@ -7,6 +7,10 @@ import 'dart:math';
 import '../Notifications/notification_service.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'menstrual_cycle_utils.dart';
+import 'cycle_calorie_settings_screen.dart';
+import 'intercourse_data_model.dart';
+import 'intercourse_editor_dialog.dart';
 
 class CycleScreen extends StatefulWidget {
   const CycleScreen({super.key});
@@ -17,12 +21,14 @@ class CycleScreen extends StatefulWidget {
 
 class _CycleScreenState extends State<CycleScreen> {
   // State variables
-  DateTime _selectedDate = DateTime.now();
+  DateTime? _selectedDate;
   DateTime _calendarDate = DateTime.now();
+  final PageController _pageController = PageController(initialPage: 1000);
   DateTime? _lastPeriodStart;
   DateTime? _lastPeriodEnd;
   int _averageCycleLength = 31;
   List<Map<String, DateTime>> _periodRanges = [];
+  List<IntercourseRecord> _intercourseRecords = [];
 
   @override
   void initState() {
@@ -54,7 +60,12 @@ class _CycleScreenState extends State<CycleScreen> {
       };
     }).toList();
 
+    await _loadIntercourseRecords();
     if (mounted) setState(() {});
+  }
+
+  Future<void> _loadIntercourseRecords() async {
+    _intercourseRecords = await IntercourseService.loadIntercourseRecords();
   }
 
   Future<void> _saveCycleData() async {
@@ -85,41 +96,42 @@ class _CycleScreenState extends State<CycleScreen> {
     await _scheduleCycleNotifications();
   }
 
-  // PERIOD MANAGEMENT METHODS
-  Future<void> _startPeriod() async {
+  Future<void> _startPeriodOnDate(DateTime date) async {
     // End current period if active
     if (_isCurrentlyOnPeriod()) {
-      await _endPeriod();
+      await _endPeriodOnDate(date);
     }
 
     setState(() {
-      _lastPeriodStart = _selectedDate;
+      _lastPeriodStart = date;
       _lastPeriodEnd = null;
     });
 
     await _saveCycleData();
     _calculateAverageCycleLength();
-    _showSnackBar('Period started! End it manually when finished.', AppColors.successGreen); // Keep green for success
+    final dateStr = _isSameDay(date, DateTime.now()) ? 'today' : 'on ${DateFormat('MMM d').format(date)}';
+    _showSnackBar('Period started $dateStr! End it manually when finished.', AppColors.successGreen);
   }
 
-  Future<void> _endPeriod() async {
+  Future<void> _endPeriodOnDate(DateTime date) async {
     if (_lastPeriodStart == null) return;
 
     setState(() {
-      _lastPeriodEnd = _selectedDate;
+      _lastPeriodEnd = date;
 
       // Add complete period to history
       _periodRanges.removeWhere((range) => _isSameDay(range['start']!, _lastPeriodStart!));
       _periodRanges.add({
         'start': _lastPeriodStart!,
-        'end': _selectedDate,
+        'end': date,
       });
       _periodRanges.sort((a, b) => a['start']!.compareTo(b['start']!));
     });
 
     await _saveCycleData();
     _calculateAverageCycleLength();
-    _showSnackBar('Period ended successfully.', AppColors.successGreen); // Keep green for success
+    final dateStr = _isSameDay(date, DateTime.now()) ? 'today' : 'on ${DateFormat('MMM d').format(date)}';
+    _showSnackBar('Period ended $dateStr successfully.', AppColors.successGreen);
   }
 
   void _calculateAverageCycleLength() {
@@ -144,7 +156,7 @@ class _CycleScreenState extends State<CycleScreen> {
 
   // HELPER METHODS
   bool _isCurrentlyOnPeriod() {
-    return _lastPeriodStart != null && _lastPeriodEnd == null;
+    return MenstrualCycleUtils.isCurrentlyOnPeriod(_lastPeriodStart, _lastPeriodEnd);
   }
 
   bool _isSameDay(DateTime date1, DateTime date2) {
@@ -217,139 +229,42 @@ class _CycleScreenState extends State<CycleScreen> {
         date.isBefore(nextPeriodEnd.add(const Duration(days: 1)));
   }
 
+  bool _hasIntercourseOnDate(DateTime date) {
+    return _intercourseRecords.any((record) => _isSameDay(record.date, date));
+  }
+
+  double? _calculateAverageIntercourseInterval() {
+    if (_intercourseRecords.length < 2) return null;
+    
+    // Sort records by date
+    final sortedRecords = List<IntercourseRecord>.from(_intercourseRecords);
+    sortedRecords.sort((a, b) => a.date.compareTo(b.date));
+    
+    final intervals = <int>[];
+    for (int i = 1; i < sortedRecords.length; i++) {
+      final interval = sortedRecords[i].date.difference(sortedRecords[i-1].date).inDays;
+      if (interval > 0) {
+        intervals.add(interval);
+      }
+    }
+    
+    if (intervals.isEmpty) return null;
+    
+    return intervals.reduce((a, b) => a + b) / intervals.length;
+  }
+
   String _getCyclePhase() {
-    if (_lastPeriodStart == null) return "No data available";
-
-    final now = DateTime.now();
-    final daysSinceStart = now.difference(_lastPeriodStart!).inDays;
-
-    if (_isCurrentlyOnPeriod()) {
-      return "Menstruation (Day ${daysSinceStart + 1})";
-    }
-
-    if (_lastPeriodEnd != null) {
-      final daysSinceEnd = now.difference(_lastPeriodEnd!).inDays;
-      final totalCycleDays = _lastPeriodEnd!.difference(_lastPeriodStart!).inDays + daysSinceEnd + 1;
-
-      return _getPhaseFromCycleDays(totalCycleDays);
-    } else {
-      return _getPhaseFromCycleDays(daysSinceStart);
-    }
+    return MenstrualCycleUtils.getCyclePhase(_lastPeriodStart, _lastPeriodEnd, _averageCycleLength);
   }
 
   String _getCycleInfo() {
-    if (_lastPeriodStart == null) return "Track your first period to begin";
-
-    final now = DateTime.now();
-    final nextPeriodStart = _lastPeriodStart!.add(Duration(days: _averageCycleLength));
-    final daysUntilPeriod = nextPeriodStart.difference(now).inDays;
-
-    // Period expected today or overdue
-    if (daysUntilPeriod <= 0) {
-      if (daysUntilPeriod == 0) {
-        return "Period expected today! 🩸";
-      } else {
-        final daysOverdue = -daysUntilPeriod;
-        return "Period is $daysOverdue days overdue";
-      }
-    }
-
-    // Pre-period warnings (1-6 days) with personalized messages
-    if (daysUntilPeriod <= 6) {
-      final messages = {
-        1: "Period expected tomorrow! Take care of yourself 💝",
-        2: "Period in 2 days. Rest and stay comfortable 🛋️",
-        3: "Period in 3 days. Listen to your body 🤗",
-        4: "Period in 4 days. Symptoms may begin 😌",
-        5: "Period in 5 days. Stay hydrated 💧",
-        6: "Period in 6 days. Self-care time 🌸"
-      };
-      return messages[daysUntilPeriod] ?? "$daysUntilPeriod days until period";
-    }
-
-    // Current period info
-    if (_isCurrentlyOnPeriod()) {
-      final currentDay = now.difference(_lastPeriodStart!).inDays + 1;
-      return "Day $currentDay of period";
-    }
-
-    // Cycle day info with ovulation focus
-    final daysSinceStart = now.difference(_lastPeriodStart!).inDays + 1;
-
-    if (daysSinceStart <= 11) {
-      return "Back in the game";
-    } else if (daysSinceStart <= 15) {
-      final ovulationDay = 14;
-      final daysToOvulation = ovulationDay - daysSinceStart;
-
-      if (daysToOvulation == 0) {
-        return "Ovulation day! 🥚";
-      } else if (daysToOvulation == 1) {
-        return "Ovulation tomorrow";
-      } else if (daysToOvulation == -1) {
-        return "Ovulation was yesterday";
-      } else {
-        return "Ovulation window";
-      }
-    } else {
-      if (daysUntilPeriod <= 3) {
-        return "$daysUntilPeriod days until next period";
-      }
-      return "Just keep swimming";
-    }
+    return MenstrualCycleUtils.getCycleInfo(_lastPeriodStart, _lastPeriodEnd, _averageCycleLength);
   }
 
-  String _getPhaseFromCycleDays(int cycleDays) {
-    if (cycleDays <= 13) {
-      return "Follicular Phase";
-    } else if (cycleDays <= 16) {
-      return "Ovulation";
-    } else {
-      final lutealDay = cycleDays - 16;
-      final expectedLutealLength = _averageCycleLength - 16;
 
-      if (lutealDay <= expectedLutealLength / 3) {
-        return "Early Luteal Phase";
-      } else if (lutealDay <= (expectedLutealLength * 2) / 3) {
-        return "Middle Luteal Phase";
-      } else {
-        return "Late Luteal Phase";
-      }
-    }
-  }
-
-  String _getExtraDetails() {
-    if (_lastPeriodStart == null) return "";
-
-    final nextPeriodStart = _lastPeriodStart!.add(Duration(days: _averageCycleLength));
-    final daysUntilPeriod = nextPeriodStart.difference(DateTime.now()).inDays;
-
-    if (daysUntilPeriod <= 6 && daysUntilPeriod >= 0) {
-      final messages = {
-        0: "Period expected today! 🩸",
-        1: "Period expected tomorrow! Take care of yourself 💝",
-        2: "Period in 2 days. Rest and stay comfortable 🛋️",
-        3: "Period in 3 days. Listen to your body 🤗",
-        4: "Period in 4 days. Symptoms may begin, be gentle with yourself 😌",
-        5: "Period in 5 days. Take it easy 🌸",
-        6: "Period in 6 days. Stay hydrated and rest well 💧",
-      };
-      return messages[daysUntilPeriod] ?? "";
-    }
-
-    return "";
-  }
 
   Color _getPhaseColor() {
-    final phase = _getCyclePhase();
-    if (phase.startsWith("Menstruation")) return Color(0xFFF43148).withValues(alpha: 0.8);
-    if (phase == "Follicular Phase") return AppColors.successGreen; // Green for growth phase
-    if (phase == "Ovulation") return Color(0xFFF98834).withValues(alpha: 0.8);
-    if (phase.contains("Early Luteal")) return Color(0xFFBD3AA6).withValues(alpha: 0.6);
-    if (phase.contains("Middle Luteal")) return Color(0xFFBD3AA6).withValues(alpha: 0.8);
-    if (phase.contains("Late Luteal")) return Color(0xFFBD3AA6);
-    if (phase.contains("Luteal")) return Color(0xFFBD3AA6).withValues(alpha: 0.8);
-    return Colors.grey;
+    return MenstrualCycleUtils.getPhaseColor(_lastPeriodStart, _lastPeriodEnd, _averageCycleLength).withValues(alpha: 0.8);
   }
 
   void _showSnackBar(String message, Color color) {
@@ -389,7 +304,7 @@ class _CycleScreenState extends State<CycleScreen> {
               padding: EdgeInsets.all(20),
               child: Text(
                 'No completed periods recorded yet',
-                style: TextStyle(color: Colors.grey),
+                style: TextStyle(color: AppColors.grey),
               ),
             )
           else
@@ -421,11 +336,11 @@ class _CycleScreenState extends State<CycleScreen> {
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Colors.red.shade300,
+          backgroundColor: AppColors.error,
           child: Text(
             duration.toString(),
             style: const TextStyle(
-              color: Colors.white,
+              color: AppColors.white,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -458,9 +373,9 @@ class _CycleScreenState extends State<CycleScreen> {
               value: 'delete',
               child: Row(
                 children: [
-                  Icon(Icons.delete, color: Colors.red),
+                  Icon(Icons.delete, color: AppColors.error),
                   SizedBox(width: 8),
-                  Text('Delete', style: TextStyle(color: Colors.red)),
+                  Text('Delete', style: TextStyle(color: AppColors.error)),
                 ],
               ),
             ),
@@ -551,7 +466,7 @@ class _CycleScreenState extends State<CycleScreen> {
                 'Period duration limited to 5 days maximum',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey.shade600,
+                  color: AppColors.grey600,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -589,7 +504,7 @@ class _CycleScreenState extends State<CycleScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Delete'),
           ),
@@ -624,20 +539,79 @@ class _CycleScreenState extends State<CycleScreen> {
     }
   }
 
+  // INTERCOURSE MANAGEMENT
+  Future<void> _addIntercourse(DateTime date) async {
+    final result = await showDialog<dynamic>(
+      context: context,
+      builder: (context) => IntercourseEditorDialog(date: date),
+    );
+
+    if (result is IntercourseRecord) {
+      await IntercourseService.addIntercourseRecord(result);
+      await _loadIntercourseRecords();
+      setState(() {});
+      _showSnackBar('Intercourse recorded for ${DateFormat('MMM d').format(date)}', AppColors.pink);
+    }
+  }
+
+  Future<void> _editIntercourse(DateTime date) async {
+    final existingRecords = await IntercourseService.getIntercourseForDate(date);
+    if (existingRecords.isEmpty) return;
+
+    final record = existingRecords.first; // For simplicity, edit the first one if multiple
+    if (!mounted) return;
+    
+    final result = await showDialog<dynamic>(
+      context: context,
+      builder: (context) => IntercourseEditorDialog(
+        date: date,
+        existingRecord: record,
+      ),
+    );
+
+    if (result is IntercourseRecord) {
+      await IntercourseService.updateIntercourseRecord(result);
+      await _loadIntercourseRecords();
+      setState(() {});
+      _showSnackBar('Intercourse updated', AppColors.successGreen);
+    } else if (result == 'delete') {
+      await IntercourseService.deleteIntercourseRecord(record.id);
+      await _loadIntercourseRecords();
+      setState(() {});
+      _showSnackBar('Intercourse deleted', AppColors.grey600);
+    }
+  }
+
   // UI BUILDING METHODS
   @override
   Widget build(BuildContext context) {
-    final extraDetails = _getExtraDetails();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cycle Tracking'),
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.transparent,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            onPressed: _showPeriodHistory,
-            tooltip: 'Period History',
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: IconButton(
+              icon: const Icon(Icons.calendar_month_rounded),
+              onPressed: _showPeriodHistory,
+              tooltip: 'Period History',
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: IconButton(
+              icon: const Icon(Icons.local_fire_department),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CycleCalorieSettingsScreen(),
+                  ),
+                );
+              },
+              tooltip: 'Calorie Settings',
+            ),
           ),
         ],
       ),
@@ -646,12 +620,12 @@ class _CycleScreenState extends State<CycleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildCurrentPhaseCard(extraDetails),
+            _buildCurrentPhaseCard(),
             const SizedBox(height: 16),
             _buildCalendarCard(),
             const SizedBox(height: 16),
             _buildActionButtons(),
-            const SizedBox(height: 16),
+            if (_selectedDate != null) const SizedBox(height: 16),
             _buildStatisticsCard(),
           ],
         ),
@@ -659,7 +633,7 @@ class _CycleScreenState extends State<CycleScreen> {
     );
   }
 
-  Widget _buildCurrentPhaseCard(String extraDetails) {
+  Widget _buildCurrentPhaseCard() {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -712,38 +686,7 @@ class _CycleScreenState extends State<CycleScreen> {
                 ),
                 _buildAnimatedPet(),
               ],
-            ),
-            if (extraDetails.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.shade300),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: Colors.orange.shade700,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        extraDetails,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.orange.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ),
-            ],
           ],
         ),
       ),
@@ -751,17 +694,7 @@ class _CycleScreenState extends State<CycleScreen> {
   }
 
   String _getPhaseBasedPet() {
-    final phase = _getCyclePhase();
-    
-    if (phase.startsWith("Menstruation")) return '🐾'; // Tired/resting pet
-    if (phase == "Follicular Phase") return '😸'; // Growing/playful pet  
-    if (phase == "Ovulation") return '🦋'; // Beautiful/fertile butterfly
-    if (phase.contains("Early Luteal")) return '🐰'; // Energetic bunny
-    if (phase.contains("Middle Luteal")) return '🦊'; // Wise fox
-    if (phase.contains("Late Luteal")) return '🐻'; // Sleepy bear
-    if (phase.contains("Luteal")) return '🐰'; // Default bunny
-    
-    return '😸'; // Default cat
+    return MenstrualCycleUtils.getPhaseBasedPet(_lastPeriodStart, _lastPeriodEnd, _averageCycleLength);
   }
 
   Widget _buildAnimatedPet() {
@@ -787,38 +720,58 @@ class _CycleScreenState extends State<CycleScreen> {
   }
 
   Widget _buildStatisticsCard() {
+    final avgIntercourse = _calculateAverageIntercourseInterval();
+    
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Statistics',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+      child: ExpansionTile(
+        title: const Text(
+          'Statistics',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        leading: const Icon(Icons.analytics_outlined),
+        initiallyExpanded: false,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Column(
               children: [
-                _buildStatItem(
-                  'Average Cycle',
-                  '$_averageCycleLength days',
-                  Icons.calendar_month_rounded,
-                  AppColors.purple, // Purple instead of blue
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildStatItem(
+                      'Average Cycle',
+                      '$_averageCycleLength days',
+                      Icons.calendar_month_rounded,
+                      AppColors.purple,
+                    ),
+                    _buildStatItem(
+                      'Tracked Periods',
+                      '${_periodRanges.length}',
+                      Icons.timeline_rounded,
+                      AppColors.successGreen,
+                    ),
+                  ],
                 ),
-                _buildStatItem(
-                  'Tracked Periods',
-                  '${_periodRanges.length}',
-                  Icons.timeline_rounded,
-                  AppColors.successGreen, // Green for success
-                ),
+                if (avgIntercourse != null) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildStatItem(
+                        'Avg Days Between',
+                        '${avgIntercourse.round()} days',
+                        Icons.favorite,
+                        AppColors.pink,
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -828,7 +781,7 @@ class _CycleScreenState extends State<CycleScreen> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -840,99 +793,100 @@ class _CycleScreenState extends State<CycleScreen> {
   }
 
   Widget _buildActionButtons() {
-    if (_isCurrentlyOnPeriod()) {
-      final currentDay = DateTime.now().difference(_lastPeriodStart!).inDays + 1;
-      return Column(
-        children: [
-          if (currentDay < 5)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.shade200),
-              ),
-              child: Text(
-                'Day $currentDay of 5 - Period will auto-end after day 5',
-                style: TextStyle(
-                  color: Colors.red.shade700,
-                  fontWeight: FontWeight.w500,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _endPeriod,
-              icon: const Icon(Icons.stop_rounded),
-              label: const Text('End Period'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey.shade600,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    } else {
-      return Center(
-        child: Container(
-          width: MediaQuery.of(context).size.width * 0.35, // Even narrower - about 1/3 screen width
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.red.shade400, Colors.red.shade600],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.red.withValues(alpha: 0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ElevatedButton.icon(
-            onPressed: _startPeriod,
-            icon: const Icon(Icons.water_drop_rounded),
-            label: const Text('Start Period', style: TextStyle(fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 0,
-            ),
-          ),
-        ),
-      );
+    // Only show buttons when a day is selected in the calendar
+    if (_selectedDate == null) {
+      return const SizedBox.shrink();
     }
-  }
-
-  Widget _buildCalendar() {
-    final firstDayOfMonth = DateTime(_calendarDate.year, _calendarDate.month, 1);
-    final lastDayOfMonth = DateTime(_calendarDate.year, _calendarDate.month + 1, 0);
-    final daysInMonth = lastDayOfMonth.day;
-    final firstWeekday = firstDayOfMonth.weekday;
 
     return Column(
       children: [
+        // Action buttons based on current state and selected date
+        Row(
+          children: [
+            // Start Period button
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _startPeriodOnDate(_selectedDate!),
+                icon: const Icon(Icons.water_drop_rounded),
+                label: const Text('Start Period'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  foregroundColor: AppColors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Add Intercourse button
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _addIntercourse(_selectedDate!),
+                icon: const Icon(Icons.favorite, size: 18),
+                label: const Text('Intercourse'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.pink,
+                  foregroundColor: AppColors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            // End Period button
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _isCurrentlyOnPeriod() ? () => _endPeriodOnDate(_selectedDate!) : null,
+                icon: const Icon(Icons.stop_rounded),
+                label: const Text('End Period'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isCurrentlyOnPeriod() ? AppColors.grey600 : AppColors.grey300,
+                  foregroundColor: AppColors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCalendar() {
+    return Column(
+      children: [
         _buildCalendarHeader(),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         _buildWeekdayHeaders(),
         const SizedBox(height: 8),
-        _buildCalendarGrid(firstWeekday, daysInMonth),
+        SizedBox(
+          height: 240,
+          child: PageView.builder(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() {
+                final monthsFromBase = index - 1000;
+                _calendarDate = DateTime(DateTime.now().year, DateTime.now().month + monthsFromBase, 1);
+              });
+            },
+            itemBuilder: (context, index) {
+              final monthsFromBase = index - 1000;
+              final monthDate = DateTime(DateTime.now().year, DateTime.now().month + monthsFromBase, 1);
+              return _buildMonthGrid(monthDate);
+            },
+          ),
+        ),
       ],
     );
   }
@@ -940,56 +894,27 @@ class _CycleScreenState extends State<CycleScreen> {
   Widget _buildCalendarHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            onPressed: () {
-              setState(() {
-                _calendarDate = DateTime(_calendarDate.year, _calendarDate.month - 1, 1);
-              });
-            },
-            style: IconButton.styleFrom(
-              backgroundColor: Colors.white.withValues(alpha: 0.1),
-              foregroundColor: Colors.white70,
-              shape: const CircleBorder(),
-              padding: const EdgeInsets.all(12),
-            ),
-            icon: const Icon(Icons.chevron_left, size: 24),
-          ),
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _calendarDate = DateTime.now();
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Text(
-                DateFormat('MMMM yy').format(_calendarDate),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white70,
-                ),
-              ),
+      child: Center(
+        child: GestureDetector(
+          onTap: () {
+            setState(() {
+              _calendarDate = DateTime.now();
+              _pageController.animateToPage(
+                1000,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            });
+          },
+          child: Text(
+            DateFormat('MMMM yy').format(_calendarDate),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.white70,
             ),
           ),
-          IconButton(
-            onPressed: () {
-              setState(() {
-                _calendarDate = DateTime(_calendarDate.year, _calendarDate.month + 1, 1);
-              });
-            },
-            style: IconButton.styleFrom(
-              backgroundColor: Colors.white.withValues(alpha: 0.1),
-              foregroundColor: Colors.white70,
-              shape: const CircleBorder(),
-              padding: const EdgeInsets.all(12),
-            ),
-            icon: const Icon(Icons.chevron_right, size: 24),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1005,7 +930,7 @@ class _CycleScreenState extends State<CycleScreen> {
           textAlign: TextAlign.center,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
-            color: Colors.grey,
+            color: AppColors.grey,
           ),
         ),
       ))
@@ -1013,7 +938,12 @@ class _CycleScreenState extends State<CycleScreen> {
     );
   }
 
-  Widget _buildCalendarGrid(int firstWeekday, int daysInMonth) {
+  Widget _buildMonthGrid(DateTime monthDate) {
+    final firstDayOfMonth = DateTime(monthDate.year, monthDate.month, 1);
+    final lastDayOfMonth = DateTime(monthDate.year, monthDate.month + 1, 0);
+    final daysInMonth = lastDayOfMonth.day;
+    final firstWeekday = firstDayOfMonth.weekday;
+    
     // Calculate the actual number of weeks needed
     final totalCells = (firstWeekday - 1) + daysInMonth;
     final weeksNeeded = (totalCells / 7).ceil();
@@ -1036,35 +966,36 @@ class _CycleScreenState extends State<CycleScreen> {
           return const SizedBox();
         }
 
-        final currentDate = DateTime(_calendarDate.year, _calendarDate.month, dayNumber);
+        final currentDate = DateTime(monthDate.year, monthDate.month, dayNumber);
         return _buildCalendarDay(currentDate, dayNumber);
       },
     );
   }
 
   Widget _buildCalendarDay(DateTime currentDate, int dayNumber) {
-    final isSelected = _isSameDay(_selectedDate, currentDate);
+    final isSelected = _selectedDate != null && _isSameDay(_selectedDate!, currentDate);
     final isToday = _isSameDay(currentDate, DateTime.now());
     final isInPeriod = _isDateInPeriod(currentDate);
     final isOvulation = _isOvulationDay(currentDate);
     final isPeakOvulation = _isPeakOvulationDay(currentDate);
     final isPredicted = _isPredictedPeriodDate(currentDate);
+    final hasIntercourse = _hasIntercourseOnDate(currentDate);
 
     Color? backgroundColor;
     Color? borderColor;
 
     if (isSelected) {
-      backgroundColor = Colors.blue.shade500;
+      backgroundColor = AppColors.purple;
     } else if (isInPeriod) {
-      backgroundColor = Colors.red.shade400;
+      backgroundColor = AppColors.lightRed; // Lighter red for registered periods
     } else if (isPeakOvulation) {
-      backgroundColor = Colors.orange.shade600;
+      backgroundColor = AppColors.orange; // Bright orange for peak ovulation
     } else if (isOvulation) {
-      backgroundColor = Colors.orange.shade300;
+      backgroundColor = AppColors.orange.withValues(alpha: 0.6); // Light orange for ovulation window
     } else if (isPredicted) {
-      backgroundColor = Colors.red.shade200;
+      backgroundColor = AppColors.lightRed;
     } else if (isToday) {
-      borderColor = Colors.blue.shade300;
+      borderColor = AppColors.purple;
     }
 
     return GestureDetector(
@@ -1073,6 +1004,7 @@ class _CycleScreenState extends State<CycleScreen> {
           _selectedDate = currentDate;
         });
       },
+      onLongPress: hasIntercourse ? () => _editIntercourse(currentDate) : null,
       child: Container(
         decoration: BoxDecoration(
           color: backgroundColor,
@@ -1082,12 +1014,29 @@ class _CycleScreenState extends State<CycleScreen> {
           shape: BoxShape.circle,
         ),
         child: Center(
-          child: Text(
-            dayNumber.toString(),
-            style: TextStyle(
-              color: backgroundColor != null ? Colors.white : null,
-              fontWeight: isToday ? FontWeight.bold : null,
-            ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Text(
+                dayNumber.toString(),
+                style: TextStyle(
+                  color: backgroundColor != null ? AppColors.white : null,
+                  fontWeight: isToday ? FontWeight.bold : null,
+                ),
+              ),
+              if (hasIntercourse)
+                Positioned(
+                  top: 16,
+                  bottom: 1,
+                  left: 0,
+                  right: 4,
+                  child: Icon(
+                    Icons.favorite,
+                    size: 8,
+                    color: backgroundColor != null ? AppColors.white : AppColors.pink,
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -1172,7 +1121,7 @@ class _CycleScreenState extends State<CycleScreen> {
         ),
         Text(
           label,
-          style: const TextStyle(fontSize: 14, color: Colors.grey),
+          style: const TextStyle(fontSize: 14, color: AppColors.grey),
         ),
       ],
     );

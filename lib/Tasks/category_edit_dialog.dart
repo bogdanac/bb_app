@@ -23,24 +23,19 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   late Color _selectedColor;
 
   final List<Color> _availableColors = [
-    AppColors.error, // Red for important categories only
-    AppColors.pink,
-    AppColors.purple,
     AppColors.coral,
     AppColors.orange,
     AppColors.yellow,
-    Colors.purple,
+    AppColors.redPrimary,
+    AppColors.grey,
+    AppColors.successGreen,
+    AppColors.lightPink,
     Colors.deepPurple,
     Colors.indigo,
     Colors.blue,
-    Colors.lightBlue,
     Colors.cyan,
     Colors.teal,
-    Colors.green,
-    Colors.lightGreen,
     Colors.lime,
-    Colors.amber,
-    Colors.deepOrange,
   ];
 
   @override
@@ -80,8 +75,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                     color: color,
                     shape: BoxShape.circle,
                     border: _selectedColor == color
-                        ? Border.all(color: Colors.white, width: 3)
-                        : null,
+                        ? Border.all(color: AppColors.pink, width: 3)
+                        : Border.all(color: Colors.grey.withValues(alpha: 0.3), width: 1),
                     boxShadow: _selectedColor == color
                         ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 8)]
                         : null,
@@ -104,6 +99,10 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
               Navigator.pop(context);
             }
           },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.coral,
+            foregroundColor: Colors.white,
+          ),
           child: const Text('Save'),
         ),
       ],

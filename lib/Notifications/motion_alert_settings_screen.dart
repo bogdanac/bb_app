@@ -85,7 +85,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
         'enabled': _isEnabled,
         'nightModeOnly': true,
         'monitoredApps': _monitoredApps,
-        'keywords': ['person', 'detected'],
+        'keyword': 'detected',
       };
       
       await prefs.setString('notification_alarm_settings', json.encode(settings));
@@ -94,7 +94,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Settings saved successfully'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.yellow,
           ),
         );
       }
@@ -239,12 +239,12 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
             // Motion Alerts Status Card (on top)
             if (_isEnabled && _hasPermission && _monitoredApps.any((app) => app['enabled'] == true))
               Card(
-                color: Colors.green.withValues(alpha: 0.15),
+                color: AppColors.yellow.withValues(alpha: 0.15),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
                     children: [
-                      Icon(Icons.security_rounded, color: Colors.green, size: 28),
+                      Icon(Icons.security_rounded, color: AppColors.yellow, size: 28),
                       const SizedBox(width: 12),
                       const Expanded(
                         child: Column(
@@ -252,7 +252,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
                           children: [
                             Text(
                               'Motion Alerts Active ✓',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.yellow),
                             ),
                             SizedBox(height: 4),
                             Text(
@@ -262,7 +262,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
                           ],
                         ),
                       ),
-                      Icon(Icons.check_circle, color: Colors.green, size: 24),
+                      Icon(Icons.check_circle, color: AppColors.yellow, size: 24),
                     ],
                   ),
                 ),
@@ -295,7 +295,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
             // Step 1: Permission (only show if not granted)
             if (!_hasPermission)
               Card(
-                color: Colors.orange.withValues(alpha: 0.1),
+                color: AppColors.orange.withValues(alpha: 0.1),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(

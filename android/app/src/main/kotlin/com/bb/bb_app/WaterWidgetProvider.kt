@@ -113,16 +113,7 @@ class WaterWidgetProvider : AppWidgetProvider() {
     private fun getCurrentWaterIntake(context: Context): Int {
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        
-        // Debug: Log all keys to understand the format
-        val allPrefs = prefs.all
-        android.util.Log.d("WaterWidget", "All SharedPreferences keys:")
-        for ((key, value) in allPrefs) {
-            if (key.contains("water")) {
-                android.util.Log.d("WaterWidget", "Key: $key, Value: $value")
-            }
-        }
-        
+
         // Try multiple key formats to find the correct one
         val possibleKeys = listOf(
             "flutter.water_$today",
@@ -152,6 +143,7 @@ class WaterWidgetProvider : AppWidgetProvider() {
         }
         
         android.util.Log.d("WaterWidget", "No water data found for today")
+        android.util.Log.d("WaterWidget", "=== WIDGET DEBUG END ===")
         return 0
     }
 

@@ -45,7 +45,7 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
             child: const Text(
               'Save',
               style: TextStyle(
-                color: AppColors.coral,
+                color: AppColors.orange,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -104,7 +104,7 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
                                   routine.reminderEnabled = value;
                                 });
                               },
-                              activeThumbColor: AppColors.coral,
+                              activeThumbColor: AppColors.orange,
                             ),
                           ],
                         ),
@@ -121,7 +121,7 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
                             children: [
                               const Icon(
                                 Icons.access_time_rounded,
-                                color: AppColors.coral,
+                                color: AppColors.orange,
                                 size: 20,
                               ),
                               const SizedBox(width: 8),
@@ -141,10 +141,10 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
                                     vertical: 8,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.coral.withValues(alpha: 0.1),
+                                    color: AppColors.orange.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
-                                      color: AppColors.coral.withValues(alpha: 0.3),
+                                      color: AppColors.orange.withValues(alpha: 0.3),
                                     ),
                                   ),
                                   child: Text(
@@ -152,7 +152,7 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
                                     style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
-                                      color: AppColors.coral,
+                                      color: AppColors.orange,
                                     ),
                                   ),
                                 ),
@@ -180,7 +180,7 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: AppColors.coral,
+              primary: AppColors.orange,
             ),
           ),
           child: child!,
@@ -227,7 +227,7 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to schedule reminder for "${routine.title}"'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.warning,
           ),
         );
       }

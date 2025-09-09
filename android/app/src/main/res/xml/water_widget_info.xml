@@ -9,5 +9,7 @@
     android:updatePeriodMillis="300000"
     android:initialLayout="@layout/water_widget"
     android:description="@string/water_widget_description"
+    android:previewImage="@drawable/ic_water_drop"
+    android:previewLayout="@layout/water_widget"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen" />

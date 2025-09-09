@@ -121,8 +121,21 @@ class CalendarService {
         }
       }
 
-      // Sort events by start time
-      allEvents.sort((a, b) {
+      // Filter out past events (events that have already ended)
+      final now = DateTime.now();
+      final currentAndFutureEvents = allEvents.where((event) {
+        // If event has no end time, check if start time is in the future (or happening now)
+        if (event.end == null) {
+          if (event.start == null) return true; // Keep all-day events without times
+          return event.start!.isAfter(now) || event.start!.isAtSameMomentAs(now);
+        }
+        
+        // If event has end time, check if it hasn't ended yet
+        return event.end!.isAfter(now);
+      }).toList();
+
+      // Sort remaining events by start time
+      currentAndFutureEvents.sort((a, b) {
         if (a.start == null && b.start == null) return 0;
         if (a.start == null) return 1;
         if (b.start == null) return -1;
@@ -130,10 +143,11 @@ class CalendarService {
       });
 
       if (kDebugMode) {
-        print('Found ${allEvents.length} events for today');
+        print('Found ${allEvents.length} total events for today');
+        print('Filtered to ${currentAndFutureEvents.length} current/future events');
       }
 
-      return allEvents;
+      return currentAndFutureEvents;
     } catch (e) {
       if (kDebugMode) {
         print('Error getting today\'s events: $e');
@@ -169,5 +183,27 @@ class CalendarService {
     if (startTime == 'All day') return 'All day';
     
     return '$startTime - $endTime';
+  }
+
+  // Check if an event is currently happening
+  bool isEventActive(Event event) {
+    final now = DateTime.now();
+    
+    if (event.start == null) return false;
+    
+    // Event has started
+    final hasStarted = event.start!.isBefore(now) || event.start!.isAtSameMomentAs(now);
+    
+    // If no end time, consider it active if it started today
+    if (event.end == null) {
+      final today = DateTime.now();
+      final startOfToday = DateTime(today.year, today.month, today.day);
+      return hasStarted && event.start!.isAfter(startOfToday);
+    }
+    
+    // Event hasn't ended yet
+    final hasNotEnded = event.end!.isAfter(now);
+    
+    return hasStarted && hasNotEnded;
   }
 }

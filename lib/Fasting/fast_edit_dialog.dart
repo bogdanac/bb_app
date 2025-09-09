@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../shared/time_picker_utils.dart';
 
 // FAST EDIT DIALOG
 class FastEditDialog extends StatefulWidget {
@@ -40,7 +41,7 @@ class _FastEditDialogState extends State<FastEditDialog> {
     );
 
     if (date != null && mounted) {
-      final time = await showTimePicker(
+      final time = await TimePickerUtils.showStyledTimePicker(
         context: context,
         initialTime: TimeOfDay.fromDateTime(currentTime),
       );

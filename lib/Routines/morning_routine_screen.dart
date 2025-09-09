@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../theme/app_colors.dart';
 class MorningRoutineScreen extends StatefulWidget {
   final VoidCallback onCompleted;
 
@@ -24,7 +26,7 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Morning Routine'),
-        backgroundColor: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
+        backgroundColor: AppColors.orange.withValues(alpha: 0.3),
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -32,7 +34,7 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
+              AppColors.orange.withValues(alpha: 0.3),
               Theme.of(context).scaffoldBackgroundColor,
             ],
           ),
@@ -61,7 +63,7 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
                         value: completedCount / _routineItems.length,
                         backgroundColor: Colors.grey.withValues(alpha: 0.3),
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          Theme.of(context).colorScheme.secondary,
+                          AppColors.orange,
                         ),
                       ),
                     ],
@@ -92,7 +94,7 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
                             _routineItems[index]['completed'] = value ?? false;
                           });
                         },
-                        activeColor: Theme.of(context).colorScheme.secondary,
+                        activeColor: AppColors.orange,
                       ),
                     );
                   },

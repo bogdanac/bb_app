@@ -1,18 +1,23 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'tasks_data_models.dart';
 import 'recurrence_dialog.dart';
+import '../theme/app_colors.dart';
+import '../shared/time_picker_utils.dart';
 
 class TaskEditScreen extends StatefulWidget {
   final Task? task;
   final List<TaskCategory> categories;
+  final List<String>? initialCategoryIds;
   final Function(Task) onSave;
 
   const TaskEditScreen({
     super.key,
     this.task,
     required this.categories,
+    this.initialCategoryIds,
     required this.onSave,
   });
 
@@ -28,7 +33,9 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   bool _isImportant = false;
   TaskRecurrence? _recurrence;
   Timer? _saveTimer;
+  Timer? _savedTimer;
   bool _hasUnsavedChanges = false;
+  bool _showSaved = false;
   Task? _currentTask; // Track the current task to prevent duplicates
 
   @override
@@ -43,6 +50,9 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
       _reminderTime = task.reminderTime;
       _isImportant = task.isImportant;
       _recurrence = task.recurrence;
+    } else if (widget.initialCategoryIds != null) {
+      // Pre-fill categories for new tasks
+      _selectedCategoryIds = List.from(widget.initialCategoryIds!);
     }
     
     // Add listeners for auto-save
@@ -52,13 +62,17 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   @override
   void dispose() {
     _saveTimer?.cancel();
+    _savedTimer?.cancel();
     _titleController.dispose();
     super.dispose();
   }
 
   void _onFieldChanged() {
     _hasUnsavedChanges = true;
+    _showSaved = false; // Hide saved indicator when user makes changes
     _scheduleAutoSave();
+    // Trigger rebuild to update Complete button state
+    setState(() {});
   }
 
   void _scheduleAutoSave() {
@@ -73,6 +87,59 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   void _autoSaveTask() {
     if (_titleController.text.trim().isEmpty) return;
     
+    try {
+      final task = Task(
+        id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        title: _titleController.text.trim(),
+        description: '',
+        categoryIds: _selectedCategoryIds,
+        deadline: _deadline,
+        reminderTime: _reminderTime,
+        isImportant: _isImportant,
+        recurrence: _recurrence,
+        isCompleted: _currentTask?.isCompleted ?? false,
+        completedAt: _currentTask?.completedAt,
+        createdAt: _currentTask?.createdAt ?? DateTime.now(),
+      );
+
+      widget.onSave(task);
+      
+      // Update current task reference after first save to prevent duplicates
+      _currentTask = task;
+      
+      setState(() {
+        _hasUnsavedChanges = false;
+        _showSaved = true;
+      });
+
+      // Hide the "saved" indicator after 2 seconds
+      _savedTimer?.cancel();
+      _savedTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _showSaved = false;
+          });
+        }
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving task: $e');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Error saving task: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  void _completeTask() async {
+    if (_titleController.text.trim().isEmpty) return;
+    
     final task = Task(
       id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
@@ -82,19 +149,33 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
       reminderTime: _reminderTime,
       isImportant: _isImportant,
       recurrence: _recurrence,
-      isCompleted: _currentTask?.isCompleted ?? false,
-      completedAt: _currentTask?.completedAt,
+      isCompleted: true,
+      completedAt: DateTime.now(),
       createdAt: _currentTask?.createdAt ?? DateTime.now(),
     );
 
+    // Show success feedback before closing
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Task "${task.title}" completed!'),
+          backgroundColor: AppColors.successGreen,
+          duration: const Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    // Save the task
     widget.onSave(task);
     
-    // Update current task reference after first save to prevent duplicates
-    _currentTask = task;
+    // Small delay to ensure the snackbar shows and save completes
+    await Future.delayed(const Duration(milliseconds: 500));
     
-    setState(() {
-      _hasUnsavedChanges = false;
-    });
+    // Close the dialog/screen after completing the task
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -137,6 +218,30 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                   ],
                 ),
               ),
+            )
+          else if (_showSaved)
+            Container(
+              margin: const EdgeInsets.only(right: 24),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.check_circle_rounded,
+                      size: 16,
+                      color: AppColors.successGreen,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Saved',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.successGreen,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
         ],
       ),
@@ -145,67 +250,264 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // TOP - Advanced/optional features (hard to reach)
-            Row(
-              children: [
-                Expanded(
-                  child: Card(
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(
-                        Icons.event_rounded,
-                        color: _deadline != null ? Theme.of(context).primaryColor : Colors.grey,
-                        size: 20,
+            // Complete Task Section
+            Container(
+              decoration: BoxDecoration(
+                color: _titleController.text.trim().isEmpty 
+                    ? AppColors.grey.withValues(alpha: 0.2)
+                    : AppColors.successGreen.withValues(alpha: 0.03),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _titleController.text.trim().isEmpty 
+                      ? Colors.grey.withValues(alpha: 0.2)
+                      : AppColors.successGreen.withValues(alpha: 0.15),
+                ),
+              ),
+              child: InkWell(
+                onTap: _titleController.text.trim().isEmpty ? null : _completeTask,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: (_titleController.text.trim().isEmpty 
+                              ? Colors.grey 
+                              : AppColors.successGreen).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.check_circle_rounded,
+                          color: _titleController.text.trim().isEmpty 
+                              ? Colors.grey 
+                              : AppColors.successGreen,
+                          size: 24,
+                        ),
                       ),
-                      title: const Text('Deadline', style: TextStyle(fontSize: 14)),
-                      subtitle: _deadline != null
-                          ? Text(DateFormat('MMM dd').format(_deadline!), style: const TextStyle(fontSize: 12))
-                          : const Text('Optional', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      trailing: _deadline != null
-                          ? IconButton(
-                        icon: const Icon(Icons.clear_rounded, size: 18),
-                        onPressed: () {
-                          setState(() => _deadline = null);
-                          _onFieldChanged();
-                        },
-                      )
-                          : const Icon(Icons.chevron_right_rounded, size: 18),
-                      onTap: _selectDeadline,
-                    ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Complete Task',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _titleController.text.trim().isEmpty 
+                                    ? Colors.grey
+                                    : AppColors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Mark as finished',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: _titleController.text.trim().isEmpty 
+                                    ? Colors.grey
+                                    : AppColors.successGreen,
+                                fontWeight: _titleController.text.trim().isEmpty 
+                                    ? FontWeight.normal 
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Transform.scale(
+                        scale: 1.2,
+                        child: Checkbox(
+                          value: false,
+                          onChanged: _titleController.text.trim().isEmpty 
+                              ? null 
+                              : (_) => _completeTask(),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          activeColor: AppColors.successGreen,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Card(
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(
-                        Icons.repeat_rounded,
-                        color: _recurrence != null ? Theme.of(context).primaryColor : Colors.grey,
-                        size: 20,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Deadline Section
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.grey.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _deadline != null 
+                      ? AppColors.lightCoral.withValues(alpha: 0.3)
+                      : Colors.grey.withValues(alpha: 0.2),
+                ),
+              ),
+              child: InkWell(
+                onTap: _selectDeadline,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: (_deadline != null 
+                              ? AppColors.lightCoral.withValues(alpha: 0.3)
+                              : Colors.grey).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.event_rounded,
+                          color: _deadline != null 
+                              ? AppColors.lightCoral
+                              : Colors.grey,
+                          size: 24,
+                        ),
                       ),
-                      title: const Text('Recurrence', style: TextStyle(fontSize: 14)),
-                      subtitle: _recurrence != null
-                          ? Text(_recurrence!.getDisplayText(), style: const TextStyle(fontSize: 12))
-                          : const Text('Optional', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      trailing: _recurrence != null
-                          ? IconButton(
-                        icon: const Icon(Icons.clear_rounded, size: 18),
-                        onPressed: () {
-                          setState(() => _recurrence = null);
-                          _onFieldChanged();
-                        },
-                      )
-                          : const Icon(Icons.chevron_right_rounded, size: 18),
-                      onTap: _selectRecurrence,
-                    ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Deadline',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _deadline != null 
+                                    ? AppColors.lightCoral
+                                    : Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _deadline != null
+                                  ? DateFormat('EEEE, MMMM dd').format(_deadline!)
+                                  : 'Optional',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: _deadline != null 
+                                    ? AppColors.lightCoral
+                                    : Colors.grey,
+                                fontWeight: _deadline != null ? FontWeight.w500 : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_deadline != null)
+                        IconButton(
+                          onPressed: () {
+                            setState(() => _deadline = null);
+                            _onFieldChanged();
+                          },
+                          icon: const Icon(Icons.clear_rounded),
+                          color: Colors.grey,
+                        )
+                      else
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.grey,
+                        ),
+                    ],
                   ),
                 ),
-              ],
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Recurrence Section
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.grey.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _recurrence != null 
+                      ? AppColors.lightCoral.withValues(alpha: 0.3)
+                      : Colors.grey.withValues(alpha: 0.2),
+                ),
+              ),
+              child: InkWell(
+                onTap: _selectRecurrence,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: (_recurrence != null 
+                              ? AppColors.lightCoral
+                              : Colors.grey).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.repeat_rounded,
+                          color: _recurrence != null 
+                              ? AppColors.lightCoral
+                              : Colors.grey,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Recurrence',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _recurrence != null 
+                                    ? AppColors.lightCoral
+                                    : Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _recurrence != null
+                                  ? _recurrence!.getDisplayText()
+                                  : 'Optional',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: _recurrence != null 
+                                    ? AppColors.lightCoral
+                                    : Colors.grey,
+                                fontWeight: _recurrence != null ? FontWeight.w500 : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_recurrence != null)
+                        IconButton(
+                          onPressed: () {
+                            setState(() => _recurrence = null);
+                            _onFieldChanged();
+                          },
+                          icon: const Icon(Icons.clear_rounded),
+                          color: Colors.grey,
+                        )
+                      else
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.grey,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
             ),
 
             if (_recurrence != null) ...[
@@ -213,17 +515,17 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                  color: AppColors.lightCoral.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                    color: AppColors.lightCoral.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       Icons.info_outline_rounded,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: AppColors.lightCoral,
                       size: 16,
                     ),
                     const SizedBox(width: 8),
@@ -231,7 +533,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                       child: Text(
                         'This task will repeat according to the schedule',
                         style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
+                          color: AppColors.lightCoral,
                           fontSize: 11,
                         ),
                       ),
@@ -258,38 +560,37 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2),
+                  borderSide: BorderSide(color: AppColors.lightCoral, width: 2),
                 ),
                 filled: true,
                 fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.3),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               ),
               style: const TextStyle(fontSize: 16),
-              autofocus: true,
             ),
             const SizedBox(height: 16),
 
 
             // Categories
             if (widget.categories.isNotEmpty) ...[
-              Card(
-                elevation: 1,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _selectedCategoryIds.isNotEmpty 
+                        ? AppColors.lightCoral.withValues(alpha: 0.3)
+                        : Colors.grey.withValues(alpha: 0.2),
+                  ),
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.category_rounded, color: Theme.of(context).primaryColor, size: 18),
-                          const SizedBox(width: 8),
-                          const Text('Categories', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
                       Wrap(
-                        spacing: 8,
+                        spacing: 4,
                         runSpacing: 8,
                         children: widget.categories.map((category) {
                           final isSelected = _selectedCategoryIds.contains(category.id);
@@ -300,7 +601,9 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             selectedColor: category.color.withValues(alpha: 0.3),
                             checkmarkColor: category.color,
                             side: BorderSide(color: category.color.withValues(alpha: 0.5)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
                             onSelected: (selected) {
                               setState(() {
                                 if (selected) {
@@ -321,49 +624,164 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               const SizedBox(height: 16),
             ],
 
-            // BOTTOM - Thumb-reachable zone (most frequently used)
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                leading: Icon(
-                  Icons.notifications_rounded,
-                  color: _reminderTime != null ? Theme.of(context).primaryColor : Colors.grey,
+            // Reminder Time Section
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _reminderTime != null 
+                      ? AppColors.lightCoral.withValues(alpha: 0.3)
+                      : Colors.grey.withValues(alpha: 0.2),
                 ),
-                title: const Text('Reminder Time'),
-                subtitle: _reminderTime != null
-                    ? Text(DateFormat('HH:mm').format(_reminderTime!))
-                    : const Text('Set a reminder to get notified'),
-                trailing: _reminderTime != null
-                    ? IconButton(
-                  icon: const Icon(Icons.clear_rounded),
-                  onPressed: () {
-                    setState(() => _reminderTime = null);
-                    _onFieldChanged();
-                  },
-                )
-                    : const Icon(Icons.chevron_right_rounded),
+              ),
+              child: InkWell(
                 onTap: _selectReminderTime,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: (_reminderTime != null 
+                              ? AppColors.lightCoral
+                              : Colors.grey).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.notifications_rounded,
+                          color: _reminderTime != null 
+                              ? AppColors.lightCoral
+                              : Colors.grey,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Reminder Time',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _reminderTime != null 
+                                    ? Theme.of(context).colorScheme.onSurface
+                                    : Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _reminderTime != null
+                                  ? _formatReminderDateTime(_reminderTime!)
+                                  : 'Optional',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: _reminderTime != null 
+                                    ? AppColors.lightCoral
+                                    : Colors.grey,
+                                fontWeight: _reminderTime != null ? FontWeight.w500 : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_reminderTime != null)
+                        IconButton(
+                          onPressed: () {
+                            setState(() => _reminderTime = null);
+                            _onFieldChanged();
+                          },
+                          icon: const Icon(Icons.clear_rounded),
+                          color: Colors.grey,
+                        )
+                      else
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.grey,
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
+            
             const SizedBox(height: 12),
 
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: SwitchListTile(
-                title: const Text('Important'),
-                subtitle: const Text('Mark this task as high priority'),
-                value: _isImportant,
-                onChanged: (value) {
-                  setState(() => _isImportant = value);
-                  _onFieldChanged();
-                },
-                secondary: Icon(
-                  Icons.star_rounded,
-                  color: _isImportant ? Theme.of(context).colorScheme.primary : Colors.grey,
+            // Important Section
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _isImportant 
+                      ? AppColors.coral.withValues(alpha: 0.3)
+                      : Colors.grey.withValues(alpha: 0.2),
                 ),
-                activeThumbColor: Theme.of(context).primaryColor,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: (_isImportant 
+                            ? AppColors.coral
+                            : Colors.grey).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.star_rounded,
+                        color: _isImportant 
+                            ? AppColors.coral 
+                            : Colors.grey,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Important',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: _isImportant 
+                                  ? AppColors.lightCoral
+                                  : Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'High priority',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: _isImportant 
+                                  ? AppColors.coral
+                                  : Colors.grey,
+                              fontWeight: _isImportant ? FontWeight.w500 : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _isImportant,
+                      onChanged: (value) {
+                        setState(() => _isImportant = value);
+                        _onFieldChanged();
+                      },
+                      activeTrackColor: AppColors.lightCoral.withValues(alpha: 0.5),
+                      activeThumbColor: AppColors.lightCoral,
+                    ),
+                  ],
+                ),
               ),
             ),
 
@@ -389,153 +807,58 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   }
 
   void _selectReminderTime() async {
-    final selectedTime = await _showFriendlyTimePicker();
+    // First, select the date
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: _reminderTime ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 1)), // Allow yesterday for flexibility
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+
+    if (selectedDate == null) return;
+    if (!mounted) return;
+
+    // Then, select the time
+    final selectedTime = await TimePickerUtils.showStyledTimePicker(
+      context: context,
+      initialTime: _reminderTime != null
+          ? TimeOfDay.fromDateTime(_reminderTime!)
+          : TimeOfDay.now(),
+    );
     if (selectedTime != null) {
-      final now = DateTime.now();
       setState(() {
-        _reminderTime = DateTime(now.year, now.month, now.day, selectedTime.hour, selectedTime.minute);
+        _reminderTime = DateTime(
+          selectedDate.year, 
+          selectedDate.month, 
+          selectedDate.day, 
+          selectedTime.hour, 
+          selectedTime.minute
+        );
       });
       _onFieldChanged();
     }
   }
 
-  Future<TimeOfDay?> _showFriendlyTimePicker() async {
-    final currentTime = TimeOfDay.now();
+  String _formatReminderDateTime(DateTime reminderTime) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final reminderDate = DateTime(reminderTime.year, reminderTime.month, reminderTime.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final yesterday = today.subtract(const Duration(days: 1));
     
-    return showDialog<TimeOfDay?>(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Set Reminder Time',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                
-                // Quick presets
-                const Text(
-                  'Quick Options',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _buildTimeChip('In 5 min', currentTime.replacing(
-                      hour: (currentTime.hour + (currentTime.minute + 5) ~/ 60) % 24,
-                      minute: (currentTime.minute + 5) % 60,
-                    )),
-                    _buildTimeChip('In 15 min', currentTime.replacing(
-                      hour: (currentTime.hour + (currentTime.minute + 15) ~/ 60) % 24,
-                      minute: (currentTime.minute + 15) % 60,
-                    )),
-                    _buildTimeChip('In 30 min', currentTime.replacing(
-                      hour: (currentTime.hour + (currentTime.minute + 30) ~/ 60) % 24,
-                      minute: (currentTime.minute + 30) % 60,
-                    )),
-                    _buildTimeChip('In 1 hour', currentTime.replacing(
-                      hour: (currentTime.hour + 1) % 24,
-                      minute: currentTime.minute,
-                    )),
-                  ],
-                ),
-                
-                const SizedBox(height: 20),
-                const Divider(),
-                const SizedBox(height: 12),
-                
-                // Common times
-                const Text(
-                  'Popular Times',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _buildTimeChip('09:00', const TimeOfDay(hour: 9, minute: 0)),
-                    _buildTimeChip('12:00', const TimeOfDay(hour: 12, minute: 0)),
-                    _buildTimeChip('14:00', const TimeOfDay(hour: 14, minute: 0)),
-                    _buildTimeChip('17:00', const TimeOfDay(hour: 17, minute: 0)),
-                    _buildTimeChip('20:00', const TimeOfDay(hour: 20, minute: 0)),
-                  ],
-                ),
-                
-                const SizedBox(height: 20),
-                const Divider(),
-                const SizedBox(height: 12),
-                
-                // Custom time button
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final navigator = Navigator.of(context);
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: _reminderTime != null
-                                ? TimeOfDay.fromDateTime(_reminderTime!)
-                                : TimeOfDay.now(),
-                            builder: (BuildContext context, Widget? child) {
-                              return MediaQuery(
-                                data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-                                child: child!,
-                              );
-                            },
-                          );
-                          if (time != null && mounted) {
-                            navigator.pop(time);
-                          }
-                        },
-                        icon: const Icon(Icons.schedule_rounded),
-                        label: const Text('Custom Time'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTimeChip(String label, TimeOfDay time) {
-    return ActionChip(
-      label: Text(label),
-      onPressed: () => Navigator.pop(context, time),
-      backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-      side: BorderSide(
-        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-      ),
-      labelStyle: TextStyle(
-        color: Theme.of(context).colorScheme.primary,
-        fontWeight: FontWeight.w500,
-      ),
-    );
+    final timeStr = DateFormat('HH:mm').format(reminderTime);
+    
+    if (reminderDate.isAtSameMomentAs(today)) {
+      return 'Today at $timeStr';
+    } else if (reminderDate.isAtSameMomentAs(tomorrow)) {
+      return 'Tomorrow at $timeStr';
+    } else if (reminderDate.isAtSameMomentAs(yesterday)) {
+      return 'Yesterday at $timeStr';
+    } else {
+      // Show date for other days
+      final dateStr = DateFormat('MMM dd').format(reminderTime);
+      return '$dateStr at $timeStr';
+    }
   }
 
   void _selectRecurrence() async {
@@ -545,7 +868,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         initialRecurrence: _recurrence,
       ),
     );
-
+    
     if (recurrence != _recurrence) {
       setState(() {
         _recurrence = recurrence;

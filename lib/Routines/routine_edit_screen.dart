@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'routine_data_models.dart';
+import '../theme/app_colors.dart';
 
 // ROUTINE EDIT SCREEN
 class RoutineEditScreen extends StatefulWidget {
@@ -19,6 +20,7 @@ class RoutineEditScreen extends StatefulWidget {
 class _RoutineEditScreenState extends State<RoutineEditScreen> {
   final _titleController = TextEditingController();
   List<RoutineItem> _items = [];
+  Set<int> _activeDays = {1, 2, 3, 4, 5, 6, 7}; // Default to all days
 
   @override
   void initState() {
@@ -26,6 +28,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     if (widget.routine != null) {
       _titleController.text = widget.routine!.title;
       _items = List.from(widget.routine!.items);
+      _activeDays = Set<int>.from(widget.routine!.activeDays);
     }
   }
 
@@ -64,10 +67,56 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
       id: widget.routine?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
       items: _items,
+      reminderEnabled: widget.routine?.reminderEnabled ?? false,
+      reminderHour: widget.routine?.reminderHour ?? 8,
+      reminderMinute: widget.routine?.reminderMinute ?? 0,
+      activeDays: _activeDays,
     );
 
     widget.onSave(routine);
     Navigator.pop(context);
+  }
+
+  Widget _buildDayButton(int day) {
+    final dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    final isSelected = _activeDays.contains(day);
+    
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (isSelected) {
+            _activeDays.remove(day);
+          } else {
+            _activeDays.add(day);
+          }
+        });
+      },
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? AppColors.yellow 
+              : Colors.grey.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSelected 
+                ? AppColors.yellow 
+                : Colors.grey.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Center(
+          child: Text(
+            dayNames[day - 1],
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: isSelected ? Colors.white : Colors.grey[700],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -96,6 +145,31 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
             ),
             const SizedBox(height: 24),
 
+            // Days of the week selection
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Active Days',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        for (int day = 1; day <= 7; day++)
+                          _buildDayButton(day),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -108,7 +182,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('Add Step'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    backgroundColor: AppColors.yellow,
                     foregroundColor: Colors.black87,
                   ),
                 ),
@@ -158,7 +232,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete_rounded, color: Colors.red),
+                            icon: const Icon(Icons.delete_rounded, color: AppColors.lightYellow),
                             onPressed: () => _removeItem(index),
                           ),
                         ],

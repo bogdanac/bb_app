@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'menstrual_cycle_utils.dart';
 
 class MenstrualCycleCard extends StatefulWidget {
   final VoidCallback? onTap;
@@ -61,148 +61,21 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
     if (mounted) setState(() {});
   }
 
-  // HELPER METHODS - Matching CycleScreen logic
-  bool _isCurrentlyOnPeriod() {
-    return _lastPeriodStart != null && _lastPeriodEnd == null;
-  }
-
+  // HELPER METHODS - Using shared utility
   String _getCyclePhase() {
-    if (_lastPeriodStart == null) return "No data available";
-
-    final now = DateTime.now();
-    final daysSinceStart = now
-        .difference(_lastPeriodStart!)
-        .inDays;
-
-    if (_isCurrentlyOnPeriod()) {
-      return "Menstruation (Day ${daysSinceStart + 1})";
-    }
-
-    if (_lastPeriodEnd != null) {
-      final daysSinceEnd = now
-          .difference(_lastPeriodEnd!)
-          .inDays;
-      final totalCycleDays = _lastPeriodEnd!.difference(_lastPeriodStart!)
-          .inDays + daysSinceEnd + 1;
-
-      return _getPhaseFromCycleDays(totalCycleDays);
-    } else {
-      return _getPhaseFromCycleDays(daysSinceStart);
-    }
-  }
-
-  String _getPhaseFromCycleDays(int cycleDays) {
-    if (cycleDays <= 13) {
-      return "Follicular Phase";
-    } else if (cycleDays <= 16) {
-      return "Ovulation";
-    } else {
-      final lutealDay = cycleDays - 16;
-      final expectedLutealLength = _averageCycleLength - 16;
-
-      if (lutealDay <= expectedLutealLength / 3) {
-        return "Early Luteal Phase";
-      } else if (lutealDay <= (expectedLutealLength * 2) / 3) {
-        return "Middle Luteal Phase";
-      } else {
-        return "Late Luteal Phase";
-      }
-    }
+    return MenstrualCycleUtils.getCyclePhase(_lastPeriodStart, _lastPeriodEnd, _averageCycleLength);
   }
 
   String _getCycleInfo() {
-    if (_lastPeriodStart == null) return "Track your first period to begin";
-
-    final nextPeriodStart = _lastPeriodStart!.add(
-        Duration(days: _averageCycleLength));
-    final daysUntilPeriod = nextPeriodStart
-        .difference(DateTime.now())
-        .inDays;
-
-    // Period expected today or overdue
-    if (daysUntilPeriod <= 0) {
-      if (daysUntilPeriod == 0) {
-        return "Period expected today! 🩸";
-      } else {
-        final daysOverdue = -daysUntilPeriod;
-        return "Period is $daysOverdue days overdue";
-      }
-    }
-
-    // Pre-period warnings (1-6 days)
-    if (daysUntilPeriod <= 6) {
-      final messages = {
-        1: "Period expected tomorrow! Take care of yourself 💝",
-        2: "Period in 2 days. Rest and stay comfortable 🛋️",
-        3: "Period in 3 days. Listen to your body 🤗",
-        4: "Period in 4 days. Symptoms may begin 😌",
-        5: "Period in 5 days. Take it easy 🌸",
-        6: "Period in 6 days. Stay hydrated 💧",
-      };
-      return messages[daysUntilPeriod] ?? "$daysUntilPeriod days until period";
-    }
-
-    // Current period info
-    if (_isCurrentlyOnPeriod()) {
-      final currentDay = DateTime
-          .now()
-          .difference(_lastPeriodStart!)
-          .inDays + 1;
-      return "Day $currentDay of period";
-    }
-
-    // Cycle day info
-    final daysSinceStart = DateTime
-        .now()
-        .difference(_lastPeriodStart!)
-        .inDays + 1;
-
-    if (daysSinceStart <= 11) {
-      return "Back in the game";
-    } else if (daysSinceStart <= 15) {
-      final ovulationDay = 14;
-      final daysToOvulation = ovulationDay - daysSinceStart;
-
-      if (daysToOvulation == 0) {
-        return "Ovulation day! 🥚";
-      } else if (daysToOvulation == 1) {
-        return "Ovulation tomorrow";
-      } else if (daysToOvulation == -1) {
-        return "Ovulation was yesterday";
-      } else {
-        return "Ovulation window";
-      }
-    } else {
-      if (daysUntilPeriod <= 3) {
-        return "$daysUntilPeriod days until next period";
-      }
-      return "Just keep swimming";
-    }
+    return MenstrualCycleUtils.getCycleInfo(_lastPeriodStart, _lastPeriodEnd, _averageCycleLength);
   }
 
   Color _getPhaseColor() {
-    final phase = _getCyclePhase();
-
-    if (phase.startsWith("Menstruation")) return AppColors.error; // Red for menstruation (important)
-    if (phase == "Follicular Phase") return AppColors.successGreen; // Green leaf color for growth phase
-    if (phase == "Ovulation") return AppColors.orange;
-    if (phase.contains("Early Luteal")) return AppColors.purple;
-    if (phase.contains("Middle Luteal")) return AppColors.purple;
-    if (phase.contains("Late Luteal")) return AppColors.purple;
-    if (phase.contains("Luteal")) return AppColors.purple;
-
-    return AppColors.coral;
+    return MenstrualCycleUtils.getPhaseColor(_lastPeriodStart, _lastPeriodEnd, _averageCycleLength);
   }
 
   IconData _getPhaseIcon() {
-    final phase = _getCyclePhase();
-
-    if (phase.startsWith("Menstruation")) return Icons.water_drop_rounded;
-    if (phase == "Follicular Phase") return Icons.energy_savings_leaf; // Energy/growth icon - perfect for follicular phase renewal
-    if (phase == "Ovulation") return Icons.favorite_rounded;
-    if (phase.contains("Luteal")) return Icons.nights_stay_rounded;
-
-    return Icons.timeline_rounded;
+    return MenstrualCycleUtils.getPhaseIcon(_lastPeriodStart, _lastPeriodEnd, _averageCycleLength);
   }
 
   @override
@@ -214,7 +87,7 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: _getPhaseColor().withValues(alpha: 0.08),
+          color: _getPhaseColor().withValues(alpha: 0.2),
         ),
         child: GestureDetector(
           onTap: widget.onTap,
@@ -246,7 +119,7 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
                         color: Colors.white60,
                         fontWeight: FontWeight.w400,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
