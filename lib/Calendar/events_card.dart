@@ -106,13 +106,13 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.lightPink.withValues(alpha: 0.1),
+          color: AppColors.lightPink.withValues(alpha: 0.15),
         ),
         child: Stack(
           children: [
             // Main content with padding
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

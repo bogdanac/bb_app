@@ -158,7 +158,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
               onTap: _toggleExpanded,
               borderRadius: BorderRadius.circular(16),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 12, 0),
+                padding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
                 child: Row(
                   children: [
                     Icon(
@@ -175,7 +175,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                             total == 0 
                               ? 'Food Tracking'
                               : 'Food: ${healthyPercentage.round()}% healthy',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -196,7 +196,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                           '$_currentPhaseCalories',
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                             color: AppColors.successGreen,
                           ),
                         ),

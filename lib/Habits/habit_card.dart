@@ -50,7 +50,7 @@ class _HabitCardState extends State<HabitCard> {
         elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             color: AppColors.orange.withValues(alpha: 0.2),
@@ -73,10 +73,10 @@ class _HabitCardState extends State<HabitCard> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.orange.withValues(alpha: 0.1),
+          color: AppColors.orange.withValues(alpha: 0.15),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,7 +85,7 @@ class _HabitCardState extends State<HabitCard> {
 
             // Habits list
             ...uncompletedHabits.map((habit) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 10),
               child: InkWell(
                   onTap: () => _toggleHabit(habit),
                   borderRadius: BorderRadius.circular(8),
@@ -103,13 +103,13 @@ class _HabitCardState extends State<HabitCard> {
                         Icon(
                           Icons.radio_button_unchecked,
                           color: AppColors.orange,
-                          size: 20,
+                          size: 24,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             habit.name,
-                            style: const TextStyle(fontSize: 16),
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                           ),
                         ),
                         if (habit.getStreak() > 0)
@@ -167,8 +167,9 @@ class _HabitCardState extends State<HabitCard> {
                             child: Text(
                               habit.name,
                               style: const TextStyle(
-                                fontSize: 14,
+                                fontSize: 13,
                                 color: Colors.grey,
+                                fontWeight: FontWeight.w400,
                                 decoration: TextDecoration.lineThrough,
                               ),
                             ),

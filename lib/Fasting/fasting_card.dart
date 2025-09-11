@@ -219,12 +219,12 @@ class _FastingCardState extends State<FastingCard> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           color: isFasting 
-              ? AppColors.lightGreen.withValues(alpha: 0.2) // Green theme when fasting
-              : AppColors.pastelGreen.withValues(alpha: 0.2), // Green theme when not fasting
+              ? AppColors.lightGreen.withValues(alpha: 0.15) // Green theme when fasting
+              : AppColors.pastelGreen.withValues(alpha: 0.15), // Green theme when not fasting
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,7 +245,7 @@ class _FastingCardState extends State<FastingCard> {
                       children: [
                         Text(
                           '${FastingUtils.formatDuration(fastingDuration)} / $currentFastType',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                         if (fastingEndTime != null)
                           Text(
@@ -284,7 +284,7 @@ class _FastingCardState extends State<FastingCard> {
                     child: recommendedFast.isNotEmpty
                     ? Text(
                         'Start fast $recommendedFast',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       )
                     : const Text(
                         'No fast today',

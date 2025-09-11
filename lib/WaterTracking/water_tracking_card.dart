@@ -120,10 +120,10 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.waterBlue.withValues(alpha: 0.2), // Water blue theme
+          color: AppColors.waterBlue.withValues(alpha: 0.15), // Water blue theme
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -133,7 +133,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                 const Icon(
                   Icons.water_drop_rounded,
                   color: AppColors.waterBlue, // Special water blue
-                  size: 28,
+                  size: 24,
                 ),
                 const SizedBox(width: 16),
                 // Înlocuiește partea cu progress bar din WaterTrackingCard
@@ -239,7 +239,6 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
               ],
             ),
           ],

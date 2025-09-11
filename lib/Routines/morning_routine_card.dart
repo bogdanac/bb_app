@@ -363,7 +363,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           color: AppColors.yellow.withValues(alpha: 0.2), // Orange theme colors
@@ -376,13 +376,13 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
                 Icon(
                   Icons.wb_sunny_rounded,
                   color: AppColors.yellow,
-                  size: 28,
+                  size: 24,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     _currentRoutine!.title,
-                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.normal),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -404,7 +404,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
                 const SizedBox(width: 8),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
 
 
 
@@ -442,7 +442,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
                       ),
                       child: Text(
                         currentStep.text,
-                        style: const TextStyle(fontSize: 16),
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                       ),
                     ),
                   ),

@@ -91,12 +91,12 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                 end: Alignment.bottomRight,
                 colors: [
                   AppColors.coral.withValues(alpha: 0.15),
-                  AppColors.coral.withValues(alpha: 0.05),
+                  AppColors.coral.withValues(alpha: 0.15),
                 ],
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

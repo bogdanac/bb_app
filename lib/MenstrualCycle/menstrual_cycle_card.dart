@@ -84,10 +84,10 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: _getPhaseColor().withValues(alpha: 0.1),
+          color: _getPhaseColor().withValues(alpha: 0.15),
         ),
         child: GestureDetector(
           onTap: widget.onTap,
@@ -115,9 +115,9 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
                     Text(
                       _getCycleInfo(),
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 14,
                         color: Colors.white60,
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.w500,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
