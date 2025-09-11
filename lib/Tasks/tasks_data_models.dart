@@ -9,6 +9,7 @@ class Task {
   String description;
   List<String> categoryIds;
   DateTime? deadline;
+  DateTime? scheduledDate; // For recurring tasks, this is when the task is scheduled for
   DateTime? reminderTime;
   bool isImportant;
   TaskRecurrence? recurrence;
@@ -22,6 +23,7 @@ class Task {
     this.description = '',
     this.categoryIds = const [],
     this.deadline,
+    this.scheduledDate,
     this.reminderTime,
     this.isImportant = false,
     this.recurrence,
@@ -30,35 +32,61 @@ class Task {
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
-  // Check if task is due today based on recurrence
+  // Check if task is due today based on deadline, scheduledDate, recurrence, or reminder
   bool isDueToday() {
     final today = DateTime.now();
 
-    if (recurrence == null) {
-      return deadline != null &&
-          _isSameDay(deadline!, today);
+    if (kDebugMode && title.contains('Debug')) {
+      print('=== isDueToday DEBUG for: $title ===');
+      print('deadline: $deadline');
+      print('scheduledDate: $scheduledDate');
+      print('today: $today');
     }
 
-    return recurrence!.isDueOn(today, taskCreatedAt: createdAt);
-  }
-
-  // Check if task should be shown today (includes special 2-day window for peak days)
-  bool shouldShowToday() {
-    final today = DateTime.now();
-
-    if (recurrence == null) {
-      return deadline != null &&
-          _isSameDay(deadline!, today);
+    // Priority 1: Check deadline (today or overdue) - deadlines are most important
+    if (deadline != null && (_isSameDay(deadline!, today) || deadline!.isBefore(today))) {
+      if (kDebugMode && title.contains('Debug')) {
+        print('Deadline check - returning true');
+        print('=== END isDueToday DEBUG ===');
+      }
+      return true;
     }
 
-    // Special exception: Show Ovulation Peak Day and Menstrual Start Day tasks for 2 days
-    if (recurrence!.type == RecurrenceType.ovulationPeakDay || 
-        recurrence!.type == RecurrenceType.menstrualStartDay) {
-      final yesterday = today.subtract(const Duration(days: 1));
-      return recurrence!.isDueOn(today, taskCreatedAt: createdAt) || recurrence!.isDueOn(yesterday, taskCreatedAt: createdAt);
+    // Priority 2: If task has a scheduled date, check that date
+    if (scheduledDate != null) {
+      final result = _isSameDay(scheduledDate!, today);
+      if (kDebugMode && title.contains('Debug')) {
+        print('Has scheduledDate - result: $result');
+        print('=== END isDueToday DEBUG ===');
+      }
+      return result;
     }
 
-    return recurrence!.isDueOn(today, taskCreatedAt: createdAt);
+    // Priority 3: Check if recurring task is due today - only if no deadline or scheduled date
+    if (recurrence != null && scheduledDate == null) {
+      // Special exception: Show Ovulation Peak Day and Menstrual Start Day tasks for 2 days
+      if (recurrence!.type == RecurrenceType.ovulationPeakDay || 
+          recurrence!.type == RecurrenceType.menstrualStartDay) {
+        final yesterday = today.subtract(const Duration(days: 1));
+        return recurrence!.isDueOn(today, taskCreatedAt: createdAt) || 
+               recurrence!.isDueOn(yesterday, taskCreatedAt: createdAt);
+      }
+      
+      if (recurrence!.isDueOn(today, taskCreatedAt: createdAt)) {
+        return true;
+      }
+    }
+
+    // Priority 4: Check if reminder is set for today - lowest priority
+    if (reminderTime != null && _isSameDay(reminderTime!, today)) {
+      return true;
+    }
+
+    if (kDebugMode && title.contains('Debug')) {
+      print('No conditions met - returning false');
+      print('=== END isDueToday DEBUG ===');
+    }
+    return false;
   }
 
   // Get next due date for recurring tasks
@@ -81,6 +109,7 @@ class Task {
     'description': description,
     'categoryIds': categoryIds,
     'deadline': deadline?.toIso8601String(),
+    'scheduledDate': scheduledDate?.toIso8601String(),
     'reminderTime': reminderTime?.toIso8601String(),
     'isImportant': isImportant,
     'recurrence': recurrence?.toJson(),
@@ -95,6 +124,7 @@ class Task {
     description: json['description'] ?? '',
     categoryIds: List<String>.from(json['categoryIds'] ?? []),
     deadline: json['deadline'] != null ? DateTime.parse(json['deadline']) : null,
+    scheduledDate: json['scheduledDate'] != null ? DateTime.parse(json['scheduledDate']) : null,
     reminderTime: json['reminderTime'] != null ? DateTime.parse(json['reminderTime']) : null,
     isImportant: json['isImportant'] ?? false,
     recurrence: json['recurrence'] != null ? TaskRecurrence.fromJson(json['recurrence']) : null,
@@ -142,6 +172,7 @@ class TaskRecurrence {
   final DateTime? endDate;
   final int? phaseDay; // Optional specific day within a menstrual phase (1-N)
   final int? daysAfterPeriod; // Days after period ends for custom recurrence
+  final TimeOfDay? reminderTime; // Optional reminder time for recurring tasks
 
   TaskRecurrence({
     List<RecurrenceType>? types,
@@ -154,6 +185,7 @@ class TaskRecurrence {
     this.endDate,
     this.phaseDay,
     this.daysAfterPeriod,
+    this.reminderTime,
   }) : types = types ?? (type != null ? [type] : []);
 
   // Backward compatibility getter
@@ -197,8 +229,8 @@ class TaskRecurrence {
       case RecurrenceType.daily:
         // For daily with interval > 1, check if it's actually due today
         if (interval > 1) {
-          // Use task creation date as reference if available
-          final referenceDate = taskCreatedAt ?? DateTime(2024, 1, 1);
+          // Use startDate as primary reference, fallback to task creation date
+          final referenceDate = startDate ?? taskCreatedAt ?? DateTime(2024, 1, 1);
           final daysSinceReference = date.difference(DateTime(referenceDate.year, referenceDate.month, referenceDate.day)).inDays;
           return daysSinceReference >= 0 && daysSinceReference % interval == 0;
         }
@@ -509,6 +541,9 @@ class TaskRecurrence {
     'endDate': endDate?.toIso8601String(),
     'phaseDay': phaseDay,
     'daysAfterPeriod': daysAfterPeriod,
+    'reminderTime': reminderTime != null 
+        ? {'hour': reminderTime!.hour, 'minute': reminderTime!.minute} 
+        : null,
   };
 
   static TaskRecurrence fromJson(Map<String, dynamic> json) {
@@ -566,6 +601,12 @@ class TaskRecurrence {
       endDate: json['endDate'] != null ? DateTime.parse(json['endDate']) : null,
       phaseDay: phaseDay,
       daysAfterPeriod: json['daysAfterPeriod'], // Keep for backward compatibility during transition
+      reminderTime: json['reminderTime'] != null 
+          ? TimeOfDay(
+              hour: json['reminderTime']['hour'], 
+              minute: json['reminderTime']['minute']
+            ) 
+          : null,
     );
   }
 }

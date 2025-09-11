@@ -8,6 +8,8 @@ import 'package:bb_app/Routines/routine_data_models.dart';
 import 'package:bb_app/Habits/habit_data_models.dart';
 import '../theme/app_colors.dart';
 import 'routine_service.dart';
+import 'routine_progress_service.dart';
+import 'routine_widget_service.dart';
 import '../Habits/habit_service.dart';
 import '../Notifications/notification_service.dart';
 
@@ -24,6 +26,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
   List<Routine> _routines = [];
   List<Habit> _habits = [];
   bool _isLoading = true;
+  String? _inProgressRoutineId;
 
   @override
   void initState() {
@@ -44,6 +47,26 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
   Future<void> _loadData() async {
     _routines = await RoutineService.loadRoutines();
     _habits = await HabitService.loadHabits();
+    
+    // Check for in-progress routine - either explicitly marked or has progress today
+    _inProgressRoutineId = await RoutineProgressService.getInProgressRoutineId();
+    
+    // If no explicit in-progress, check if any routine has progress today
+    if (_inProgressRoutineId == null) {
+      for (final routine in _routines) {
+        final progress = await RoutineProgressService.loadRoutineProgress(routine.id);
+        if (progress != null) {
+          // This routine has progress today, consider it in-progress
+          final completedSteps = List<bool>.from(progress['completedSteps'] ?? []);
+          final allCompleted = completedSteps.isNotEmpty && completedSteps.every((step) => step);
+          
+          if (!allCompleted) {
+            _inProgressRoutineId = routine.id;
+            break;
+          }
+        }
+      }
+    }
     
     // Save routines if we got the default ones (first time)
     if (_routines.length == 1 && _routines.first.id == '1') {
@@ -154,18 +177,26 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
     }
   }
 
-  void _startRoutine(Routine routine) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => RoutineExecutionScreen(
-          routine: routine,
-          onCompleted: () {
-            // Routine completed
-          },
+  void _startRoutine(Routine routine) async {
+    // Simply mark routine as in progress without navigating
+    await RoutineProgressService.markRoutineInProgress(routine.id);
+    
+    setState(() {
+      _inProgressRoutineId = routine.id;
+    });
+    
+    // Update widget to show the routine is in progress
+    await RoutineWidgetService.updateWidget();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${routine.title} started'),
+          backgroundColor: AppColors.lightGreen,
+          duration: const Duration(seconds: 2),
         ),
-      ),
-    );
+      );
+    }
   }
 
   void _openReminderSettings() {
@@ -520,7 +551,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
       background: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: AppColors.lightYellow,
+          color: AppColors.redPrimary,
           borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.centerRight,
@@ -691,18 +722,65 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                 Row(
                   children: [
                     Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _startRoutine(routine),
-                        icon: const Icon(Icons.play_arrow_rounded),
-                        label: const Text('Start Routine'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.lightGreen.withValues(alpha: 0.8),
-                          foregroundColor: AppColors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                      child: _inProgressRoutineId == routine.id
+                        ? InkWell(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => RoutineExecutionScreen(
+                                    routine: routine,
+                                    onCompleted: () async {
+                                      await RoutineProgressService.clearInProgressStatus();
+                                      _loadData();
+                                    },
+                                  ),
+                                ),
+                              ).then((_) => _loadData());
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: AppColors.lightGreen.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: AppColors.lightGreen.withValues(alpha: 0.5),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.autorenew_rounded,
+                                    color: AppColors.yellow,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Continue',
+                                    style: TextStyle(
+                                      color: AppColors.yellow,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : ElevatedButton.icon(
+                            onPressed: () => _startRoutine(routine),
+                            icon: const Icon(Icons.play_arrow_rounded),
+                            label: const Text('Start Routine'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.lightGreen.withValues(alpha: 0.8),
+                              foregroundColor: AppColors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
                     ),
                   ],
                 ),
@@ -764,7 +842,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
       background: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: AppColors.lightYellow,
+          color: AppColors.redPrimary,
           borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.centerRight,

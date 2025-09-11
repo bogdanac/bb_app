@@ -5,7 +5,7 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:padding="16dp"
-    android:background="@drawable/widget_background"
+    android:background="#FF4CAF50"
     android:clickable="true">
 
     <!-- Header -->
@@ -30,7 +30,7 @@
             android:layout_weight="1"
             android:text="Morning Routine"
             android:textSize="16sp"
-            android:textStyle="bold"
+            android:textStyle="normal"
             android:textColor="@android:color/black"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -44,7 +44,19 @@
             android:textColor="@android:color/darker_gray"
             android:background="@drawable/progress_background"
             android:paddingHorizontal="8dp"
-            android:paddingVertical="4dp" />
+            android:paddingVertical="4dp"
+            android:layout_marginEnd="8dp" />
+
+        <!-- Small Refresh Button -->
+        <ImageButton
+            android:id="@+id/refresh_button"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@android:drawable/ic_popup_sync"
+            android:background="@android:color/transparent"
+            android:scaleType="fitCenter"
+            android:contentDescription="Refresh"
+            android:padding="2dp" />
 
     </LinearLayout>
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'tasks_data_models.dart';
 import '../theme/app_colors.dart';
 import '../MenstrualCycle/menstrual_cycle_constants.dart';
+import '../shared/time_picker_utils.dart';
 
 class RecurrenceDialog extends StatefulWidget {
   final TaskRecurrence? initialRecurrence;
@@ -24,9 +25,11 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
   List<int> _selectedWeekDays = [];
   int? _dayOfMonth;
   bool _isLastDayOfMonth = false;
+  DateTime? _startDate;
   DateTime? _endDate;
   int? _phaseDay; // Selected day within a menstrual phase
   bool _usePhaseDaySelector = false; // Whether to use specific day selection
+  TimeOfDay? _reminderTime; // Reminder time for recurring tasks
 
   final List<String> _weekDayNames = [
     'Monday',
@@ -51,9 +54,11 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
       _selectedWeekDays = List.from(recurrence.weekDays);
       _dayOfMonth = recurrence.dayOfMonth;
       _isLastDayOfMonth = recurrence.isLastDayOfMonth;
+      _startDate = recurrence.startDate;
       _endDate = recurrence.endDate;
       _phaseDay = recurrence.phaseDay;
       _usePhaseDaySelector = recurrence.phaseDay != null;
+      _reminderTime = recurrence.reminderTime;
     }
   }
 
@@ -618,6 +623,146 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
 
                     const SizedBox(height: 24),
 
+                    // Reminder Time Section (only show if recurrence is selected)
+                    if (_selectedTypes.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.coral.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: AppColors.coral.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Reminder Time (Optional)',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            const SizedBox(height: 6),
+                            InkWell(
+                              onTap: _selectReminderTime,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                      color: Colors.grey.withValues(alpha: 0.3)),
+                                  borderRadius: BorderRadius.circular(6),
+                                  color: Colors.white.withValues(alpha: 0.05),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.access_time_rounded,
+                                      color: _reminderTime != null 
+                                          ? AppColors.coral 
+                                          : Colors.grey[600],
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _reminderTime != null
+                                            ? _reminderTime!.format(context)
+                                            : 'Tap to set reminder time',
+                                        style: TextStyle(
+                                          color: _reminderTime != null
+                                              ? AppColors.coral
+                                              : Colors.grey[600],
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_reminderTime != null)
+                                      IconButton(
+                                        icon: const Icon(Icons.clear_rounded,
+                                            size: 14),
+                                        onPressed: () =>
+                                            setState(() => _reminderTime = null),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                                        color: Colors.grey[600],
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Start Date Section
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.blue.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Start Date (Optional)',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 12),
+                          InkWell(
+                            onTap: _selectStartDate,
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                    color: Colors.grey.withValues(alpha: 0.3)),
+                                borderRadius: BorderRadius.circular(8),
+                                color: Colors.white.withValues(alpha: 0.05),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.play_arrow_rounded,
+                                    color: Colors.blue[600],
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _startDate != null
+                                          ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
+                                          : 'Starts today',
+                                      style: TextStyle(
+                                        color: _startDate != null
+                                            ? null
+                                            : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ),
+                                  if (_startDate != null)
+                                    IconButton(
+                                      icon: const Icon(Icons.clear_rounded,
+                                          size: 18),
+                                      onPressed: () =>
+                                          setState(() => _startDate = null),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      color: Colors.grey[600],
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
                     // End Date Section
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -726,11 +871,13 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                           isLastDayOfMonth:
                               _selectedTypes.contains(RecurrenceType.monthly) &&
                                   _isLastDayOfMonth,
+                          startDate: _startDate,
                           endDate: _endDate,
                           phaseDay: _hasSelectedMenstrualPhase() &&
                                   _usePhaseDaySelector
                               ? _phaseDay
                               : null,
+                          reminderTime: _reminderTime,
                         );
                         Navigator.pop(context, recurrence);
                       }
@@ -917,6 +1064,21 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
     }
   }
 
+  void _selectStartDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _startDate ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)), // Allow past dates
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+
+    if (date != null) {
+      setState(() {
+        _startDate = date;
+      });
+    }
+  }
+
   void _selectEndDate() async {
     final date = await showDatePicker(
       context: context,
@@ -928,6 +1090,19 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
     if (date != null) {
       setState(() {
         _endDate = date;
+      });
+    }
+  }
+
+  void _selectReminderTime() async {
+    final time = await TimePickerUtils.showStyledTimePicker(
+      context: context,
+      initialTime: _reminderTime ?? TimeOfDay.now(),
+    );
+
+    if (time != null) {
+      setState(() {
+        _reminderTime = time;
       });
     }
   }

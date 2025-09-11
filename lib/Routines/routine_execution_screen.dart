@@ -1,10 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
-import 'dart:convert';
 import '../theme/app_colors.dart';
 import 'routine_data_models.dart';
+import 'routine_progress_service.dart';
 
 // ROUTINE EXECUTION SCREEN - UPDATED WITH SAVE FUNCTIONALITY
 class RoutineExecutionScreen extends StatefulWidget {
@@ -38,17 +36,13 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
   }
 
   Future<void> _loadProgress() async {
-    final prefs = await SharedPreferences.getInstance();
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final progressKey = 'routine_progress_${widget.routine.id}_$today';
-
-    final progressJson = prefs.getString(progressKey);
-    if (progressJson != null) {
+    final progressData = await RoutineProgressService.loadRoutineProgress(widget.routine.id);
+    
+    if (progressData != null) {
       try {
-        final progressData = jsonDecode(progressJson);
         final completedSteps = List<bool>.from(progressData['completedSteps'] ?? []);
         final skippedSteps = List<bool>.from(progressData['skippedSteps'] ?? []);
-        final savedItemCount = progressData['routineItemCount'] as int?;
+        final savedItemCount = progressData['itemCount'] as int?;
 
         // Validate that the saved data matches current routine structure
         if (savedItemCount != null && savedItemCount != _items.length) {
@@ -66,25 +60,29 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
           }
         });
       } catch (e) {
-        // Continue with default state if loading fails
+        if (kDebugMode) {
+          print('Error loading progress: $e');
+        }
       }
     }
   }
 
   Future<void> _saveProgress() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final progressKey = 'routine_progress_${widget.routine.id}_$today';
-
-      final progressData = {
-        'completedSteps': _items.map((item) => item.isCompleted).toList(),
-        'skippedSteps': _items.map((item) => item.isSkipped).toList(),
-        'lastUpdated': DateTime.now().toIso8601String(),
-        'routineItemCount': _items.length, // Store item count for validation
-      };
-
-      await prefs.setString(progressKey, jsonEncode(progressData));
+      // Find the current step index (first non-completed, non-skipped step)
+      int currentStepIndex = 0;
+      for (int i = 0; i < _items.length; i++) {
+        if (!_items[i].isCompleted && !_items[i].isSkipped) {
+          currentStepIndex = i;
+          break;
+        }
+      }
+      
+      await RoutineProgressService.saveRoutineProgress(
+        routineId: widget.routine.id,
+        currentStepIndex: currentStepIndex,
+        items: _items,
+      );
     } catch (e) {
       if (kDebugMode) {
         print('Error saving routine progress: $e');

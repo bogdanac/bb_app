@@ -18,7 +18,7 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
   bool _isLoading = true;
   bool _hasPermission = false;
   String _errorMessage = '';
-
+  
   @override
   void initState() {
     super.initState();

@@ -87,7 +87,7 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: _getPhaseColor().withValues(alpha: 0.2),
+          color: _getPhaseColor().withValues(alpha: 0.1),
         ),
         child: GestureDetector(
           onTap: widget.onTap,

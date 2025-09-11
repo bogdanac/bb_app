@@ -94,6 +94,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         description: '',
         categoryIds: _selectedCategoryIds,
         deadline: _deadline,
+        scheduledDate: _currentTask?.scheduledDate,
         reminderTime: _reminderTime,
         isImportant: _isImportant,
         recurrence: _recurrence,
@@ -146,6 +147,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
       description: '',
       categoryIds: _selectedCategoryIds,
       deadline: _deadline,
+      scheduledDate: _currentTask?.scheduledDate,
       reminderTime: _reminderTime,
       isImportant: _isImportant,
       recurrence: _recurrence,
@@ -423,207 +425,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               ),
             ),
             
-            const SizedBox(height: 12),
-            
-            // Recurrence Section
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.grey.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _recurrence != null 
-                      ? AppColors.lightCoral.withValues(alpha: 0.3)
-                      : Colors.grey.withValues(alpha: 0.2),
-                ),
-              ),
-              child: InkWell(
-                onTap: _selectRecurrence,
-                borderRadius: BorderRadius.circular(16),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: (_recurrence != null 
-                              ? AppColors.lightCoral
-                              : Colors.grey).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.repeat_rounded,
-                          color: _recurrence != null 
-                              ? AppColors.lightCoral
-                              : Colors.grey,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Recurrence',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: _recurrence != null 
-                                    ? AppColors.lightCoral
-                                    : Colors.grey,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _recurrence != null
-                                  ? _recurrence!.getDisplayText()
-                                  : 'Optional',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: _recurrence != null 
-                                    ? AppColors.lightCoral
-                                    : Colors.grey,
-                                fontWeight: _recurrence != null ? FontWeight.w500 : FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (_recurrence != null)
-                        IconButton(
-                          onPressed: () {
-                            setState(() => _recurrence = null);
-                            _onFieldChanged();
-                          },
-                          icon: const Icon(Icons.clear_rounded),
-                          color: Colors.grey,
-                        )
-                      else
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: Colors.grey,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            if (_recurrence != null) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.lightCoral.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: AppColors.lightCoral.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      color: AppColors.lightCoral,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'This task will repeat according to the schedule',
-                        style: TextStyle(
-                          color: AppColors.lightCoral,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            
-            const SizedBox(height: 24),
-
-            // MIDDLE - Essential content
-            TextField(
-              controller: _titleController,
-              decoration: InputDecoration(
-                labelText: 'Task Title',
-                hintText: 'What do you need to do?',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: AppColors.lightCoral, width: 2),
-                ),
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.3),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              ),
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-
-
-            // Categories
-            if (widget.categories.isNotEmpty) ...[
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _selectedCategoryIds.isNotEmpty 
-                        ? AppColors.lightCoral.withValues(alpha: 0.3)
-                        : Colors.grey.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Wrap(
-                        spacing: 4,
-                        runSpacing: 8,
-                        children: widget.categories.map((category) {
-                          final isSelected = _selectedCategoryIds.contains(category.id);
-                          return FilterChip(
-                            label: Text(category.name),
-                            selected: isSelected,
-                            backgroundColor: category.color.withValues(alpha: 0.1),
-                            selectedColor: category.color.withValues(alpha: 0.3),
-                            checkmarkColor: category.color,
-                            side: BorderSide(color: category.color.withValues(alpha: 0.5)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) {
-                                  _selectedCategoryIds.add(category.id);
-                                } else {
-                                  _selectedCategoryIds.remove(category.id);
-                                }
-                              });
-                              _onFieldChanged();
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
             // Reminder Time Section
             Container(
               decoration: BoxDecoration(
@@ -676,7 +477,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             const SizedBox(height: 2),
                             Text(
                               _reminderTime != null
-                                  ? _formatReminderDateTime(_reminderTime!)
+                                  ? _formatReminderDateTime(_reminderTime!) // Always show full date/time
                                   : 'Optional',
                               style: TextStyle(
                                 fontSize: 14,
@@ -785,6 +586,173 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               ),
             ),
 
+            const SizedBox(height: 16),
+
+            // Task Title Section
+            TextField(
+              controller: _titleController,
+              minLines: 1,
+              maxLines: null,
+              decoration: InputDecoration(
+                labelText: 'Task Title',
+                hintText: 'What do you need to do?',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: AppColors.lightCoral, width: 2),
+                ),
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.3),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              ),
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16),
+
+            // Categories Section
+            if (widget.categories.isNotEmpty) ...[
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _selectedCategoryIds.isNotEmpty 
+                        ? AppColors.lightCoral.withValues(alpha: 0.3)
+                        : Colors.grey.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 8,
+                        children: widget.categories.map((category) {
+                          final isSelected = _selectedCategoryIds.contains(category.id);
+                          return FilterChip(
+                            label: Text(category.name),
+                            selected: isSelected,
+                            backgroundColor: category.color.withValues(alpha: 0.1),
+                            selectedColor: category.color.withValues(alpha: 0.3),
+                            checkmarkColor: category.color,
+                            side: BorderSide(color: category.color.withValues(alpha: 0.5)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _selectedCategoryIds.add(category.id);
+                                } else {
+                                  _selectedCategoryIds.remove(category.id);
+                                }
+                              });
+                              _onFieldChanged();
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Recurrence Section
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.grey.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _recurrence != null 
+                      ? AppColors.lightCoral.withValues(alpha: 0.3)
+                      : Colors.grey.withValues(alpha: 0.2),
+                ),
+              ),
+              child: InkWell(
+                onTap: _selectRecurrence,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: (_recurrence != null 
+                              ? AppColors.lightCoral
+                              : Colors.grey).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.repeat_rounded,
+                          color: _recurrence != null 
+                              ? AppColors.lightCoral
+                              : Colors.grey,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Recurrence',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _recurrence != null 
+                                    ? AppColors.lightCoral
+                                    : Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _recurrence != null
+                                  ? _recurrence!.getDisplayText()
+                                  : 'Optional',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: _recurrence != null 
+                                    ? AppColors.lightCoral
+                                    : Colors.grey,
+                                fontWeight: _recurrence != null ? FontWeight.w500 : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_recurrence != null)
+                        IconButton(
+                          onPressed: () {
+                            setState(() => _recurrence = null);
+                            _onFieldChanged();
+                          },
+                          icon: const Icon(Icons.clear_rounded),
+                          color: Colors.grey,
+                        )
+                      else
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.grey,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
             const SizedBox(height: 24),
           ],
         ),
@@ -807,6 +775,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   }
 
   void _selectReminderTime() async {
+    // Regular reminder time always allows both date and time selection
     // First, select the date
     final selectedDate = await showDatePicker(
       context: context,

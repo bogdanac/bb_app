@@ -33,7 +33,7 @@ class BBetterApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'I am fabulous',
+      title: 'BB',
       builder: (BuildContext context, Widget? child) {
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
@@ -326,10 +326,10 @@ class _LauncherScreenState extends State<LauncherScreen>
                 colors: [
                   AppColors.redPrimary, // Red/Pink
                   AppColors.orange, // Orange
-                  AppColors.purple, // Purple
-                  AppColors.darkBackground, // Dark background
+                  AppColors.lightPink, // Purple
+                  const Color(0x77E81EE8)
                 ],
-                stops: const [0.0, 0.4, 0.7, 1.0],
+                stops: const [0.0, 0.3, 0.7, 1.0],
               ),
             ),
             child: Center(
@@ -530,7 +530,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
       bottomNavigationBar: Container(
         height: 70 + MediaQuery.of(context).padding.bottom, // Increased from 60 to 70
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
+          color: AppColors.darkBackground,
           boxShadow: [
             BoxShadow(
               color: AppColors.black.withValues(alpha: 0.3),

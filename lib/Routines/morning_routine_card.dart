@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:bb_app/Routines/routine_data_models.dart';
 import 'routine_service.dart';
 import 'routine_widget_service.dart';
+import 'routine_progress_service.dart';
 import 'dart:async';
 
 class MorningRoutineCard extends StatefulWidget {
@@ -90,7 +91,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
 
       if (_currentRoutine != null) {
         // Check if we have progress saved for today
-        final progressData = await RoutineService.loadMorningRoutineProgress();
+        final progressData = await RoutineProgressService.loadRoutineProgress(_currentRoutine!.id);
         
         if (progressData != null) {
           // Load today's progress - resume from where we left off
@@ -151,7 +152,8 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
         _currentStepIndex = _currentRoutine!.items.length - 1;
       }
 
-      await RoutineService.saveMorningRoutineProgress(
+      await RoutineProgressService.saveRoutineProgress(
+        routineId: _currentRoutine!.id,
         currentStepIndex: _currentStepIndex,
         items: _currentRoutine!.items,
       );
@@ -246,19 +248,11 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
     }
 
     setState(() {
-      // Always move the current item to the end of the list
-      final skippedItem = _currentRoutine!.items.removeAt(_currentStepIndex);
-      // Keep the existing skip status, don't reset it
-      skippedItem.isCompleted = false;
-      _currentRoutine!.items.add(skippedItem);
+      // Mark the current step as skipped (don't remove from list)
+      _currentRoutine!.items[_currentStepIndex].isSkipped = true;
+      _currentRoutine!.items[_currentStepIndex].isCompleted = false;
       
-      // Current index stays the same since we removed an item from before it
-      // But we need to make sure we don't go out of bounds
-      if (_currentStepIndex >= _currentRoutine!.items.length) {
-        _currentStepIndex = 0; // Start from beginning if we've reached the end
-      }
-      
-      // Find the next unfinished step from current position
+      // Move to the next unfinished step
       _moveToNextUnfinishedStep();
     });
 
@@ -271,22 +265,26 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
       print('Moving to next unfinished step. Current index: $_currentStepIndex');
     }
 
-    // Find next step that is not completed (including skipped steps), starting from current position
-    for (int i = _currentStepIndex; i < _currentRoutine!.items.length; i++) {
-      if (!_currentRoutine!.items[i].isCompleted) {
+    // Start searching from the next index
+    int startIndex = (_currentStepIndex + 1) % _currentRoutine!.items.length;
+    
+    // Find next step that is not completed and not skipped
+    for (int i = 0; i < _currentRoutine!.items.length; i++) {
+      int checkIndex = (startIndex + i) % _currentRoutine!.items.length;
+      if (!_currentRoutine!.items[checkIndex].isCompleted && !_currentRoutine!.items[checkIndex].isSkipped) {
         if (kDebugMode) {
-          print('Found unfinished step at index $i: ${_currentRoutine!.items[i].text} (isSkipped: ${_currentRoutine!.items[i].isSkipped})');
+          print('Found unfinished non-skipped step at index $checkIndex: ${_currentRoutine!.items[checkIndex].text}');
         }
-        _currentStepIndex = i;
+        _currentStepIndex = checkIndex;
         return;
       }
     }
     
-    // If no unfinished step found from current position, search from beginning
-    for (int i = 0; i < _currentStepIndex; i++) {
-      if (!_currentRoutine!.items[i].isCompleted) {
+    // If all non-skipped steps are completed, find the first skipped step
+    for (int i = 0; i < _currentRoutine!.items.length; i++) {
+      if (_currentRoutine!.items[i].isSkipped && !_currentRoutine!.items[i].isCompleted) {
         if (kDebugMode) {
-          print('Found unfinished step at index $i: ${_currentRoutine!.items[i].text} (isSkipped: ${_currentRoutine!.items[i].isSkipped})');
+          print('All non-skipped steps done. Found skipped step at index $i: ${_currentRoutine!.items[i].text}');
         }
         _currentStepIndex = i;
         return;
@@ -297,6 +295,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
     if (kDebugMode) {
       print('No unfinished steps found. All steps are completed.');
     }
+    // Keep current index if everything is completed
   }
 
 

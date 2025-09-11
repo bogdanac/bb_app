@@ -92,7 +92,7 @@ class _HabitCardState extends State<HabitCard> {
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.orange.withValues(alpha: 0.1),
+                      color: AppColors.orange.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: AppColors.orange.withValues(alpha: 0.3),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'dart:math' as Math;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tasks_data_models.dart';
 import '../Notifications/notification_service.dart';
@@ -11,6 +12,28 @@ class TaskService {
   TaskService._internal();
 
   final NotificationService _notificationService = NotificationService();
+  
+  // Global task change notifier
+  final List<VoidCallback> _taskChangeListeners = [];
+  
+  // Add listener for task changes
+  void addTaskChangeListener(VoidCallback listener) {
+    if (!_taskChangeListeners.contains(listener)) {
+      _taskChangeListeners.add(listener);
+    }
+  }
+  
+  // Remove listener for task changes
+  void removeTaskChangeListener(VoidCallback listener) {
+    _taskChangeListeners.remove(listener);
+  }
+  
+  // Notify all listeners that tasks have changed
+  void _notifyTasksChanged() {
+    for (final listener in _taskChangeListeners) {
+      listener();
+    }
+  }
 
   Future<List<Task>> loadTasks() async {
     try {
@@ -38,6 +61,9 @@ class TaskService {
 
       // Update task notifications when saving
       await _scheduleAllTaskNotifications(tasks);
+      
+      // Notify all listeners that tasks have changed
+      _notifyTasksChanged();
     } catch (e) {
       if (kDebugMode) {
         print('Error saving tasks: $e');
@@ -144,46 +170,33 @@ class TaskService {
   Future<void> postponeTaskToTomorrow(Task task) async {
     try {
       final now = DateTime.now();
-      final tomorrow = DateTime(now.year, now.month, now.day + 1);
       
-      // Determine what to postpone based on task type
-      DateTime? newDeadline = task.deadline;
+      // Calculate the new postpone date - add 1 day to existing scheduled date or use tomorrow if no scheduled date
+      DateTime postponeDate;
+      if (task.scheduledDate != null) {
+        // If task already has a scheduled date, add 1 day to that date
+        postponeDate = task.scheduledDate!.add(const Duration(days: 1));
+      } else {
+        // If no scheduled date, set to tomorrow
+        postponeDate = DateTime(now.year, now.month, now.day + 1);
+      }
+      
       DateTime? newReminderTime = task.reminderTime;
       
-      // 1. If task has a deadline today, move it to tomorrow
-      if (task.deadline != null) {
-        final taskDeadline = DateTime(task.deadline!.year, task.deadline!.month, task.deadline!.day);
-        final today = DateTime(now.year, now.month, now.day);
-        if (taskDeadline.isAtSameMomentAs(today)) {
-          newDeadline = tomorrow;
-        }
-      }
-      
-      // 2. If task has a reminder today, move it to tomorrow
+      // If task has a reminder time, keep the same time but move date to postpone date
       if (task.reminderTime != null) {
-        final reminderDate = DateTime(task.reminderTime!.year, task.reminderTime!.month, task.reminderTime!.day);
-        final today = DateTime(now.year, now.month, now.day);
-        if (reminderDate.isAtSameMomentAs(today)) {
-          newReminderTime = DateTime(tomorrow.year, tomorrow.month, tomorrow.day,
-                                   task.reminderTime!.hour, task.reminderTime!.minute);
-        }
+        newReminderTime = DateTime(postponeDate.year, postponeDate.month, postponeDate.day,
+                                 task.reminderTime!.hour, task.reminderTime!.minute);
       }
       
-      // 3. For recurring tasks, we add a deadline for tomorrow to "skip" today's occurrence
-      if (task.recurrence != null && task.recurrence!.isDueOn(now, taskCreatedAt: task.createdAt)) {
-        // If it doesn't already have a deadline or the deadline is not tomorrow, set it to tomorrow
-        if (newDeadline == null || !DateTime(newDeadline.year, newDeadline.month, newDeadline.day).isAtSameMomentAs(tomorrow)) {
-          newDeadline = tomorrow;
-        }
-      }
-      
-      // Create updated task
+      // Create updated task with scheduled date moved to postpone date
       final updatedTask = Task(
         id: task.id,
         title: task.title,
         description: task.description,
         categoryIds: List.from(task.categoryIds),
-        deadline: newDeadline,
+        deadline: task.deadline, // Keep original deadline
+        scheduledDate: postponeDate, // Move scheduled date to postpone date
         reminderTime: newReminderTime,
         isImportant: task.isImportant,
         recurrence: task.recurrence,
@@ -199,9 +212,17 @@ class TaskService {
       if (taskIndex != -1) {
         allTasks[taskIndex] = updatedTask;
         await saveTasks(allTasks);
-        
+
         if (kDebugMode) {
-          print('Task postponed to tomorrow: ${task.title}');
+          print('=== POSTPONE DEBUG ===');
+          print('Task postponed: ${task.title}');
+          print('Original scheduledDate: ${task.scheduledDate}');
+          print('Original deadline: ${task.deadline}');
+          print('Postpone date: $postponeDate');
+          print('New scheduledDate: ${updatedTask.scheduledDate}');
+          print('New deadline: ${updatedTask.deadline}');
+          print('isDueToday after postpone: ${updatedTask.isDueToday()}');
+          print('=== END POSTPONE DEBUG ===');
         }
       }
     } catch (e) {
@@ -212,15 +233,15 @@ class TaskService {
     }
   }
 
-  // Check if a task should show postpone button (due today, recurring today, or reminder today)
+  // Check if a task should show postpone button (due today, overdue, recurring today, or reminder today)
   static bool shouldShowPostponeButton(Task task) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     
-    // 1. Tasks with deadlines today
+    // 1. Tasks with deadlines today or overdue
     if (task.deadline != null) {
       final taskDeadline = DateTime(task.deadline!.year, task.deadline!.month, task.deadline!.day);
-      if (taskDeadline.isAtSameMomentAs(today)) {
+      if (taskDeadline.isAtSameMomentAs(today) || taskDeadline.isBefore(today)) {
         return true;
       }
     }
@@ -257,8 +278,8 @@ class TaskService {
     // Sort by priority with enhanced logic
     availableTasks.sort((a, b) {
       // Calculate priority scores for better comparison
-      final aPriorityScore = _calculateTaskPriorityScore(a, now, today);
-      final bPriorityScore = _calculateTaskPriorityScore(b, now, today);
+      final aPriorityScore = _calculateTaskPriorityScore(a, now, today, categories);
+      final bPriorityScore = _calculateTaskPriorityScore(b, now, today, categories);
       
       if (aPriorityScore != bPriorityScore) {
         return bPriorityScore.compareTo(aPriorityScore); // Higher score = higher priority
@@ -312,7 +333,7 @@ class TaskService {
   }
 
   // Calculate priority score for enhanced task ordering
-  int _calculateTaskPriorityScore(Task task, DateTime now, DateTime today) {
+  int _calculateTaskPriorityScore(Task task, DateTime now, DateTime today, List<TaskCategory> categories) {
     int score = 0;
 
     // 1. HIGHEST PRIORITY: Tasks with reminder times (past or future)
@@ -372,11 +393,12 @@ class TaskService {
       score += 800;
     }
 
-    // 4. MEDIUM-HIGH PRIORITY: Deadlines tomorrow
+    // 4. CONTEXT-AWARE PRIORITY: Tomorrow's deadlines
     else if (task.deadline != null) {
       final tomorrow = today.add(const Duration(days: 1));
       if (_isSameDay(task.deadline!, tomorrow)) {
-        score += 400;
+        // Non-recurring deadlines get time-based priority
+        score += _getContextualTomorrowPriority(now);
       }
       // Only prioritize deadlines that are very close - ignore distant ones
       else {
@@ -389,11 +411,35 @@ class TaskService {
       }
     }
 
+    // 4b. RECURRING TASKS: Handle scheduled dates for tomorrow (low priority)
+    else if (task.recurrence != null && task.scheduledDate != null) {
+      final tomorrow = today.add(const Duration(days: 1));
+      if (_isSameDay(task.scheduledDate!, tomorrow)) {
+        score += 25; // Very low priority for tomorrow's recurring tasks
+        if (task.title.contains('debug recurring')) {
+          print('=== RECURRING TOMORROW (scheduledDate) DEBUG: ${task.title} ===');
+          print('scheduledDate: ${task.scheduledDate}');
+          print('Added 25 points (recurring scheduled tomorrow), score: $score');
+        }
+      }
+    }
+
     // 5. MEDIUM-HIGH PRIORITY: Recurring tasks due today
     if (task.recurrence != null && task.isDueToday()) {
-      // If task was postponed (has deadline for today/future), reduce recurring priority
-      if (task.deadline != null && !task.deadline!.isBefore(today)) {
-        score += 200; // Lower priority for postponed recurring tasks
+      if (task.title.contains('debug recurring')) { // Only debug tasks with 'debug recurring' in title
+        print('=== RECURRING TASK DEBUG: ${task.title} ===');
+        print('isDueToday: ${task.isDueToday()}');
+        print('deadline: ${task.deadline}');
+        print('scheduledDate: ${task.scheduledDate}');
+        print('Current score before recurring logic: $score');
+      }
+      
+      // If task was postponed (has scheduledDate for future), reduce recurring priority
+      if (task.scheduledDate != null && task.scheduledDate!.isAfter(today)) {
+        score += 30; // Very low priority for postponed recurring tasks
+        if (task.title.contains('debug recurring')) {
+          print('Added 30 points (postponed recurring - scheduledDate future), new score: $score');
+        }
       } else {
         // For menstrual cycle tasks, consider distance to target day
         if (_isMenstrualCycleTask(task.recurrence!)) {
@@ -412,18 +458,45 @@ class TaskService {
           }
         } else {
           score += 700; // Full priority for non-menstrual recurring tasks
+          if (task.title.contains('debug recurring')) {
+            print('Added 700 points (non-menstrual recurring), new score: $score');
+          }
         }
       }
+      
+      if (task.title.contains('debug recurring')) {
+        print('Final recurring task score: $score');
+        print('=== END RECURRING DEBUG ===');
+      }
     }
+
 
     // 6. LOW-MEDIUM PRIORITY: Important tasks (less than reminder priority)
     if (task.isImportant) {
       score += 50; // Reduced from 100 to ensure reminders take precedence
     }
 
+    // 7. CATEGORY PRIORITY: Based on category order (higher than basic tasks, lower than important)
+    if (task.categoryIds.isNotEmpty) {
+      final categoryImportance = _getCategoryImportance(task.categoryIds, categories);
+      // Lower category order = higher priority
+      // Category order 1 = +40 points, order 2 = +35 points, order 5 = +20 points, etc.
+      if (categoryImportance < 999) {
+        score += Math.max(10, 45 - (categoryImportance * 5));
+      }
+    }
+
     // Note: Removed bonus for reminder tasks since they already get priority above
 
     return score;
+  }
+
+  // Helper method to calculate contextual priority for tomorrow's tasks based on time of day
+  int _getContextualTomorrowPriority(DateTime now) {
+    final hour = now.hour;
+    if (hour < 12) return 50;   // Morning: focus today
+    if (hour < 18) return 150;  // Afternoon: light planning
+    return 300; // Evening: prep for tomorrow
   }
 
   // Check if a task is a menstrual cycle-based task

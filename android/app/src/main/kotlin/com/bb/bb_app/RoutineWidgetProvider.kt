@@ -82,6 +82,9 @@ class RoutineWidgetProvider : AppWidgetProvider() {
     private fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
         val views = RemoteViews(context.packageName, R.layout.routine_widget)
         
+        // Apply custom background color
+        applyCustomBackgroundColor(context, views)
+        
         val routineData = getCurrentRoutine(context)
         
         if (routineData != null) {
@@ -130,133 +133,182 @@ class RoutineWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.routine_progress, "0/0")
             views.setViewVisibility(R.id.step_container, android.view.View.GONE)
             views.setViewVisibility(R.id.completed_container, android.view.View.VISIBLE)
-            views.setTextViewText(R.id.completed_text, "No routine available for today")
+            views.setTextViewText(R.id.completed_text, "Tap refresh to reload routines")
         }
         
-        // Set up refresh intent for the whole widget
+        // Set up refresh intent for the refresh button
         val refreshIntent = Intent(context, RoutineWidgetProvider::class.java).apply {
             action = ACTION_REFRESH
         }
-        views.setOnClickPendingIntent(R.id.widget_container, 
+        views.setOnClickPendingIntent(R.id.refresh_button, 
             PendingIntent.getBroadcast(context, 2, refreshIntent, 
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
 
         appWidgetManager.updateAppWidget(appWidgetId, views)
     }
 
+    private fun applyCustomBackgroundColor(context: Context, views: RemoteViews) {
+        try {
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val defaultColor = 0xFF4CAF50.toInt() // Default vibrant green
+            
+            // Try different possible keys
+            var customColor = defaultColor
+            val possibleKeys = listOf(
+                "flutter.widget_background_color",
+                "widget_background_color",
+                "flutter.widget_color",
+                "widget_color"
+            )
+            
+            for (key in possibleKeys) {
+                try {
+                    val colorValue = prefs.getInt(key, -1)
+                    if (colorValue != -1) {
+                        customColor = colorValue
+                        break
+                    }
+                } catch (e: Exception) {
+                    // Try as long if int fails
+                    try {
+                        val colorValue = prefs.getLong(key, -1L)
+                        if (colorValue != -1L) {
+                            customColor = colorValue.toInt()
+                            break
+                        }
+                    } catch (e2: Exception) {
+                        // Key not found or invalid type, continue to next key
+                    }
+                }
+            }
+            
+            // Set the background color of the widget container
+            views.setInt(R.id.widget_container, "setBackgroundColor", customColor)
+        } catch (e: Exception) {
+            // Silent failure - use default color
+        }
+    }
+
     private fun getCurrentRoutine(context: Context): JSONObject? {
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         
-        // Try to get the routines data - Flutter shared_preferences stores as StringList
-        val routinesJson: Set<String>? = try {
-            // First try the correct key format used by Flutter app (without flutter prefix)
-            prefs.getStringSet("routines", null)
-        } catch (e: ClassCastException) {
-            // Flutter might store it differently, try alternative approaches
-            try {
-                // Check if it's stored as a single string
-                val singleString = prefs.getString("routines", null)
-                if (singleString != null) {
-                    // Convert to set format
-                    setOf(singleString)
-                } else {
-                    // Try with flutter prefix as fallback
-                    try {
-                        prefs.getStringSet("flutter.routines", null)
-                    } catch (e3: ClassCastException) {
-                        // Try as single string with prefix
-                        val fallbackString = prefs.getString("flutter.routines", null)
-                        if (fallbackString != null) setOf(fallbackString) else null
+        // Flutter shared_preferences plugin stores StringList values with special formatting
+        // Try multiple approaches to read the data
+        val routinesJson: List<String>? = try {
+            val allPrefs = prefs.all
+            
+            // Method 1: Try numbered routine keys (routine_0, routine_1, etc.) - our new approach  
+            val routinesCount = try {
+                prefs.getInt("flutter.routines_count", -1)
+            } catch (e: ClassCastException) {
+                // Handle case where it's stored as Long instead of Int
+                try {
+                    prefs.getLong("flutter.routines_count", -1).toInt()
+                } catch (e2: Exception) {
+                    -1
+                }
+            }
+            if (routinesCount > 0) {
+                val numberedRoutines = mutableListOf<String>()
+                for (i in 0 until routinesCount) {
+                    val routineJson = prefs.getString("flutter.routine_$i", null)
+                    if (routineJson != null) {
+                        numberedRoutines.add(routineJson)
                     }
                 }
-            } catch (e2: Exception) {
-                Log.e("RoutineWidget", "Error reading routines data: ${e2.message}")
-                return null
+                if (numberedRoutines.isNotEmpty()) {
+                    numberedRoutines
+                } else null
+            } else {
+                // Method 2: Try to get as StringSet (legacy widget format)
+                val stringSet = prefs.getStringSet("flutter.routines", null)
+                if (stringSet != null && stringSet.isNotEmpty()) {
+                    stringSet.toList()
+                } else {
+                    // Method 3: Flutter stores StringList with flutter. prefix and special encoding
+                    val flutterRoutinesKey = allPrefs.keys.find { it.startsWith("flutter.routines") }
+                    if (flutterRoutinesKey != null) {
+                        val value = allPrefs[flutterRoutinesKey]
+                        when (value) {
+                            is Set<*> -> {
+                                value.filterIsInstance<String>()
+                            }
+                            is String -> {
+                                listOf(value)
+                            }
+                            else -> {
+                                null
+                            }
+                        }
+                    } else {
+                        // Method 4: Direct string access for routines key
+                        val directString = prefs.getString("flutter.routines", null)
+                        if (directString != null) {
+                            listOf(directString)
+                        } else {
+                            null
+                        }
+                    }
+                }
             }
+        } catch (e: Exception) {
+            null
         }
         
         if (routinesJson == null || routinesJson.isEmpty()) {
-            Log.d("RoutineWidget", "No routines data found in SharedPreferences")
             return null
         }
         
-        Log.d("RoutineWidget", "Found ${routinesJson.size} routine(s) in SharedPreferences")
-        
         try {
-            // Handle data from Flutter's shared_preferences - try different approaches
-            val decodedRoutines = mutableListOf<String>()
+            // Process each routine JSON string
+            val validRoutines = mutableListOf<JSONObject>()
+            
             for (routineJsonString in routinesJson) {
                 try {
-                    // First check if it's already valid JSON
-                    if (routineJsonString.trim().startsWith("{") && routineJsonString.trim().endsWith("}")) {
-                        // Already valid JSON, use as is
-                        decodedRoutines.add(routineJsonString.trim())
-                        Log.d("RoutineWidget", "Using raw JSON: ${routineJsonString.take(100)}...")
-                        continue
-                    }
-                    
-                    // Try to decode as Base64 only if it looks like Base64
+                    // Try to parse as direct JSON first
+                    val routine = JSONObject(routineJsonString)
+                    validRoutines.add(routine)
+                } catch (directParseError: Exception) {
+                    // Try Base64 decode if it looks like Base64
                     if (routineJsonString.matches(Regex("^[A-Za-z0-9+/]*={0,2}$")) && routineJsonString.length % 4 == 0) {
                         try {
                             val decodedBytes = Base64.decode(routineJsonString, Base64.DEFAULT)
                             val decodedString = String(decodedBytes, Charsets.UTF_8)
-                            Log.d("RoutineWidget", "Base64 decoded: ${decodedString.take(100)}...")
-                            
-                            // Check if decoded string is valid JSON
-                            if (decodedString.trim().startsWith("{") && decodedString.trim().endsWith("}")) {
-                                decodedRoutines.add(decodedString.trim())
-                                Log.d("RoutineWidget", "Added Base64 decoded JSON")
-                            } else {
-                                // Try to find JSON in the string
-                                val jsonStart = decodedString.indexOf("{")
-                                val jsonEnd = decodedString.lastIndexOf("}") + 1
-                                if (jsonStart != -1 && jsonEnd > jsonStart) {
-                                    val jsonPart = decodedString.substring(jsonStart, jsonEnd)
-                                    decodedRoutines.add(jsonPart)
-                                    Log.d("RoutineWidget", "Extracted JSON from Base64: ${jsonPart.take(100)}...")
-                                } else {
-                                    Log.w("RoutineWidget", "Base64 decoded but no valid JSON found")
-                                }
-                            }
+                            val routine = JSONObject(decodedString)
+                            validRoutines.add(routine)
                         } catch (base64Error: Exception) {
-                            Log.w("RoutineWidget", "Base64 decode failed: ${base64Error.message}, using raw")
-                            decodedRoutines.add(routineJsonString)
+                            // Skip this routine
                         }
-                    } else {
-                        // Not Base64 format, use as is
-                        decodedRoutines.add(routineJsonString)
-                        Log.d("RoutineWidget", "Not Base64, using raw: ${routineJsonString.take(100)}...")
                     }
-                } catch (e: Exception) {
-                    Log.e("RoutineWidget", "Error processing routine data: ${e.message}")
-                    // As last resort, try using the raw string
-                    decodedRoutines.add(routineJsonString)
                 }
             }
             
+            if (validRoutines.isEmpty()) {
+                return null
+            }
+            
             // First check if there's a manual override for today
-            val overrideJson = prefs.getString("active_routine_override", null)
+            val overrideJson = prefs.getString("flutter.active_routine_override", null)
             if (overrideJson != null) {
-                val overrideData = JSONObject(overrideJson)
-                val savedDate = overrideData.optString("date", "")
-                val today = getEffectiveDate()
-                
-                if (savedDate == today) {
-                    val overrideRoutineId = overrideData.optString("routineId", "")
-                    if (overrideRoutineId.isNotEmpty()) {
-                        // Find the routine with this ID
-                        for (routineJsonString in decodedRoutines) {
-                            val routine = try {
-                                JSONObject(routineJsonString)
-                            } catch (e: Exception) {
-                                Log.e("RoutineWidget", "Failed to parse override routine JSON: '$routineJsonString', error: ${e.message}")
-                                continue
+                try {
+                    val overrideData = JSONObject(overrideJson)
+                    val savedDate = overrideData.optString("date", "")
+                    val today = getEffectiveDate()
+                    
+                    if (savedDate == today) {
+                        val overrideRoutineId = overrideData.optString("routineId", "")
+                        if (overrideRoutineId.isNotEmpty()) {
+                            // Find the routine with this ID
+                            val overrideRoutine = validRoutines.find { routine ->
+                                routine.optString("id", "") == overrideRoutineId
                             }
-                            if (routine.optString("id", "") == overrideRoutineId) {
-                                return routine
+                            if (overrideRoutine != null) {
+                                return overrideRoutine
                             }
                         }
                     }
+                } catch (e: Exception) {
+                    // Skip override processing
                 }
             }
             
@@ -264,26 +316,15 @@ class RoutineWidgetProvider : AppWidgetProvider() {
             val currentWeekday = getCurrentWeekday()
             
             // First, find all morning routines that are active today
-            for (routineJsonString in decodedRoutines) {
-                val routine = try {
-                    JSONObject(routineJsonString)
-                } catch (e: Exception) {
-                    Log.e("RoutineWidget", "Failed to parse routine JSON: '$routineJsonString', error: ${e.message}")
-                    continue
-                }
+            for (routine in validRoutines) {
                 val routineTitle = routine.optString("title", "").lowercase()
                 val activeDays = routine.optJSONArray("activeDays")
                 
-                Log.d("RoutineWidget", "Checking routine: '$routineTitle', activeDays: $activeDays, currentWeekday: $currentWeekday")
-                
                 // Check if it's a morning routine and active today (case-insensitive)
                 if (routineTitle.contains("morning") && activeDays != null) {
-                    Log.d("RoutineWidget", "Found morning routine: $routineTitle")
                     for (i in 0 until activeDays.length()) {
                         val dayValue = activeDays.getInt(i)
-                        Log.d("RoutineWidget", "Checking day $dayValue against current $currentWeekday")
                         if (dayValue == currentWeekday) {
-                            Log.d("RoutineWidget", "Morning routine is active today!")
                             return routine
                         }
                     }
@@ -291,13 +332,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
             }
             
             // Fallback: find any routine active today
-            for (routineJsonString in decodedRoutines) {
-                val routine = try {
-                    JSONObject(routineJsonString)
-                } catch (e: Exception) {
-                    Log.e("RoutineWidget", "Failed to parse fallback routine JSON: '$routineJsonString', error: ${e.message}")
-                    continue
-                }
+            for (routine in validRoutines) {
                 val activeDays = routine.optJSONArray("activeDays")
                 
                 if (activeDays != null) {
@@ -307,6 +342,12 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                         }
                     }
                 }
+            }
+            
+            // Final fallback: return the first routine even if not active today
+            if (validRoutines.isNotEmpty()) {
+                val fallbackRoutine = validRoutines.first()
+                return fallbackRoutine
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -322,7 +363,14 @@ class RoutineWidgetProvider : AppWidgetProvider() {
         
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val today = getTodayString()
-        val progressJson = prefs.getString("morning_routine_progress_$today", null)
+        
+        // Try routine-specific progress first
+        var progressJson = prefs.getString("flutter.routine_progress_${routineId}_$today", null)
+        
+        // Fallback to morning routine progress
+        if (progressJson == null) {
+            progressJson = prefs.getString("flutter.morning_routine_progress_$today", null)
+        }
         
         if (progressJson != null) {
             try {
@@ -363,7 +411,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 val skippedSteps = mutableListOf<Boolean>()
                 
                 // Load existing progress
-                val progressJson = prefs.getString("morning_routine_progress_$today", null)
+                val progressJson = prefs.getString("flutter.morning_routine_progress_$today", null)
                 if (progressJson != null) {
                     val progress = JSONObject(progressJson)
                     val completedArray = progress.optJSONArray("completedSteps")
@@ -409,8 +457,9 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 }
                 
                 prefs.edit()
-                    .putString("morning_routine_progress_$today", progressData.toString())
-                    .putString("morning_routine_last_date", today)
+                    .putString("flutter.routine_progress_${routineId}_$today", progressData.toString())
+                    .putString("flutter.morning_routine_progress_$today", progressData.toString())
+                    .putString("flutter.morning_routine_last_date", today)
                     .apply()
                     
             } catch (e: Exception) {
@@ -434,7 +483,10 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 val completedSteps = mutableListOf<Boolean>()
                 val skippedSteps = mutableListOf<Boolean>()
                 
-                val progressJson = prefs.getString("morning_routine_progress_$today", null)
+                var progressJson = prefs.getString("flutter.routine_progress_${routineId}_$today", null)
+                if (progressJson == null) {
+                    progressJson = prefs.getString("flutter.morning_routine_progress_$today", null)
+                }
                 if (progressJson != null) {
                     val progress = JSONObject(progressJson)
                     val completedArray = progress.optJSONArray("completedSteps")
@@ -479,8 +531,9 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 }
                 
                 prefs.edit()
-                    .putString("morning_routine_progress_$today", progressData.toString())
-                    .putString("morning_routine_last_date", today)
+                    .putString("flutter.routine_progress_${routineId}_$today", progressData.toString())
+                    .putString("flutter.morning_routine_progress_$today", progressData.toString())
+                    .putString("flutter.morning_routine_last_date", today)
                     .apply()
                     
             } catch (e: Exception) {

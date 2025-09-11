@@ -609,11 +609,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   );
                 },
               ),
-              const SizedBox(height: 4), // Consistent spacing
+              const SizedBox(height: 2), // Consistent spacing
 
               // Calendar Events Card
               CalendarEventsCard(key: _calendarEventsKey),
-              const SizedBox(height: 4), // Consistent spacing
+
+              const SizedBox(height: 2), // Consistent spacing
+
+              // Food Tracking Section
+              const FoodTrackingCard(),
+
+              const SizedBox(height: 2),
 
               // Water Tracking Section (conditional)
               if (_shouldShowWaterTracking) ...[
@@ -621,6 +627,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   waterIntake: waterIntake,
                   onWaterAdded: _onWaterAdded,
                 ),
+                const SizedBox(height: 4), // Consistent spacing
+              ],
+
+              // Habit Card Section (conditional - appears before water tracking)
+              if (showHabitCard) ...[
+                HabitCard(
+                  onAllCompleted: _onAllHabitsCompleted,
+                ),
+                const SizedBox(height: 4), // Consistent spacing
+              ],
+
+              const SizedBox(height: 4), // Consistent spacing
+
+              // Fasting Section (conditional)
+              if (showFastingSection) ...[
+                FastingCard(onHiddenForToday: _onFastingHiddenForToday),
                 const SizedBox(height: 4), // Consistent spacing
               ],
 
@@ -633,26 +655,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(height: 4), // Consistent spacing
               ],
 
-              // Fasting Section (conditional)
-              if (showFastingSection) ...[
-                FastingCard(onHiddenForToday: _onFastingHiddenForToday),
-                const SizedBox(height: 4), // Consistent spacing
-              ],
-
               // Daily Tasks Section
               const DailyTasksCard(),
-              const SizedBox(height: 4), // Consistent spacing
 
-              // Habit Card Section (conditional - appears before water tracking)
-              if (showHabitCard) ...[
-                HabitCard(
-                  onAllCompleted: _onAllHabitsCompleted,
-                ),
-                const SizedBox(height: 4), // Consistent spacing
-              ],
-
-              // Food Tracking Section
-              const FoodTrackingCard(),
             ],
           ),
         ),

@@ -14,23 +14,28 @@ class RoutineWidgetService {
       final routines = await RoutineService.loadRoutines();
       final prefs = await SharedPreferences.getInstance();
       
-      debugPrint('DEBUG: updateWidget - Found ${routines.length} routines');
+      if (routines.isEmpty) {
+        return;
+      }
       
       // Convert routines to JSON format that Android can read
       final routinesJson = routines.map((routine) => jsonEncode(routine.toJson())).toList();
+      
+      // Save routines for Android widget to read
+      // Flutter automatically adds 'flutter.' prefix to all keys
       await prefs.setStringList('routines', routinesJson);
       
-      // Debug: Check what we saved
-      final savedRoutines = prefs.getStringList('routines');
-      debugPrint('DEBUG: updateWidget - Saved ${savedRoutines?.length ?? 0} routines to SharedPreferences');
+      // Also save individual routines for easier Android access
+      await prefs.setInt('routines_count', routinesJson.length);
+      for (int i = 0; i < routinesJson.length; i++) {
+        await prefs.setString('routine_$i', routinesJson[i]);
+      }
       
-      // Also log all SharedPreferences keys to see what's actually stored
-      debugPrint('DEBUG: updateWidget - All SharedPreferences keys: ${prefs.getKeys()}');
       
       // Trigger widget update via platform channel
       await _platform.invokeMethod('updateRoutineWidget');
     } catch (e) {
-      // Silent fail - widget updates are not critical
+      debugPrint('updateWidget - Error: $e');
     }
   }
 
@@ -99,12 +104,20 @@ class RoutineWidgetService {
   /// Force refresh widget
   static Future<void> forceRefreshWidget() async {
     try {
-      debugPrint('DEBUG: forceRefreshWidget - Starting force refresh');
       await updateWidget();
       await _platform.invokeMethod('refreshRoutineWidget');
-      debugPrint('DEBUG: forceRefreshWidget - Completed force refresh');
     } catch (e) {
-      debugPrint('DEBUG: forceRefreshWidget - Error: $e');
+      debugPrint('forceRefreshWidget - Error: $e');
+    }
+  }
+
+  /// Refresh widget when color changes
+  static Future<void> refreshWidgetColor() async {
+    try {
+      // Just trigger a widget refresh, no need to update routine data
+      await _platform.invokeMethod('refreshRoutineWidget');
+    } catch (e) {
+      debugPrint('refreshWidgetColor - Error: $e');
     }
   }
 

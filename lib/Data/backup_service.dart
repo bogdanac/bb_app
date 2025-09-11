@@ -186,18 +186,21 @@ class BackupService {
           // Save both manual and auto backup timestamp for manual backups
           // This ensures manual backups are always recognized
           await prefs.setString('last_backup', timestamp);
-          await prefs.setString('last_manual_backup', timestamp); // Additional key for manual backups
-          
-          debugPrint('Manual backup timestamp saved: $timestamp');
+          await prefs.setString('last_manual_backup', timestamp);
           
         } catch (e) {
-          debugPrint('Could not update last backup timestamp: $e');
+          debugPrint('Error updating backup timestamp: $e');
         }
       }
       
-      debugPrint('Backup exported to: ${file.path}');
-      debugPrint('File exists: ${await file.exists()}');
-      debugPrint('File size: ${await file.length()} bytes');
+      // Clean up old backups after successful export
+      try {
+        final locations = await getBackupLocations();
+        await _cleanupOldBackups(locations['found_files']);
+      } catch (e) {
+        debugPrint('Cleanup after backup export failed: $e');
+      }
+      
       return file.path;
       
     } catch (e, stackTrace) {
@@ -673,17 +676,19 @@ class BackupService {
       final categories = <String, int>{};
       
       for (String category in ['fasting', 'menstrual_cycle', 'tasks', 'task_categories', 'routines', 'food_tracking', 'water_tracking', 'notifications', 'settings', 'app_preferences']) {
-        final categoryData = backupData[category] as Map<String, dynamic>;
+        final categoryData = Map<String, dynamic>.from(backupData[category] ?? {});
         final count = categoryData.keys.length;
         categories[category] = count;
         totalItems += count;
       }
       
+      final lastBackupTime = await _getLastBackup();
+      
       return {
         'total_items': totalItems,
         'categories': categories,
         'backup_size_kb': (json.encode(backupData).length / 1024).round(),
-        'last_backup_time': await _getLastBackup(),
+        'last_backup_time': lastBackupTime,
       };
       
     } catch (e) {
@@ -693,39 +698,156 @@ class BackupService {
   
   static Future<String?> _getLastBackup() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.reload(); // Ensure we have the latest values
+      // Scan for backup files directly without triggering cleanup
+      Map<String, dynamic> locations = {
+        'current_location': null,
+        'all_locations': [],
+        'found_files': [],
+      };
       
-      final lastManual = prefs.getString('last_backup');
-      final lastManualSpecific = prefs.getString('last_manual_backup');
-      final lastAuto = prefs.getString('last_auto_backup');
-      
-      debugPrint('Getting last backup: manual=$lastManual, manual_specific=$lastManualSpecific, auto=$lastAuto');
-      
-      // Prioritize manual backups - if we have any manual backup, use the most recent one
-      String? mostRecentManual;
-      if (lastManual != null && lastManualSpecific != null) {
-        final manualDate = DateTime.parse(lastManual);
-        final manualSpecificDate = DateTime.parse(lastManualSpecific);
-        mostRecentManual = manualDate.isAfter(manualSpecificDate) ? lastManual : lastManualSpecific;
-      } else {
-        mostRecentManual = lastManual ?? lastManualSpecific;
+      if (Platform.isAndroid) {
+        List<String> possiblePaths = [];
+        
+        // Check Downloads/BBetter_Backups (new location)
+        try {
+          final downloadsDir = await getDownloadsDirectory();
+          if (downloadsDir != null) {
+            final bbetterBackupsDir = Directory('${downloadsDir.path}/BBetter_Backups');
+            possiblePaths.add(bbetterBackupsDir.path);
+          }
+        } catch (e) {
+          // Skip if we can't access Downloads
+        }
+        
+        // Check Downloads root
+        try {
+          final downloadsDir = await getDownloadsDirectory();
+          if (downloadsDir != null) {
+            possiblePaths.add(downloadsDir.path);
+          }
+        } catch (e) {
+          // Skip if we can't access Downloads root
+        }
+        
+        // Check app documents/Backups (old location)
+        try {
+          final appDir = await getApplicationDocumentsDirectory();
+          final backupsDir = Directory('${appDir.path}/Backups');
+          possiblePaths.add(backupsDir.path);
+        } catch (e) {
+          // Skip if we can't access app Backups
+        }
+        
+        // Check app documents root
+        try {
+          final appDir = await getApplicationDocumentsDirectory();
+          possiblePaths.add(appDir.path);
+        } catch (e) {
+          // Skip if we can't access app documents
+        }
+        
+        // Search for backup files in all locations
+        for (String path in possiblePaths) {
+          try {
+            final dir = Directory(path);
+            if (await dir.exists()) {
+              final files = await dir.list().toList();
+              for (var file in files) {
+                if (file is File && file.path.endsWith('.json')) {
+                  final fileName = file.path.split(Platform.pathSeparator).last.toLowerCase();
+                  bool isLikelyBackup = fileName.contains('bbetter_backup') || 
+                      fileName.contains('backup') ||
+                      fileName.contains('bbetter');
+                  
+                  if (!isLikelyBackup) {
+                    try {
+                      final stat = await file.stat();
+                      if (stat.size > 1000) {
+                        isLikelyBackup = true;
+                      }
+                    } catch (e) {
+                      // Skip if we can't check size
+                    }
+                  }
+                  
+                  if (isLikelyBackup) {
+                    try {
+                      final stat = await file.stat();
+                      locations['found_files'].add({
+                        'path': file.path,
+                        'name': file.path.split(Platform.pathSeparator).last,
+                        'size': stat.size,
+                        'modified': stat.modified.toIso8601String(),
+                        'location': path,
+                      });
+                    } catch (e) {
+                      // Skip if we can't stat file
+                    }
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            // Skip if we can't scan path
+          }
+        }
       }
       
-      // If we have a manual backup, compare with auto backup
-      if (mostRecentManual != null && lastAuto != null) {
-        final manualDate = DateTime.parse(mostRecentManual);
-        final autoDate = DateTime.parse(lastAuto);
-        return manualDate.isAfter(autoDate) ? mostRecentManual : lastAuto;
-      } else if (mostRecentManual != null) {
-        return mostRecentManual;
-      } else if (lastAuto != null) {
-        return lastAuto;
+      // Sort found files by date descending (newest first)
+      if (locations['found_files'] is List) {
+        (locations['found_files'] as List).sort((a, b) {
+          try {
+            final dateA = DateTime.parse(a['modified']);
+            final dateB = DateTime.parse(b['modified']);
+            return dateB.compareTo(dateA);
+          } catch (e) {
+            return 0;
+          }
+        });
+      }
+      
+      final foundFiles = locations['found_files'] as List<dynamic>;
+      
+      if (foundFiles.isNotEmpty) {
+        final mostRecentFile = foundFiles.first;
+        final lastBackupTime = mostRecentFile['modified'] as String;
+        return lastBackupTime;
       } else {
+        // Fallback to SharedPreferences for compatibility
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.reload();
+          
+          final lastManual = prefs.getString('last_backup');
+          final lastManualSpecific = prefs.getString('last_manual_backup');
+          final lastAuto = prefs.getString('last_auto_backup');
+          
+          // Return the most recent timestamp from SharedPreferences
+          List<String> timestamps = [lastManual, lastManualSpecific, lastAuto]
+              .where((t) => t != null)
+              .cast<String>()
+              .toList();
+              
+          if (timestamps.isNotEmpty) {
+            timestamps.sort((a, b) => DateTime.parse(b).compareTo(DateTime.parse(a)));
+            return timestamps.first;
+          }
+        } catch (e) {
+          // SharedPreferences fallback failed
+        }
         return null;
       }
     } catch (e) {
-      debugPrint('Error getting last backup: $e');
+      // Try SharedPreferences fallback on error
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final lastBackup = prefs.getString('last_backup');
+        if (lastBackup != null) {
+          return lastBackup;
+        }
+      } catch (e2) {
+        // All fallback methods failed
+      }
       return null;
     }
   }

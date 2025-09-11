@@ -9,13 +9,452 @@ import 'task_categories_screen.dart';
 import 'task_edit_screen.dart';
 import 'task_service.dart';
 import 'task_completion_animation.dart';
+import 'task_card_utils.dart';
 import '../theme/app_colors.dart';
 
 class TodoScreen extends StatefulWidget {
-  const TodoScreen({super.key});
+  final bool showFilters;
+  final bool showAddButton;
+  final VoidCallback? onTasksChanged; // Callback when tasks are modified
+  
+  const TodoScreen({
+    super.key, 
+    this.showFilters = true,
+    this.showAddButton = true,
+    this.onTasksChanged,
+  });
 
   @override
   State<TodoScreen> createState() => _TodoScreenState();
+}
+
+class _AnimatedTaskRandomizer extends StatefulWidget {
+  final List<Task> tasks;
+  final Function(Task) onTaskSelected;
+  final VoidCallback onCancel;
+  final List<TaskCategory> categories;
+
+  const _AnimatedTaskRandomizer({
+    required this.tasks,
+    required this.onTaskSelected,
+    required this.onCancel,
+    required this.categories,
+  });
+
+  @override
+  State<_AnimatedTaskRandomizer> createState() => _AnimatedTaskRandomizerState();
+}
+
+class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
+    with TickerProviderStateMixin {
+  late AnimationController _shuffleController;
+  late AnimationController _scaleController;
+  late AnimationController _glowController;
+  late Animation<double> _shuffleAnimation;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _glowAnimation;
+  
+  Task? _currentTask;
+  Task? _selectedTask;
+  bool _isShuffling = false;
+  bool _hasSelected = false;
+  Timer? _shuffleTimer;
+  int _shuffleCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _shuffleController = AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: this,
+    );
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _glowController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
+    _shuffleAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _shuffleController, curve: Curves.easeInOut),
+    );
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.2).animate(
+      CurvedAnimation(parent: _scaleController, curve: Curves.elasticOut),
+    );
+    _glowAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
+    );
+
+    _currentTask = widget.tasks[Random().nextInt(widget.tasks.length)];
+    
+    // Start with scale animation
+    _scaleController.forward();
+  }
+
+  @override
+  void dispose() {
+    _shuffleController.dispose();
+    _scaleController.dispose();
+    _glowController.dispose();
+    _shuffleTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startShuffling() {
+    if (_hasSelected) return;
+    
+    setState(() {
+      _isShuffling = true;
+      _shuffleCount = 0;
+    });
+
+    _glowController.repeat(reverse: true);
+    
+    _shuffleTimer = Timer.periodic(const Duration(milliseconds: 150), (timer) {
+      if (_shuffleCount >= 20) { // Shuffle for 3 seconds
+        timer.cancel();
+        _stopShuffling();
+        return;
+      }
+      
+      setState(() {
+        _currentTask = widget.tasks[Random().nextInt(widget.tasks.length)];
+        _shuffleCount++;
+      });
+      
+      _shuffleController.forward().then((_) {
+        _shuffleController.reverse();
+      });
+    });
+  }
+
+  void _stopShuffling() {
+    setState(() {
+      _isShuffling = false;
+      _hasSelected = true;
+      _selectedTask = _currentTask;
+    });
+    
+    _glowController.stop();
+    _glowController.reset();
+    _scaleController.forward();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 20,
+              spreadRadius: 5,
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.coral, AppColors.lightCoral],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                ),
+              ),
+              child: Row(
+                children: [
+                  AnimatedBuilder(
+                    animation: _shuffleAnimation,
+                    builder: (context, child) {
+                      return Transform.rotate(
+                        angle: _shuffleAnimation.value * 2 * 3.14159,
+                        child: const Icon(
+                          Icons.casino_rounded,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Text(
+                      'Task Randomizer',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (!_isShuffling)
+                    IconButton(
+                      onPressed: widget.onCancel,
+                      icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    ),
+                ],
+              ),
+            ),
+            
+            // Main content
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    // Task display area
+                    Expanded(
+                      child: Center(
+                        child: AnimatedBuilder(
+                          animation: Listenable.merge([_scaleAnimation, _glowAnimation]),
+                          builder: (context, child) {
+                            return Transform.scale(
+                              scale: _hasSelected ? _scaleAnimation.value : 1.0,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: _hasSelected 
+                                      ? AppColors.successGreen.withValues(alpha: 0.1)
+                                      : Theme.of(context).colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: _hasSelected 
+                                        ? AppColors.successGreen
+                                        : (_isShuffling 
+                                            ? AppColors.coral.withValues(alpha: 0.3 + _glowAnimation.value * 0.7)
+                                            : AppColors.grey.withValues(alpha: 0.3)),
+                                    width: _hasSelected ? 3 : 2,
+                                  ),
+                                  boxShadow: _hasSelected ? [
+                                    BoxShadow(
+                                      color: AppColors.successGreen.withValues(alpha: 0.3),
+                                      blurRadius: 20,
+                                      spreadRadius: 2,
+                                    ),
+                                  ] : null,
+                                ),
+                                child: _currentTask != null 
+                                    ? _buildTaskContent(_currentTask!)
+                                    : const SizedBox.shrink(),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Action buttons
+                    if (!_hasSelected) ...[
+                      if (!_isShuffling) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _startShuffling,
+                            icon: const Icon(Icons.shuffle_rounded),
+                            label: const Text('Shuffle Tasks!'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.coral,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton(
+                            onPressed: widget.onCancel,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                      ] else ...[
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.coral.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.coral),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              const Text(
+                                'Shuffling tasks...',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ] else ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: widget.onCancel,
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                              child: const Text('Skip This Task'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: ElevatedButton.icon(
+                              onPressed: () => widget.onTaskSelected(_selectedTask!),
+                              icon: const Icon(Icons.check_circle_rounded),
+                              label: const Text('Complete Task'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.successGreen,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTaskContent(Task task) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          task.title,
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        if (task.description.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            task.description,
+            style: const TextStyle(fontSize: 16),
+          ),
+        ],
+        const SizedBox(height: 16),
+        
+        // Task details
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            if (task.deadline != null)
+              _buildInfoChip(
+                Icons.schedule_rounded,
+                'Due ${DateFormat('MMM dd').format(task.deadline!)}',
+                AppColors.lightCoral,
+              ),
+            if (task.reminderTime != null)
+              _buildInfoChip(
+                Icons.notifications_rounded,
+                DateFormat('HH:mm').format(task.reminderTime!),
+                AppColors.coral,
+              ),
+            if (task.isImportant)
+              _buildInfoChip(
+                Icons.star_rounded,
+                'Important',
+                AppColors.coral,
+              ),
+            if (task.categoryIds.isNotEmpty)
+              ...task.categoryIds.map((categoryId) {
+                final category = widget.categories.firstWhere(
+                  (cat) => cat.id == categoryId,
+                  orElse: () => TaskCategory(
+                    id: '',
+                    name: 'Unknown',
+                    color: Colors.grey,
+                    order: 0,
+                  ),
+                );
+                return _buildInfoChip(
+                  Icons.label_rounded,
+                  category.name,
+                  category.color,
+                );
+              }),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoChip(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
@@ -23,7 +462,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   List<TaskCategory> _categories = [];
   List<String> _selectedCategoryFilters = [];
   bool _showCompleted = false;
-  bool _showAllTasks = false; // Bypass menstrual cycle filtering
+  bool _showAllTasks = true; // Default: show only current menstrual phase tasks
   final TaskService _taskService = TaskService();
   final Set<String> _completingTasks = {};
 
@@ -32,11 +471,15 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadData();
+    
+    // Listen for global task changes
+    _taskService.addTaskChangeListener(_refreshTasks);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _taskService.removeTaskChangeListener(_refreshTasks);
     super.dispose();
   }
 
@@ -85,32 +528,6 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
   Future<void> _loadTasks() async {
     final tasks = await _taskService.loadTasks();
-    
-    // Debug: Examine each loaded task
-    if (kDebugMode) {
-      print('=== LOADING TASKS DEBUG ===');
-      print('Total tasks loaded: ${tasks.length}');
-      for (int i = 0; i < tasks.length; i++) {
-        final task = tasks[i];
-        print('Task $i:');
-        print('  ID: ${task.id}');
-        print('  Title: "${task.title}" (length: ${task.title.length}, trimmed: ${task.title.trim().length})');
-        print('  Description: "${task.description}"');
-        print('  Completed: ${task.isCompleted}');
-        print('  Important: ${task.isImportant}');
-        print('  Categories: ${task.categoryIds}');
-        print('  Created: ${task.createdAt}');
-        
-        // Check for potential issues
-        if (task.title.trim().isEmpty) {
-          print('  ⚠️  WARNING: Empty title!');
-        }
-        if (task.id.isEmpty) {
-          print('  ⚠️  WARNING: Empty ID!');
-        }
-      }
-      print('=== END LOADING DEBUG ===');
-    }
     
     if (mounted) {
       setState(() {
@@ -243,6 +660,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       description: task.description,
       categoryIds: List.from(task.categoryIds),
       deadline: task.deadline,
+      scheduledDate: task.scheduledDate,
       reminderTime: task.reminderTime,
       isImportant: task.isImportant,
       recurrence: task.recurrence,
@@ -261,6 +679,9 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       
       // Reload local list to stay synchronized
       await _loadTasks();
+      
+      // Notify parent widget that tasks have changed
+      widget.onTasksChanged?.call();
       
       if (kDebugMode) {
         print('Task completion saved successfully');
@@ -288,70 +709,63 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       print('Previous completion status: ${task.isCompleted}');
     }
     
-    // Mark current task as completed
-    task.isCompleted = true;
-    task.completedAt = DateTime.now();
-
     // Get next due date for the recurring task
-    final nextDueDate = task.recurrence!.getNextDueDate(DateTime.now());
+    // For postponed tasks, we need to skip the current cycle to respect the postponement
+    DateTime referenceDate;
+    if (task.scheduledDate != null) {
+      // Task was postponed - find the next occurrence after the scheduled date
+      // This ensures we don't go back to the original cycle day that was skipped
+      referenceDate = task.scheduledDate!;
+    } else {
+      // Task completed on time - use natural recurrence from today
+      referenceDate = DateTime.now();
+    }
+    
+    final nextDueDate = task.recurrence!.getNextDueDate(referenceDate);
     
     if (nextDueDate != null) {
-      // Load fresh task list
+      // Update the existing task's scheduledDate instead of deadline
+      final updatedTask = Task(
+        id: task.id, // Keep same ID
+        title: task.title,
+        description: task.description,
+        categoryIds: List.from(task.categoryIds),
+        deadline: task.deadline, // Keep original deadline unchanged
+        scheduledDate: nextDueDate, // Update scheduled date to next occurrence
+        reminderTime: task.reminderTime != null 
+            ? DateTime(nextDueDate.year, nextDueDate.month, nextDueDate.day,
+                       task.reminderTime!.hour, task.reminderTime!.minute)
+            : null,
+        isImportant: task.isImportant,
+        recurrence: task.recurrence,
+        isCompleted: false, // Reset completion status
+        completedAt: null,  // Clear completion timestamp
+        createdAt: task.createdAt, // Keep original creation date
+      );
+      
+      // Load fresh task list and update the existing task
       final allTasks = await _taskService.loadTasks();
-      
-      // Update current task
       final currentTaskIndex = allTasks.indexWhere((t) => t.id == task.id);
+      
       if (currentTaskIndex != -1) {
-        allTasks[currentTaskIndex] = task;
-      }
-      
-      // Check if next instance already exists to prevent duplicates
-      final existingNextTask = allTasks.where((t) => 
-        t.title == task.title && 
-        t.recurrence != null &&
-        t.deadline != null &&
-        t.deadline!.year == nextDueDate.year &&
-        t.deadline!.month == nextDueDate.month &&
-        t.deadline!.day == nextDueDate.day &&
-        !t.isCompleted
-      ).toList();
-      
-      if (existingNextTask.isEmpty) {
-        // Create new instance for next occurrence only if it doesn't exist
-        final nextTask = Task(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          title: task.title,
-          description: task.description,
-          categoryIds: List.from(task.categoryIds),
-          deadline: nextDueDate,
-          reminderTime: task.reminderTime != null 
-              ? DateTime(nextDueDate.year, nextDueDate.month, nextDueDate.day,
-                         task.reminderTime!.hour, task.reminderTime!.minute)
-              : null,
-          isImportant: task.isImportant,
-          recurrence: task.recurrence,
-          isCompleted: false,
-        );
-        
-        // Add next instance
-        allTasks.add(nextTask);
+        allTasks[currentTaskIndex] = updatedTask;
+        await _taskService.saveTasks(allTasks);
+        await _loadTasks();
         
         if (kDebugMode) {
-          print('✅ Created next recurring task instance for: ${nextDueDate.toString()}');
-          print('   New task ID: ${nextTask.id}');
-          print('   Total tasks after creation: ${allTasks.length}');
-        }
-      } else {
-        if (kDebugMode) {
-          print('Next recurring task instance already exists for: ${nextDueDate.toString()}');
+          print('✅ Updated recurring task to next due date: ${nextDueDate.toString()}');
+          print('   Task is now unchecked and scheduled for next occurrence');
+          print('   Original deadline preserved: ${task.deadline}');
+          print('   Reference date used: ${referenceDate.toString()}');
+          print('   Previous scheduled date: ${task.scheduledDate?.toString() ?? "none"}');
         }
       }
-      
-      await _taskService.saveTasks(allTasks);
-      await _loadTasks();
       
     } else {
-      // Just mark as completed if no next date found
+      // If no next date found, just mark as completed
+      task.isCompleted = true;
+      task.completedAt = DateTime.now();
+      
       final allTasks = await _taskService.loadTasks();
       final taskIndex = allTasks.indexWhere((t) => t.id == task.id);
       
@@ -389,15 +803,22 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     // Reload local list to stay synchronized
     await _loadTasks();
     
+    // Notify parent widget that tasks have changed
+    widget.onTasksChanged?.call();
+    
     if (kDebugMode) {
       print('=== END DELETING TASK DEBUG ===');
     }
   }
 
   Future<void> _postponeTask(Task task) async {
+    debugPrint('=== _postponeTask called for: ${task.title} ===');
     try {
       await _taskService.postponeTaskToTomorrow(task);
       await _loadTasks(); // Reload to reflect changes
+      
+      // Notify parent widget that tasks have changed
+      widget.onTasksChanged?.call();
       
       // Removed postpone snackbar notification as requested
     } catch (e) {
@@ -427,49 +848,17 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       return;
     }
 
-    final randomTask = availableTasks[Random().nextInt(availableTasks.length)];
-
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('🎲 Random Task'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              randomTask.title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            if (randomTask.description.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(randomTask.description),
-            ],
-            if (randomTask.deadline != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.schedule_rounded, size: 16),
-                  const SizedBox(width: 4),
-                  Text('Due: ${DateFormat('MMM dd, yyyy').format(randomTask.deadline!)}'),
-                ],
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _toggleTaskCompletion(randomTask);
-            },
-            child: const Text('Mark Done'),
-          ),
-        ],
+      barrierDismissible: false,
+      builder: (context) => _AnimatedTaskRandomizer(
+        tasks: availableTasks,
+        onTaskSelected: (task) {
+          Navigator.pop(context);
+          _toggleTaskCompletion(task);
+        },
+        onCancel: () => Navigator.pop(context),
+        categories: _categories,
       ),
     );
   }
@@ -493,7 +882,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       filtered = filtered.where((task) => 
         // Show non-menstrual tasks OR menstrual tasks that are due today (current phase)
         (task.recurrence == null || !_isMenstrualCycleTask(task.recurrence!)) || 
-        (task.recurrence != null && _isMenstrualCycleTask(task.recurrence!) && task.shouldShowToday())
+        (task.recurrence != null && _isMenstrualCycleTask(task.recurrence!) && task.isDueToday())
       ).toList();
     }
     // When flower icon is OFF: Show ALL tasks without any menstrual filtering
@@ -526,29 +915,8 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final prioritizedTasks = _getPrioritizedTasks();
 
-    // Debug logging
-    if (kDebugMode) {
-      print('=== TODO SCREEN DEBUG ===');
-      print('Total tasks loaded: ${_tasks.length}');
-      final activeTasks = _tasks.where((t) => !t.isCompleted).length;
-      print('Active tasks: $activeTasks');
-      print('Total prioritized tasks: ${prioritizedTasks.length}');
-      print('Show completed: $_showCompleted');
-      print('Category filters: $_selectedCategoryFilters');
-      
-      for (int i = 0; i < prioritizedTasks.length; i++) {
-        final task = prioritizedTasks[i];
-        print('Task $i: "${task.title}" (completed: ${task.isCompleted}, important: ${task.isImportant}, categories: ${task.categoryIds})');
-      }
-      
-      // Also show filtered tasks details
-      final filteredTasks = _getFilteredTasks();
-      print('Filtered tasks count: ${filteredTasks.length}');
-      print('=== END DEBUG ===');
-    }
-
     return Scaffold(
-      appBar: AppBar(
+      appBar: widget.showFilters ? AppBar(
         title: const Text('Tasks'),
         backgroundColor: Colors.transparent,
         actions: [
@@ -556,8 +924,8 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
             padding: const EdgeInsets.only(right: 4),
             child: IconButton(
               icon: Icon(
-                _showAllTasks ? Icons.local_florist_rounded : Icons.local_florist_rounded,
-                color: _showAllTasks ? AppColors.white24 : AppColors.lightPink,
+                Icons.local_florist_rounded,
+                color: _showAllTasks ? AppColors.lightPink : AppColors.white24,
               ),
               tooltip: _showAllTasks ? 'Hide Cycle-Filtered Tasks' : 'Show All Tasks (Bypass Cycle Filtering)',
               onPressed: () {
@@ -612,51 +980,66 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
             ),
           ),
         ],
-      ),
+      ) : null,
+      backgroundColor: widget.showFilters ? null : Colors.transparent,
       body: Column(
         children: [
           // Filter Section
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          if (widget.showFilters) 
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Wrap(
-                  spacing: 4,
-                  runSpacing: 8,
+                // Stretched category filter chips
+                Row(
                   children: [
-                    FilterChip(
-                      label: const Text('All'),
-                      selected: _selectedCategoryFilters.isEmpty,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
-                      onSelected: (selected) {
-                        setState(() {
-                          _selectedCategoryFilters.clear();
-                        });
-                        _saveCategoryFilters();
-                      },
+                    Expanded(
+                      child: FilterChip(
+                        label: const Text('All'),
+                        selected: _selectedCategoryFilters.isEmpty,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedCategoryFilters.clear();
+                          });
+                          _saveCategoryFilters();
+                        },
+                      ),
                     ),
-                    ..._categories.map((category) => FilterChip(
-                      label: Text(category.name),
-                      selected: _selectedCategoryFilters.contains(category.id),
-                      backgroundColor: category.color.withValues(alpha: 0.1),
-                      selectedColor: category.color.withValues(alpha: 0.3),
-                      checkmarkColor: category.color,
-                      side: BorderSide(color: category.color.withValues(alpha: 0.5)),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
-                      onSelected: (selected) {
-                        setState(() {
-                          if (selected) {
-                            _selectedCategoryFilters.add(category.id);
-                          } else {
-                            _selectedCategoryFilters.remove(category.id);
-                          }
-                        });
-                        _saveCategoryFilters();
-                      },
-                    )),
+                    if (_categories.isNotEmpty) ...[
+                      const SizedBox(width: 4),
+                      ..._categories.expand((category) => [
+                        Expanded(
+                          child: FilterChip(
+                            label: Text(
+                              category.name,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            selected: _selectedCategoryFilters.contains(category.id),
+                            backgroundColor: category.color.withValues(alpha: 0.1),
+                            selectedColor: category.color.withValues(alpha: 0.3),
+                            checkmarkColor: category.color,
+                            side: BorderSide(color: category.color.withValues(alpha: 0.5)),
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _selectedCategoryFilters.add(category.id);
+                                } else {
+                                  _selectedCategoryFilters.remove(category.id);
+                                }
+                              });
+                              _saveCategoryFilters();
+                            },
+                          ),
+                        ),
+                        if (_categories.last != category) const SizedBox(width: 4),
+                      ]),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -731,6 +1114,10 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                       // Check if this task is completing
                       final isCompleting = _completingTasks.contains(task.id);
                       
+                      // Calculate priority for display
+                      final priorityReason = TaskCardUtils.getTaskPriorityReason(task);
+                      final priorityColor = TaskCardUtils.getPriorityColor(priorityReason);
+                      
                       return TaskCompletionAnimation(
                         key: ValueKey('animation_${task.id}'),
                         isCompleting: isCompleting,
@@ -743,6 +1130,8 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                           onEdit: () => _editTask(task),
                           onDelete: () => _deleteTask(task),
                           onPostpone: () => _postponeTask(task),
+                          priorityReason: priorityReason.isNotEmpty ? priorityReason : null,
+                          priorityColor: priorityColor,
                         ),
                       );
                     },
@@ -751,11 +1140,11 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: widget.showAddButton ? FloatingActionButton(
         onPressed: _addTask,
         backgroundColor: AppColors.successGreen,
         child: const Icon(Icons.add_rounded),
-      ),
+      ) : null,
     );
   }
 }

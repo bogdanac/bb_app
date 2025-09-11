@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'tasks_data_models.dart';
-import 'task_service.dart';
 import '../theme/app_colors.dart';
 import 'task_card_utils.dart';
 
@@ -12,6 +11,8 @@ class TaskCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback? onPostpone;
+  final String? priorityReason;
+  final Color? priorityColor;
   const TaskCard({
     super.key,
     required this.task,
@@ -20,6 +21,8 @@ class TaskCard extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     this.onPostpone,
+    this.priorityReason,
+    this.priorityColor,
   });
 
   @override
@@ -31,19 +34,61 @@ class TaskCard extends StatelessWidget {
     
     return Dismissible(
       key: ValueKey(task.id),
-      direction: DismissDirection.endToStart,
+      direction: DismissDirection.horizontal,
       dismissThresholds: const {
-        DismissDirection.endToStart: 0.8, // Require 80% swipe to delete
+        DismissDirection.endToStart: 0.8, // Require 80% swipe left to delete
+        DismissDirection.startToEnd: 0.8, // Require 80% swipe right to postpone
       },
       confirmDismiss: (direction) async {
         return true; // Skip confirmation dialog
       },
       onDismissed: (direction) {
-        onDelete();
+        if (direction == DismissDirection.endToStart) {
+          debugPrint('=== SWIPE DELETE: ${task.title} ===');
+          onDelete();
+        } else if (direction == DismissDirection.startToEnd) {
+          debugPrint('=== SWIPE POSTPONE: ${task.title} ===');
+          onPostpone?.call();
+        }
       },
       background: Container(
         decoration: BoxDecoration(
-          color: AppColors.lightCoral,
+          color: AppColors.yellow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 24),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.schedule_rounded,
+              color: Colors.white,
+              size: 32,
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Swipe fully',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+              ),
+            ),
+            Text(
+              'to postpone',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+      secondaryBackground: Container(
+        decoration: BoxDecoration(
+          color: AppColors.redPrimary,
           borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.centerRight,
@@ -82,7 +127,7 @@ class TaskCard extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: task.isImportant
-              ? BorderSide(color: AppColors.coral, width: 2)
+              ? BorderSide(color: AppColors.coral.withValues(alpha: 0.3), width: 1)
               : BorderSide.none,
         ),
         child: InkWell(
@@ -129,7 +174,7 @@ class TaskCard extends StatelessWidget {
                                           ? Colors.grey
                                           : null,
                                     ),
-                                    maxLines: 1,
+                                    maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -165,13 +210,20 @@ class TaskCard extends StatelessWidget {
                               ],
                             ),
                             // All labels directly after title
-                            if (task.deadline != null || task.reminderTime != null || task.recurrence != null || task.categoryIds.isNotEmpty) ...[
+                            if (task.deadline != null || task.reminderTime != null || task.recurrence != null || task.categoryIds.isNotEmpty || task.isDueToday() || (priorityReason != null && priorityReason!.isNotEmpty)) ...[
                               const SizedBox(height: 10),
                               Wrap(
                                 spacing: 6,
                                 runSpacing: 3,
                                 children: [
-                                  if (task.deadline != null)
+                                  // Priority chip (highest priority)
+                                  if (priorityReason != null && priorityReason!.isNotEmpty)
+                                    TaskCardUtils.buildInfoChip(
+                                      Icons.today_rounded,
+                                      priorityReason!,
+                                      priorityColor ?? Colors.orange,
+                                    ),
+                                  if (task.deadline != null && !task.isDueToday())
                                     TaskCardUtils.buildInfoChip(
                                       Icons.schedule_rounded,
                                       DateFormat('MMM dd').format(task.deadline!),
@@ -212,33 +264,6 @@ class TaskCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      // Postpone button for tasks due today
-                      if (TaskService.isTaskDueToday(task) && !task.isCompleted && onPostpone != null)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 0),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.orange.withValues(alpha: 0.3), width: 1),
-                            ),
-                            child: InkWell(
-                              onTap: () {
-                                debugPrint('Postpone button tapped for task: ${task.title}');
-                                onPostpone!();
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Padding(
-                                padding: const EdgeInsets.all(6.0),
-                                child: Icon(
-                                  Icons.skip_next_rounded,
-                                  color: Colors.orange,
-                                  size: 18,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
                       // Checkbox on the right
                       const SizedBox(width: 8),
                       GestureDetector(
