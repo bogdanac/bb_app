@@ -341,7 +341,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
                   const SizedBox(width: 12),
                   const Text(
                     'Morning Routine',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -388,7 +388,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
                 const SizedBox(width: 12),
                 OutlinedButton.icon(
                   onPressed: widget.onHiddenForToday,
-                  icon: const Icon(Icons.close_rounded, size: 14),
+                  icon: const Icon(Icons.close_rounded, size: 16),
                   label: const Text(
                     'Not Today',
                     style: TextStyle(fontSize: 12),

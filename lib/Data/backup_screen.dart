@@ -29,8 +29,6 @@ class _BackupScreenState extends State<BackupScreen> {
     try {
       final info = await BackupService.getBackupInfo();
       
-      debugPrint('Loaded backup info - last_backup_time: ${info['last_backup_time']}');
-      
       setState(() {
         _backupInfo = info;
         _isLoading = false;
@@ -161,21 +159,50 @@ class _BackupScreenState extends State<BackupScreen> {
                     )),
                   ] else ...[
                     Text('Found ${locations['found_files'].length} backup file(s):', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
+                    // Global path label
+                    if (locations['found_files'].isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.folder_outlined, size: 16, color: Colors.grey),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Storage: ${locations['found_files'].first['location']}',
+                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     ...locations['found_files'].map<Widget>((file) => Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: Padding(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(12),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(file['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            // Date first, prominent
+                            Text(
+                              '📅 ${_formatBackupDate(file['modified'])}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue),
+                            ),
+                            const SizedBox(height: 6),
+                            // File name/title
+                            Text(
+                              file['name'],
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                            ),
                             const SizedBox(height: 4),
-                            Text('📍 ${file['location']}', style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
-                            const SizedBox(height: 2),
-                            Text('📅 ${_formatBackupDate(file['modified'])}', style: const TextStyle(fontSize: 10)),
-                            Text('💾 ${(file['size'] / 1024).round()} KB', style: const TextStyle(fontSize: 10)),
-                            const SizedBox(height: 4),
+                            // Size info
+                            Text('💾 ${(file['size'] / 1024).round()} KB', style: const TextStyle(fontSize: 10, color: Colors.grey)),
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
@@ -384,7 +411,7 @@ class _BackupScreenState extends State<BackupScreen> {
 
       // Verify original file still exists after sharing
       if (await originalFile.exists()) {
-        debugPrint('Original backup file preserved at: $filePath');
+        // File preserved successfully
       } else {
         debugPrint('WARNING: Original backup file was removed during sharing!');
         if (mounted) {
@@ -402,7 +429,6 @@ class _BackupScreenState extends State<BackupScreen> {
         try {
           if (await tempFile.exists()) {
             await tempFile.delete();
-            debugPrint('Cleaned up temporary share file');
           }
         } catch (e) {
           debugPrint('Could not clean up temp file: $e');
@@ -425,7 +451,9 @@ class _BackupScreenState extends State<BackupScreen> {
     // If no stored backup time but we have session backup, show "Today"
     if (lastBackup == null && _lastSessionBackup != null) {
       final now = DateTime.now();
-      final difference = now.difference(_lastSessionBackup!).inDays;
+      final nowDate = DateTime(now.year, now.month, now.day);
+      final sessionDate = DateTime(_lastSessionBackup!.year, _lastSessionBackup!.month, _lastSessionBackup!.day);
+      final difference = nowDate.difference(sessionDate).inDays;
       if (difference == 0) return 'Today';
     }
     
@@ -433,7 +461,11 @@ class _BackupScreenState extends State<BackupScreen> {
     try {
       final date = DateTime.parse(lastBackup);
       final now = DateTime.now();
-      final difference = now.difference(date).inDays;
+      
+      // Compare calendar dates, not time differences
+      final nowDate = DateTime(now.year, now.month, now.day);
+      final backupDate = DateTime(date.year, date.month, date.day);
+      final difference = nowDate.difference(backupDate).inDays;
       
       if (difference == 0) {
         return 'Today';
@@ -464,12 +496,46 @@ class _BackupScreenState extends State<BackupScreen> {
 
                   // Backup Info
                   if (_backupInfo != null && !_backupInfo!.containsKey('error')) ...[
-                    const Text(
-                      'Your Data',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
 
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: Column(
+                          children: [
+                            SwitchListTile(
+                              title: const Text('Automatic Daily Backups'),
+                              subtitle: const Text('Auto-backup every day to App Backups folder'),
+                              value: _autoBackupEnabled,
+                              onChanged: (value) {
+                                setState(() {
+                                  _autoBackupEnabled = value;
+                                });
+                                // Save this setting
+                              },
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            if (_autoBackupEnabled) ...[
+                              const Divider(),
+                              Row(
+                                children: [
+                                  const Icon(Icons.schedule, size: 14, color: Colors.grey),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Last backup: ${_formatLastBackup(_backupInfo?['last_backup_time'])}',
+                                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                '💡 Tip: Auto backups happen daily in the background. You can also manually export anytime above.',
+                                style: TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
@@ -492,15 +558,17 @@ class _BackupScreenState extends State<BackupScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 8),
                   ],
 
                   // Export Section
-                  const Text(
-                    'Export Backup',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  const Center(
+                    child: Text(
+                      'Export',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
 
                   Card(
                     child: Column(
@@ -524,14 +592,16 @@ class _BackupScreenState extends State<BackupScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 8),
 
                   // Import Section
-                  const Text(
-                    'Restore Backup',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  const Center(
+                    child: Text(
+                      'Restore',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
 
                   Card(
                     child: Column(
@@ -554,56 +624,6 @@ class _BackupScreenState extends State<BackupScreen> {
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 24),
-
-                  // Auto Backup Settings
-                  const Text(
-                    'Auto Backup',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          SwitchListTile(
-                            title: const Text('Automatic Daily Backups'),
-                            subtitle: const Text('Auto-backup every day to App Backups folder'),
-                            value: _autoBackupEnabled,
-                            onChanged: (value) {
-                              setState(() {
-                                _autoBackupEnabled = value;
-                              });
-                              // Save this setting
-                            },
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          if (_autoBackupEnabled) ...[
-                            const Divider(),
-                            Row(
-                              children: [
-                                const Icon(Icons.schedule, size: 14, color: Colors.grey),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Last backup: ${_formatLastBackup(_backupInfo?['last_backup_time'])}',
-                                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              '💡 Tip: Auto backups happen daily in the background. You can also manually export anytime above.',
-                              style: TextStyle(fontSize: 12, color: Colors.grey),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-
                 ],
               ),
             ),

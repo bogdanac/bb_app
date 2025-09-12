@@ -214,9 +214,9 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
                     style: const TextStyle(fontSize: 12, color: AppColors.white60),
                   ),
                 ),
-                ],
-              ),
+              ],
             ),
+          ),
             
           ],
         ),
@@ -285,8 +285,8 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
                         child: const Text(
                           'NOW',
                           style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                             color: AppColors.white,
                           ),
                         ),

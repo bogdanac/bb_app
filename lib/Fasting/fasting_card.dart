@@ -11,8 +11,9 @@ import 'fasting_phases.dart';
 
 class FastingCard extends StatefulWidget {
   final VoidCallback? onHiddenForToday;
+  final Function(bool)? onFastingStatusChanged;
   
-  const FastingCard({super.key, this.onHiddenForToday});
+  const FastingCard({super.key, this.onHiddenForToday, this.onFastingStatusChanged});
 
   @override
   State<FastingCard> createState() => _FastingCardState();
@@ -45,6 +46,10 @@ class _FastingCardState extends State<FastingCard> {
 
   void _onFastingStateChanged() {
     _loadFastingState();
+  }
+  
+  void _notifyFastingStatusChanged() {
+    widget.onFastingStatusChanged?.call(isFasting);
   }
 
   Future<void> _loadRecommendedFast() async {
@@ -82,6 +87,7 @@ class _FastingCardState extends State<FastingCard> {
           currentFastType = fastType;
           fastingDuration = now.difference(startTime);
         });
+        _notifyFastingStatusChanged();
         _startTimer();
       } else if (!isFastingStored || (endTime != null && now.isAfter(endTime))) {
         // Only clear if explicitly not fasting OR fast has definitely ended
@@ -92,6 +98,7 @@ class _FastingCardState extends State<FastingCard> {
           currentFastType = '';
           fastingDuration = Duration.zero;
         });
+        _notifyFastingStatusChanged();
         _timer?.cancel();
       }
     } else {
@@ -104,6 +111,7 @@ class _FastingCardState extends State<FastingCard> {
           currentFastType = '';
           fastingDuration = Duration.zero;
         });
+        _notifyFastingStatusChanged();
         _timer?.cancel();
       }
     }
@@ -187,7 +195,8 @@ class _FastingCardState extends State<FastingCard> {
       currentFastType = recommendedFast;
       fastingDuration = Duration.zero;
     });
-
+    
+    _notifyFastingStatusChanged();
     _saveFastingState();
     _startTimer();
 
@@ -219,7 +228,7 @@ class _FastingCardState extends State<FastingCard> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           color: isFasting 
@@ -288,22 +297,28 @@ class _FastingCardState extends State<FastingCard> {
                       )
                     : const Text(
                         'No fast today',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.white70),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.white70),
                           ),
                   ),
                   if (recommendedFast.isNotEmpty) ...[
-                    ElevatedButton.icon(
+                    ElevatedButton(
                       onPressed: _startFast,
-                      icon: const Icon(Icons.play_arrow_rounded, size: 24),
-                      label: const Text('Start', style: TextStyle(fontSize: 16)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.lightGreen,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        minimumSize: const Size(80, 40),
+                        padding: const EdgeInsets.fromLTRB(0, 4, 4, 8),
+                        minimumSize: const Size(65, 35),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.play_arrow_rounded, size: 16),
+                          const SizedBox(width: 2), // Closer spacing
+                          const Text('Start', style: TextStyle(fontSize: 16)),
+                        ],
                       ),
                     ),
                     // Not Today button inline with Start button
@@ -318,7 +333,7 @@ class _FastingCardState extends State<FastingCard> {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          minimumSize: const Size(0, 40),
+                          minimumSize: const Size(35, 35),
                         ),
                         child: const Icon(Icons.update, size: 16),
                       ),

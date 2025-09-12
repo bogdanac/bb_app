@@ -29,6 +29,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int waterIntake = 0;
   bool showFastingSection = false;
+  bool _isFastingInProgress = false;
   bool showMorningRoutine = true;
   bool showHabitCard = false;
   bool _isLoading = true;
@@ -553,7 +554,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return Scaffold(
         appBar: AppBar(
           title: const Text('BBetter',
-              style: TextStyle(fontWeight: FontWeight.bold)),
+              style: TextStyle(fontWeight: FontWeight.w600)),
           backgroundColor: AppColors.transparent,
         ),
         body: const Center(
@@ -567,7 +568,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         title: const Text('bbetter',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+            style: TextStyle(fontWeight: FontWeight.w600)),
         backgroundColor: AppColors.transparent,
         actions: [
           if (kDebugMode)
@@ -609,17 +610,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   );
                 },
               ),
-              const SizedBox(height: 2), // Consistent spacing
+              const SizedBox(height: 4), // Consistent spacing
 
               // Calendar Events Card
               CalendarEventsCard(key: _calendarEventsKey),
+              const SizedBox(height: 4), // Consistent spacing
 
-              const SizedBox(height: 2), // Consistent spacing
+              // Fasting Section (conditional)
+              if (showFastingSection) ...[
+                FastingCard(
+                  onHiddenForToday: _onFastingHiddenForToday,
+                  onFastingStatusChanged: (bool isFasting) {
+                    setState(() {
+                      _isFastingInProgress = isFasting;
+                    });
+                  },
+                ),
+                const SizedBox(height: 4), // Consistent spacing
+              ],
 
-              // Food Tracking Section
-              const FoodTrackingCard(),
-
-              const SizedBox(height: 2),
+              // Food Tracking Section (hidden during fasting)
+              if (!_isFastingInProgress) ...[
+                const FoodTrackingCard(),
+                const SizedBox(height: 4), // Consistent spacing
+              ],
 
               // Water Tracking Section (conditional)
               if (_shouldShowWaterTracking) ...[
@@ -630,19 +644,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(height: 4), // Consistent spacing
               ],
 
-              // Habit Card Section (conditional - appears before water tracking)
+              // Habit Card Section (conditional)
               if (showHabitCard) ...[
                 HabitCard(
                   onAllCompleted: _onAllHabitsCompleted,
                 ),
-                const SizedBox(height: 4), // Consistent spacing
-              ],
-
-              const SizedBox(height: 4), // Consistent spacing
-
-              // Fasting Section (conditional)
-              if (showFastingSection) ...[
-                FastingCard(onHiddenForToday: _onFastingHiddenForToday),
                 const SizedBox(height: 4), // Consistent spacing
               ],
 

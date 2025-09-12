@@ -73,7 +73,7 @@ class _HabitCardState extends State<HabitCard> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           color: AppColors.orange.withValues(alpha: 0.15),
@@ -132,7 +132,7 @@ class _HabitCardState extends State<HabitCard> {
                                   '${habit.getStreak()}',
                                   style: const TextStyle(
                                     fontSize: 12,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.w600,
                                     color: AppColors.orange,
                                   ),
                                 ),

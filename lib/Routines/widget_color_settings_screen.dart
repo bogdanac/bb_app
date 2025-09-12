@@ -36,7 +36,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
 
   Future<void> _loadCurrentColor() async {
     final prefs = await SharedPreferences.getInstance();
-    final colorValue = prefs.getInt('widget_background_color') ?? _selectedColor.value;
+    final colorValue = prefs.getInt('widget_background_color') ?? _selectedColor.toARGB32();
     
     setState(() {
       _selectedColor = Color(colorValue);
@@ -46,7 +46,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
 
   Future<void> _saveColor(Color color) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('widget_background_color', color.value);
+    await prefs.setInt('widget_background_color', color.toARGB32());
     
     setState(() {
       _selectedColor = color;
@@ -153,7 +153,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
               itemCount: _colorOptions.length,
               itemBuilder: (context, index) {
                 final color = _colorOptions[index];
-                final isSelected = color.value == _selectedColor.value;
+                final isSelected = color.toARGB32() == _selectedColor.toARGB32();
                 
                 return GestureDetector(
                   onTap: () => _saveColor(color),

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'dart:math' as Math;
+import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tasks_data_models.dart';
 import '../Notifications/notification_service.dart';
@@ -416,30 +416,15 @@ class TaskService {
       final tomorrow = today.add(const Duration(days: 1));
       if (_isSameDay(task.scheduledDate!, tomorrow)) {
         score += 25; // Very low priority for tomorrow's recurring tasks
-        if (task.title.contains('debug recurring')) {
-          print('=== RECURRING TOMORROW (scheduledDate) DEBUG: ${task.title} ===');
-          print('scheduledDate: ${task.scheduledDate}');
-          print('Added 25 points (recurring scheduled tomorrow), score: $score');
-        }
       }
     }
 
     // 5. MEDIUM-HIGH PRIORITY: Recurring tasks due today
     if (task.recurrence != null && task.isDueToday()) {
-      if (task.title.contains('debug recurring')) { // Only debug tasks with 'debug recurring' in title
-        print('=== RECURRING TASK DEBUG: ${task.title} ===');
-        print('isDueToday: ${task.isDueToday()}');
-        print('deadline: ${task.deadline}');
-        print('scheduledDate: ${task.scheduledDate}');
-        print('Current score before recurring logic: $score');
-      }
       
       // If task was postponed (has scheduledDate for future), reduce recurring priority
       if (task.scheduledDate != null && task.scheduledDate!.isAfter(today)) {
         score += 30; // Very low priority for postponed recurring tasks
-        if (task.title.contains('debug recurring')) {
-          print('Added 30 points (postponed recurring - scheduledDate future), new score: $score');
-        }
       } else {
         // For menstrual cycle tasks, consider distance to target day
         if (_isMenstrualCycleTask(task.recurrence!)) {
@@ -458,15 +443,7 @@ class TaskService {
           }
         } else {
           score += 700; // Full priority for non-menstrual recurring tasks
-          if (task.title.contains('debug recurring')) {
-            print('Added 700 points (non-menstrual recurring), new score: $score');
-          }
         }
-      }
-      
-      if (task.title.contains('debug recurring')) {
-        print('Final recurring task score: $score');
-        print('=== END RECURRING DEBUG ===');
       }
     }
 
@@ -482,7 +459,7 @@ class TaskService {
       // Lower category order = higher priority
       // Category order 1 = +40 points, order 2 = +35 points, order 5 = +20 points, etc.
       if (categoryImportance < 999) {
-        score += Math.max(10, 45 - (categoryImportance * 5));
+        score += math.max(10, 45 - (categoryImportance * 5));
       }
     }
 

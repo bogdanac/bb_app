@@ -1,3 +1,5 @@
+// ignore_for_file: unnecessary_brace_in_string_interps
+
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -39,7 +41,7 @@ class RoutineProgressService {
       'date': today,
     };
     
-    await prefs.setString('${_activeRoutineKey}$today', jsonEncode(progressData));
+    await prefs.setString('$_activeRoutineKey$today', jsonEncode(progressData));
     
     // Update widget
     await RoutineWidgetService.updateWidget();

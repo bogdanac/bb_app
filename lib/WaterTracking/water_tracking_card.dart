@@ -120,7 +120,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           color: AppColors.waterBlue.withValues(alpha: 0.15), // Water blue theme
@@ -234,7 +234,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                       '+',
                       style: TextStyle(
                         fontSize: 24, // Larger plus sign
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),

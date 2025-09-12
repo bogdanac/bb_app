@@ -123,9 +123,9 @@ class BackupService {
       final backupData = await _getAllAppData();
       final jsonString = const JsonEncoder.withIndent('  ').convert(backupData);
       
-      // Create file name with timestamp
-      final timestamp = DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
-      final fileName = '${_backupFileName}_$timestamp.json';
+      // Create file name with readable timestamp  
+      final timestamp = DateFormat('yyyy-MM-dd HH.mm').format(DateTime.now());
+      final fileName = '$timestamp - $_backupFileName.json';
       
       // Get appropriate directory
       Directory? directory;
@@ -370,8 +370,14 @@ class BackupService {
       
       const notificationDetails = NotificationDetails(android: androidDetails);
       
-      // Convert to timezone-aware datetime
-      final scheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
+      // Convert to timezone-aware datetime with error handling
+      tz.TZDateTime scheduledDate;
+      try {
+        scheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
+      } catch (e) {
+        debugPrint('Timezone error, using UTC fallback: $e');
+        scheduledDate = tz.TZDateTime.from(scheduledTime.toUtc(), tz.UTC);
+      }
       
       await notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
         8888, // Unique ID for auto backup
@@ -464,8 +470,14 @@ class BackupService {
       
       const notificationDetails = NotificationDetails(android: androidDetails);
       
-      // Convert to timezone-aware datetime
-      final scheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
+      // Convert to timezone-aware datetime with error handling
+      tz.TZDateTime scheduledDate;
+      try {
+        scheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
+      } catch (e) {
+        debugPrint('Cloud backup timezone error, using UTC fallback: $e');
+        scheduledDate = tz.TZDateTime.from(scheduledTime.toUtc(), tz.UTC);
+      }
       
       await notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
         9999, // Unique ID for cloud backup reminders

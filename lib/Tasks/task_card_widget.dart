@@ -223,6 +223,13 @@ class TaskCard extends StatelessWidget {
                                       priorityReason!,
                                       priorityColor ?? Colors.orange,
                                     ),
+                                  // Scheduled date chip (show when different from priority)
+                                  if (TaskCardUtils.getScheduledDateText(task, priorityReason ?? '') != null)
+                                    TaskCardUtils.buildInfoChip(
+                                      Icons.event_rounded,
+                                      'Scheduled ${TaskCardUtils.getScheduledDateText(task, priorityReason ?? '')}',
+                                      AppColors.waterBlue,
+                                    ),
                                   if (task.deadline != null && !task.isDueToday())
                                     TaskCardUtils.buildInfoChip(
                                       Icons.schedule_rounded,

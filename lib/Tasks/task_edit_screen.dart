@@ -425,6 +425,8 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               ),
             ),
             
+            const SizedBox(height: 12),
+
             // Reminder Time Section
             Container(
               decoration: BoxDecoration(

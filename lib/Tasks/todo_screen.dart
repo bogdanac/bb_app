@@ -991,10 +991,11 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Stretched category filter chips
-                Row(
+                // Category filter chips - full width layout
+                Column(
                   children: [
-                    Expanded(
+                    SizedBox(
+                      width: double.infinity,
                       child: FilterChip(
                         label: const Text('All'),
                         selected: _selectedCategoryFilters.isEmpty,
@@ -1008,38 +1009,33 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                         },
                       ),
                     ),
-                    if (_categories.isNotEmpty) ...[
-                      const SizedBox(width: 4),
-                      ..._categories.expand((category) => [
-                        Expanded(
-                          child: FilterChip(
-                            label: Text(
-                              category.name,
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            selected: _selectedCategoryFilters.contains(category.id),
-                            backgroundColor: category.color.withValues(alpha: 0.1),
-                            selectedColor: category.color.withValues(alpha: 0.3),
-                            checkmarkColor: category.color,
-                            side: BorderSide(color: category.color.withValues(alpha: 0.5)),
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) {
-                                  _selectedCategoryFilters.add(category.id);
-                                } else {
-                                  _selectedCategoryFilters.remove(category.id);
-                                }
-                              });
-                              _saveCategoryFilters();
-                            },
-                          ),
+                    const SizedBox(height: 8),
+                    ..._categories.map((category) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilterChip(
+                          label: Text(category.name),
+                          selected: _selectedCategoryFilters.contains(category.id),
+                          backgroundColor: category.color.withValues(alpha: 0.1),
+                          selectedColor: category.color.withValues(alpha: 0.3),
+                          checkmarkColor: category.color,
+                          side: BorderSide(color: category.color.withValues(alpha: 0.5)),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedCategoryFilters.add(category.id);
+                              } else {
+                                _selectedCategoryFilters.remove(category.id);
+                              }
+                            });
+                            _saveCategoryFilters();
+                          },
                         ),
-                        if (_categories.last != category) const SizedBox(width: 4),
-                      ]),
-                    ],
+                      ),
+                    )),
                   ],
                 ),
                 const SizedBox(height: 8),

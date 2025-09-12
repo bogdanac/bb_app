@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'tasks_data_models.dart';
 import '../theme/app_colors.dart';
 
@@ -125,14 +126,6 @@ class TaskCardUtils {
   static String getTaskPriorityReason(Task task) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    
-    if (task.title.contains('move the car')) {
-      print('=== PRIORITY REASON DEBUG for: ${task.title} ===');
-      print('isDueToday(): ${task.isDueToday()}');
-      print('scheduledDate: ${task.scheduledDate}');
-      print('deadline: ${task.deadline}');
-      print('About to return priority reason...');
-    }
 
     // Check reminder time - highest priority display
     if (task.reminderTime != null) {
@@ -178,15 +171,6 @@ class TaskCardUtils {
       }
     }
 
-    // Check recurring task that's due today
-    if (task.recurrence != null && task.isDueToday() && 
-        (task.deadline == null || task.deadline!.isBefore(today))) {
-      if (task.title.contains('move the car')) {
-        print('Returning: $dueToday (recurring)');
-      }
-      return dueToday;
-    }
-
     // Check deadline tomorrow (for non-recurring tasks)
     final tomorrow = today.add(const Duration(days: 1));
     if (task.deadline != null && task.recurrence == null &&
@@ -200,18 +184,6 @@ class TaskCardUtils {
         DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)
             .isAtSameMomentAs(tomorrow)) {
       return dueTomorrow;
-    }
-
-    // Check important
-    if (task.isImportant) {
-      if (task.title.contains('move the car')) {
-        print('Returning: $important');
-      }
-      return important;
-    }
-
-    if (task.title.contains('move the car')) {
-      print('Returning empty string');
     }
     return '';
   }
@@ -248,6 +220,40 @@ class TaskCardUtils {
           return reminderColor;
         }
         return defaultColor;
+    }
+  }
+
+  // Get scheduled date text for display
+  static String? getScheduledDateText(Task task, String priorityReason) {
+    if (task.scheduledDate == null) return null;
+    
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final scheduledDay = DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day);
+    
+    // Don't show scheduled date if priority reason already covers it
+    if (priorityReason == dueToday && scheduledDay.isAtSameMomentAs(today)) {
+      return null; // Priority already says "today"
+    }
+    if (priorityReason == dueTomorrow && scheduledDay.isAtSameMomentAs(tomorrow)) {
+      return null; // Priority already says "tomorrow"
+    }
+    if (priorityReason.contains('today') && scheduledDay.isAtSameMomentAs(today)) {
+      return null; // Priority already mentions today
+    }
+    if (priorityReason.contains('tomorrow') && scheduledDay.isAtSameMomentAs(tomorrow)) {
+      return null; // Priority already mentions tomorrow
+    }
+    
+    // Format the scheduled date
+    if (scheduledDay.isAtSameMomentAs(today)) {
+      return 'Today';
+    } else if (scheduledDay.isAtSameMomentAs(tomorrow)) {
+      return 'Tomorrow';
+    } else {
+      // Use format like "Nov 10" for other dates
+      return DateFormat('MMM dd').format(task.scheduledDate!);
     }
   }
 }

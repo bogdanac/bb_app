@@ -240,7 +240,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: _addHealthy,
-                            icon: const Icon(Icons.add, size: 20),
+                            icon: const Icon(Icons.add, size: 16),
                             label: const Text('Healthy'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.successGreen,
@@ -256,7 +256,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: _addProcessed,
-                            icon: const Icon(Icons.remove, size: 20),
+                            icon: const Icon(Icons.remove, size: 16),
                             label: const Text('Processed'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.orange,

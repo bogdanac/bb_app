@@ -36,29 +36,14 @@ class Task {
   bool isDueToday() {
     final today = DateTime.now();
 
-    if (kDebugMode && title.contains('Debug')) {
-      print('=== isDueToday DEBUG for: $title ===');
-      print('deadline: $deadline');
-      print('scheduledDate: $scheduledDate');
-      print('today: $today');
-    }
-
     // Priority 1: Check deadline (today or overdue) - deadlines are most important
     if (deadline != null && (_isSameDay(deadline!, today) || deadline!.isBefore(today))) {
-      if (kDebugMode && title.contains('Debug')) {
-        print('Deadline check - returning true');
-        print('=== END isDueToday DEBUG ===');
-      }
       return true;
     }
 
     // Priority 2: If task has a scheduled date, check that date
     if (scheduledDate != null) {
       final result = _isSameDay(scheduledDate!, today);
-      if (kDebugMode && title.contains('Debug')) {
-        print('Has scheduledDate - result: $result');
-        print('=== END isDueToday DEBUG ===');
-      }
       return result;
     }
 
@@ -82,10 +67,6 @@ class Task {
       return true;
     }
 
-    if (kDebugMode && title.contains('Debug')) {
-      print('No conditions met - returning false');
-      print('=== END isDueToday DEBUG ===');
-    }
     return false;
   }
 
