@@ -86,14 +86,7 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
           Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.coral.withValues(alpha: 0.15),
-                  AppColors.coral.withValues(alpha: 0.15),
-                ],
-              ),
+              color: AppColors.homeCardBackground,
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
@@ -140,6 +133,7 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                         child: TodoScreen(
                           showFilters: false,
                           showAddButton: false,
+                          enableRefresh: false, // Disable pull-to-refresh in daily tasks card
                           onTasksChanged: _loadTasks, // Reload daily tasks when embedded TodoScreen tasks change
                         ),
                       ),
