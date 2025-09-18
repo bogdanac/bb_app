@@ -56,12 +56,12 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
                       const SizedBox(height: 8),
                       Text(
                         'Complete your morning routine ($completedCount/${_routineItems.length})',
-                        style: const TextStyle(fontSize: 16, color: Colors.grey),
+                        style: const TextStyle(fontSize: 16, color: AppColors.greyText),
                       ),
                       const SizedBox(height: 20),
                       LinearProgressIndicator(
                         value: completedCount / _routineItems.length,
-                        backgroundColor: Colors.grey.withValues(alpha: 0.3),
+                        backgroundColor: AppColors.greyText,
                         valueColor: AlwaysStoppedAnimation<Color>(
                           AppColors.orange,
                         ),

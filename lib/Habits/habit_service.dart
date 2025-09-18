@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'habit_data_models.dart';
 
@@ -8,7 +9,16 @@ class HabitService {
   /// Load all habits from SharedPreferences
   static Future<List<Habit>> loadHabits() async {
     final prefs = await SharedPreferences.getInstance();
-    final habitsJson = prefs.getStringList(_habitsKey) ?? [];
+    List<String> habitsJson;
+    try {
+      habitsJson = prefs.getStringList(_habitsKey) ?? [];
+    } catch (e) {
+      if (kDebugMode) {
+        print('ERROR: Habits data type mismatch, clearing corrupted data');
+      }
+      await prefs.remove(_habitsKey);
+      habitsJson = [];
+    }
 
     return habitsJson
         .map((json) => Habit.fromJson(jsonDecode(json)))
@@ -40,13 +50,24 @@ class HabitService {
   static Future<void> toggleHabitCompletion(String habitId) async {
     final habits = await loadHabits();
     final habitIndex = habits.indexWhere((h) => h.id == habitId);
-    
+
     if (habitIndex != -1) {
       if (habits[habitIndex].isCompletedToday()) {
         habits[habitIndex].markUncompleted();
       } else {
         habits[habitIndex].markCompleted();
       }
+      await saveHabits(habits);
+    }
+  }
+
+  /// Toggle habit completion for a specific date
+  static Future<void> toggleHabitCompletionOnDate(String habitId, DateTime date) async {
+    final habits = await loadHabits();
+    final habitIndex = habits.indexWhere((h) => h.id == habitId);
+
+    if (habitIndex != -1) {
+      habits[habitIndex].toggleCompletionOnDate(date);
       await saveHabits(habits);
     }
   }

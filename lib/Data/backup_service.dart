@@ -42,14 +42,12 @@ class BackupService {
         backupData['fasting'][key] = value;
       } else if (key.startsWith('menstrual_') || key.contains('cycle') || key.contains('period') || key.startsWith('last_period_') || key == 'average_cycle_length' || key == 'period_ranges' || key == 'intercourse_records') {
         backupData['menstrual_cycle'][key] = value;
-      } else if (key.startsWith('task') || key.contains('todo') || key.contains('priority')) {
+      } else if (key.startsWith('task') || key.contains('todo') || key.contains('priority') || key.contains('categor') || key == 'task_categories') {
         if (key.contains('categor') || key == 'task_categories') {
           backupData['task_categories'][key] = value;
         } else {
           backupData['tasks'][key] = value;
         }
-      } else if (key.contains('categor')) {
-        backupData['task_categories'][key] = value;
       } else if (key.startsWith('routine') || key.contains('morning') || key.startsWith('routines')) {
         backupData['routines'][key] = value;
       } else if (key == 'habits' || key.startsWith('habit')) {
@@ -60,7 +58,7 @@ class BackupService {
         backupData['water_tracking'][key] = value;
       } else if (key.contains('notification') || key.contains('alarm') || key.contains('reminder') || key.endsWith('_enabled') || key.endsWith('_hour') || key.endsWith('_minute')) {
         backupData['notifications'][key] = value;
-      } else if (key.contains('settings') || key.contains('config') || key == 'last_auto_backup' || key == 'last_backup') {
+      } else if (key.contains('settings') || key.contains('config') || key == 'last_auto_backup' || key == 'last_backup' || key == 'backup_overdue_threshold' || key == 'last_manual_backup' || key == 'last_cloud_share') {
         backupData['settings'][key] = value;
       } else {
         // Catch-all for other important app preferences
@@ -118,8 +116,23 @@ class BackupService {
           }
         }
       }
-      
-      // Get app data
+
+      // Update backup timestamps BEFORE creating backup data so they're included
+      if (updateLastBackupTime) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final timestamp = DateTime.now().toIso8601String();
+
+          // Update manual backup timestamp before creating backup data
+          await prefs.setString('last_backup', timestamp);
+          await prefs.setString('last_manual_backup', timestamp);
+          await prefs.reload(); // Ensure changes are applied
+        } catch (e) {
+          debugPrint('Error updating backup timestamp before backup: $e');
+        }
+      }
+
+      // Get app data (now includes the updated timestamps)
       final backupData = await _getAllAppData();
       final jsonString = const JsonEncoder.withIndent('  ').convert(backupData);
       
@@ -148,50 +161,51 @@ class BackupService {
             directory = null;
           }
           
-          // Fallback to app documents directory
+          // CRITICAL: Never fallback to app-internal storage - data will be lost on uninstall
           if (directory == null) {
-            directory = await getApplicationDocumentsDirectory();
-            final backupDir = Directory('${directory.path}/Backups');
-            if (!await backupDir.exists()) {
-              await backupDir.create(recursive: true);
-            }
-            directory = backupDir;
+            throw Exception('Cannot access external storage. Backups require Downloads directory access to survive app uninstalls.');
           }
         } else {
-          // For other platforms
+          // For other platforms - still require external storage
           try {
-            directory = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+            directory = await getDownloadsDirectory();
+            if (directory == null) {
+              throw Exception('Cannot access external storage. Backups require Downloads directory access to survive app uninstalls.');
+            }
           } catch (e) {
-            directory = await getApplicationDocumentsDirectory();
+            throw Exception('Cannot access external storage. Backups require Downloads directory access to survive app uninstalls.');
           }
         }
-        
+
         if (!await directory.exists()) {
-          directory = await getApplicationDocumentsDirectory();
+          throw Exception('Backup directory does not exist and cannot be created.');
         }
       } catch (e) {
-        // Final fallback - use app documents directory
-        directory = await getApplicationDocumentsDirectory();
+        // No dangerous fallbacks - let it fail with clear error message
+        rethrow;
       }
       
       final file = File('${directory.path}${Platform.pathSeparator}$fileName');
       await file.writeAsString(jsonString);
-      
-      // Update last backup time if requested
-      if (updateLastBackupTime) {
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          final timestamp = DateTime.now().toIso8601String();
-          
-          // Save both manual and auto backup timestamp for manual backups
-          // This ensures manual backups are always recognized
-          await prefs.setString('last_backup', timestamp);
-          await prefs.setString('last_manual_backup', timestamp);
-          
-        } catch (e) {
-          debugPrint('Error updating backup timestamp: $e');
-        }
+
+      // Validate backup file was created correctly
+      if (!await file.exists()) {
+        throw Exception('Backup file was not created successfully');
       }
+
+      // Validate backup file is readable and contains expected data
+      try {
+        final validationContent = await file.readAsString();
+        final validationData = json.decode(validationContent);
+        if (validationData['version'] == null || validationData['timestamp'] == null) {
+          throw Exception('Backup file is corrupted - missing required fields');
+        }
+      } catch (e) {
+        throw Exception('Backup file validation failed: $e');
+      }
+
+      // Backup timestamp was already updated before creating backup data
+      // No need to update again here
       
       // Clean up old backups after successful export
       try {
@@ -225,9 +239,30 @@ class BackupService {
       
       final backupData = json.decode(jsonString) as Map<String, dynamic>;
       
-      // Validate backup format
+      // Validate backup format and version compatibility
       if (!backupData.containsKey('version') || !backupData.containsKey('timestamp')) {
         return {'success': false, 'error': 'Invalid backup file format - missing version or timestamp'};
+      }
+
+      // Check version compatibility
+      final backupVersion = backupData['version'].toString();
+      if (backupVersion != '1.0') {
+        return {'success': false, 'error': 'Incompatible backup version: $backupVersion. This app supports version 1.0.'};
+      }
+
+      // Validate backup timestamp
+      try {
+        DateTime.parse(backupData['timestamp']);
+      } catch (e) {
+        return {'success': false, 'error': 'Invalid backup timestamp format'};
+      }
+
+      // Validate backup contains expected categories
+      final expectedCategories = ['fasting', 'menstrual_cycle', 'tasks', 'task_categories', 'routines', 'habits', 'food_tracking', 'water_tracking', 'notifications', 'settings', 'app_preferences'];
+      for (String category in expectedCategories) {
+        if (!backupData.containsKey(category)) {
+          return {'success': false, 'error': 'Backup file is incomplete - missing category: $category'};
+        }
       }
       
       final prefs = await SharedPreferences.getInstance();
@@ -280,7 +315,8 @@ class BackupService {
         await prefs.setBool(key, value);
       } else if (value is List) {
         // Handle different list types
-        if (value.isNotEmpty && value.first is String) {
+        if (value.isEmpty || value.first is String) {
+          // Handle empty lists and string lists
           await prefs.setStringList(key, value.cast<String>());
         } else {
           // Convert complex lists to JSON string
@@ -308,29 +344,47 @@ class BackupService {
       final prefs = await SharedPreferences.getInstance();
       final lastBackup = prefs.getString('last_auto_backup');
       final now = DateTime.now();
-      
+
       // Check if we need to backup (every 1 day)
       if (lastBackup != null) {
         final lastBackupDate = DateTime.parse(lastBackup);
         final daysSinceBackup = now.difference(lastBackupDate).inDays;
         if (daysSinceBackup < 1) {
-          return; // Too recent
+          debugPrint('Auto backup skipped - too recent (last: $lastBackup)');
+          // Still schedule next backup even if we skip this one
+          await _scheduleNextAutoBackup();
+          return;
         }
       }
-      
-      // Perform backup
-      final backupPath = await exportToFile();
+
+      // Update auto backup timestamp BEFORE creating backup so it's included in the backup data
+      await prefs.setString('last_auto_backup', now.toIso8601String());
+      await prefs.reload(); // Ensure timestamp is applied
+
+      // Perform backup (without updating manual backup timestamps)
+      final backupPath = await exportToFile(updateLastBackupTime: false);
       if (backupPath != null) {
-        await prefs.setString('last_auto_backup', now.toIso8601String());
-        await prefs.reload(); // Ensure timestamp is persisted
         debugPrint('Daily auto backup completed: $backupPath');
-        
-        // Schedule next backup
-        await _scheduleNextAutoBackup();
+      } else {
+        debugPrint('Daily auto backup failed - likely storage permission issue');
+        // Rollback auto backup timestamp if backup failed
+        await prefs.remove('last_auto_backup');
+        if (lastBackup != null) {
+          await prefs.setString('last_auto_backup', lastBackup); // Restore previous timestamp
+        }
       }
-      
+
+      // Always schedule next backup attempt, even if this one failed
+      await _scheduleNextAutoBackup();
+
     } catch (e) {
       debugPrint('Daily auto backup failed: $e');
+      // Still try to schedule next backup even if this one failed
+      try {
+        await _scheduleNextAutoBackup();
+      } catch (scheduleError) {
+        debugPrint('Failed to schedule next auto backup: $scheduleError');
+      }
     }
   }
 
@@ -349,9 +403,9 @@ class BackupService {
     try {
       final notificationService = NotificationService();
       
-      // Schedule for 2 AM tonight (or tomorrow if it's already past 2 AM)
+      // Schedule for midnight tonight (or tomorrow if it's already past midnight)
       final now = DateTime.now();
-      final backupTime = DateTime(now.year, now.month, now.day, 2, 0); // 2:00 AM
+      final backupTime = DateTime(now.year, now.month, now.day, 0, 0); // 12:00 AM (midnight)
       final scheduledTime = backupTime.isBefore(now) 
           ? backupTime.add(const Duration(days: 1))
           : backupTime;
@@ -420,7 +474,7 @@ class BackupService {
       final prefs = await SharedPreferences.getInstance();
       final lastCloudReminder = prefs.getString('last_cloud_backup_reminder');
       final now = DateTime.now();
-      
+
       // Check if we need to remind (every 7 days)
       bool shouldRemind = false;
       if (lastCloudReminder != null) {
@@ -430,16 +484,16 @@ class BackupService {
           shouldRemind = true;
         }
       } else {
-        // First time - remind after 3 days of using the app
+        // First time - remind after 2 days of using the app to encourage early adoption
         shouldRemind = true;
       }
-      
+
       if (shouldRemind) {
         await _scheduleCloudBackupNotification();
         await prefs.setString('last_cloud_backup_reminder', now.toIso8601String());
         debugPrint('Weekly cloud backup reminder scheduled');
       }
-      
+
     } catch (e) {
       debugPrint('Cloud backup reminder check failed: $e');
     }
@@ -481,8 +535,8 @@ class BackupService {
       
       await notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
         9999, // Unique ID for cloud backup reminders
-        '☁️ Weekly Cloud Backup Reminder',
-        'Don\'t forget to backup your data to cloud storage (Google Drive, etc.) for extra safety!',
+        '☁️ Protect Your Data - Cloud Backup Reminder',
+        'Your BBetter data is precious! Back it up to Google Drive, OneDrive, or Dropbox for ultimate safety. Tap to open backup settings.',
         scheduledDate,
         notificationDetails,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -531,26 +585,6 @@ class BackupService {
           }
         } catch (e) {
           debugPrint('Could not check Downloads root: $e');
-        }
-        
-        // Check app documents/Backups (old location)
-        try {
-          final appDir = await getApplicationDocumentsDirectory();
-          final backupsDir = Directory('${appDir.path}/Backups');
-          possiblePaths.add(backupsDir.path);
-          if (await backupsDir.exists()) {
-            locations['current_location'] ??= backupsDir.path;
-          }
-        } catch (e) {
-          debugPrint('Could not check app Backups: $e');
-        }
-        
-        // Check app documents root
-        try {
-          final appDir = await getApplicationDocumentsDirectory();
-          possiblePaths.add(appDir.path);
-        } catch (e) {
-          debugPrint('Could not check app documents: $e');
         }
         
         locations['all_locations'] = possiblePaths;
@@ -741,23 +775,6 @@ class BackupService {
           // Skip if we can't access Downloads root
         }
         
-        // Check app documents/Backups (old location)
-        try {
-          final appDir = await getApplicationDocumentsDirectory();
-          final backupsDir = Directory('${appDir.path}/Backups');
-          possiblePaths.add(backupsDir.path);
-        } catch (e) {
-          // Skip if we can't access app Backups
-        }
-        
-        // Check app documents root
-        try {
-          final appDir = await getApplicationDocumentsDirectory();
-          possiblePaths.add(appDir.path);
-        } catch (e) {
-          // Skip if we can't access app documents
-        }
-        
         // Search for backup files in all locations
         for (String path in possiblePaths) {
           try {
@@ -864,6 +881,105 @@ class BackupService {
     }
   }
   
+  // Get customizable backup overdue threshold (default 7 days)
+  static Future<int> getBackupOverdueThreshold() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt('backup_overdue_threshold') ?? 7; // Default 7 days
+    } catch (e) {
+      return 7; // Fallback to 7 days
+    }
+  }
+
+  // Set backup overdue threshold
+  static Future<void> setBackupOverdueThreshold(int days) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('backup_overdue_threshold', days);
+    } catch (e) {
+      debugPrint('Error setting backup overdue threshold: $e');
+    }
+  }
+
+  // Get detailed backup status with overdue warnings
+  static Future<Map<String, dynamic>> getDetailedBackupStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+
+      final lastManual = prefs.getString('last_manual_backup');
+      final lastAuto = prefs.getString('last_auto_backup');
+      final lastCloudShare = prefs.getString('last_cloud_share');
+
+      final now = DateTime.now();
+      final overdueThreshold = await getBackupOverdueThreshold();
+
+      Map<String, dynamic> status = {
+        'last_manual_backup': lastManual,
+        'last_auto_backup': lastAuto,
+        'last_cloud_share': lastCloudShare,
+        'manual_overdue': false,
+        'auto_overdue': false,
+        'cloud_overdue': false,
+        'any_overdue': false,
+        'days_since_manual': null,
+        'days_since_auto': null,
+        'days_since_cloud': null,
+      };
+
+      // Check manual backup
+      bool manualOverdue = false;
+      if (lastManual != null) {
+        final manualDate = DateTime.parse(lastManual);
+        final daysSince = now.difference(manualDate).inDays;
+        status['days_since_manual'] = daysSince;
+        manualOverdue = daysSince > overdueThreshold;
+      } else {
+        manualOverdue = true; // Never backed up manually
+      }
+
+      // Check auto backup
+      bool autoOverdue = false;
+      if (lastAuto != null) {
+        final autoDate = DateTime.parse(lastAuto);
+        final daysSince = now.difference(autoDate).inDays;
+        status['days_since_auto'] = daysSince;
+        autoOverdue = daysSince > overdueThreshold;
+      } else {
+        autoOverdue = true; // Never backed up automatically
+      }
+
+      // If auto backup is recent, suppress manual backup warning
+      if (!autoOverdue && lastAuto != null) {
+        manualOverdue = false;
+      }
+
+      status['manual_overdue'] = manualOverdue;
+      status['auto_overdue'] = autoOverdue;
+
+      // Check cloud sharing
+      if (lastCloudShare != null) {
+        final cloudDate = DateTime.parse(lastCloudShare);
+        final daysSince = now.difference(cloudDate).inDays;
+        status['days_since_cloud'] = daysSince;
+        status['cloud_overdue'] = daysSince > overdueThreshold;
+      } else {
+        status['cloud_overdue'] = true; // Never shared to cloud
+      }
+
+      // Set overall overdue flag
+      status['any_overdue'] = status['manual_overdue'] || status['auto_overdue'] || status['cloud_overdue'];
+
+      return status;
+    } catch (e) {
+      debugPrint('Error getting detailed backup status: $e');
+      return {
+        'error': e.toString(),
+        'any_overdue': true, // Assume overdue if we can't check
+      };
+    }
+  }
+
   // Clear all app data (for testing)
   static Future<void> clearAllData() async {
     try {

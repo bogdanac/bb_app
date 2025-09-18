@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import 'scheduled_fastings_service.dart';
 import 'fasting_utils.dart';
+import '../shared/date_picker_utils.dart';
 
 class ScheduledFastingsScreen extends StatefulWidget {
   const ScheduledFastingsScreen({super.key});
@@ -23,7 +24,21 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
   Future<void> _loadScheduledFastings() async {
     setState(() => _isLoading = true);
     try {
-      final fastings = await ScheduledFastingsService.getFastingsForNext2Months();
+      // Get all scheduled fastings and filter to include the last 3 days + next 2 months
+      final allFastings = await ScheduledFastingsService.getScheduledFastings();
+      final now = DateTime.now();
+      final threeDaysAgo = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 3));
+      final twoMonthsFromNow = DateTime(now.year, now.month + 2, now.day);
+
+      final fastings = allFastings
+          .where((f) {
+            final isInRange = f.date.isAfter(threeDaysAgo.subtract(const Duration(days: 1))) &&
+                             f.date.isBefore(twoMonthsFromNow.add(const Duration(days: 1)));
+            return isInRange;
+          })
+          .toList()
+        ..sort((a, b) => a.date.compareTo(b.date));
+
       setState(() {
         _scheduledFastings = fastings;
         _isLoading = false;
@@ -42,7 +57,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
     final shouldRegenerate = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.darkSurface,
+        backgroundColor: AppColors.dialogBackground,
         title: const Text(
           'Fix Overlapping Fasts',
           style: TextStyle(color: Colors.white),
@@ -85,7 +100,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Error fixing schedule: $e'),
-              backgroundColor: AppColors.redPrimary,
+              backgroundColor: AppColors.red,
             ),
           );
         }
@@ -94,22 +109,11 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
   }
 
   Future<void> _showRescheduleDialog(ScheduledFasting fasting) async {
-    DateTime? newDate = await showDatePicker(
+    DateTime? newDate = await DatePickerUtils.showStyledDatePicker(
       context: context,
       initialDate: fasting.date,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: AppColors.coral,
-              onPrimary: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (newDate != null) {
@@ -134,16 +138,16 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
 
   Future<void> _showFastTypeDialog(ScheduledFasting fasting) async {
     final List<String> fastTypes = [
-      '24h Weekly Fast',
-      '36h Monthly Fast', 
-      '48h Quarterly Fast',
-      '3-Day Water Fast',
+      '24h weekly wast',
+      '36h monthly fast', 
+      '48h quarterly fast',
+      '3-day water fast',
     ];
 
     final selectedType = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.darkSurface,
+        backgroundColor: AppColors.dialogBackground,
         title: const Text(
           'Change Fast Type',
           style: TextStyle(color: Colors.white),
@@ -199,7 +203,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.darkSurface,
+        backgroundColor: AppColors.dialogBackground,
         title: const Text(
           'Delete Scheduled Fast',
           style: TextStyle(color: Colors.white),
@@ -215,7 +219,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.redPrimary),
+            style: TextButton.styleFrom(foregroundColor: AppColors.red),
             child: const Text('Delete'),
           ),
         ],
@@ -230,7 +234,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Fast deleted for ${fasting.formattedDate}'),
-            backgroundColor: AppColors.redPrimary,
+            backgroundColor: AppColors.red,
           ),
         );
       }
@@ -261,10 +265,10 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: isPast 
-              ? AppColors.grey.withValues(alpha: 0.05)
+              ? AppColors.greyText.withValues(alpha: 0.05)
               : isToday 
                   ? AppColors.coral.withValues(alpha: 0.08)
-                  : AppColors.darkSurface,
+                  : AppColors.dialogCardBackground,
           border: isToday 
               ? Border.all(color: AppColors.coral.withValues(alpha: 0.3))
               : null,
@@ -329,7 +333,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                         fasting.shortFastType,
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           color: _getFastTypeColor(fasting.fastType),
                         ),
                       ),
@@ -361,7 +365,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                         decoration: BoxDecoration(
                           color: fasting.isEnabled 
                               ? AppColors.successGreen.withValues(alpha: 0.15)
-                              : AppColors.grey.withValues(alpha: 0.15),
+                              : AppColors.greyText.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -452,13 +456,13 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: AppColors.redPrimary.withValues(alpha: 0.15),
+                          color: AppColors.red.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(
                           Icons.delete_outline,
                           size: 18,
-                          color: AppColors.redPrimary,
+                          color: AppColors.red,
                         ),
                       ),
                     ),
@@ -474,13 +478,13 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
 
   Color _getFastTypeColor(String fastType) {
     switch (fastType) {
-      case '24h Weekly Fast':
+      case '24h weekly wast':
         return AppColors.coral;
-      case '36h Monthly Fast':
+      case '36h monthly fast':
         return AppColors.orange;
-      case '48h Quarterly Fast':
+      case '48h quarterly fast':
         return AppColors.purple;
-      case '3-Day Water Fast':
+      case '3-day water fast':
         return AppColors.pink;
       default:
         return AppColors.coral;
@@ -490,9 +494,9 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.darkBackground,
+      backgroundColor: AppColors.dialogBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.darkSurface,
+        backgroundColor: AppColors.dialogBackground,
         foregroundColor: Colors.white,
         elevation: 0,
         title: const Text('Scheduled Fastings'),
@@ -501,10 +505,6 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
             onPressed: _regenerateSchedule,
             icon: const Icon(Icons.auto_fix_high),
             tooltip: 'Fix Overlapping Fasts',
-          ),
-          IconButton(
-            onPressed: _loadScheduledFastings,
-            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
@@ -548,10 +548,10 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       Text(
-                        'Next 2 Months (${_scheduledFastings.length} fasts)',
+                        'Recent & Upcoming (${_scheduledFastings.length} fasts)',
                         style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           color: AppColors.white70,
                         ),
                       ),

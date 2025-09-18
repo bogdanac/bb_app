@@ -11,6 +11,9 @@ import 'menstrual_cycle_utils.dart';
 import 'cycle_calorie_settings_screen.dart';
 import 'intercourse_data_model.dart';
 import 'intercourse_editor_dialog.dart';
+import 'period_history_screen.dart';
+import '../Tasks/task_service.dart';
+import '../Tasks/tasks_data_models.dart';
 
 class CycleScreen extends StatefulWidget {
   const CycleScreen({super.key});
@@ -60,12 +63,42 @@ class _CycleScreenState extends State<CycleScreen> {
       };
     }).toList();
 
+    // Auto-end periods that exceed 7 days
+    await _autoEndLongPeriods();
+    
     await _loadIntercourseRecords();
     if (mounted) setState(() {});
   }
 
   Future<void> _loadIntercourseRecords() async {
     _intercourseRecords = await IntercourseService.loadIntercourseRecords();
+  }
+
+  Future<void> _autoEndLongPeriods() async {
+    if (_lastPeriodStart == null || _lastPeriodEnd != null) return;
+    
+    final now = DateTime.now();
+    final daysSinceStart = now.difference(_lastPeriodStart!).inDays;
+    
+    // Auto-end period after 7 days
+    if (daysSinceStart >= 7) {
+      final autoEndDate = _lastPeriodStart!.add(const Duration(days: 6)); // Day 7 = 6 days after start
+      
+      setState(() {
+        _lastPeriodEnd = autoEndDate;
+        
+        // Add to period ranges
+        _periodRanges.removeWhere((range) => _isSameDay(range['start']!, _lastPeriodStart!));
+        _periodRanges.add({
+          'start': _lastPeriodStart!,
+          'end': autoEndDate,
+        });
+        _periodRanges.sort((a, b) => a['start']!.compareTo(b['start']!));
+      });
+      
+      await _saveCycleData();
+      _calculateAverageCycleLength();
+    }
   }
 
   Future<void> _saveCycleData() async {
@@ -96,6 +129,120 @@ class _CycleScreenState extends State<CycleScreen> {
     await _scheduleCycleNotifications();
   }
 
+  Future<void> _recalculateMenstrualPhaseTasks() async {
+    if (_lastPeriodStart == null) {
+      _showSnackBar('No period data available to recalculate tasks', AppColors.greyText);
+      return;
+    }
+
+    final taskService = TaskService();
+    final allTasks = await taskService.loadTasks();
+
+    // Find tasks with menstrual cycle recurrence that have specific days
+    final menstrualTasks = allTasks.where((task) {
+      if (task.recurrence == null) return false;
+
+      // Check if it's a menstrual cycle task
+      final menstrualTypes = [
+        RecurrenceType.menstrualPhase,
+        RecurrenceType.follicularPhase,
+        RecurrenceType.ovulationPhase,
+        RecurrenceType.earlyLutealPhase,
+        RecurrenceType.lateLutealPhase
+      ];
+
+      return task.recurrence!.types.any((type) => menstrualTypes.contains(type)) &&
+             task.recurrence!.phaseDay != null;
+    }).toList();
+
+    if (menstrualTasks.isEmpty) return;
+
+    bool tasksUpdated = false;
+
+    for (final task in menstrualTasks) {
+      final recurrence = task.recurrence!;
+      DateTime? newScheduledDate;
+
+      // Calculate phase start dates for this cycle
+      final phaseStartDates = _calculatePhaseStartDates(_lastPeriodStart!, _averageCycleLength);
+
+      for (final recurrenceType in recurrence.types) {
+        DateTime? phaseStart;
+
+        switch (recurrenceType) {
+          case RecurrenceType.menstrualPhase:
+            phaseStart = phaseStartDates['menstrual'];
+            break;
+          case RecurrenceType.follicularPhase:
+            phaseStart = phaseStartDates['follicular'];
+            break;
+          case RecurrenceType.ovulationPhase:
+            phaseStart = phaseStartDates['ovulation'];
+            break;
+          case RecurrenceType.earlyLutealPhase:
+            phaseStart = phaseStartDates['earlyLuteal'];
+            break;
+          case RecurrenceType.lateLutealPhase:
+            phaseStart = phaseStartDates['lateLuteal'];
+            break;
+          default:
+            continue;
+        }
+
+        if (phaseStart != null && recurrence.phaseDay != null) {
+          final dayInPhase = recurrence.phaseDay!;
+          newScheduledDate = phaseStart.add(Duration(days: dayInPhase - 1)); // Day 1 = 0 days offset
+          break; // Use first matching phase
+        }
+      }
+
+      // Update task if we calculated a new date
+      if (newScheduledDate != null) {
+        final updatedTask = Task(
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          categoryIds: task.categoryIds,
+          deadline: task.deadline,
+          scheduledDate: newScheduledDate,
+          reminderTime: task.reminderTime,
+          isImportant: task.isImportant,
+          recurrence: task.recurrence,
+          isCompleted: task.isCompleted,
+          completedAt: task.completedAt,
+          createdAt: task.createdAt,
+        );
+
+        // Update in the list
+        final taskIndex = allTasks.indexWhere((t) => t.id == task.id);
+        if (taskIndex != -1) {
+          allTasks[taskIndex] = updatedTask;
+          tasksUpdated = true;
+        }
+      }
+    }
+
+    // Save updated tasks if any were changed
+    if (tasksUpdated) {
+      await taskService.saveTasks(allTasks);
+      final taskCount = menstrualTasks.length;
+      _showSnackBar('✅ Recalculated $taskCount menstrual phase task${taskCount == 1 ? '' : 's'}', AppColors.successGreen);
+    } else {
+      _showSnackBar('No menstrual phase tasks with specific days found', AppColors.greyText);
+    }
+  }
+
+  Map<String, DateTime> _calculatePhaseStartDates(DateTime periodStart, int averageCycleLength) {
+    // Based on the phase logic from MenstrualCycleUtils.getPhaseFromCycleDays
+    return {
+      'menstrual': periodStart, // Day 1-5
+      'follicular': periodStart.add(const Duration(days: 5)), // Day 6-11
+      'ovulation': periodStart.add(const Duration(days: 11)), // Day 12-16
+      'earlyLuteal': periodStart.add(const Duration(days: 16)), // Day 17 to (cycleLength - 7)
+      'lateLuteal': periodStart.add(Duration(days: averageCycleLength - 7)), // Last 7 days of cycle
+    };
+  }
+
   Future<void> _startPeriodOnDate(DateTime date) async {
     // End current period if active
     if (_isCurrentlyOnPeriod()) {
@@ -109,6 +256,10 @@ class _CycleScreenState extends State<CycleScreen> {
 
     await _saveCycleData();
     _calculateAverageCycleLength();
+
+    // Recalculate menstrual phase tasks with specific days
+    await _recalculateMenstrualPhaseTasks();
+
     final dateStr = _isSameDay(date, DateTime.now()) ? 'today' : 'on ${DateFormat('MMM d').format(date)}';
     _showSnackBar('Period started $dateStr! End it manually when finished.', AppColors.successGreen);
   }
@@ -135,13 +286,22 @@ class _CycleScreenState extends State<CycleScreen> {
   }
 
   void _calculateAverageCycleLength() {
-    if (_periodRanges.length < 2) return;
-
     final cycles = <int>[];
+    
+    // Calculate cycles between completed periods
     for (int i = 1; i < _periodRanges.length; i++) {
       final cycleLength = _periodRanges[i]['start']!.difference(_periodRanges[i-1]['start']!).inDays;
       if (cycleLength > 15 && cycleLength < 45) {
         cycles.add(cycleLength);
+      }
+    }
+    
+    // Include cycle from last completed period to current period start (if exists)
+    if (_periodRanges.isNotEmpty && _lastPeriodStart != null) {
+      final lastCompletedPeriod = _periodRanges.last;
+      final currentCycleLength = _lastPeriodStart!.difference(lastCompletedPeriod['start']!).inDays;
+      if (currentCycleLength > 15 && currentCycleLength < 45) {
+        cycles.add(currentCycleLength);
       }
     }
 
@@ -166,18 +326,19 @@ class _CycleScreenState extends State<CycleScreen> {
   }
 
   bool _isDateInPeriod(DateTime date) {
-    // Check current active period
-    if (_isCurrentlyOnPeriod()) {
-      final daysSinceStart = date.difference(_lastPeriodStart!).inDays;
-      return daysSinceStart >= 0 && daysSinceStart < 5 && !date.isAfter(DateTime.now());
-    }
-
-    // Check historical periods
+    // First check historical periods (completed periods)
     for (final range in _periodRanges) {
       if (date.isAfter(range['start']!.subtract(const Duration(days: 1))) &&
           date.isBefore(range['end']!.add(const Duration(days: 1)))) {
         return true;
       }
+    }
+
+    // Then check current active period (show 5 days including future days for THIS period only)
+    if (_lastPeriodStart != null && _lastPeriodEnd == null) {
+      final daysSinceStart = date.difference(_lastPeriodStart!).inDays;
+      // Show up to 5 days from start date, including future days for current period
+      return daysSinceStart >= 0 && daysSinceStart < 5;
     }
 
     return false;
@@ -277,267 +438,9 @@ class _CycleScreenState extends State<CycleScreen> {
     );
   }
 
-  // PERIOD HISTORY MANAGEMENT
-  void _showPeriodHistory() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => _buildPeriodHistorySheet(),
-    );
-  }
 
-  Widget _buildPeriodHistorySheet() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            'Period History',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 20),
-          if (_periodRanges.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(20),
-              child: Text(
-                'No completed periods recorded yet',
-                style: TextStyle(color: AppColors.grey),
-              ),
-            )
-          else
-            SizedBox(
-              height: 300,
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: _periodRanges.length,
-                itemBuilder: (context, index) => _buildPeriodHistoryItem(index),
-              ),
-            ),
-          const SizedBox(height: 20),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildPeriodHistoryItem(int index) {
-    final range = _periodRanges[index];
-    final start = range['start']!;
-    final end = range['end']!;
-    final duration = end.difference(start).inDays + 1;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: AppColors.error,
-          child: Text(
-            duration.toString(),
-            style: const TextStyle(
-              color: AppColors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        title: Text(
-          '${DateFormat('MMM d').format(start)} - ${DateFormat('MMM d, y').format(end)}',
-          style: const TextStyle(fontWeight: FontWeight.w500),
-        ),
-        subtitle: Text('$duration days'),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) {
-            if (value == 'edit') {
-              _editPeriod(index);
-            } else if (value == 'delete') {
-              _deletePeriod(index);
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'edit',
-              child: Row(
-                children: [
-                  Icon(Icons.edit),
-                  SizedBox(width: 8),
-                  Text('Edit'),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(Icons.delete, color: AppColors.error),
-                  SizedBox(width: 8),
-                  Text('Delete', style: TextStyle(color: AppColors.error)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _editPeriod(int index) async {
-    final range = _periodRanges[index];
-    DateTime? newStart = range['start'];
-    DateTime? newEnd = range['end'];
-
-    final result = await showDialog<Map<String, DateTime?>>(
-      context: context,
-      builder: (context) => _buildEditPeriodDialog(newStart!, newEnd!),
-    );
-
-    if (result != null) {
-      setState(() {
-        _periodRanges[index] = {
-          'start': result['start']!,
-          'end': result['end']!,
-        };
-
-        // Update last period if this was the most recent
-        if (_lastPeriodStart != null && _isSameDay(_lastPeriodStart!, range['start']!)) {
-          _lastPeriodStart = result['start']!;
-          _lastPeriodEnd = result['end']!;
-        }
-      });
-
-      await _saveCycleData();
-      _calculateAverageCycleLength();
-      if (mounted) {
-        Navigator.pop(context);
-      }
-    }
-  }
-
-  Widget _buildEditPeriodDialog(DateTime initialStart, DateTime initialEnd) {
-    DateTime newStart = initialStart;
-    DateTime newEnd = initialEnd;
-
-    return StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: const Text('Edit Period'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.play_arrow),
-              title: const Text('Start Date'),
-              subtitle: Text(DateFormat('MMM d, y').format(newStart)),
-              onTap: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: newStart,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now(),
-                );
-                if (date != null) {
-                  setDialogState(() => newStart = date);
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.stop),
-              title: const Text('End Date'),
-              subtitle: Text(DateFormat('MMM d, y').format(newEnd)),
-              onTap: () async {
-                final maxEnd = newStart.add(const Duration(days: 4));
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: newEnd,
-                  firstDate: newStart,
-                  lastDate: maxEnd.isAfter(DateTime.now()) ? DateTime.now() : maxEnd,
-                );
-                if (date != null) {
-                  setDialogState(() => newEnd = date);
-                }
-              },
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                'Period duration limited to 5 days maximum',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.grey600,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context, {
-                'start': newStart,
-                'end': newEnd,
-              });
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _deletePeriod(int index) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Period'),
-        content: const Text('Are you sure you want to delete this period record?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final range = _periodRanges[index];
-
-      setState(() {
-        _periodRanges.removeAt(index);
-
-        // Update last period if this was the most recent
-        if (_lastPeriodStart != null && _isSameDay(_lastPeriodStart!, range['start']!)) {
-          if (_periodRanges.isNotEmpty) {
-            final mostRecent = _periodRanges.last;
-            _lastPeriodStart = mostRecent['start']!;
-            _lastPeriodEnd = mostRecent['end']!;
-          } else {
-            _lastPeriodStart = null;
-            _lastPeriodEnd = null;
-          }
-        }
-      });
-
-      await _saveCycleData();
-      _calculateAverageCycleLength();
-      if (mounted) {
-        Navigator.pop(context);
-      }
-    }
-  }
 
   // INTERCOURSE MANAGEMENT
   Future<void> _addIntercourse(DateTime date) async {
@@ -577,8 +480,6 @@ class _CycleScreenState extends State<CycleScreen> {
     } else if (result == 'delete') {
       await IntercourseService.deleteIntercourseRecord(record.id);
       await _loadIntercourseRecords();
-      setState(() {});
-      _showSnackBar('Intercourse deleted', AppColors.grey600);
     }
   }
 
@@ -593,8 +494,23 @@ class _CycleScreenState extends State<CycleScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: _recalculateMenstrualPhaseTasks,
+              tooltip: 'Recalculate Phase Tasks',
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: IconButton(
               icon: const Icon(Icons.calendar_month_rounded),
-              onPressed: _showPeriodHistory,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PeriodHistoryScreen(),
+                  ),
+                );
+              },
               tooltip: 'Period History',
             ),
           ),
@@ -686,7 +602,7 @@ class _CycleScreenState extends State<CycleScreen> {
                 ),
                 _buildAnimatedPet(),
               ],
-              ),
+            ),
           ],
         ),
       ),
@@ -699,18 +615,24 @@ class _CycleScreenState extends State<CycleScreen> {
 
   Widget _buildAnimatedPet() {
     return Padding(
-      padding: const EdgeInsets.only(right: 16),
+      padding: const EdgeInsets.only(right: 8),
       child: TweenAnimationBuilder<double>(
-        duration: const Duration(milliseconds: 2000),
+        duration: const Duration(milliseconds: 20000), // Longer but still visible movement
         tween: Tween(begin: 0.0, end: 2 * pi),
         builder: (context, value, child) {
           return Transform.scale(
-            scale: 1.0 + (sin(value) * 0.2),
+            scale: 1.0 + (sin(value) * 0.1), // Gentle, subtle scaling
             child: Transform.rotate(
-              angle: sin(value * 0.5) * 0.15,
-              child: Text(
-                _getPhaseBasedPet(),
-                style: const TextStyle(fontSize: 50),
+              angle: sin(value * 0.7) * 0.25 + cos(value * 1.4) * 0.1, // Playful wobbling with multiple rotations
+              child: Transform.translate(
+                offset: Offset(
+                  sin(value * 1.8) * 2.5 + cos(value * 0.9) * 1.2, // More complex horizontal movement
+                  cos(value * 1.1) * 1.8 + sin(value * 2.3) * 0.8, // Playful vertical bouncing
+                ),
+                child: Text(
+                  _getPhaseBasedPet(),
+                  style: const TextStyle(fontSize: 56), // Slightly bigger again
+                ),
               ),
             ),
           );
@@ -725,53 +647,55 @@ class _CycleScreenState extends State<CycleScreen> {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ExpansionTile(
-        title: const Text(
-          'Statistics',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        leading: const Icon(Icons.analytics_outlined),
-        initiallyExpanded: false,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Column(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildStatItem(
-                      'Average Cycle',
-                      '$_averageCycleLength days',
-                      Icons.calendar_month_rounded,
-                      AppColors.purple,
-                    ),
-                    _buildStatItem(
-                      'Tracked Periods',
-                      '${_periodRanges.length}',
-                      Icons.timeline_rounded,
-                      AppColors.successGreen,
-                    ),
-                  ],
+                const Icon(Icons.analytics_outlined),
+                const SizedBox(width: 12),
+                const Text(
+                  'Statistics',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                if (avgIntercourse != null) ...[
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildStatItem(
-                        'Avg Days Between',
-                        '${avgIntercourse.round()} days',
-                        Icons.favorite,
-                        AppColors.pink,
-                      ),
-                    ],
-                  ),
-                ],
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatItem(
+                  'Average Cycle',
+                  '$_averageCycleLength days',
+                  Icons.calendar_month_rounded,
+                  AppColors.purple,
+                ),
+                _buildStatItem(
+                  'Tracked Periods',
+                  '${_periodRanges.length}',
+                  Icons.timeline_rounded,
+                  AppColors.successGreen,
+                ),
+              ],
+            ),
+            if (avgIntercourse != null) ...[
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildStatItem(
+                    'Avg Days Between',
+                    '${avgIntercourse.round()} days',
+                    Icons.favorite,
+                    AppColors.pink,
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -800,45 +724,48 @@ class _CycleScreenState extends State<CycleScreen> {
 
     return Column(
       children: [
-        // Action buttons based on current state and selected date
-        Row(
-          children: [
-            // Start Period button
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _startPeriodOnDate(_selectedDate!),
-                icon: const Icon(Icons.water_drop_rounded),
-                label: const Text('Start Period'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.error,
-                  foregroundColor: AppColors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+        // Only show Start Period and Intercourse buttons when NOT currently on period
+        if (!_isCurrentlyOnPeriod()) ...[
+          // Action buttons based on current state and selected date
+          Row(
+            children: [
+              // Start Period button
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _startPeriodOnDate(_selectedDate!),
+                  icon: const Icon(Icons.water_drop_rounded),
+                  label: const Text('Start Period'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: AppColors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            // Add Intercourse button
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _addIntercourse(_selectedDate!),
-                icon: const Icon(Icons.favorite, size: 18),
-                label: const Text('Intercourse'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.pink,
-                  foregroundColor: AppColors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              const SizedBox(width: 12),
+              // Add Intercourse button
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _addIntercourse(_selectedDate!),
+                  icon: const Icon(Icons.favorite, size: 18),
+                  label: const Text('Intercourse'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.pink,
+                    foregroundColor: AppColors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
         Row(
           children: [
             // End Period button
@@ -848,7 +775,7 @@ class _CycleScreenState extends State<CycleScreen> {
                 icon: const Icon(Icons.stop_rounded),
                 label: const Text('End Period'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isCurrentlyOnPeriod() ? AppColors.grey600 : AppColors.grey300,
+                  backgroundColor: _isCurrentlyOnPeriod() ? AppColors.normalCardBackground : AppColors.lightRed,
                   foregroundColor: AppColors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -879,6 +806,8 @@ class _CycleScreenState extends State<CycleScreen> {
                 final monthsFromBase = index - 1000;
                 _calendarDate = DateTime(DateTime.now().year, DateTime.now().month + monthsFromBase, 1);
               });
+              // Reload period data when changing calendar months to ensure historical periods are displayed
+              _loadCycleData();
             },
             itemBuilder: (context, index) {
               final monthsFromBase = index - 1000;
@@ -930,7 +859,7 @@ class _CycleScreenState extends State<CycleScreen> {
           textAlign: TextAlign.center,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
-            color: AppColors.grey,
+            color: AppColors.greyText,
           ),
         ),
       ))
@@ -991,11 +920,14 @@ class _CycleScreenState extends State<CycleScreen> {
     } else if (isPeakOvulation) {
       backgroundColor = AppColors.orange; // Bright orange for peak ovulation
     } else if (isOvulation) {
-      backgroundColor = AppColors.orange.withValues(alpha: 0.6); // Light orange for ovulation window
+      backgroundColor = AppColors.orange.withValues(alpha: 0.7); // Light orange for ovulation window
     } else if (isPredicted) {
-      backgroundColor = AppColors.lightRed;
-    } else if (isToday) {
-      borderColor = AppColors.purple;
+      backgroundColor = AppColors.lightRed.withValues(alpha: 0.7); // Faded red for predicted periods
+    }
+    
+    // Always show today border if it's today, regardless of other states
+    if (isToday) {
+      borderColor = AppColors.white60; // More prominent color for today
     }
 
     return GestureDetector(
@@ -1121,7 +1053,7 @@ class _CycleScreenState extends State<CycleScreen> {
         ),
         Text(
           label,
-          style: const TextStyle(fontSize: 14, color: AppColors.grey),
+          style: const TextStyle(fontSize: 14, color: AppColors.greyText),
         ),
       ],
     );

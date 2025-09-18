@@ -97,12 +97,12 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
         decoration: BoxDecoration(
           color: isSelected 
               ? AppColors.yellow 
-              : Colors.grey.withValues(alpha: 0.2),
+              : AppColors.greyText,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isSelected 
                 ? AppColors.yellow 
-                : Colors.grey.withValues(alpha: 0.4),
+                : AppColors.greyText.withValues(alpha: 0.4),
           ),
         ),
         child: Center(
@@ -111,7 +111,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 14,
-              color: isSelected ? Colors.white : Colors.grey[700],
+              color: isSelected ? Colors.white : AppColors.greyText,
             ),
           ),
         ),
@@ -182,8 +182,8 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('Add Step'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.yellow,
-                    foregroundColor: Colors.black87,
+                    backgroundColor: AppColors.lightYellow,
+                    foregroundColor: Colors.black54,
                   ),
                 ),
               ],
@@ -196,7 +196,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                 child: Text(
                   'No steps added yet.\nTap "Add Step" to get started.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(color: AppColors.greyText),
                 ),
               )
                   : ReorderableListView.builder(
@@ -217,7 +217,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                       padding: const EdgeInsets.all(12),
                       child: Row(
                         children: [
-                          Icon(Icons.drag_handle_rounded, color: Colors.grey),
+                          Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
                           const SizedBox(width: 8),
                           Expanded(
                             child: TextField(
@@ -232,7 +232,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete_rounded, color: AppColors.lightYellow),
+                            icon: const Icon(Icons.delete_rounded, color: AppColors.deleteRed),
                             onPressed: () => _removeItem(index),
                           ),
                         ],

@@ -267,6 +267,7 @@ class TaskRecurrence {
     try {
       // Get cycle data synchronously (this is a limitation - ideally async)
       // For MVP, we'll return true so the feature works
+      // Note: phaseDay specific checking is handled in the async UI layer
       return _checkMenstrualPhaseSync(date, expectedPhase);
     } catch (e) {
       // If there's any error, default to false
@@ -278,62 +279,10 @@ class TaskRecurrence {
   }
 
   bool _checkMenstrualPhaseSync(DateTime date, String expectedPhase) {
-    // Simple logic: assume a 30-day cycle starting from a reference date
-    // This is a placeholder implementation
-    final referenceDate = DateTime(2024, 1, 1); // Assume period started here
-    final daysSinceReference = date.difference(referenceDate).inDays;
-    final cycleDay = (daysSinceReference % 30) + 1;
-
-    // If a specific phase day is requested, check for that exact day within the phase
-    if (phaseDay != null) {
-      int phaseStartDay;
-      int phaseEndDay;
-      
-      switch (expectedPhase) {
-        case 'Menstrual Phase':
-          phaseStartDay = 1;
-          phaseEndDay = 5;
-          break;
-        case 'Follicular Phase':
-          phaseStartDay = 6;
-          phaseEndDay = 11;
-          break;
-        case 'Ovulation Phase':
-          phaseStartDay = 12;
-          phaseEndDay = 16;
-          break;
-        case 'Early Luteal Phase':
-          phaseStartDay = 17;
-          phaseEndDay = 23;
-          break;
-        case 'Late Luteal Phase':
-          phaseStartDay = 24;
-          phaseEndDay = 30;
-          break;
-        default:
-          return false;
-      }
-      
-      // Check if we're on the specific day within the phase
-      final targetDay = phaseStartDay + phaseDay! - 1;
-      return cycleDay == targetDay && targetDay <= phaseEndDay;
-    }
-
-    // Use the same logic as MenstrualCycleUtils.getPhaseFromCycleDays (30-day cycle)
-    switch (expectedPhase) {
-      case 'Menstrual Phase':
-        return cycleDay >= 1 && cycleDay <= 5; // Days 1-5
-      case 'Follicular Phase':
-        return cycleDay >= 6 && cycleDay <= 11; // Days 6-11
-      case 'Ovulation Phase':
-        return cycleDay >= 12 && cycleDay <= 16; // Days 12-16
-      case 'Early Luteal Phase':
-        return cycleDay >= 17 && cycleDay <= 23; // Days 17-23
-      case 'Late Luteal Phase':
-        return cycleDay >= 24 && cycleDay <= 30; // Days 24-30
-      default:
-        return false;
-    }
+    // Since we now handle menstrual phase checking properly in todo_screen.dart,
+    // this sync version can just return true to avoid blocking regular task recurrence
+    // The proper async phase checking happens in the UI layer
+    return true;
   }
 
   bool _isSpecificCycleDay(DateTime date, int targetDay) {

@@ -5,6 +5,8 @@ import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tasks_data_models.dart';
 import '../Notifications/notification_service.dart';
+import '../MenstrualCycle/menstrual_cycle_utils.dart';
+import '../MenstrualCycle/menstrual_cycle_constants.dart';
 
 class TaskService {
   static final TaskService _instance = TaskService._internal();
@@ -38,14 +40,28 @@ class TaskService {
   Future<List<Task>> loadTasks() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final tasksJson = prefs.getStringList('tasks') ?? [];
+      List<String> tasksJson;
+      try {
+        tasksJson = prefs.getStringList('tasks') ?? [];
+      } catch (e) {
+        if (kDebugMode) {
+          print('ERROR: Tasks data type mismatch, clearing corrupted data');
+        }
+        await prefs.remove('tasks');
+        tasksJson = [];
+      }
 
-      return tasksJson
+      final tasks = tasksJson
           .map((json) => Task.fromJson(jsonDecode(json)))
           .toList();
+
+      // Check for menstrual tasks that should be prioritized today due to phaseDay
+      await _updateMenstrualTaskPriorities(tasks, prefs);
+
+      return tasks;
     } catch (e) {
       if (kDebugMode) {
-        print('Error loading tasks: $e');
+        print('ERROR loading tasks: $e');
       }
       return [];
     }
@@ -66,7 +82,7 @@ class TaskService {
       _notifyTasksChanged();
     } catch (e) {
       if (kDebugMode) {
-        print('Error saving tasks: $e');
+        print('ERROR saving tasks: $e');
       }
     }
   }
@@ -74,7 +90,16 @@ class TaskService {
   Future<List<TaskCategory>> loadCategories() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final categoriesJson = prefs.getStringList('task_categories') ?? [];
+      List<String> categoriesJson;
+      try {
+        categoriesJson = prefs.getStringList('task_categories') ?? [];
+      } catch (e) {
+        if (kDebugMode) {
+          print('ERROR: Task categories data type mismatch, clearing corrupted data');
+        }
+        await prefs.remove('task_categories');
+        categoriesJson = [];
+      }
 
       if (categoriesJson.isEmpty) {
         // Default categories
@@ -93,7 +118,7 @@ class TaskService {
           .toList();
     } catch (e) {
       if (kDebugMode) {
-        print('Error loading categories: $e');
+        print('ERROR loading categories: $e');
       }
       return [];
     }
@@ -108,7 +133,7 @@ class TaskService {
       await prefs.setStringList('task_categories', categoriesJson);
     } catch (e) {
       if (kDebugMode) {
-        print('Error saving categories: $e');
+        print('ERROR saving categories: $e');
       }
     }
   }
@@ -125,7 +150,7 @@ class TaskService {
       return TaskSettings.fromJson(jsonDecode(settingsJson));
     } catch (e) {
       if (kDebugMode) {
-        print('Error loading task settings: $e');
+        print('ERROR loading task settings: $e');
       }
       return TaskSettings();
     }
@@ -137,7 +162,7 @@ class TaskService {
       await prefs.setString('task_settings', jsonEncode(settings.toJson()));
     } catch (e) {
       if (kDebugMode) {
-        print('Error saving task settings: $e');
+        print('ERROR saving task settings: $e');
       }
     }
   }
@@ -146,10 +171,18 @@ class TaskService {
   Future<List<String>> loadSelectedCategoryFilters() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getStringList('selected_category_filters') ?? [];
+      try {
+        return prefs.getStringList('selected_category_filters') ?? [];
+      } catch (e) {
+        if (kDebugMode) {
+          print('ERROR: Category filters data type mismatch, clearing corrupted data');
+        }
+        await prefs.remove('selected_category_filters');
+        return [];
+      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error loading category filters: $e');
+        print('ERROR loading category filters: $e');
       }
       return [];
     }
@@ -161,7 +194,7 @@ class TaskService {
       await prefs.setStringList('selected_category_filters', categoryIds);
     } catch (e) {
       if (kDebugMode) {
-        print('Error saving category filters: $e');
+        print('ERROR saving category filters: $e');
       }
     }
   }
@@ -213,21 +246,10 @@ class TaskService {
         allTasks[taskIndex] = updatedTask;
         await saveTasks(allTasks);
 
-        if (kDebugMode) {
-          print('=== POSTPONE DEBUG ===');
-          print('Task postponed: ${task.title}');
-          print('Original scheduledDate: ${task.scheduledDate}');
-          print('Original deadline: ${task.deadline}');
-          print('Postpone date: $postponeDate');
-          print('New scheduledDate: ${updatedTask.scheduledDate}');
-          print('New deadline: ${updatedTask.deadline}');
-          print('isDueToday after postpone: ${updatedTask.isDueToday()}');
-          print('=== END POSTPONE DEBUG ===');
-        }
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error postponing task: $e');
+        print('ERROR postponing task: $e');
       }
       rethrow;
     }
@@ -336,6 +358,16 @@ class TaskService {
   int _calculateTaskPriorityScore(Task task, DateTime now, DateTime today, List<TaskCategory> categories) {
     int score = 0;
 
+    // SPECIAL CASE: Postponed recurring tasks get absolute lowest priority
+    if (task.recurrence != null && task.scheduledDate != null) {
+      final tomorrow = today.add(const Duration(days: 1));
+      if (task.scheduledDate!.isAfter(today) || _isSameDay(task.scheduledDate!, tomorrow)) {
+        // This is a postponed recurring task - give it minimal priority
+        // It will only get points from categories, nothing else
+        return 1; // Return immediately with minimal score
+      }
+    }
+
     // 1. HIGHEST PRIORITY: Tasks with reminder times (past or future)
     if (task.reminderTime != null) {
       final reminderDiff = task.reminderTime!.difference(now).inMinutes;
@@ -378,7 +410,14 @@ class TaskService {
       }
       // Future reminders beyond today
       else {
-        score += 300; // Lower but still significant priority for future reminders
+        // Special handling for postponed recurring tasks - absolute lowest priority
+        final tomorrow = today.add(const Duration(days: 1));
+        if (task.recurrence != null && task.scheduledDate != null && 
+            (task.scheduledDate!.isAfter(today) || _isSameDay(task.scheduledDate!, tomorrow))) {
+          score += 0; // No priority for postponed recurring tasks - they should appear last
+        } else {
+          score += 30; // Reduced priority for future reminders - they're not urgent yet
+        }
       }
     }
 
@@ -411,11 +450,26 @@ class TaskService {
       }
     }
 
-    // 4b. RECURRING TASKS: Handle scheduled dates for tomorrow (low priority)
+    // 4b. RECURRING TASKS: Handle scheduled dates for tomorrow (lowest priority)
     else if (task.recurrence != null && task.scheduledDate != null) {
       final tomorrow = today.add(const Duration(days: 1));
       if (_isSameDay(task.scheduledDate!, tomorrow)) {
-        score += 25; // Very low priority for tomorrow's recurring tasks
+        // Postponed recurring tasks should have the absolute lowest priority
+        // Don't add any score - they'll only get minimal points from categories if any
+        score += 0; // No priority boost for postponed recurring tasks
+      }
+    }
+
+    // AUTO-FIX: Update scheduledDate for recurring tasks if outdated OR missing
+    if (task.recurrence != null) {
+      // Check if task would be due today according to its recurrence pattern
+      if (task.recurrence!.isDueOn(today, taskCreatedAt: task.createdAt)) {
+        // Update if scheduledDate is missing OR outdated
+        if (task.scheduledDate == null || task.scheduledDate!.isBefore(today)) {
+          // Note: This async call is fire-and-forget during prioritization
+          // The task list will be refreshed and show the updated scheduledDate
+          _updateTaskScheduledDate(task, today);
+        }
       }
     }
 
@@ -424,7 +478,7 @@ class TaskService {
       
       // If task was postponed (has scheduledDate for future), reduce recurring priority
       if (task.scheduledDate != null && task.scheduledDate!.isAfter(today)) {
-        score += 30; // Very low priority for postponed recurring tasks
+        score += 5; // Much lower priority for postponed recurring tasks
       } else {
         // For menstrual cycle tasks, consider distance to target day
         if (_isMenstrualCycleTask(task.recurrence!)) {
@@ -447,6 +501,10 @@ class TaskService {
       }
     }
 
+    // 5b. SCHEDULED TODAY: Tasks scheduled for today (should appear before unscheduled important tasks)
+    if (task.scheduledDate != null && _isSameDay(task.scheduledDate!, today)) {
+      score += 600; // High priority for tasks scheduled today, higher than important tasks
+    }
 
     // 6. LOW-MEDIUM PRIORITY: Important tasks (less than reminder priority)
     if (task.isImportant) {
@@ -459,7 +517,12 @@ class TaskService {
       // Lower category order = higher priority
       // Category order 1 = +40 points, order 2 = +35 points, order 5 = +20 points, etc.
       if (categoryImportance < 999) {
-        score += math.max(10, 45 - (categoryImportance * 5));
+        int baseScore = math.max(10, 45 - (categoryImportance * 5));
+        
+        // Bonus for multiple categories: +2 points per additional category (max +10)
+        // This makes tasks with multiple high-priority categories rank higher
+        int categoryBonus = math.min(10, (task.categoryIds.length - 1) * 2);
+        score += baseScore + categoryBonus;
       }
     }
 
@@ -560,58 +623,43 @@ class TaskService {
       await _cancelAllTaskNotifications();
 
       // Schedule notifications for all tasks with reminder times
-      int scheduledCount = 0;
       for (final task in tasks) {
         if (!task.isCompleted && task.reminderTime != null) {
-          await _scheduleTaskNotification(task);
-          scheduledCount++;
+          await scheduleTaskNotification(task);
         }
-      }
-
-      if (kDebugMode) {
-        print('Scheduled $scheduledCount task notifications');
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling task notifications: $e');
+        print('ERROR scheduling task notifications: $e');
       }
     }
   }
 
-  Future<void> _scheduleTaskNotification(Task task) async {
+  Future<void> scheduleTaskNotification(Task task) async {
     try {
       if (task.reminderTime == null) return;
 
       final now = DateTime.now();
-      DateTime? scheduledDate;
+      DateTime scheduledDate = task.reminderTime!;
 
-      if (task.recurrence != null) {
-        // For recurring tasks, find the next occurrence and schedule reminder accordingly
-        scheduledDate = _getNextReminderTime(task, now);
-      } else {
-        // For non-recurring tasks, use the original reminder time
-        scheduledDate = task.reminderTime!;
-      }
-
-      // Don't schedule if no valid date found
-      if (scheduledDate == null) {
-        if (kDebugMode) {
-          print('No valid reminder date found for task: ${task.title}');
+      // For recurring tasks, only use _getNextReminderTime if the current reminderTime is in the past
+      if (task.recurrence != null && scheduledDate.isBefore(now)) {
+        final nextReminderTime = _getNextReminderTime(task, now);
+        if (nextReminderTime != null) {
+          scheduledDate = nextReminderTime;
+        } else {
+          return;
         }
-        return;
       }
 
       // Don't schedule if the time has already passed and it's not recurring
       if (scheduledDate.isBefore(now) && task.recurrence == null) {
-        if (kDebugMode) {
-          print('Skipping past reminder for task: ${task.title}');
-        }
         return;
       }
 
       // Cancel existing notification first to avoid duplicates
       await _notificationService.cancelTaskNotification(task.id);
-      
+
       // Use NotificationService to schedule the notification
       await _notificationService.scheduleTaskNotification(
         task.id,
@@ -620,12 +668,9 @@ class TaskService {
         isRecurring: task.recurrence != null,
       );
 
-      if (kDebugMode) {
-        print('Scheduled task notification: ${task.title} at $scheduledDate (recurring: ${task.recurrence != null})');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling task notification for ${task.title}: $e');
+        print('ERROR scheduling task notification for ${task.title}: $e');
       }
     }
   }
@@ -636,16 +681,18 @@ class TaskService {
 
     final originalTime = task.reminderTime!;
     final timeOfDay = TimeOfDay(hour: originalTime.hour, minute: originalTime.minute);
-    
+
     // Start checking from today
     DateTime checkDate = DateTime(now.year, now.month, now.day);
-    
+
     // Look ahead for up to 90 days to find the next occurrence
     for (int i = 0; i < 90; i++) {
       final currentCheck = checkDate.add(Duration(days: i));
-      
+
       // Check if task is due on this date according to its recurrence pattern
-      if (task.recurrence!.isDueOn(currentCheck, taskCreatedAt: task.createdAt)) {
+      final isDue = task.recurrence!.isDueOn(currentCheck, taskCreatedAt: task.createdAt);
+
+      if (isDue) {
         final reminderDateTime = DateTime(
           currentCheck.year,
           currentCheck.month,
@@ -653,14 +700,14 @@ class TaskService {
           timeOfDay.hour,
           timeOfDay.minute,
         );
-        
+
         // Only schedule if the reminder time is in the future
         if (reminderDateTime.isAfter(now)) {
           return reminderDateTime;
         }
       }
     }
-    
+
     // If no occurrence found in the next 90 days, return null
     return null;
   }
@@ -668,12 +715,9 @@ class TaskService {
   Future<void> _cancelAllTaskNotifications() async {
     try {
       await _notificationService.cancelAllTaskNotifications();
-      if (kDebugMode) {
-        print('Cancelled all task notifications');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error canceling task notifications: $e');
+        print('ERROR canceling task notifications: $e');
       }
     }
   }
@@ -681,13 +725,9 @@ class TaskService {
   Future<void> cancelTaskNotification(Task task) async {
     try {
       await _notificationService.cancelTaskNotification(task.id);
-
-      if (kDebugMode) {
-        print('Cancelled notification for task: ${task.title}');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error canceling task notification: $e');
+        print('ERROR canceling task notification: $e');
       }
     }
   }
@@ -697,14 +737,131 @@ class TaskService {
     try {
       final tasks = await loadTasks();
       await _scheduleAllTaskNotifications(tasks);
-      
-      if (kDebugMode) {
-        print('Force rescheduled all task notifications');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error force rescheduling notifications: $e');
+        print('ERROR force rescheduling notifications: $e');
       }
     }
+  }
+
+  // Update a task's scheduled date and save to storage
+  Future<void> _updateTaskScheduledDate(Task task, DateTime newScheduledDate) async {
+    task.scheduledDate = newScheduledDate;
+
+    // Load all tasks, update this one, and save back
+    final allTasks = await loadTasks();
+    final taskIndex = allTasks.indexWhere((t) => t.id == task.id);
+    if (taskIndex != -1) {
+      allTasks[taskIndex] = task;
+      await saveTasks(allTasks);
+    }
+
+    // Reschedule notification if task has reminder time
+    if (task.reminderTime != null) {
+      await scheduleTaskNotification(task);
+    }
+
+  }
+
+  // Check menstrual tasks and set scheduledDate for those on their target phaseDay
+  Future<void> _updateMenstrualTaskPriorities(List<Task> tasks, SharedPreferences prefs) async {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+
+    // Get menstrual cycle data
+    final lastStartStr = prefs.getString('last_period_start');
+    final lastEndStr = prefs.getString('last_period_end');
+    final averageCycleLength = prefs.getInt('average_cycle_length') ?? 28;
+
+    if (lastStartStr == null) return; // No cycle data available
+
+    final lastPeriodStart = DateTime.parse(lastStartStr);
+    final lastPeriodEnd = lastEndStr != null ? DateTime.parse(lastEndStr) : null;
+
+    // Get current menstrual phase
+    final currentPhase = MenstrualCycleUtils.getCyclePhase(lastPeriodStart, lastPeriodEnd, averageCycleLength);
+
+    bool tasksUpdated = false;
+
+    for (final task in tasks) {
+      // Skip non-menstrual tasks or tasks without phaseDay
+      if (task.recurrence == null || task.recurrence!.phaseDay == null || !_isMenstrualCycleTask(task.recurrence!)) {
+        continue;
+      }
+
+      // Skip postponed tasks (they already have a scheduled date for the future)
+      if (task.scheduledDate != null && task.scheduledDate!.isAfter(todayDate)) {
+        continue;
+      }
+
+      // Check if task's menstrual phase matches current phase
+      final taskMatchesCurrentPhase = _taskMatchesPhase(task.recurrence!, currentPhase);
+      if (!taskMatchesCurrentPhase) continue;
+
+      // Get target phase for this task
+      final targetPhase = _getTaskTargetPhase(task.recurrence!);
+      if (targetPhase == null) continue;
+
+      // Check if today is the target phaseDay
+      final currentDayInPhase = MenstrualCycleUtils.getCurrentDayInPhase(
+        lastPeriodStart,
+        averageCycleLength,
+        targetPhase
+      );
+
+      if (currentDayInPhase == task.recurrence!.phaseDay) {
+        // Today is the target day! Set scheduledDate to today for high priority
+        if (task.scheduledDate == null || !_isSameDay(task.scheduledDate!, todayDate)) {
+          task.scheduledDate = todayDate;
+          tasksUpdated = true;
+        }
+      }
+    }
+
+    // Save tasks if any were updated
+    if (tasksUpdated) {
+      await saveTasks(tasks);
+    }
+  }
+
+  // Helper method to check if task matches current phase
+  bool _taskMatchesPhase(TaskRecurrence recurrence, String currentPhase) {
+    return recurrence.types.any((type) {
+      switch (type) {
+        case RecurrenceType.menstrualPhase:
+          return currentPhase == MenstrualCycleConstants.menstrualPhase;
+        case RecurrenceType.follicularPhase:
+          return currentPhase == MenstrualCycleConstants.follicularPhase;
+        case RecurrenceType.ovulationPhase:
+          return currentPhase == MenstrualCycleConstants.ovulationPhase;
+        case RecurrenceType.earlyLutealPhase:
+          return currentPhase == MenstrualCycleConstants.earlyLutealPhase;
+        case RecurrenceType.lateLutealPhase:
+          return currentPhase == MenstrualCycleConstants.lateLutealPhase;
+        default:
+          return false;
+      }
+    });
+  }
+
+  // Helper method to get the target phase name for a task
+  String? _getTaskTargetPhase(TaskRecurrence recurrence) {
+    for (final type in recurrence.types) {
+      switch (type) {
+        case RecurrenceType.menstrualPhase:
+          return MenstrualCycleConstants.menstrualPhase;
+        case RecurrenceType.follicularPhase:
+          return MenstrualCycleConstants.follicularPhase;
+        case RecurrenceType.ovulationPhase:
+          return MenstrualCycleConstants.ovulationPhase;
+        case RecurrenceType.earlyLutealPhase:
+          return MenstrualCycleConstants.earlyLutealPhase;
+        case RecurrenceType.lateLutealPhase:
+          return MenstrualCycleConstants.lateLutealPhase;
+        default:
+          continue;
+      }
+    }
+    return null;
   }
 }

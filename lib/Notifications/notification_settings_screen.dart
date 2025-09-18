@@ -44,7 +44,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                 ),
                 subtitle: const Text(
                   'Quick setup: Night mode or 24/7 vacation mode',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(color: AppColors.greyText),
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () {
@@ -75,7 +75,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                 ),
                 subtitle: const Text(
                   'Export/import all your app data safely',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(color: AppColors.greyText),
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () {

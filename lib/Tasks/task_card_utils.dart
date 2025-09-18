@@ -15,23 +15,16 @@ class TaskCardUtils {
   // Color constants for task chips
   static const Color dueTomorrowColor = AppColors.yellow;
   static const Color importantColor = AppColors.coral;
-  static const Color overdueColor = AppColors.redPrimary;
+  static const Color overdueColor = AppColors.red;
   static const Color scheduledTodayColor = AppColors.successGreen;
   static const Color reminderColor = AppColors.waterBlue;
   static const Color recurringColor = AppColors.lightYellow;
-  static const Color defaultColor = AppColors.grey;
+  static const Color defaultColor = AppColors.greyText;
 
   // Common method to get deadline color based on days remaining
   static Color getDeadlineColor(DateTime deadline) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final deadlineDay = DateTime(deadline.year, deadline.month, deadline.day);
-    final difference = deadlineDay.difference(today).inDays;
-
-    if (difference < 0) return Colors.red;
-    if (difference == 0) return Colors.orange;
-    if (difference == 1) return Colors.amber;
-    return Colors.blue;
+    // All deadline chips should be red for visibility and urgency
+    return AppColors.red;
   }
 
   // Common method to get reminder color based on time remaining
@@ -39,7 +32,7 @@ class TaskCardUtils {
     final now = DateTime.now();
     final difference = reminderTime.difference(now).inMinutes;
 
-    if (difference < -30) return Colors.grey; // Past
+    if (difference < -30) return AppColors.greyText; // Past
     if (difference <= 0) return Colors.red; // Now or just passed
     if (difference <= 60) return Colors.orange; // Within an hour
     return Colors.blue; // Future
@@ -179,6 +172,13 @@ class TaskCardUtils {
       return dueTomorrow;
     }
 
+    // Check if task is scheduled for today (for recurring tasks)
+    if (task.scheduledDate != null &&
+        DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)
+            .isAtSameMomentAs(today)) {
+      return 'Scheduled today';
+    }
+
     // Check scheduled date tomorrow (for recurring tasks)
     if (task.scheduledDate != null && task.recurrence != null &&
         DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)
@@ -205,7 +205,7 @@ class TaskCardUtils {
       case 'Reminder now':
         return scheduledTodayColor;
       case 'Scheduled today':
-        return AppColors.waterBlue; // Less urgent than "Due today"
+        return scheduledTodayColor; // Green for scheduled today
       case 'Recurring today':
         return recurringColor;
       case dueTomorrow:
@@ -244,6 +244,11 @@ class TaskCardUtils {
     }
     if (priorityReason.contains('tomorrow') && scheduledDay.isAtSameMomentAs(tomorrow)) {
       return null; // Priority already mentions tomorrow
+    }
+    
+    // For recurring tasks, don't show past scheduled dates
+    if (task.recurrence != null && scheduledDay.isBefore(today)) {
+      return null; // Don't show past dates for recurring tasks
     }
     
     // Format the scheduled date

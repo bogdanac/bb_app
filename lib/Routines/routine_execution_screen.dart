@@ -239,7 +239,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                         children: [
                           Text(
                             'Progress: $completedCount/${_items.length}',
-                            style: const TextStyle(fontSize: 16, color: Colors.grey),
+                            style: const TextStyle(fontSize: 16, color: AppColors.greyText),
                           ),
                           if (skippedCount > 0)
                             Text(
@@ -251,7 +251,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                       const SizedBox(height: 20),
                       LinearProgressIndicator(
                         value: completedCount / _items.length,
-                        backgroundColor: Colors.grey.withValues(alpha: 0.3),
+                        backgroundColor: AppColors.greyText,
                         valueColor: AlwaysStoppedAnimation<Color>(
                           AppColors.orange,
                         ),
@@ -324,7 +324,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                               trailing: IconButton(
                                 icon: Icon(
                                   item.isSkipped ? Icons.undo : Icons.skip_next,
-                                  color: item.isSkipped ? Colors.orange : Colors.grey,
+                                  color: item.isSkipped ? Colors.orange : AppColors.greyText,
                                 ),
                                 onPressed: () => _skipItem(index),
                                 tooltip: item.isSkipped ? 'Unskip' : 'Skip for later',

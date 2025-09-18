@@ -7,6 +7,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import '../Fasting/fasting_phases.dart';
 import '../Data/backup_service.dart';
+import '../Tasks/task_service.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -17,9 +18,6 @@ class NotificationService {
   FlutterLocalNotificationsPlugin();
 
   Future<void> initializeNotifications() async {
-    if (kDebugMode) {
-      print('Initializing notifications...');
-    }
 
     try {
       // Initialize timezone properly
@@ -29,24 +27,15 @@ class NotificationService {
         // Try to get the device's timezone
         final String timeZoneName = DateTime.now().timeZoneName;
         tz.setLocalLocation(tz.getLocation(timeZoneName));
-        if (kDebugMode) {
-          print('Set timezone to: $timeZoneName');
-        }
       } catch (e) {
         try {
           // Fallback to common timezone names
-          final String timeZoneOffset = DateTime.now().timeZoneOffset.toString();
-          if (kDebugMode) {
-            print('Failed to set timezone by name, trying offset: $timeZoneOffset');
-          }
+          DateTime.now().timeZoneOffset.toString();
           // Try UTC as safe fallback
           tz.setLocalLocation(tz.UTC);
         } catch (e2) {
           // Last resort - use a default location
           tz.setLocalLocation(tz.getLocation('America/New_York'));
-          if (kDebugMode) {
-            print('Using default timezone America/New_York: $e2');
-          }
         }
       }
 
@@ -72,20 +61,14 @@ class NotificationService {
         iOS: initializationSettingsDarwin,
       );
 
-      final bool? initialized = await flutterLocalNotificationsPlugin.initialize(
+      await flutterLocalNotificationsPlugin.initialize(
         initializationSettings,
         onDidReceiveNotificationResponse: (NotificationResponse response) {
           // Handle notification tap
-          if (kDebugMode) {
-            print('Notification tapped: ${response.payload}');
-          }
           _handleNotificationTap(response.payload);
         },
       );
 
-      if (kDebugMode) {
-        print('Notifications initialized: $initialized');
-      }
 
       // Create critical alarm notification channel for motion alerts
       final androidImpl = flutterLocalNotificationsPlugin
@@ -106,9 +89,6 @@ class NotificationService {
         
         await androidImpl.createNotificationChannel(alarmChannel);
             
-        if (kDebugMode) {
-          print('Created critical alarm notification channel');
-        }
       }
 
       // Request permissions for iOS
@@ -130,16 +110,10 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin>();
       
       if (androidImplementation != null) {
-        final bool? granted = await androidImplementation.requestNotificationsPermission();
-        if (kDebugMode) {
-          print('Android notification permission granted: $granted');
-        }
-        
+        await androidImplementation.requestNotificationsPermission();
+
         // Request exact alarm permission for Android 12+
-        final bool? exactAlarmGranted = await androidImplementation.requestExactAlarmsPermission();
-        if (kDebugMode) {
-          print('Exact alarm permission granted: $exactAlarmGranted');
-        }
+        await androidImplementation.requestExactAlarmsPermission();
       }
 
       // Test immediate notification to verify setup
@@ -150,7 +124,7 @@ class NotificationService {
       
     } catch (e) {
       if (kDebugMode) {
-        print('Error initializing notifications: $e');
+        print('ERROR initializing notifications: $e');
       }
     }
   }
@@ -158,13 +132,12 @@ class NotificationService {
   void _handleNotificationTap(String? payload) {
     if (payload == null) return;
 
-    if (kDebugMode) {
-      print('Handling notification tap: $payload');
-    }
 
     // Handle different notification types
     if (payload.startsWith('task_reminder_')) {
-      // Task reminder notification tapped
+      // Task reminder notification tapped - need to reschedule if recurring
+      final taskId = payload.substring('task_reminder_'.length);
+      _handleTaskReminderTriggered(taskId);
       // You can add navigation logic here if needed
     } else if (payload == 'morning_routine') {
       // Morning routine notification tapped
@@ -215,11 +188,9 @@ class NotificationService {
       // After cleanup, reschedule water notifications to make sure they're active
       await scheduleWaterReminders();
       
-      if (kDebugMode) {
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error cancelling legacy morning notifications: $e');
+        print('ERROR cancelling legacy morning notifications: $e');
       }
     }
   }
@@ -232,17 +203,10 @@ class NotificationService {
       final now = DateTime.now();
       var scheduledDate = reminderTime;
 
-      // Don't schedule if the time has already passed and it's not recurring
-      if (scheduledDate.isBefore(now) && !isRecurring) {
-        if (kDebugMode) {
-          print('Task reminder time has passed, not scheduling: $title');
-        }
-        return;
-      }
 
-      // If recurring and time has passed today, schedule for tomorrow
-      if (isRecurring && scheduledDate.isBefore(now)) {
-        scheduledDate = scheduledDate.add(const Duration(days: 1));
+      // Don't schedule if the time has already passed
+      if (scheduledDate.isBefore(now)) {
+        return;
       }
 
       // Use local timezone instead of UTC for proper scheduling
@@ -252,9 +216,6 @@ class NotificationService {
       } catch (e) {
         // Fallback to UTC if local timezone is not available
         location = tz.UTC;
-        if (kDebugMode) {
-          print('Using UTC fallback for task notification: $e');
-        }
       }
 
       await flutterLocalNotificationsPlugin.zonedSchedule(
@@ -282,16 +243,13 @@ class NotificationService {
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: isRecurring ? DateTimeComponents.time : null,
+        matchDateTimeComponents: null, // Don't use automatic recurring - TaskService handles the logic
         payload: 'task_reminder_$taskId',
       );
 
-      if (kDebugMode) {
-        print('Scheduled task notification: $title at $scheduledDate (ID: $notificationId) - Location: ${location.name}');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling task notification: $e');
+        print('ERROR scheduling task notification: $e');
       }
     }
   }
@@ -301,12 +259,9 @@ class NotificationService {
       final notificationId = 1000 + taskId.hashCode.abs() % 9000;
       await flutterLocalNotificationsPlugin.cancel(notificationId);
 
-      if (kDebugMode) {
-        print('Cancelled task notification for task: $taskId (ID: $notificationId)');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error cancelling task notification: $e');
+        print('ERROR cancelling task notification: $e');
       }
     }
   }
@@ -318,12 +273,9 @@ class NotificationService {
         await flutterLocalNotificationsPlugin.cancel(i);
       }
 
-      if (kDebugMode) {
-        print('Cancelled all task notifications');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error cancelling task notifications: $e');
+        print('ERROR cancelling task notifications: $e');
       }
     }
   }
@@ -344,12 +296,9 @@ class NotificationService {
       await _scheduleWaterReminder10AM();
       await _scheduleWaterReminder2PM();
       await _scheduleWaterReminder4PM();
-      if (kDebugMode) {
-        print('All water reminders scheduled successfully');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Failed to schedule water notifications: $e');
+        print('ERROR schedule water notifications: $e');
         print('App will continue without water reminders');
       }
       // Don't rethrow - let the app continue without water notifications
@@ -395,7 +344,7 @@ class NotificationService {
       );
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling water reminder: $e');
+        print('ERROR scheduling water reminder: $e');
       }
       rethrow; // Let parent method handle the error
     }
@@ -445,7 +394,7 @@ class NotificationService {
       );
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling water reminder: $e');
+        print('ERROR scheduling water reminder: $e');
       }
       rethrow; // Let parent method handle the error
     }
@@ -494,7 +443,7 @@ class NotificationService {
       );
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling water reminder: $e');
+        print('ERROR scheduling water reminder: $e');
       }
       rethrow; // Let parent method handle the error
     }
@@ -544,7 +493,7 @@ class NotificationService {
       );
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling water reminder: $e');
+        print('ERROR scheduling water reminder: $e');
       }
       rethrow; // Let parent method handle the error
     }
@@ -631,12 +580,9 @@ class NotificationService {
         payload: 'routine_reminder_$routineId',
       );
       
-      if (kDebugMode) {
-        print('Scheduled routine notification: $routineTitle at $scheduledDate (ID: $notificationId)');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling routine notification: $e');
+        print('ERROR scheduling routine notification: $e');
       }
     }
   }
@@ -646,12 +592,9 @@ class NotificationService {
       final notificationId = 2000 + routineId.hashCode.abs() % 8000;
       await flutterLocalNotificationsPlugin.cancel(notificationId);
       
-      if (kDebugMode) {
-        print('Cancelled routine notification for routine: $routineId (ID: $notificationId)');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error cancelling routine notification: $e');
+        print('ERROR cancelling routine notification: $e');
       }
     }
   }
@@ -663,12 +606,9 @@ class NotificationService {
         await flutterLocalNotificationsPlugin.cancel(i);
       }
 
-      if (kDebugMode) {
-        print('Cancelled all routine notifications');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error cancelling routine notifications: $e');
+        print('ERROR cancelling routine notifications: $e');
       }
     }
   }
@@ -693,11 +633,9 @@ class NotificationService {
       // Reschedule water notifications to ensure they're active
       await scheduleWaterReminders();
 
-      if (kDebugMode) {
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error cleaning up duplicate notifications: $e');
+        print('ERROR cleaning up duplicate notifications: $e');
       }
     }
   }
@@ -758,12 +696,9 @@ class NotificationService {
       // Schedule multiple follow-up notifications at different intervals
       await _scheduleProgressReminders(fastType, elapsedTime, totalDuration);
 
-      if (kDebugMode) {
-        print('Updated fasting progress notification: $progress%');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error showing fasting progress notification: $e');
+        print('ERROR showing fasting progress notification: $e');
       }
     }
   }
@@ -831,12 +766,9 @@ class NotificationService {
         );
       }
 
-      if (kDebugMode) {
-        print('Scheduled 20 fasting progress reminders');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling progress reminders: $e');
+        print('ERROR scheduling progress reminders: $e');
       }
     }
   }
@@ -852,12 +784,9 @@ class NotificationService {
         await flutterLocalNotificationsPlugin.cancel(_fastingProgressNotificationId + i);
       }
       
-      if (kDebugMode) {
-        print('Cancelled fasting progress notification');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error cancelling fasting progress notification: $e');
+        print('ERROR cancelling fasting progress notification: $e');
       }
     }
   }
@@ -895,12 +824,9 @@ class NotificationService {
         payload: 'fasting_completed',
       );
 
-      if (kDebugMode) {
-        print('Showed fasting completed notification');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error showing fasting completed notification: $e');
+        print('ERROR showing fasting completed notification: $e');
       }
     }
   }
@@ -937,12 +863,9 @@ class NotificationService {
         payload: 'fasting_started',
       );
 
-      if (kDebugMode) {
-        print('Showed fasting started notification');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error showing fasting started notification: $e');
+        print('ERROR showing fasting started notification: $e');
       }
     }
   }
@@ -981,12 +904,9 @@ class NotificationService {
         payload: 'fasting_milestone',
       );
 
-      if (kDebugMode) {
-        print('Showed fasting milestone notification: $milestone');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error showing fasting milestone notification: $e');
+        print('ERROR showing fasting milestone notification: $e');
       }
     }
   }
@@ -1048,12 +968,9 @@ class NotificationService {
         payload: 'fasting_reminder',
       );
 
-      if (kDebugMode) {
-        print('Scheduled fasting reminder notification for $fastType at $reminderTime');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling fasting reminder notification: $e');
+        print('ERROR scheduling fasting reminder notification: $e');
       }
     }
   }
@@ -1063,12 +980,9 @@ class NotificationService {
       final notificationId = _fastingProgressNotificationId + 10;
       await flutterLocalNotificationsPlugin.cancel(notificationId);
       
-      if (kDebugMode) {
-        print('Cancelled fasting reminder notification');
-      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error cancelling fasting reminder notification: $e');
+        print('ERROR cancelling fasting reminder notification: $e');
       }
     }
   }
@@ -1076,9 +990,6 @@ class NotificationService {
   // Handle auto backup trigger from notification
   void _handleAutoBackupTrigger() async {
     try {
-      if (kDebugMode) {
-        print('Auto backup triggered by notification');
-      }
       
       // Perform the backup
       await BackupService.performAutoBackup();
@@ -1105,12 +1016,12 @@ class NotificationService {
       
     } catch (e) {
       if (kDebugMode) {
-        print('Error handling auto backup trigger: $e');
+        print('ERROR handling auto backup trigger: $e');
       }
       
       // Show error notification
       await flutterLocalNotificationsPlugin.show(
-        8890, // Error notification ID
+        8890, // ERROR notification ID
         '⚠️ Backup Error',
         'Nightly backup failed. Try manual backup.',
         const NotificationDetails(
@@ -1171,16 +1082,13 @@ class NotificationService {
         payload: 'food_tracking_reminder',
       );
       
-      if (kDebugMode) {
-        print('Food tracking reminder scheduled for: $scheduledTime');
-      }
       
       // Schedule the next day's reminder
       await _scheduleNextFoodTrackingReminder();
       
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling food tracking reminder: $e');
+        print('ERROR scheduling food tracking reminder: $e');
       }
     }
   }
@@ -1220,13 +1128,10 @@ class NotificationService {
         payload: 'food_tracking_reminder',
       );
       
-      if (kDebugMode) {
-        print('Next food tracking reminder scheduled for: $reminderTime');
-      }
       
     } catch (e) {
       if (kDebugMode) {
-        print('Error scheduling next food tracking reminder: $e');
+        print('ERROR scheduling next food tracking reminder: $e');
       }
     }
   }
@@ -1236,13 +1141,52 @@ class NotificationService {
     try {
       await flutterLocalNotificationsPlugin.cancel(7777);
       await flutterLocalNotificationsPlugin.cancel(7776);
-      
-      if (kDebugMode) {
-        print('Cancelled food tracking reminders');
-      }
+
     } catch (e) {
       if (kDebugMode) {
-        print('Error cancelling food tracking reminders: $e');
+        print('ERROR cancelling food tracking reminders: $e');
+      }
+    }
+  }
+
+  // Handle task reminder notification triggered - reschedule next occurrence for recurring tasks
+  Future<void> _handleTaskReminderTriggered(String taskId) async {
+    try {
+
+      // Import TaskService to reschedule recurring tasks
+      // Note: We need to be careful about circular dependencies here
+      // For now, we'll use a simple approach and let the TaskService handle the logic
+
+      // Schedule a delayed call to reschedule the task after app startup
+      Future.delayed(const Duration(seconds: 2), () async {
+        try {
+          // This will trigger a reschedule of all task notifications
+          // which will include the next occurrence of this recurring task
+          _rescheduleAllTaskNotifications();
+        } catch (e) {
+          if (kDebugMode) {
+            print('ERROR rescheduling task notifications: $e');
+          }
+        }
+      });
+
+    } catch (e) {
+      if (kDebugMode) {
+        print('ERROR handling task reminder triggered: $e');
+      }
+    }
+  }
+
+  // Method to trigger rescheduling of all task notifications
+  Future<void> _rescheduleAllTaskNotifications() async {
+    try {
+      // Get TaskService instance and trigger reschedule
+      final taskService = TaskService();
+      await taskService.forceRescheduleAllNotifications();
+
+    } catch (e) {
+      if (kDebugMode) {
+        print('ERROR rescheduling all task notifications: $e');
       }
     }
   }

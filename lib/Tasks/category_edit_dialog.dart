@@ -26,8 +26,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     AppColors.coral,
     AppColors.orange,
     AppColors.yellow,
-    AppColors.redPrimary,
-    AppColors.grey,
+    AppColors.red,
+    AppColors.greyText,
     AppColors.successGreen,
     AppColors.lightPink,
     Colors.deepPurple,
@@ -48,6 +48,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      backgroundColor: Colors.transparent,
       title: Text(widget.initialName == null ? 'Add Category' : 'Edit Category'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -76,7 +77,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                     shape: BoxShape.circle,
                     border: _selectedColor == color
                         ? Border.all(color: AppColors.pink, width: 3)
-                        : Border.all(color: Colors.grey.withValues(alpha: 0.3), width: 1),
+                        : Border.all(color: AppColors.dialogBackground, width: 1),
                     boxShadow: _selectedColor == color
                         ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 8)]
                         : null,

@@ -10,6 +10,7 @@ class MenstrualCycleConstants {
   static const String menstrualStartDay = "Menstrual Start Day";
   static const String ovulationPeakDay = "Ovulation Peak Day";
   
+  
   // Phase descriptions with day ranges
   static const String menstrualPhaseDesc = "Menstrual Phase (Days 1-5)";
   static const String follicularPhaseDesc = "Follicular Phase (Days 6-11)";
@@ -17,9 +18,6 @@ class MenstrualCycleConstants {
   static const String earlyLutealPhaseDesc = "Early Luteal Phase (Days 17-21)";
   static const String lateLutealPhaseDesc = "Late Luteal Phase (Days 22-28)";
   
-  // Special day descriptions
-  static const String menstrualStartDayDesc = "Menstrual Start Day (Day 1 only) - Shows for 2 days";
-  static const String ovulationPeakDayDesc = "Ovulation Peak Day (Day 14 only) - Shows for 2 days";
   
   // Task display names with emojis
   static const String menstrualPhaseTask = "During Menstrual Phase (Days 1-5) 🩸";
@@ -32,14 +30,13 @@ class MenstrualCycleConstants {
   static const String menstrualStartDayTask = "On Menstrual Start Day (Day 1 only) 🩸";
   static const String ovulationPeakDayTask = "On Ovulation Peak Day (Day 14 only) 🥚";
   
+  
   // Short names for task cards
-  static const String menstrualPhaseShort = "Menstrual";
-  static const String follicularPhaseShort = "Follicular";
-  static const String ovulationPhaseShort = "Ovulation";
-  static const String earlyLutealPhaseShort = "Early Luteal";
-  static const String lateLutealPhaseShort = "Late Luteal";
-  static const String menstrualStartDayShort = "Menstrual Day 1";
-  static const String ovulationPeakDayShort = "Ovulation Day 14";
+  static const String menstrualPhaseShort = "Menstrual Phase";
+  static const String follicularPhaseShort = "Follicular Phase";
+  static const String ovulationPhaseShort = "Ovulation Phase";
+  static const String earlyLutealPhaseShort = "Early Luteal Phase";
+  static const String lateLutealPhaseShort = "Late Luteal Phase";
   
   // Default calories for each phase
   static const Map<String, int> defaultPhaseCalories = {
@@ -71,4 +68,5 @@ class MenstrualCycleConstants {
   // Specific days for special options
   static const int menstrualStartDayNumber = 1;
   static const int ovulationPeakDayNumber = 14;
+  
 }

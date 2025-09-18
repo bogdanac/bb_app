@@ -32,7 +32,7 @@ class ScheduledFastingsService {
     final now = DateTime.now();
     final endDate = DateTime(now.year, now.month + 2, now.day);
 
-    DateTime current = DateTime(now.year, now.month, now.day + 1); // Start from tomorrow
+    DateTime current = DateTime(now.year, now.month, now.day - 3); // Start from 3 days ago for grace period
     DateTime? lastFastEnd; // Track when the last fast ends
 
     while (current.isBefore(endDate)) {
@@ -87,11 +87,11 @@ class ScheduledFastingsService {
       final month = date.month;
       String longerFastType;
       if (month == 1 || month == 9) {
-        longerFastType = '3-Day Water Fast';
+        longerFastType = FastingUtils.waterFast;
       } else if (month % 3 == 1) {
-        longerFastType = '48h Quarterly Fast';
+        longerFastType = FastingUtils.quarterlyFast;
       } else {
-        longerFastType = '36h Monthly Fast';
+        longerFastType = FastingUtils.monthlyFast;
       }
 
       // Check if Friday is close (within the duration of this fast)
@@ -148,7 +148,7 @@ class ScheduledFastingsService {
         }
       }
 
-      return ('24h Weekly Fast', false);
+      return (FastingUtils.weeklyFast, false);
     }
 
     return ('', false);
@@ -180,14 +180,15 @@ class ScheduledFastingsService {
     await saveScheduledFastings(fastings);
   }
 
-  /// Get fastings for next 2 months sorted by date
+  /// Get fastings for next 2 months + last 3 days (grace period) sorted by date
   static Future<List<ScheduledFasting>> getFastingsForNext2Months() async {
     final fastings = await getScheduledFastings();
     final now = DateTime.now();
+    final threeDaysAgo = DateTime(now.year, now.month, now.day - 3);
     final endDate = DateTime(now.year, now.month + 2, now.day);
 
     return fastings
-        .where((f) => f.date.isAfter(now) && f.date.isBefore(endDate))
+        .where((f) => f.date.isAfter(threeDaysAgo) && f.date.isBefore(endDate))
         .toList()
       ..sort((a, b) => a.date.compareTo(b.date));
   }
@@ -276,13 +277,13 @@ class ScheduledFasting {
 
   String get shortFastType {
     switch (fastType) {
-      case '24h Weekly Fast':
+      case '24h weekly fast':
         return '24h';
-      case '36h Monthly Fast':
+      case '36h monthly fast':
         return '36h';
-      case '48h Quarterly Fast':
+      case '48h quarterly fast':
         return '48h';
-      case '3-Day Water Fast':
+      case '3-day water fast':
         return '3-Day';
       default:
         return fastType;

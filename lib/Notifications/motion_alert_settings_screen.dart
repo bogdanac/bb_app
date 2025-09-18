@@ -345,7 +345,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
             
             // Step 2: Enable alerts
             Card(
-              color: _isEnabled ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+              color: _isEnabled ? Colors.green.withValues(alpha: 0.1) : AppColors.normalCardBackground,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -355,7 +355,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
                       children: [
                         Icon(
                           _isEnabled ? Icons.check_circle : Icons.looks_two_rounded,
-                          color: _isEnabled ? Colors.green : (_hasPermission ? AppColors.purple : Colors.grey),
+                          color: _isEnabled ? Colors.green : (_hasPermission ? AppColors.purple : AppColors.greyText),
                           size: 24,
                         ),
                         const SizedBox(width: 12),
@@ -389,7 +389,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
             Card(
               color: _monitoredApps.any((app) => app['enabled'] == true) 
                 ? Colors.green.withValues(alpha: 0.1) 
-                : Colors.grey.withValues(alpha: 0.1),
+                : AppColors.appBackground,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -403,7 +403,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
                             : Icons.looks_3_rounded,
                           color: _monitoredApps.any((app) => app['enabled'] == true) 
                             ? Colors.green 
-                            : (_hasPermission && _isEnabled ? AppColors.coral : Colors.grey),
+                            : (_hasPermission && _isEnabled ? AppColors.coral : AppColors.greyText),
                           size: 24,
                         ),
                         const SizedBox(width: 12),
@@ -418,7 +418,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
                     if (!_hasPermission || !_isEnabled)
                       const Text(
                         'Complete steps above first',
-                        style: TextStyle(color: Colors.grey),
+                        style: TextStyle(color: AppColors.greyText),
                       )
                     else if (_isLoadingApps)
                       const Row(
@@ -435,7 +435,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
                     else if (_availableApps.isEmpty)
                       const Text(
                         'No apps found. Try refreshing by toggling permission.',
-                        style: TextStyle(color: Colors.grey),
+                        style: TextStyle(color: AppColors.greyText),
                       )
                     else ...[
                       // Filtered app list

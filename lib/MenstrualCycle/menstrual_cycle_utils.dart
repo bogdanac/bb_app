@@ -5,7 +5,16 @@ import 'menstrual_cycle_constants.dart';
 
 class MenstrualCycleUtils {
   static bool isCurrentlyOnPeriod(DateTime? lastPeriodStart, DateTime? lastPeriodEnd) {
-    return lastPeriodStart != null && lastPeriodEnd == null;
+    if (lastPeriodStart == null) return false;
+    
+    // If period has been manually ended, not currently on period
+    if (lastPeriodEnd != null) return false;
+    
+    // Auto-end period after 7 days maximum
+    final now = DateTime.now();
+    final daysSinceStart = now.difference(lastPeriodStart).inDays;
+    
+    return daysSinceStart < 7;
   }
 
   static String getCyclePhase(DateTime? lastPeriodStart, DateTime? lastPeriodEnd, int averageCycleLength) {
@@ -36,17 +45,21 @@ class MenstrualCycleUtils {
     if (lastPeriodStart == null) return "Track your first period to begin";
 
     final now = DateTime.now();
-    final nextPeriodStart = lastPeriodStart.add(Duration(days: averageCycleLength));
-    final daysUntilPeriod = nextPeriodStart.difference(now).inDays;
+    final nowDate = DateTime(now.year, now.month, now.day);
+
+    // Alternative calculation method - more explicit
+    final lastPeriodDateOnly = DateTime(lastPeriodStart.year, lastPeriodStart.month, lastPeriodStart.day);
+    final daysSinceLastPeriod = nowDate.difference(lastPeriodDateOnly).inDays;
+    final daysUntilPeriod = averageCycleLength - daysSinceLastPeriod;
+    
+    
 
     // Period expected today or overdue
-    if (daysUntilPeriod <= 0) {
-      if (daysUntilPeriod == 0) {
-        return "Period expected today! 🩸";
-      } else {
-        final daysOverdue = -daysUntilPeriod;
-        return "Period is $daysOverdue days overdue";
-      }
+    if (daysUntilPeriod < 0) {
+      final daysOverdue = -daysUntilPeriod;
+      return _getLatePeriodMessage(daysOverdue);
+    } else if (daysUntilPeriod == 0) {
+      return "Period expected today! 🩸";
     }
 
     // Pre-period warnings (1-5 days) with personalized messages
@@ -96,6 +109,28 @@ class MenstrualCycleUtils {
   }
 
   static Color getPhaseColor(DateTime? lastPeriodStart, DateTime? lastPeriodEnd, int averageCycleLength) {
+    if (lastPeriodStart != null) {
+      final now = DateTime.now();
+      final nextPeriodStart = lastPeriodStart.add(Duration(days: averageCycleLength));
+      
+      // Use same date calculation as getCycleInfo
+      final nowDate = DateTime(now.year, now.month, now.day);
+      final nextPeriodDate = DateTime(nextPeriodStart.year, nextPeriodStart.month, nextPeriodStart.day);
+      final daysUntilPeriod = nextPeriodDate.difference(nowDate).inDays;
+      
+      // Check if period is late (only when actually late, not on expected day)
+      if (daysUntilPeriod < 0) {
+        final daysOverdue = -daysUntilPeriod;
+        if (daysOverdue <= 3) {
+          return AppColors.lightCoral; // Gentle color for early lateness
+        } else if (daysOverdue <= 7) {
+          return AppColors.coral; // Slightly more prominent for moderate lateness
+        } else {
+          return AppColors.orange; // More noticeable for extended lateness
+        }
+      }
+    }
+    
     final phase = getCyclePhase(lastPeriodStart, lastPeriodEnd, averageCycleLength);
     
     if (phase == MenstrualCycleConstants.menstrualPhase) return AppColors.lightRed;
@@ -108,6 +143,26 @@ class MenstrualCycleUtils {
   }
 
   static IconData getPhaseIcon(DateTime? lastPeriodStart, DateTime? lastPeriodEnd, int averageCycleLength) {
+    if (lastPeriodStart != null) {
+      final now = DateTime.now();
+      final nextPeriodStart = lastPeriodStart.add(Duration(days: averageCycleLength));
+      
+      // Use same date calculation as getCycleInfo
+      final nowDate = DateTime(now.year, now.month, now.day);
+      final nextPeriodDate = DateTime(nextPeriodStart.year, nextPeriodStart.month, nextPeriodStart.day);
+      final daysUntilPeriod = nextPeriodDate.difference(nowDate).inDays;
+      
+      // Check if period is late - use supportive icons (only when actually late, not on expected day)
+      if (daysUntilPeriod < 0) {
+        final daysOverdue = -daysUntilPeriod;
+        if (daysOverdue <= 7) {
+          return Icons.spa_rounded; // Gentle self-care icon for early-moderate lateness
+        } else {
+          return Icons.health_and_safety_rounded; // Health awareness icon for extended lateness
+        }
+      }
+    }
+    
     final phase = getCyclePhase(lastPeriodStart, lastPeriodEnd, averageCycleLength);
 
     if (phase == MenstrualCycleConstants.menstrualPhase) return Icons.water_drop_rounded;
@@ -122,10 +177,10 @@ class MenstrualCycleUtils {
   static String getPhaseBasedPet(DateTime? lastPeriodStart, DateTime? lastPeriodEnd, int averageCycleLength) {
     final phase = getCyclePhase(lastPeriodStart, lastPeriodEnd, averageCycleLength);
     
-    if (phase == MenstrualCycleConstants.menstrualPhase) return '🐾';
-    if (phase == MenstrualCycleConstants.follicularPhase) return '😸';
-    if (phase == MenstrualCycleConstants.ovulationPhase) return '🦋';
-    if (phase == MenstrualCycleConstants.earlyLutealPhase) return '🐰';
+    if (phase == MenstrualCycleConstants.menstrualPhase) return '🌙';
+    if (phase == MenstrualCycleConstants.follicularPhase) return '🐰';
+    if (phase == MenstrualCycleConstants.ovulationPhase) return '🌹';
+    if (phase == MenstrualCycleConstants.earlyLutealPhase) return '🍃';
     if (phase == MenstrualCycleConstants.lateLutealPhase) return '🐻';
     
     return '😸';
@@ -154,5 +209,71 @@ class MenstrualCycleUtils {
 
   static List<String> getAllPhases() {
     return MenstrualCycleConstants.allPhases;
+  }
+
+  // Get the current day within a specific menstrual phase (1-based indexing)
+  static int getCurrentDayInPhase(DateTime? lastPeriodStart, int averageCycleLength, String targetPhase) {
+    if (lastPeriodStart == null) return 0;
+
+    final now = DateTime.now();
+    final daysSinceStart = now.difference(lastPeriodStart).inDays + 1; // +1 because day 1 is period start
+    final currentPhase = getPhaseFromCycleDays(daysSinceStart, averageCycleLength);
+
+    if (currentPhase != targetPhase) return 0; // Not in the target phase
+
+    // Calculate day within the specific phase
+    if (targetPhase == MenstrualCycleConstants.menstrualPhase) {
+      return daysSinceStart; // Days 1-5
+    } else if (targetPhase == MenstrualCycleConstants.follicularPhase) {
+      return daysSinceStart - 5; // Days 6-11 become 1-6
+    } else if (targetPhase == MenstrualCycleConstants.ovulationPhase) {
+      return daysSinceStart - 11; // Days 12-16 become 1-5
+    } else if (targetPhase == MenstrualCycleConstants.earlyLutealPhase) {
+      return daysSinceStart - 16; // Days 17-X become 1-Y
+    } else if (targetPhase == MenstrualCycleConstants.lateLutealPhase) {
+      final earlyLutealEnd = averageCycleLength - 7;
+      return daysSinceStart - earlyLutealEnd; // Last 7 days become 1-7
+    }
+
+    return 0;
+  }
+
+  static String _getLatePeriodMessage(int daysOverdue) {
+    if (daysOverdue == 1) {
+      return "Period is 1 day late. This is completely normal, take care of yourself. 😌";
+    } else if (daysOverdue <= 3) {
+      return "Period is $daysOverdue days late. Don't worry, your body responds to many factors. Rest and stay hydrated! 🤗";
+    } else if (daysOverdue <= 7) {
+      return "Period is $daysOverdue days late. Cycles can vary, have you had any changes in stress, sleep, or routine lately? 💝";
+    } else if (daysOverdue <= 14) {
+      return "Period is $daysOverdue days late. While this can be normal, consider tracking any symptoms or changes 🌸";
+    } else {
+      return "Period is $daysOverdue days late. If you're concerned or experiencing other symptoms, it may be helpful to speak with a healthcare provider 💙";
+    }
+  }
+
+  // FASTING WARNINGS
+  static bool isDateInLateLutealPhase(DateTime date, DateTime? lastPeriodStart, int averageCycleLength) {
+    if (lastPeriodStart == null) return false;
+
+    // Calculate how many days since the last period start
+    final daysSinceStart = date.difference(lastPeriodStart).inDays + 1;
+
+    // Adjust for cycle length - late luteal is the last 7 days before next period
+    final adjustedDays = daysSinceStart % averageCycleLength;
+    if (adjustedDays == 0) return false; // Exactly on period start
+
+    return adjustedDays > (averageCycleLength - 7);
+  }
+
+  static Future<bool> isFastingConflictWithLateLuteal(DateTime fastDate) async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastStartStr = prefs.getString('last_period_start');
+    final averageCycleLength = prefs.getInt('average_cycle_length') ?? 31;
+
+    if (lastStartStr == null) return false;
+
+    final lastPeriodStart = DateTime.parse(lastStartStr);
+    return isDateInLateLutealPhase(fastDate, lastPeriodStart, averageCycleLength);
   }
 }

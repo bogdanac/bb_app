@@ -8,7 +8,7 @@ class FastingPhases {
       return {
         'phase': 'Ready to Fast',
         'message': 'Begin your transformative journey',
-        'color': AppColors.grey,
+        'color': AppColors.normalCardBackground,
         'progress': 0.0,
       };
     }
@@ -54,7 +54,7 @@ class FastingPhases {
       return {
         'phase': 'Growth Hormone Peak',
         'message': 'HGH levels are significantly elevated! 💪',
-        'color': AppColors.redPrimary,
+        'color': AppColors.red,
         'progress': ((hoursElapsed - 20) / 4).clamp(0.0, 1.0),
       };
     } else if (hoursElapsed < 36) {

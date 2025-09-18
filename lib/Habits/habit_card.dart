@@ -53,7 +53,7 @@ class _HabitCardState extends State<HabitCard> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            color: AppColors.orange.withValues(alpha: 0.2),
+            color: AppColors.dialogCardBackground,
           ),
           child: const Center(
             child: CircularProgressIndicator(),
@@ -67,7 +67,6 @@ class _HabitCardState extends State<HabitCard> {
     }
 
     final uncompletedHabits = _activeHabits.where((h) => !h.isCompletedToday()).toList();
-    final completedCount = _activeHabits.length - uncompletedHabits.length;
 
     return Card(
       elevation: 4,
@@ -76,7 +75,7 @@ class _HabitCardState extends State<HabitCard> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.orange.withValues(alpha: 0.15),
+          color: AppColors.homeCardBackground, // Home card background
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,7 +91,7 @@ class _HabitCardState extends State<HabitCard> {
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.orange.withValues(alpha: 0.05),
+                      color: AppColors.homeCardBackground,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: AppColors.orange.withValues(alpha: 0.3),
@@ -101,8 +100,8 @@ class _HabitCardState extends State<HabitCard> {
                     child: Row(
                       children: [
                         Icon(
-                          Icons.radio_button_unchecked,
-                          color: AppColors.orange,
+                          Icons.check_box_outline_blank,
+                          color: AppColors.orange.withValues(alpha: 0.8),
                           size: 24,
                         ),
                         const SizedBox(width: 12),
@@ -132,7 +131,7 @@ class _HabitCardState extends State<HabitCard> {
                                   '${habit.getStreak()}',
                                   style: const TextStyle(
                                     fontSize: 12,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w500,
                                     color: AppColors.orange,
                                   ),
                                 ),
@@ -145,42 +144,6 @@ class _HabitCardState extends State<HabitCard> {
                 ),
             )),
 
-            // Completed habits (if any)
-            if (completedCount > 0) ...[
-              const SizedBox(height: 8),
-              ...(_activeHabits.where((h) => h.isCompletedToday()).map((habit) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: InkWell(
-                    onTap: () => _toggleHabit(habit),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.check_circle,
-                            color: AppColors.orange,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              habit.name,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey,
-                                fontWeight: FontWeight.w400,
-                                decoration: TextDecoration.lineThrough,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              )),
-            ],
 
             if (uncompletedHabits.isEmpty) ...[
               // All habits completed

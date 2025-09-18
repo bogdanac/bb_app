@@ -83,7 +83,7 @@ class _FastingStageTimelineState extends State<FastingStageTimeline>
       'hours': '20-24h',
       'startHour': 20,
       'endHour': 24,
-      'color': AppColors.redPrimary,
+      'color': AppColors.red,
       'icon': Icons.fitness_center,
       'description': 'Human Growth Hormone levels reach peak elevation.',
       'benefits': ['5x HGH increase', 'Muscle preservation', 'Anti-aging effects'],
@@ -433,7 +433,7 @@ class _FastingStageTimelineState extends State<FastingStageTimeline>
                                 stage['hours'],
                                 style: TextStyle(
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w500,
                                   color: isSelected ? Colors.white : stage['color'],
                                 ),
                               ),
@@ -531,7 +531,7 @@ class _FastingStageTimelineState extends State<FastingStageTimeline>
               'Key Benefits:',
               style: TextStyle(
                 fontSize: 14,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 color: Colors.white,
               ),
             ),

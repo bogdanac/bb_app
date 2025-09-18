@@ -96,7 +96,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
                 color: _selectedColor,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Colors.grey.withValues(alpha: 0.3),
+                  color: AppColors.greyText,
                   width: 2,
                 ),
               ),
@@ -105,15 +105,15 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
                   Icon(
                     Icons.widgets_rounded,
                     size: 40,
-                    color: Colors.grey[700],
+                    color: AppColors.greyText,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Current Widget Color',
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[100],
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.greyText,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -121,7 +121,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
                     'This is how your routine widget will look',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey[200],
+                      color: AppColors.greyText,
                     ),
                   ),
                 ],
@@ -162,7 +162,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
                       color: color,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isSelected ? AppColors.lightGreen : Colors.grey.withValues(alpha: 0.3),
+                        color: isSelected ? AppColors.lightGreen : AppColors.greyText,
                         width: isSelected ? 3 : 1,
                       ),
                     ),
@@ -187,7 +187,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
                 color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Colors.grey.withValues(alpha: 0.2),
+                  color: AppColors.greyText,
                 ),
               ),
               child: InkWell(
@@ -218,7 +218,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
                               'Custom Color',
                               style: TextStyle(
                                 fontSize: 18,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                             SizedBox(height: 4),
@@ -226,7 +226,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
                               'Pick any color you like',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.grey,
+                                color: AppColors.greyText,
                               ),
                             ),
                           ],
@@ -234,7 +234,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
                       ),
                       Icon(
                         Icons.chevron_right_rounded,
-                        color: Colors.grey[600],
+                        color: AppColors.greyText,
                       ),
                     ],
                   ),
@@ -293,7 +293,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
               color: color,
               borderRadius: BorderRadius.circular(4),
               border: Border.all(
-                color: Colors.grey.withValues(alpha: 0.3),
+                color: AppColors.greyText,
               ),
             ),
           ),

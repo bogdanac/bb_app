@@ -48,22 +48,17 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
     _routines = await RoutineService.loadRoutines();
     _habits = await HabitService.loadHabits();
     
-    // Check for in-progress routine - either explicitly marked or has progress today
-    _inProgressRoutineId = await RoutineProgressService.getInProgressRoutineId();
-    
-    // If no explicit in-progress, check if any routine has progress today
-    if (_inProgressRoutineId == null) {
-      for (final routine in _routines) {
-        final progress = await RoutineProgressService.loadRoutineProgress(routine.id);
-        if (progress != null) {
-          // This routine has progress today, consider it in-progress
-          final completedSteps = List<bool>.from(progress['completedSteps'] ?? []);
-          final allCompleted = completedSteps.isNotEmpty && completedSteps.every((step) => step);
-          
-          if (!allCompleted) {
-            _inProgressRoutineId = routine.id;
-            break;
-          }
+    // Use unified method to determine which routine should show Continue button
+    final activeRoutine = await RoutineService.getCurrentActiveRoutine(_routines);
+    if (activeRoutine != null) {
+      final progress = await RoutineProgressService.loadRoutineProgress(activeRoutine.id);
+      if (progress != null) {
+        // This routine has progress today, consider it in-progress
+        final completedSteps = List<bool>.from(progress['completedSteps'] ?? []);
+        final allCompleted = completedSteps.isNotEmpty && completedSteps.every((step) => step);
+
+        if (!allCompleted) {
+          _inProgressRoutineId = activeRoutine.id;
         }
       }
     }
@@ -164,9 +159,43 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
   }
 
   Future<void> _setAsActiveForToday(Routine routine) async {
-    await RoutineService.setActiveRoutineForToday(routine.id);
-    
+    // Clear any in-progress routine first
+    await RoutineProgressService.clearInProgressStatus();
+
+    // Clear progress for all other routines to ensure no Continue buttons remain
+    for (final r in _routines) {
+      if (r.id != routine.id) {
+        await RoutineProgressService.clearRoutineProgress(r.id);
+      }
+    }
+
+    // Mark the routine as in-progress and create initial progress
+    await RoutineProgressService.markRoutineInProgress(routine.id);
+
+    // Create initial progress with all steps uncompleted
+    final initialItems = routine.items.map((item) => RoutineItem(
+      id: item.id,
+      text: item.text,
+      isCompleted: false,
+      isSkipped: false,
+    )).toList();
+
+    await RoutineProgressService.saveRoutineProgress(
+      routineId: routine.id,
+      currentStepIndex: 0,
+      items: initialItems,
+    );
+
+    // Update UI state
+    _inProgressRoutineId = routine.id;
+
+    // Update widget
+    await RoutineWidgetService.updateWidget();
+
+    // Trigger UI rebuild
     if (mounted) {
+      setState(() {});
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${routine.title} set as active for today'),
@@ -178,16 +207,26 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
   }
 
   void _startRoutine(Routine routine) async {
-    // Simply mark routine as in progress without navigating
+    // Clear any previous in-progress routine
+    await RoutineProgressService.clearInProgressStatus();
+
+    // Clear progress for all other routines to ensure no Continue buttons remain
+    for (final r in _routines) {
+      if (r.id != routine.id) {
+        await RoutineProgressService.clearRoutineProgress(r.id);
+      }
+    }
+
+    // Mark the new routine as in progress
     await RoutineProgressService.markRoutineInProgress(routine.id);
-    
+
     setState(() {
       _inProgressRoutineId = routine.id;
     });
-    
+
     // Update widget to show the routine is in progress
     await RoutineWidgetService.updateWidget();
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -302,7 +341,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
               unselectedLabelColor: _tabController.index == 0 ? AppColors.lightYellow : AppColors.lightOrange,
               labelStyle: const TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
               ),
               unselectedLabelStyle: const TextStyle(
                 fontSize: 16,
@@ -375,8 +414,14 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildRoutinesTab(),
-          _buildHabitsTab(),
+          RefreshIndicator(
+            onRefresh: _loadData,
+            child: _buildRoutinesTab(),
+          ),
+          RefreshIndicator(
+            onRefresh: _loadData,
+            child: _buildHabitsTab(),
+          ),
         ],
       ),
     );
@@ -384,21 +429,27 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
 
   Widget _buildRoutinesTab() {
     if (_routines.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.auto_awesome_rounded, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              'No routines yet',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.auto_awesome_rounded, size: 64, color: AppColors.greyText),
+                SizedBox(height: 16),
+                Text(
+                  'No routines yet',
+                  style: TextStyle(fontSize: 18, color: AppColors.greyText),
+                ),
+                Text(
+                  'Create your first routine to get started',
+                  style: TextStyle(color: AppColors.greyText),
+                ),
+              ],
             ),
-            Text(
-              'Create your first routine to get started',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -413,7 +464,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                 child: Text(
                   'Tap to edit • Long press for options',
                   style: TextStyle(
-                    color: Colors.grey,
+                    color: AppColors.greyText,
                     fontSize: 12,
                   ),
                 ),
@@ -445,21 +496,27 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
 
   Widget _buildHabitsTab() {
     if (_habits.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.psychology_rounded, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              'No habits yet',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.psychology_rounded, size: 64, color: AppColors.greyText),
+                SizedBox(height: 16),
+                Text(
+                  'No habits yet',
+                  style: TextStyle(fontSize: 18, color: AppColors.greyText),
+                ),
+                Text(
+                  'Create your first habit to get started',
+                  style: TextStyle(color: AppColors.greyText),
+                ),
+              ],
             ),
-            Text(
-              'Create your first habit to get started',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -474,7 +531,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                 child: Text(
                   'Tap to edit • Swipe left to delete • Toggle switch to activate',
                   style: TextStyle(
-                    color: Colors.grey,
+                    color: AppColors.greyText,
                     fontSize: 12,
                   ),
                 ),
@@ -508,6 +565,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
     return Dismissible(
       key: ValueKey(routine.id),
       direction: DismissDirection.endToStart,
+      dismissThresholds: const {DismissDirection.endToStart: 0.8},
       confirmDismiss: (direction) async {
         return await showDialog<bool>(
           context: context,
@@ -551,7 +609,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
       background: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: AppColors.redPrimary,
+          color: AppColors.deleteRed,
           borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.centerRight,
@@ -569,7 +627,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
               'Delete',
               style: TextStyle(
                 color: AppColors.white,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 fontSize: 12,
               ),
             ),
@@ -593,7 +651,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
               children: [
                 Row(
                   children: [
-                    Icon(Icons.drag_handle_rounded, color: Colors.grey),
+                    Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -689,20 +747,20 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                   children: [
                     Text(
                       '${routine.items.length} steps',
-                      style: const TextStyle(color: Colors.grey),
+                      style: const TextStyle(color: AppColors.greyText),
                     ),
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: routine.isActiveToday() 
-                            ? AppColors.lightGreen.withValues(alpha: 0.1)
-                            : Colors.grey.withValues(alpha: 0.1),
+                            ? AppColors.orange.withValues(alpha: 0.15)
+                            : AppColors.yellow.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: routine.isActiveToday() 
-                              ? AppColors.lightGreen.withValues(alpha: 0.3)
-                              : Colors.grey.withValues(alpha: 0.3),
+                              ? AppColors.orange.withValues(alpha: 0.4)
+                              : AppColors.yellow.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Text(
@@ -711,8 +769,8 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
                           color: routine.isActiveToday() 
-                              ? AppColors.lightGreen
-                              : Colors.grey,
+                              ? AppColors.orange
+                              : AppColors.yellow,
                         ),
                       ),
                     ),
@@ -741,10 +799,10 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                               decoration: BoxDecoration(
-                                color: AppColors.lightGreen.withValues(alpha: 0.2),
+                                color: AppColors.successGreen.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: AppColors.lightGreen.withValues(alpha: 0.5),
+                                  color: AppColors.successGreen.withValues(alpha: 0.5),
                                   width: 2,
                                 ),
                               ),
@@ -774,7 +832,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                             icon: const Icon(Icons.play_arrow_rounded),
                             label: const Text('Start Routine'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.lightGreen.withValues(alpha: 0.8),
+                              backgroundColor: AppColors.successGreen,
                               foregroundColor: AppColors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
@@ -795,10 +853,11 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
   Widget _buildHabitCard(Habit habit, int index) {
     final isCompletedToday = habit.isCompletedToday();
     final streak = habit.getStreak();
-    
+
     return Dismissible(
       key: ValueKey(habit.id),
       direction: DismissDirection.endToStart,
+      dismissThresholds: const {DismissDirection.endToStart: 0.8},
       confirmDismiss: (direction) async {
         return await showDialog<bool>(
           context: context,
@@ -842,7 +901,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
       background: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: AppColors.redPrimary,
+          color: AppColors.deleteRed,
           borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.centerRight,
@@ -860,7 +919,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
               'Delete',
               style: TextStyle(
                 color: AppColors.white,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 fontSize: 12,
               ),
             ),
@@ -884,7 +943,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
               children: [
                 Row(
                   children: [
-                    Icon(Icons.drag_handle_rounded, color: Colors.grey),
+                    Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(
@@ -895,14 +954,14 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: habit.isActive ? null : Colors.grey,
+                              color: habit.isActive ? null : AppColors.greyText,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'Cycle ${habit.currentCycle} • ${habit.getCurrentCycleProgress()}/21 days',
                             style: TextStyle(
-                              color: habit.isActive ? AppColors.orange : Colors.grey[600],
+                              color: habit.isActive ? AppColors.orange : AppColors.greyText,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                             ),
@@ -924,10 +983,10 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+                          color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.1) : AppColors.greyText,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.3) : Colors.grey.withValues(alpha: 0.3),
+                            color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.3) : AppColors.greyText,
                           ),
                         ),
                         child: Row(
@@ -935,7 +994,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                           children: [
                             Icon(
                               isCompletedToday ? Icons.check_circle : Icons.radio_button_unchecked,
-                              color: isCompletedToday ? AppColors.orange : Colors.grey,
+                              color: isCompletedToday ? AppColors.orange : AppColors.white,
                               size: 16,
                             ),
                             const SizedBox(width: 4),
@@ -944,7 +1003,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
-                                color: isCompletedToday ? AppColors.orange : Colors.grey,
+                                color: isCompletedToday ? AppColors.orange : AppColors.white,
                               ),
                             ),
                           ],
@@ -955,18 +1014,15 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppColors.orange.withValues(alpha: 0.1),
+                            color: AppColors.greyText,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppColors.orange.withValues(alpha: 0.3),
-                            ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(
                                 Icons.schedule,
-                                color: AppColors.orange,
+                                color: AppColors.white,
                                 size: 16,
                               ),
                               const SizedBox(width: 4),
@@ -975,7 +1031,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                                 style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
-                                  color: AppColors.orange,
+                                  color: AppColors.white,
                                 ),
                               ),
                             ],

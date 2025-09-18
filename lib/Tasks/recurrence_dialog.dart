@@ -4,6 +4,7 @@ import 'tasks_data_models.dart';
 import '../theme/app_colors.dart';
 import '../MenstrualCycle/menstrual_cycle_constants.dart';
 import '../shared/time_picker_utils.dart';
+import '../shared/date_picker_utils.dart';
 
 class RecurrenceDialog extends StatefulWidget {
   final TaskRecurrence? initialRecurrence;
@@ -31,15 +32,6 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
   bool _usePhaseDaySelector = false; // Whether to use specific day selection
   TimeOfDay? _reminderTime; // Reminder time for recurring tasks
 
-  final List<String> _weekDayNames = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday'
-  ];
 
   @override
   void initState() {
@@ -90,11 +82,12 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.dialogBackground,
       appBar: AppBar(
         title: const Text('Repeat Task'),
         backgroundColor: AppColors.transparent,
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, widget.initialRecurrence),
           icon: const Icon(Icons.close_rounded),
         ),
       ),
@@ -109,20 +102,10 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Quick options section
-                    const Text(
-                      'Quick Options',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
                     // Quick preset buttons
                     Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                      spacing: 6,
+                      runSpacing: 6,
                       children: [
                         _buildQuickOption('Daily', RecurrenceType.daily, 1,
                             Icons.today_rounded),
@@ -137,16 +120,392 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
 
                     const SizedBox(height: 16),
 
-                    // Menstrual cycle options
-                    const Text(
-                      'Menstrual Cycle',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.pink,
+
+                    // Recurrence Type Selection - only show if a daily/weekly/monthly/yearly type is selected
+                    if (_selectedTypes.isNotEmpty && !_isMenstrualPhase(_primaryType))
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.dialogBackground.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppColors.coral.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Text(
+                              'Repeat every:',
+                              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16, color: AppColors.greyText),
+                            ),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              width: 50,
+                              height: 30,
+                              child: TextFormField(
+                                initialValue: _interval.toString(),
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 0),
+                                  isDense: false,
+                                  hintText: '1',
+                                ),
+                                onChanged: (value) {
+                                  final intValue = int.tryParse(value);
+                                  if (intValue != null && intValue > 0) {
+                                    setState(() {
+                                      _interval = intValue;
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: DropdownButtonFormField<RecurrenceType>(
+                                initialValue: _displayedSelectedType,
+                                decoration: InputDecoration(
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                  isDense: true,
+                                ),
+                                items: _allowedDropdownTypes.map((type) {
+                                  return DropdownMenuItem(
+                                    value: type,
+                                    child: Text(
+                                      _getRecurrenceTypeName(type),
+                                      style: const TextStyle(fontSize: 16),
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _primaryType = value;
+                                      // Update selected types if this basic type is being changed
+                                      _selectedTypes = [value];
+                                      // Reset values when type changes
+                                      _selectedWeekDays.clear();
+                                      _dayOfMonth = null;
+                                      _isLastDayOfMonth = false;
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
+
+                    // Weekly specific options - show right after repeat every
+                    if (_selectedTypes.contains(RecurrenceType.weekly)) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.dialogBackground.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppColors.coral.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Repeat on days:',
+                              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16, color: AppColors.greyText),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: List.generate(7, (index) {
+                                final dayNumber = index + 1;
+                                final isSelected = _selectedWeekDays.contains(dayNumber);
+                                return FilterChip(
+                                  label: Text(_getDayName(dayNumber)),
+                                  selected: isSelected,
+                                  onSelected: (selected) {
+                                    setState(() {
+                                      if (selected) {
+                                        _selectedWeekDays.add(dayNumber);
+                                      } else {
+                                        _selectedWeekDays.remove(dayNumber);
+                                      }
+                                    });
+                                  },
+                                  backgroundColor: Colors.transparent,
+                                  selectedColor: AppColors.coral.withValues(alpha: 0.2),
+                                  checkmarkColor: AppColors.coral,
+                                  side: BorderSide(
+                                    color: isSelected ? AppColors.coral : AppColors.greyText,
+                                  ),
+                                );
+                              }),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // Monthly specific options - show right after weekly
+                    if (_selectedTypes.contains(RecurrenceType.monthly)) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.dialogBackground.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppColors.coral.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Monthly Options:',
+                              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16, color: AppColors.greyText),
+                            ),
+                            const SizedBox(height: 8),
+                            // Specific day option
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: !_isLastDayOfMonth
+                                    ? AppColors.coral.withValues(alpha: 0.1)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: !_isLastDayOfMonth
+                                      ? AppColors.coral.withValues(alpha: 0.1)
+                                      : AppColors.greyText,
+                                ),
+                              ),
+                              child: InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _isLastDayOfMonth = false;
+                                    _dayOfMonth = _dayOfMonth ?? DateTime.now().day;
+                                  });
+                                },
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 20,
+                                      height: 20,
+                                      margin: const EdgeInsets.only(right: 10),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: !_isLastDayOfMonth
+                                              ? AppColors.coral
+                                              : AppColors.greyText,
+                                          width: 2,
+                                        ),
+                                        color: !_isLastDayOfMonth
+                                            ? AppColors.coral
+                                            : Colors.transparent,
+                                      ),
+                                      child: !_isLastDayOfMonth
+                                          ? const Icon(
+                                              Icons.circle,
+                                              size: 8,
+                                              color: Colors.white,
+                                            )
+                                          : null,
+                                    ),
+                                    SizedBox(
+                                      width: 50,
+                                      height: 30,
+                                      child: TextFormField(
+                                        initialValue: _dayOfMonth?.toString() ??
+                                            DateTime.now().day.toString(),
+                                        keyboardType: TextInputType.number,
+                                        enabled: !_isLastDayOfMonth,
+                                        decoration: InputDecoration(
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 8, vertical: 4),
+                                                ),
+                                        onChanged: (value) {
+                                          final intValue = int.tryParse(value);
+                                          if (intValue != null &&
+                                              intValue >= 1 &&
+                                              intValue <= 31) {
+                                            setState(() {
+                                              _dayOfMonth = intValue;
+                                              _isLastDayOfMonth = false;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text('of each month', style: TextStyle(color: AppColors.greyText)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            // Last day option
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: _isLastDayOfMonth
+                                    ? AppColors.coral.withValues(alpha: 0.3)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: _isLastDayOfMonth
+                                      ? AppColors.coral.withValues(alpha: 0.3)
+                                      : AppColors.greyText,
+                                ),
+                              ),
+                              child: InkWell(
+                                onTap: () {
+                                  setState(() => _isLastDayOfMonth = true);
+                                },
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 20,
+                                      height: 20,
+                                      margin: const EdgeInsets.only(right: 8),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: _isLastDayOfMonth
+                                              ? AppColors.coral
+                                              : AppColors.greyText,
+                                          width: 2,
+                                        ),
+                                        color: _isLastDayOfMonth
+                                            ? AppColors.coral
+                                            : Colors.transparent,
+                                      ),
+                                      child: _isLastDayOfMonth
+                                          ? const Icon(
+                                              Icons.circle,
+                                              size: 8,
+                                              color: Colors.white,
+                                            )
+                                          : null,
+                                    ),
+                                    const Text('Last day of each month', style: TextStyle(color: AppColors.greyText)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // Yearly specific options - show right after monthly
+                    if (_selectedTypes.contains(RecurrenceType.yearly)) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.dialogBackground.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppColors.coral.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Yearly Options:',
+                              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16, color: AppColors.greyText),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Text('Month: ', style: TextStyle(color: AppColors.greyText)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: DropdownButtonFormField<int>(
+                                    initialValue: _interval <= 12 ? _interval : 1,
+                                    decoration: InputDecoration(
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                      isDense: true,
+                                    ),
+                                    items: List.generate(12, (index) {
+                                      final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                                                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                                      return DropdownMenuItem(
+                                        value: index + 1,
+                                        child: Text(monthNames[index]),
+                                      );
+                                    }),
+                                    onChanged: (value) {
+                                      if (value != null) {
+                                        setState(() {
+                                          _interval = value; // For yearly, interval represents the month
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 24),
+                                const Text('Day: ', style: TextStyle(color: AppColors.greyText)),
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 50,
+                                  height: 30,
+                                  child: TextFormField(
+                                    initialValue: _dayOfMonth?.toString() ?? '1',
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                                      isDense: false,
+                                    ),
+                                    onChanged: (value) {
+                                      final intValue = int.tryParse(value);
+                                      if (intValue != null && intValue >= 1 && intValue <= 31) {
+                                        setState(() {
+                                          _dayOfMonth = intValue;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 16),
+
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -179,512 +538,75 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                       ],
                     ),
 
-                    // Phase Day Selector for menstrual phases
+                    // Phase Day Selector for menstrual phases - show right after menstrual phases selection
                     if (_hasSelectedMenstrualPhase()) ...[
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 8),
                       _buildPhaseDaySelector(),
-                      const SizedBox(height: 16),
                     ],
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
                     const Divider(),
                     const SizedBox(height: 16),
-
-                    // Custom section - only show if primary type is not a menstrual phase
-                    if (!_isMenstrualPhase(_primaryType)) ...[
-                      const Text(
-                        'Custom Repeat',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Recurrence Type Selection - only show if primary type is not a menstrual phase
-                    if (!_isMenstrualPhase(_primaryType))
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.coral.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.coral.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Repeat every:',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  flex: 1,
-                                  child: TextFormField(
-                                    initialValue: _interval.toString(),
-                                    keyboardType: TextInputType.number,
-                                    decoration: InputDecoration(
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 8),
-                                      hintText: '1',
-                                    ),
-                                    onChanged: (value) {
-                                      final intValue = int.tryParse(value);
-                                      if (intValue != null && intValue > 0) {
-                                        setState(() {
-                                          _interval = intValue;
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  flex: 2,
-                                  child:
-                                      DropdownButtonFormField<RecurrenceType>(
-                                    initialValue: _displayedSelectedType,
-                                    decoration: InputDecoration(
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 8),
-                                    ),
-                                    items: _allowedDropdownTypes.map((type) {
-                                      return DropdownMenuItem(
-                                        value: type,
-                                        child:
-                                            Text(_getRecurrenceTypeName(type)),
-                                      );
-                                    }).toList(),
-                                    onChanged: (value) {
-                                      if (value != null) {
-                                        setState(() {
-                                          _primaryType = value;
-                                          // Update selected types if this basic type is being changed
-                                          _selectedTypes = [value];
-                                          // Reset values when type changes
-                                          _selectedWeekDays.clear();
-                                          _dayOfMonth = null;
-                                          _isLastDayOfMonth = false;
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    // Weekly specific options
-                    if (_selectedTypes.contains(RecurrenceType.weekly)) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.coral.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.coral.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Repeat on days:',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 12),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: List.generate(7, (index) {
-                                final dayNumber = index + 1;
-                                final isSelected =
-                                    _selectedWeekDays.contains(dayNumber);
-
-                                return FilterChip(
-                                  label: Text(
-                                    _weekDayNames[index].substring(0, 3),
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                      color: isSelected ? Colors.white : null,
-                                    ),
-                                  ),
-                                  selected: isSelected,
-                                  backgroundColor: Colors.transparent,
-                                  selectedColor: AppColors.coral,
-                                  checkmarkColor: Colors.white,
-                                  side: BorderSide(
-                                    color: isSelected
-                                        ? AppColors.coral
-                                        : Colors.grey.withValues(alpha: 0.5),
-                                  ),
-                                  onSelected: (selected) {
-                                    setState(() {
-                                      if (selected) {
-                                        _selectedWeekDays.add(dayNumber);
-                                      } else {
-                                        _selectedWeekDays.remove(dayNumber);
-                                        // If all weekdays are deselected, keep at least Monday
-                                        if (_selectedWeekDays.isEmpty) {
-                                          _selectedWeekDays.add(1); // Monday
-                                        }
-                                      }
-                                      _selectedWeekDays.sort();
-                                    });
-                                  },
-                                );
-                              }),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    // Yearly specific options
-                    if (_selectedTypes.contains(RecurrenceType.yearly)) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.successGreen.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color:
-                                AppColors.successGreen.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Repeat on:',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                const Text('Month: '),
-                                Expanded(
-                                  child: DropdownButtonFormField<int>(
-                                    initialValue:
-                                        _interval <= 12 ? _interval : 1,
-                                    decoration: InputDecoration(
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 8),
-                                    ),
-                                    items: List.generate(12, (index) {
-                                      final monthNames = [
-                                        'Jan',
-                                        'Feb',
-                                        'Mar',
-                                        'Apr',
-                                        'May',
-                                        'Jun',
-                                        'Jul',
-                                        'Aug',
-                                        'Sep',
-                                        'Oct',
-                                        'Nov',
-                                        'Dec'
-                                      ];
-                                      return DropdownMenuItem(
-                                        value: index + 1,
-                                        child: Text(monthNames[index]),
-                                      );
-                                    }),
-                                    onChanged: (value) {
-                                      if (value != null) {
-                                        setState(() {
-                                          _interval =
-                                              value; // For yearly, interval represents the month
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Text('Day: '),
-                                SizedBox(
-                                  width: 80,
-                                  child: TextFormField(
-                                    initialValue:
-                                        _dayOfMonth?.toString() ?? '1',
-                                    keyboardType: TextInputType.number,
-                                    decoration: InputDecoration(
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 8),
-                                    ),
-                                    onChanged: (value) {
-                                      final intValue = int.tryParse(value);
-                                      if (intValue != null &&
-                                          intValue >= 1 &&
-                                          intValue <= 31) {
-                                        setState(() {
-                                          _dayOfMonth = intValue;
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    // Monthly specific options
-                    if (_selectedTypes.contains(RecurrenceType.monthly)) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.purple.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.purple.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Repeat on:',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 12),
-
-                            // Specific day option
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: !_isLastDayOfMonth
-                                    ? AppColors.purple.withValues(alpha: 0.1)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: !_isLastDayOfMonth
-                                      ? AppColors.purple.withValues(alpha: 0.3)
-                                      : Colors.grey.withValues(alpha: 0.3),
-                                ),
-                              ),
-                              child: InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    _isLastDayOfMonth = false;
-                                    _dayOfMonth ??= DateTime.now().day;
-                                  });
-                                },
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 20,
-                                      height: 20,
-                                      margin: const EdgeInsets.only(right: 8),
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: !_isLastDayOfMonth
-                                              ? AppColors.purple
-                                              : Colors.grey,
-                                          width: 2,
-                                        ),
-                                        color: !_isLastDayOfMonth
-                                            ? AppColors.purple
-                                            : Colors.transparent,
-                                      ),
-                                      child: !_isLastDayOfMonth
-                                          ? const Icon(
-                                              Icons.circle,
-                                              size: 12,
-                                              color: Colors.white,
-                                            )
-                                          : null,
-                                    ),
-                                    const Text('Day '),
-                                    SizedBox(
-                                      width: 60,
-                                      child: TextFormField(
-                                        initialValue: _dayOfMonth?.toString() ??
-                                            DateTime.now().day.toString(),
-                                        keyboardType: TextInputType.number,
-                                        enabled: !_isLastDayOfMonth,
-                                        decoration: InputDecoration(
-                                          border: OutlineInputBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(6),
-                                          ),
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 8, vertical: 4),
-                                          isDense: true,
-                                        ),
-                                        onChanged: (value) {
-                                          final intValue = int.tryParse(value);
-                                          if (intValue != null &&
-                                              intValue >= 1 &&
-                                              intValue <= 31) {
-                                            setState(() {
-                                              _dayOfMonth = intValue;
-                                              _isLastDayOfMonth = false;
-                                            });
-                                          }
-                                        },
-                                      ),
-                                    ),
-                                    const Text(' of each month'),
-                                  ],
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(height: 8),
-
-                            // Last day option
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: _isLastDayOfMonth
-                                    ? AppColors.purple.withValues(alpha: 0.1)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: _isLastDayOfMonth
-                                      ? AppColors.purple.withValues(alpha: 0.3)
-                                      : Colors.grey.withValues(alpha: 0.3),
-                                ),
-                              ),
-                              child: InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    _isLastDayOfMonth = true;
-                                    _dayOfMonth = null;
-                                  });
-                                },
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 20,
-                                      height: 20,
-                                      margin: const EdgeInsets.only(right: 8),
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: _isLastDayOfMonth
-                                              ? AppColors.purple
-                                              : Colors.grey,
-                                          width: 2,
-                                        ),
-                                        color: _isLastDayOfMonth
-                                            ? AppColors.purple
-                                            : Colors.transparent,
-                                      ),
-                                      child: _isLastDayOfMonth
-                                          ? const Icon(
-                                              Icons.circle,
-                                              size: 12,
-                                              color: Colors.white,
-                                            )
-                                          : null,
-                                    ),
-                                    const Text('Last day of each month'),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    const SizedBox(height: 24),
 
                     // Reminder Time Section (only show if recurrence is selected)
                     if (_selectedTypes.isNotEmpty) ...[
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppColors.coral.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(8),
+                          color: AppColors.dialogBackground.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: AppColors.coral.withValues(alpha: 0.2),
+                            color: AppColors.coral.withValues(alpha: 0.3),
                           ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
                             const Text(
-                              'Reminder Time (Optional)',
-                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              'Set a reminder:',
+                              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16, color: AppColors.greyText),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(width: 16),
                             InkWell(
                               onTap: _selectReminderTime,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 decoration: BoxDecoration(
-                                  border: Border.all(
-                                      color: Colors.grey.withValues(alpha: 0.3)),
-                                  borderRadius: BorderRadius.circular(6),
+                                  borderRadius: BorderRadius.circular(8),
                                   color: Colors.white.withValues(alpha: 0.05),
                                 ),
                                 child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
                                       Icons.access_time_rounded,
                                       color: _reminderTime != null 
                                           ? AppColors.coral 
-                                          : Colors.grey[600],
-                                      size: 16,
+                                          : AppColors.greyText,
+                                      size: 18,
                                     ),
                                     const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _reminderTime != null
-                                            ? _reminderTime!.format(context)
-                                            : 'Tap to set reminder time',
-                                        style: TextStyle(
-                                          color: _reminderTime != null
-                                              ? AppColors.coral
-                                              : Colors.grey[600],
-                                          fontSize: 13,
-                                        ),
+                                    Text(
+                                      _reminderTime != null
+                                          ? _reminderTime!.format(context)
+                                          : 'Set time',
+                                      style: TextStyle(
+                                        color: _reminderTime != null
+                                            ? AppColors.coral
+                                            : AppColors.greyText,
+                                        fontSize: 16,
                                       ),
                                     ),
-                                    if (_reminderTime != null)
-                                      IconButton(
-                                        icon: const Icon(Icons.clear_rounded,
-                                            size: 14),
-                                        onPressed: () =>
-                                            setState(() => _reminderTime = null),
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                                        color: Colors.grey[600],
+                                    if (_reminderTime != null) ...[
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: () => setState(() => _reminderTime = null),
+                                        child: Icon(
+                                          Icons.clear_rounded,
+                                          size: 18,
+                                          color: AppColors.greyText,
+                                        ),
                                       ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -695,135 +617,131 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                       const SizedBox(height: 16),
                     ],
 
-                    // Start Date Section
+                    // Start Date and End Date Section (same row)
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.08),
+                        color: AppColors.dialogBackground.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.blue.withValues(alpha: 0.2),
+                          color: AppColors.coral.withValues(alpha: 0.2),
                         ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Start Date (Optional)',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 12),
-                          InkWell(
-                            onTap: _selectStartDate,
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                    color: Colors.grey.withValues(alpha: 0.3)),
-                                borderRadius: BorderRadius.circular(8),
-                                color: Colors.white.withValues(alpha: 0.05),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.play_arrow_rounded,
-                                    color: Colors.blue[600],
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      _startDate != null
-                                          ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
-                                          : 'Starts today',
-                                      style: TextStyle(
-                                        color: _startDate != null
-                                            ? null
-                                            : Colors.grey[600],
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Start Date',
+                                      style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16, color: AppColors.greyText),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    InkWell(
+                                      onTap: _selectStartDate,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(8),
+                                          color: Colors.white.withValues(alpha: 0.05),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.play_arrow_rounded,
+                                              color: Colors.blue[600],
+                                              size: 20,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                _startDate != null
+                                                    ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
+                                                    : 'Starts today',
+                                                style: TextStyle(
+                                                  color: _startDate != null
+                                                      ? null
+                                                      : AppColors.greyText,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                            if (_startDate != null)
+                                              GestureDetector(
+                                                onTap: () => setState(() => _startDate = null),
+                                                child: Icon(
+                                                  Icons.clear_rounded,
+                                                  size: 16,
+                                                  color: AppColors.greyText,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  if (_startDate != null)
-                                    IconButton(
-                                      icon: const Icon(Icons.clear_rounded,
-                                          size: 18),
-                                      onPressed: () =>
-                                          setState(() => _startDate = null),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                      color: Colors.grey[600],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'End Date',
+                                      style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16, color: AppColors.greyText),
                                     ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // End Date Section
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.grey.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'End Date (Optional)',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 12),
-                          InkWell(
-                            onTap: _selectEndDate,
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                    color: Colors.grey.withValues(alpha: 0.3)),
-                                borderRadius: BorderRadius.circular(8),
-                                color: Colors.white.withValues(alpha: 0.05),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.calendar_today_rounded,
-                                    color: Colors.grey[600],
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      _endDate != null
-                                          ? '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}'
-                                          : 'Tap to set end date',
-                                      style: TextStyle(
-                                        color: _endDate != null
-                                            ? null
-                                            : Colors.grey[600],
+                                    const SizedBox(height: 8),
+                                    InkWell(
+                                      onTap: _selectEndDate,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(8),
+                                          color: Colors.white.withValues(alpha: 0.05),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.calendar_today_rounded,
+                                              color: AppColors.greyText,
+                                              size: 20,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                _endDate != null
+                                                    ? '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}'
+                                                    : 'Set end date',
+                                                style: TextStyle(
+                                                  color: _endDate != null
+                                                      ? null
+                                                      : AppColors.greyText,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                            if (_endDate != null)
+                                              GestureDetector(
+                                                onTap: () => setState(() => _endDate = null),
+                                                child: Icon(
+                                                  Icons.clear_rounded,
+                                                  size: 16,
+                                                  color: AppColors.greyText,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  if (_endDate != null)
-                                    IconButton(
-                                      icon: const Icon(Icons.clear_rounded,
-                                          size: 18),
-                                      onPressed: () =>
-                                          setState(() => _endDate = null),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                      color: Colors.grey[600],
-                                    ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
+                            ],
                           ),
                         ],
                       ),
@@ -892,7 +810,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                 ),
                 child: const Text(
                   'Save Repeat',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  style: TextStyle(fontWeight: FontWeight.w500),
                 ),
               ),
             ),
@@ -904,12 +822,8 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
 
   Widget _buildQuickOption(
       String label, RecurrenceType type, int interval, IconData icon,
-      {List<int>? weekdays, String? customDescription}) {
-    final isSelected = _selectedTypes.contains(type) ||
-        (customDescription != null &&
-            customDescription == '3 days after period ends' &&
-            _selectedTypes.contains(RecurrenceType.custom) &&
-            _interval == -1);
+      {List<int>? weekdays}) {
+    final isSelected = _selectedTypes.contains(type);
 
     return InkWell(
       onTap: () {
@@ -926,10 +840,6 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
           // Toggle selection - if already selected, remove it; if not selected, add it
           if (isSelected) {
             _selectedTypes.remove(type);
-            // If it was a custom type, also remove the special custom option
-            if (customDescription == '3 days after period ends') {
-              _selectedTypes.remove(RecurrenceType.custom);
-            }
           } else {
             // If this is a schedule type, remove other conflicting schedule types
             if (isScheduleType) {
@@ -956,28 +866,20 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
               }
             }
 
-            // Special handling for "3 days after period" custom recurrence
-            if (customDescription == '3 days after period ends') {
-              _selectedTypes.remove(type);
-              _selectedTypes.add(RecurrenceType.custom);
-              _primaryType = RecurrenceType.custom;
-              _interval = -1; // Special marker for "3 days after period"
-            } else {
-              _interval = interval;
-            }
+            _interval = interval;
           }
         });
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.coral : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
                 ? AppColors.coral
-                : Colors.grey.withValues(alpha: 0.3),
-            width: 2,
+                : AppColors.greyText,
+            width: 1,
           ),
         ),
         child: Row(
@@ -985,7 +887,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
           children: [
             Icon(
               icon,
-              color: isSelected ? Colors.white : Colors.grey[600],
+              color: isSelected ? Colors.white : AppColors.greyText,
               size: 20,
             ),
             const SizedBox(width: 8),
@@ -993,7 +895,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
               label,
               style: TextStyle(
                 color: isSelected ? Colors.white : null,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                fontWeight: isSelected ? FontWeight.w500 : FontWeight.w500,
               ),
             ),
           ],
@@ -1065,7 +967,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
   }
 
   void _selectStartDate() async {
-    final date = await showDatePicker(
+    final date = await DatePickerUtils.showStyledDatePicker(
       context: context,
       initialDate: _startDate ?? DateTime.now(),
       firstDate: DateTime.now().subtract(const Duration(days: 365)), // Allow past dates
@@ -1080,7 +982,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
   }
 
   void _selectEndDate() async {
-    final date = await showDatePicker(
+    final date = await DatePickerUtils.showStyledDatePicker(
       context: context,
       initialDate: _endDate ?? DateTime.now().add(const Duration(days: 30)),
       firstDate: DateTime.now(),
@@ -1194,10 +1096,10 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.coral.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.dialogBackground.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppColors.coral.withValues(alpha: 0.2),
+          color: AppColors.coral.withValues(alpha: 0.3),
         ),
       ),
       child: Column(
@@ -1208,8 +1110,9 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
               Text(
                 'Select Day within $phaseTitle',
                 style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 16,
+                  color: AppColors.greyText,
                 ),
               ),
               const Spacer(),
@@ -1217,13 +1120,13 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                 'Optional',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[600],
+                  color: AppColors.greyText,
                   fontStyle: FontStyle.italic,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Row(
             children: [
               Checkbox(
@@ -1240,7 +1143,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                   });
                 },
               ),
-              const Text('Specific day within phase'),
+              const Text('Specific day within phase', style: TextStyle(color: AppColors.greyText)),
             ],
           ),
           if (_usePhaseDaySelector) ...[
@@ -1249,7 +1152,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
               children: [
                 Text(
                   'Cycle Day $currentCycleDay',
-                  style: const TextStyle(fontWeight: FontWeight.w500),
+                  style: const TextStyle(fontWeight: FontWeight.w500, color: AppColors.greyText),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -1274,5 +1177,10 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
         ],
       ),
     );
+  }
+
+  String _getDayName(int dayNumber) {
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return dayNames[dayNumber - 1];
   }
 }

@@ -75,16 +75,16 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
         await RoutineWidgetService.forceRefreshWidget();
       }
 
-      // Find morning routine
+      // Find currently active routine using unified method
       try {
-        _currentRoutine = await RoutineService.findMorningRoutine(routines);
-        
+        _currentRoutine = await RoutineService.getCurrentActiveRoutine(routines);
+
         if (kDebugMode) {
-          print('Selected morning routine: ${_currentRoutine?.title}');
+          print('Selected active routine: ${_currentRoutine?.title}');
         }
       } catch (e) {
         if (kDebugMode) {
-          print('Error in findMorningRoutine: $e');
+          print('Error in getCurrentActiveRoutine: $e');
         }
         _currentRoutine = null;
       }
@@ -309,7 +309,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            color: AppColors.yellow.withValues(alpha: 0.2), // Orange theme colors
+            color: AppColors.homeCardBackground, // Home card background
           ),
           child: const Center(
             child: CircularProgressIndicator(),
@@ -326,7 +326,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            color: AppColors.yellow.withValues(alpha: 0.2), // Orange theme colors
+            color: AppColors.homeCardBackground, // Home card background
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,7 +341,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
                   const SizedBox(width: 12),
                   const Text(
                     'Morning Routine',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
@@ -366,7 +366,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.yellow.withValues(alpha: 0.2), // Orange theme colors
+          color: AppColors.homeCardBackground, // Home card background
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,20 +382,20 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
                 Expanded(
                   child: Text(
                     _currentRoutine!.title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton.icon(
                   onPressed: widget.onHiddenForToday,
-                  icon: const Icon(Icons.close_rounded, size: 16),
+                  icon: const Icon(Icons.close_rounded, size: 16, color: AppColors.greyText,),
                   label: const Text(
                     'Not Today',
-                    style: TextStyle(fontSize: 12),
+                    style: TextStyle(fontSize: 12, color: AppColors.greyText),
                   ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.grey[700],
-                    side: BorderSide(color: Colors.grey[400]!, width: 1),
+                    foregroundColor: AppColors.greyText,
+                    side: BorderSide(color: AppColors.greyText, width: 1),
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -434,10 +434,10 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.yellow.withValues(alpha: 0.1),
+                        color: AppColors.yellow.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: AppColors.yellow.withValues(alpha: 0.3),
+                          color: AppColors.yellow.withValues(alpha: 0.4),
                         ),
                       ),
                       child: Text(
@@ -468,7 +468,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
                         icon: const Icon(Icons.skip_next_rounded, size: 20),
                         tooltip: 'Skip',
                         style: IconButton.styleFrom(
-                          backgroundColor: Colors.grey,
+                          backgroundColor: AppColors.greyText,
                           foregroundColor: Colors.white,
                           minimumSize: const Size(32, 32),
                           padding: const EdgeInsets.all(4),
@@ -503,9 +503,9 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Row(
                             children: [
-                              const Icon(Icons.skip_next, size: 16, color: Colors.grey),
+                              const Icon(Icons.skip_next, size: 16, color: AppColors.greyText),
                               const SizedBox(width: 8),
-                              Expanded(child: Text(item.text, style: const TextStyle(color: Colors.grey))),
+                              Expanded(child: Text(item.text, style: const TextStyle(color: AppColors.greyText))),
                             ],
                           ),
                         ))),

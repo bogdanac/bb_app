@@ -38,6 +38,31 @@ class Habit {
     completedDates.remove(today);
   }
 
+  bool isCompletedOnDate(DateTime date) {
+    final dateString = DateFormat('yyyy-MM-dd').format(date);
+    return completedDates.contains(dateString);
+  }
+
+  void markCompletedOnDate(DateTime date) {
+    final dateString = DateFormat('yyyy-MM-dd').format(date);
+    if (!completedDates.contains(dateString)) {
+      completedDates.add(dateString);
+    }
+  }
+
+  void markUncompletedOnDate(DateTime date) {
+    final dateString = DateFormat('yyyy-MM-dd').format(date);
+    completedDates.remove(dateString);
+  }
+
+  void toggleCompletionOnDate(DateTime date) {
+    if (isCompletedOnDate(date)) {
+      markUncompletedOnDate(date);
+    } else {
+      markCompletedOnDate(date);
+    }
+  }
+
   int getCurrentCycleProgress() {
     if (completedDates.isEmpty) return 0;
     

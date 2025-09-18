@@ -246,24 +246,25 @@ class NotificationListenerService {
   // Initialize notification actions to handle stop button
   static Future<void> _initializeNotificationActions() async {
     try {
-      debugPrint('🔧 Initializing notification actions...');
       final FlutterLocalNotificationsPlugin notifications = FlutterLocalNotificationsPlugin();
       
-      // Handle notification actions (like stop button) - simplified setup
+      // Handle notification actions (like stop button) - simplified setup with timeout
       await notifications.initialize(
         const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         ),
         onDidReceiveNotificationResponse: (NotificationResponse response) async {
-          debugPrint('Notification action received: ${response.actionId}');
           if (response.actionId == 'stop_alarm') {
-            debugPrint('🛑 Stop button pressed - stopping alarm');
             await stopAlarm();
           }
         },
+      ).timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('❌ Notification actions initialization timed out');
+          throw TimeoutException('Notification actions timeout', const Duration(seconds: 3));
+        },
       );
-      
-      debugPrint('✅ Notification actions initialized successfully');
     } catch (e) {
       debugPrint('❌ Error initializing notification actions: $e');
       // Don't rethrow - continue without notification actions

@@ -3,6 +3,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 class FastingUtils {
+  // Fast type constants
+  static const String weeklyFast = '24h weekly fast';
+  static const String monthlyFast = '36h monthly fast';
+  static const String quarterlyFast = '48h quarterly fast';
+  static const String waterFast = '3-day water fast';
+
+  // List of all fast types for dropdowns
+  static const List<String> fastTypes = [
+    weeklyFast,
+    monthlyFast,
+    quarterlyFast,
+    waterFast,
+  ];
   /// Format duration to readable string (e.g., "12h 30m")
   static String formatDuration(Duration duration) {
     final hours = duration.inHours;
@@ -13,16 +26,16 @@ class FastingUtils {
   /// Get duration for different fast types
   static Duration getFastDuration(String fastType) {
     switch (fastType) {
-      case '24h Weekly Fast':
+      case '24h weekly fast':
       case '24h':
         return const Duration(hours: 24);
-      case '36h Monthly Fast':
+      case '36h monthly fast':
       case '36h':
         return const Duration(hours: 36);
-      case '48h Quarterly Fast':
+      case '48h quarterly fast':
       case '48h':
         return const Duration(hours: 48);
-      case '3-Day Water Fast':
+      case '3-day water fast':
       case '3-days':
         return const Duration(days: 3);
       default:
@@ -41,7 +54,14 @@ class FastingUtils {
       debugPrint('[FastingUtils] Checking recommendation for: $today');
 
       // First check if already completed a fast today
-      final historyStr = prefs.getStringList('fasting_history') ?? [];
+      List<String> historyStr;
+      try {
+        historyStr = prefs.getStringList('fasting_history') ?? [];
+      } catch (e) {
+        debugPrint('Warning: Fasting history data type mismatch, clearing corrupted data');
+        await prefs.remove('fasting_history');
+        historyStr = [];
+      }
       debugPrint('[FastingUtils] History entries count: ${historyStr.length}');
       
       final todayHistory = historyStr.where((item) {

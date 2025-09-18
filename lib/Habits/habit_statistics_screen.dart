@@ -46,15 +46,15 @@ class _HabitStatisticsScreenState extends State<HabitStatisticsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.bar_chart, size: 64, color: Colors.grey),
+                  Icon(Icons.bar_chart, size: 64, color: AppColors.greyText),
                   SizedBox(height: 16),
                   Text(
                     'No habit data yet',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                    style: TextStyle(fontSize: 18, color: AppColors.greyText),
                   ),
                   Text(
                     'Start tracking your habits to see statistics',
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(color: AppColors.greyText),
                   ),
                 ],
               ),
@@ -291,18 +291,18 @@ class _HabitStatisticsScreenState extends State<HabitStatisticsScreen> {
                       _selectedTimeRange == -1 
                           ? 'Overall Progress'
                           : 'Progress (Last $_selectedTimeRange days)',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: const TextStyle(fontSize: 12, color: AppColors.greyText),
                     ),
                     Text(
                       '${(completionRate * 100).toInt()}%',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: const TextStyle(fontSize: 12, color: AppColors.greyText),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 LinearProgressIndicator(
                   value: completionRate,
-                  backgroundColor: Colors.grey.withValues(alpha: 0.2),
+                  backgroundColor: AppColors.dialogCardBackground,
                   valueColor: AlwaysStoppedAnimation<Color>(_getCompletionRateColor(completionRate)),
                 ),
               ],
@@ -354,7 +354,7 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             title,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
+            style: const TextStyle(fontSize: 12, color: AppColors.greyText),
             textAlign: TextAlign.center,
           ),
         ],
@@ -391,7 +391,7 @@ class _SmallStatCard extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           title,
-          style: const TextStyle(fontSize: 10, color: Colors.grey),
+          style: const TextStyle(fontSize: 10, color: AppColors.greyText),
           textAlign: TextAlign.center,
         ),
       ],
@@ -423,7 +423,7 @@ class _TimeRangeButton extends StatelessWidget {
           color: isSelected ? AppColors.yellow.withValues(alpha: 0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? AppColors.yellow.withValues(alpha: 0.3) : Colors.grey.withValues(alpha: 0.3),
+            color: isSelected ? AppColors.yellow.withValues(alpha: 0.3) : AppColors.greyText,
           ),
         ),
         child: Text(
@@ -432,7 +432,7 @@ class _TimeRangeButton extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? AppColors.yellow : Colors.grey,
+            color: isSelected ? AppColors.yellow : AppColors.greyText,
           ),
         ),
       ),

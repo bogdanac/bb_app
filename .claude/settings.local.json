@@ -9,7 +9,9 @@
       "Bash(flutter logs:*)",
       "Bash(copy:*)",
       "Bash(powershell:*)",
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "Bash(find:*)",
+      "Bash(xargs sed:*)"
     ]
   },
   "outputStyle": "default"

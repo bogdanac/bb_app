@@ -106,7 +106,7 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.lightPink.withValues(alpha: 0.15),
+          color: AppColors.homeCardBackground, // Home card background
         ),
         child: Stack(
           children: [
@@ -176,7 +176,7 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
                             );
                           },
                           icon: const Icon(Icons.help_outline),
-                          color: AppColors.pink,
+                          color: AppColors.purple,
                           tooltip: 'Help',
                         ),
                       ],
@@ -267,7 +267,7 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
                         event.title ?? 'Untitled Event',
                         style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           color: AppColors.white,
                         ),
                         maxLines: 2,
@@ -286,7 +286,7 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
                           'NOW',
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                             color: AppColors.white,
                           ),
                         ),

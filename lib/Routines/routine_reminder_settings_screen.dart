@@ -57,15 +57,15 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.schedule_rounded, size: 64, color: Colors.grey),
+                  Icon(Icons.schedule_rounded, size: 64, color: AppColors.greyText),
                   SizedBox(height: 16),
                   Text(
                     'No routines to set reminders for',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                    style: TextStyle(fontSize: 18, color: AppColors.greyText),
                   ),
                   Text(
                     'Create routines first to enable reminders',
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(color: AppColors.greyText),
                   ),
                 ],
               ),
@@ -111,7 +111,7 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
                         const SizedBox(height: 8),
                         Text(
                           '${routine.items.length} steps',
-                          style: const TextStyle(color: Colors.grey),
+                          style: const TextStyle(color: AppColors.greyText),
                         ),
                         if (routine.reminderEnabled) ...[
                           const SizedBox(height: 16),

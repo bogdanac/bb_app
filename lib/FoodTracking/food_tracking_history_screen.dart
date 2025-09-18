@@ -78,7 +78,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.redPrimary),
+            style: TextButton.styleFrom(foregroundColor: AppColors.deleteRed),
             child: const Text('Delete'),
           ),
         ],
@@ -92,30 +92,151 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     }
   }
 
+  Future<void> _moveEntryToDate(FoodEntry entry, String targetDateKey) async {
+    // Parse the target date
+    DateTime targetDate;
+    final now = DateTime.now();
+
+    if (targetDateKey == 'Today') {
+      targetDate = now;
+    } else if (targetDateKey == 'Yesterday') {
+      targetDate = now.subtract(const Duration(days: 1));
+    } else {
+      // Parse format "dd/mm/yyyy"
+      final parts = targetDateKey.split('/');
+      if (parts.length == 3) {
+        targetDate = DateTime(
+          int.parse(parts[2]), // year
+          int.parse(parts[1]), // month
+          int.parse(parts[0]), // day
+          entry.timestamp.hour,
+          entry.timestamp.minute,
+        );
+      } else {
+        return; // Invalid date format
+      }
+    }
+
+    // Create new entry with updated timestamp
+    final newEntry = FoodEntry(
+      id: '', // Will get new ID
+      type: entry.type,
+      timestamp: targetDate,
+    );
+
+    // Delete old entry and add new one
+    await FoodTrackingService.deleteEntry(entry.id);
+    await FoodTrackingService.addEntry(newEntry);
+
+    HapticFeedback.mediumImpact();
+    await _loadEntries();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Food entry moved to $targetDateKey'),
+          backgroundColor: AppColors.successGreen,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   Widget _buildEntryTile(FoodEntry entry) {
     final isHealthy = entry.type == FoodType.healthy;
     final color = isHealthy ? AppColors.successGreen : AppColors.orange;
     final icon = isHealthy ? Icons.restaurant : Icons.fastfood;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.2),
-          child: Icon(icon, color: color),
-        ),
-        title: Text(
-          isHealthy ? 'Healthy Food' : 'Processed Food',
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: color,
+    return LongPressDraggable<FoodEntry>(
+      data: entry,
+      delay: const Duration(milliseconds: 300),
+      feedback: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 300,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.normalCardBackground,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color, width: 2),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                backgroundColor: color.withValues(alpha: 0.2),
+                child: Icon(icon, color: color),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      isHealthy ? 'Healthy Food' : 'Processed Food',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: color,
+                      ),
+                    ),
+                    Text(
+                      _formatTime(entry.timestamp),
+                      style: const TextStyle(color: AppColors.greyText),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        subtitle: Text(_formatTime(entry.timestamp)),
-        trailing: IconButton(
-          onPressed: () => _deleteEntry(entry),
-          icon: const Icon(Icons.delete_outline),
-          color: AppColors.redPrimary.withValues(alpha: 0.7),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.3,
+        child: Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: color.withValues(alpha: 0.2),
+              child: Icon(icon, color: color),
+            ),
+            title: Text(
+              isHealthy ? 'Healthy Food' : 'Processed Food',
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+            subtitle: Text(_formatTime(entry.timestamp)),
+            trailing: IconButton(
+              onPressed: () => _deleteEntry(entry),
+              icon: const Icon(Icons.delete_outline),
+              color: AppColors.deleteRed.withValues(alpha: 0.7),
+            ),
+          ),
+        ),
+      ),
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: color.withValues(alpha: 0.2),
+            child: Icon(icon, color: color),
+          ),
+          title: Text(
+            isHealthy ? 'Healthy Food' : 'Processed Food',
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
+          ),
+          subtitle: Text(_formatTime(entry.timestamp)),
+          trailing: IconButton(
+            onPressed: () => _deleteEntry(entry),
+            icon: const Icon(Icons.delete_outline),
+            color: AppColors.deleteRed.withValues(alpha: 0.7),
+          ),
         ),
       ),
     );
@@ -160,7 +281,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     } else if (healthyPercentage >= 60) {
       statusColor = AppColors.orange;
     } else {
-      statusColor = AppColors.redPrimary;
+      statusColor = AppColors.red;
     }
 
     return ListTile(
@@ -204,41 +325,111 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     final total = healthyCount + processedCount;
     final healthyPercentage = total > 0 ? (healthyCount / total * 100).round() : 0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          margin: const EdgeInsets.only(top: 16),
-          color: AppColors.darkSurface.withValues(alpha: 0.3),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return DragTarget<FoodEntry>(
+      onWillAccept: (entry) => entry != null,
+      onAccept: (entry) {
+        // Don't move if dropping on the same date
+        final entryDateKey = _formatDate(entry.timestamp);
+        if (entryDateKey != date) {
+          _moveEntryToDate(entry, date);
+        }
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isBeingDraggedOver = candidateData.isNotEmpty;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: isBeingDraggedOver
+                ? AppColors.successGreen.withValues(alpha: 0.1)
+                : null,
+            border: isBeingDraggedOver
+                ? Border.all(color: AppColors.successGreen, width: 2)
+                : null,
+            borderRadius: isBeingDraggedOver ? BorderRadius.circular(8) : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                date,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                margin: const EdgeInsets.only(top: 16),
+                color: isBeingDraggedOver
+                    ? AppColors.successGreen.withValues(alpha: 0.2)
+                    : AppColors.normalCardBackground.withValues(alpha: 0.3),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          date,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (isBeingDraggedOver) ...[
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.add_circle_outline,
+                            color: AppColors.successGreen,
+                            size: 16,
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (total > 0)
+                      Text(
+                        '$healthyPercentage% healthy ($healthyCount/$total)',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: healthyPercentage >= 80
+                              ? AppColors.successGreen
+                              : healthyPercentage >= 60
+                                  ? AppColors.orange
+                                  : AppColors.red,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              if (total > 0)
-                Text(
-                  '$healthyPercentage% healthy ($healthyCount/$total)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: healthyPercentage >= 80 
-                        ? AppColors.successGreen 
-                        : healthyPercentage >= 60 
-                            ? AppColors.orange 
-                            : AppColors.redPrimary,
+              ...entries.map(_buildEntryTile),
+              if (isBeingDraggedOver)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.successGreen.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.successGreen.withValues(alpha: 0.3),
+                      style: BorderStyle.solid,
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.add_circle_outline,
+                        color: AppColors.successGreen,
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Drop here to move to this date',
+                        style: TextStyle(
+                          color: AppColors.successGreen,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
             ],
           ),
-        ),
-        ...entries.map(_buildEntryTile),
-      ],
+        );
+      },
     );
   }
 

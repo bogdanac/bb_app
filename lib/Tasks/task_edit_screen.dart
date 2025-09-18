@@ -5,7 +5,7 @@ import 'dart:async';
 import 'tasks_data_models.dart';
 import 'recurrence_dialog.dart';
 import '../theme/app_colors.dart';
-import '../shared/time_picker_utils.dart';
+import '../shared/date_picker_utils.dart';
 
 class TaskEditScreen extends StatefulWidget {
   final Task? task;
@@ -60,6 +60,28 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   }
 
   @override
+  void didUpdateWidget(TaskEditScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Cancel any pending auto-save during hot reload to prevent data loss
+    _saveTimer?.cancel();
+    _savedTimer?.cancel();
+    
+    // Re-initialize state from widget.task if it changed during hot reload
+    if (widget.task != oldWidget.task && widget.task != null) {
+      final task = widget.task!;
+      _titleController.text = task.title;
+      _selectedCategoryIds = List.from(task.categoryIds);
+      _deadline = task.deadline;
+      _reminderTime = task.reminderTime;
+      _isImportant = task.isImportant;
+      _recurrence = task.recurrence;
+      _currentTask = task;
+      _hasUnsavedChanges = false;
+      _showSaved = false;
+    }
+  }
+
+  @override
   void dispose() {
     _saveTimer?.cancel();
     _savedTimer?.cancel();
@@ -94,7 +116,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         description: '',
         categoryIds: _selectedCategoryIds,
         deadline: _deadline,
-        scheduledDate: _currentTask?.scheduledDate,
+        scheduledDate: _getScheduledDate(),
         reminderTime: _reminderTime,
         isImportant: _isImportant,
         recurrence: _recurrence,
@@ -140,14 +162,14 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
 
   void _completeTask() async {
     if (_titleController.text.trim().isEmpty) return;
-    
+
     final task = Task(
       id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
       description: '',
       categoryIds: _selectedCategoryIds,
       deadline: _deadline,
-      scheduledDate: _currentTask?.scheduledDate,
+      scheduledDate: _getScheduledDate(),
       reminderTime: _reminderTime,
       isImportant: _isImportant,
       recurrence: _recurrence,
@@ -170,14 +192,167 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
 
     // Save the task
     widget.onSave(task);
-    
+
     // Small delay to ensure the snackbar shows and save completes
     await Future.delayed(const Duration(milliseconds: 500));
-    
+
     // Close the dialog/screen after completing the task
     if (mounted) {
       Navigator.of(context).pop();
     }
+  }
+
+  void _skipTask() async {
+    if (_titleController.text.trim().isEmpty) return;
+
+    DateTime? nextScheduledDate;
+
+    // Calculate next scheduled date based on recurrence
+    if (_recurrence != null) {
+      final now = DateTime.now();
+
+      // For menstrual cycle tasks, put on hold until appropriate phase
+      if (_recurrence!.types.any((type) => [
+        RecurrenceType.menstrualPhase,
+        RecurrenceType.follicularPhase,
+        RecurrenceType.ovulationPhase,
+        RecurrenceType.earlyLutealPhase,
+        RecurrenceType.lateLutealPhase
+      ].contains(type))) {
+        // For menstrual cycle tasks, don't set a specific date - they'll appear when appropriate phase comes
+        nextScheduledDate = null;
+      } else {
+        // For regular recurring tasks, calculate next occurrence
+        if (_recurrence!.types.contains(RecurrenceType.daily)) {
+          nextScheduledDate = DateTime(now.year, now.month, now.day + 1);
+        } else if (_recurrence!.types.contains(RecurrenceType.weekly)) {
+          nextScheduledDate = DateTime(now.year, now.month, now.day + 7);
+        } else if (_recurrence!.types.contains(RecurrenceType.monthly)) {
+          nextScheduledDate = DateTime(now.year, now.month + 1, now.day);
+        } else if (_recurrence!.types.contains(RecurrenceType.yearly)) {
+          nextScheduledDate = DateTime(now.year + 1, now.month, now.day);
+        } else {
+          // For custom recurrence, skip by 1 day as default
+          nextScheduledDate = DateTime(now.year, now.month, now.day + 1);
+        }
+      }
+    } else {
+      // Non-recurring task - skip by 1 day
+      final now = DateTime.now();
+      nextScheduledDate = DateTime(now.year, now.month, now.day + 1);
+    }
+
+    final task = Task(
+      id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      title: _titleController.text.trim(),
+      description: '',
+      categoryIds: _selectedCategoryIds,
+      deadline: _deadline,
+      scheduledDate: nextScheduledDate,
+      reminderTime: _reminderTime,
+      isImportant: _isImportant,
+      recurrence: _recurrence,
+      isCompleted: false,
+      completedAt: null,
+      createdAt: _currentTask?.createdAt ?? DateTime.now(),
+    );
+
+    // Show feedback
+    if (mounted) {
+      final skipMessage = nextScheduledDate != null
+          ? '⏭️ Task "${task.title}" skipped until ${DateFormat('MMM d').format(nextScheduledDate)}'
+          : '⏭️ Task "${task.title}" skipped until next appropriate phase';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(skipMessage),
+          backgroundColor: AppColors.lightCoral,
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    // Save the task
+    widget.onSave(task);
+
+    // Small delay to ensure the snackbar shows and save completes
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // Close the dialog/screen after skipping the task
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  DateTime? _getScheduledDate() {
+    // If the task already has a scheduled date, keep it
+    if (_currentTask?.scheduledDate != null) {
+      return _currentTask!.scheduledDate;
+    }
+    
+    // If we have a recurrence, calculate the next scheduled date
+    if (_recurrence != null) {
+      final today = DateTime.now();
+      final todayDate = DateTime(today.year, today.month, today.day);
+      
+      // Check if it's due today
+      if (_recurrence!.isDueOn(todayDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
+        return todayDate;
+      }
+      
+      // For monthly and yearly recurrences, calculate next occurrence
+      if (_recurrence!.types.contains(RecurrenceType.monthly) || 
+          _recurrence!.types.contains(RecurrenceType.yearly)) {
+        // For yearly: search up to 367 days to handle leap years and ensure we find the next occurrence
+        // For monthly: 365 days is more than enough (12 months)
+        final maxDays = _recurrence!.types.contains(RecurrenceType.yearly) ? 367 : 365;
+        for (int i = 1; i <= maxDays; i++) {
+          final checkDate = todayDate.add(Duration(days: i));
+          if (_recurrence!.isDueOn(checkDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
+            return checkDate;
+          }
+        }
+      }
+      
+      // For weekly recurrence, find next occurrence
+      if (_recurrence!.types.contains(RecurrenceType.weekly)) {
+        // For weekly with intervals (e.g., every 4, 8, 12 weeks), search up to interval * 7 + 7 days
+        // This ensures we find the next occurrence even for very long weekly intervals
+        final maxDays = _recurrence!.interval > 1 ? (_recurrence!.interval * 7) + 7 : 7;
+        for (int i = 1; i <= maxDays; i++) {
+          final checkDate = todayDate.add(Duration(days: i));
+          if (_recurrence!.isDueOn(checkDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
+            return checkDate;
+          }
+        }
+      }
+      
+      // For daily recurrence, calculate next occurrence
+      if (_recurrence!.types.contains(RecurrenceType.daily)) {
+        // Check up to the interval + 1 days to find the next occurrence
+        // For intervals like 2-3 days, this ensures we find the next occurrence
+        // For long intervals (like 90 days), this also works properly
+        final maxDays = _recurrence!.interval + 1;
+        for (int i = 1; i <= maxDays; i++) {
+          final checkDate = todayDate.add(Duration(days: i));
+          if (_recurrence!.isDueOn(checkDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
+            return checkDate;
+          }
+        }
+      }
+      
+      // Fallback: For any other recurrence types (menstrual phases, custom, etc.)
+      // Search up to 1 year to find the next occurrence
+      for (int i = 1; i <= 365; i++) {
+        final checkDate = todayDate.add(Duration(days: i));
+        if (_recurrence!.isDueOn(checkDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
+          return checkDate;
+        }
+      }
+    }
+    
+    return null;
   }
 
   @override
@@ -190,9 +365,10 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         }
       },
       child: Scaffold(
-      appBar: AppBar(
-        title: Text(widget.task == null ? 'Add Task' : 'Edit Task'),
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.dialogBackground,
+        appBar: AppBar(
+          title: Text(widget.task == null ? 'Add Task' : 'Edit Task'),
+          backgroundColor: Colors.transparent,
         actions: [
           if (_hasUnsavedChanges)
             Container(
@@ -256,13 +432,13 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
             Container(
               decoration: BoxDecoration(
                 color: _titleController.text.trim().isEmpty 
-                    ? AppColors.grey.withValues(alpha: 0.2)
+                    ? AppColors.dialogBackground
                     : AppColors.successGreen.withValues(alpha: 0.03),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: _titleController.text.trim().isEmpty 
-                      ? Colors.grey.withValues(alpha: 0.2)
-                      : AppColors.successGreen.withValues(alpha: 0.15),
+                      ? AppColors.greyText
+                      : AppColors.successGreen.withValues(alpha: 0.1),
                 ),
               ),
               child: InkWell(
@@ -276,14 +452,14 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: (_titleController.text.trim().isEmpty 
-                              ? Colors.grey 
+                              ? AppColors.greyText
                               : AppColors.successGreen).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
                           Icons.check_circle_rounded,
                           color: _titleController.text.trim().isEmpty 
-                              ? Colors.grey 
+                              ? AppColors.greyText
                               : AppColors.successGreen,
                           size: 24,
                         ),
@@ -295,25 +471,19 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                           children: [
                             Text(
                               'Complete Task',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: _titleController.text.trim().isEmpty 
-                                    ? Colors.grey
-                                    : AppColors.grey,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.greyText,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               'Mark as finished',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 14,
-                                color: _titleController.text.trim().isEmpty 
-                                    ? Colors.grey
-                                    : AppColors.successGreen,
-                                fontWeight: _titleController.text.trim().isEmpty 
-                                    ? FontWeight.normal 
-                                    : FontWeight.w500,
+                                color: AppColors.greyText,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ],
@@ -340,15 +510,101 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
 
             const SizedBox(height: 12),
 
+            // Skip Task Section
+            Container(
+              decoration: BoxDecoration(
+                color: _titleController.text.trim().isEmpty
+                    ? AppColors.dialogBackground
+                    : AppColors.lightCoral.withValues(alpha: 0.03),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _titleController.text.trim().isEmpty
+                      ? AppColors.greyText
+                      : AppColors.lightCoral.withValues(alpha: 0.1),
+                ),
+              ),
+              child: InkWell(
+                onTap: _titleController.text.trim().isEmpty ? null : _skipTask,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: (_titleController.text.trim().isEmpty
+                              ? AppColors.greyText
+                              : AppColors.lightCoral).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.skip_next_rounded,
+                          color: _titleController.text.trim().isEmpty
+                              ? AppColors.greyText
+                              : AppColors.lightCoral,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Skip Task',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.greyText,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _recurrence != null && _recurrence!.types.any((type) => [
+                                RecurrenceType.menstrualPhase,
+                                RecurrenceType.follicularPhase,
+                                RecurrenceType.ovulationPhase,
+                                RecurrenceType.earlyLutealPhase,
+                                RecurrenceType.lateLutealPhase
+                              ].contains(type))
+                                  ? 'Put on hold until next appropriate phase'
+                                  : 'Postpone to next occurrence',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.white24,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Transform.scale(
+                        scale: 1.2,
+                        child: Icon(
+                          Icons.skip_next_rounded,
+                          color: _titleController.text.trim().isEmpty
+                              ? AppColors.greyText
+                              : AppColors.lightCoral,
+                          size: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
             // Deadline Section
             Container(
               decoration: BoxDecoration(
-                color: AppColors.grey.withValues(alpha: 0.2),
+                color: AppColors.dialogBackground.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: _deadline != null 
-                      ? AppColors.lightCoral.withValues(alpha: 0.3)
-                      : Colors.grey.withValues(alpha: 0.2),
+                      ? AppColors.lightCoral.withValues(alpha: 0.1)
+                      : AppColors.greyText,
                 ),
               ),
               child: InkWell(
@@ -363,14 +619,14 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                         decoration: BoxDecoration(
                           color: (_deadline != null 
                               ? AppColors.lightCoral.withValues(alpha: 0.3)
-                              : Colors.grey).withValues(alpha: 0.1),
+                              : AppColors.greyText).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
                           Icons.event_rounded,
                           color: _deadline != null 
                               ? AppColors.lightCoral
-                              : Colors.grey,
+                              : AppColors.greyText,
                           size: 24,
                         ),
                       ),
@@ -381,12 +637,10 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                           children: [
                             Text(
                               'Deadline',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: _deadline != null 
-                                    ? AppColors.lightCoral
-                                    : Colors.grey,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.greyText,
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -394,12 +648,10 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                               _deadline != null
                                   ? DateFormat('EEEE, MMMM dd').format(_deadline!)
                                   : 'Optional',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 14,
-                                color: _deadline != null 
-                                    ? AppColors.lightCoral
-                                    : Colors.grey,
-                                fontWeight: _deadline != null ? FontWeight.w500 : FontWeight.normal,
+                                color: AppColors.greyText,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ],
@@ -412,12 +664,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             _onFieldChanged();
                           },
                           icon: const Icon(Icons.clear_rounded),
-                          color: Colors.grey,
+                          color: AppColors.greyText,
                         )
                       else
                         Icon(
                           Icons.chevron_right_rounded,
-                          color: Colors.grey,
+                          color: AppColors.greyText,
                         ),
                     ],
                   ),
@@ -430,12 +682,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
             // Reminder Time Section
             Container(
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
+                color: AppColors.dialogBackground.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: _reminderTime != null 
-                      ? AppColors.lightCoral.withValues(alpha: 0.3)
-                      : Colors.grey.withValues(alpha: 0.2),
+                      ? AppColors.lightCoral.withValues(alpha: 0.1)
+                      : AppColors.greyText,
                 ),
               ),
               child: InkWell(
@@ -450,14 +702,14 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                         decoration: BoxDecoration(
                           color: (_reminderTime != null 
                               ? AppColors.lightCoral
-                              : Colors.grey).withValues(alpha: 0.1),
+                              : AppColors.greyText).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
                           Icons.notifications_rounded,
                           color: _reminderTime != null 
                               ? AppColors.lightCoral
-                              : Colors.grey,
+                              : AppColors.greyText,
                           size: 24,
                         ),
                       ),
@@ -468,12 +720,10 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                           children: [
                             Text(
                               'Reminder Time',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: _reminderTime != null 
-                                    ? Theme.of(context).colorScheme.onSurface
-                                    : Colors.grey,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.greyText,
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -481,12 +731,10 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                               _reminderTime != null
                                   ? _formatReminderDateTime(_reminderTime!) // Always show full date/time
                                   : 'Optional',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 14,
-                                color: _reminderTime != null 
-                                    ? AppColors.lightCoral
-                                    : Colors.grey,
-                                fontWeight: _reminderTime != null ? FontWeight.w500 : FontWeight.normal,
+                                color: AppColors.greyText,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ],
@@ -499,12 +747,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             _onFieldChanged();
                           },
                           icon: const Icon(Icons.clear_rounded),
-                          color: Colors.grey,
+                          color: AppColors.greyText,
                         )
                       else
                         Icon(
                           Icons.chevron_right_rounded,
-                          color: Colors.grey,
+                          color: AppColors.greyText,
                         ),
                     ],
                   ),
@@ -517,12 +765,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
             // Important Section
             Container(
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
+                color: AppColors.dialogBackground.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: _isImportant 
                       ? AppColors.coral.withValues(alpha: 0.3)
-                      : Colors.grey.withValues(alpha: 0.2),
+                      : AppColors.greyText,
                 ),
               ),
               child: Padding(
@@ -534,14 +782,14 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                       decoration: BoxDecoration(
                         color: (_isImportant 
                             ? AppColors.coral
-                            : Colors.grey).withValues(alpha: 0.1),
+                            : AppColors.greyText).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
                         Icons.star_rounded,
                         color: _isImportant 
                             ? AppColors.coral 
-                            : Colors.grey,
+                            : AppColors.greyText,
                         size: 24,
                       ),
                     ),
@@ -554,10 +802,10 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             'Important',
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w500,
                               color: _isImportant 
                                   ? AppColors.lightCoral
-                                  : Colors.grey,
+                                  : AppColors.greyText,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -567,7 +815,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                               fontSize: 14,
                               color: _isImportant 
                                   ? AppColors.coral
-                                  : Colors.grey,
+                                  : AppColors.greyText,
                               fontWeight: _isImportant ? FontWeight.w500 : FontWeight.normal,
                             ),
                           ),
@@ -603,7 +851,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
+                  borderSide: BorderSide(color: AppColors.greyText),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -622,12 +870,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
+                  color: AppColors.dialogBackground.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: _selectedCategoryIds.isNotEmpty 
-                        ? AppColors.lightCoral.withValues(alpha: 0.3)
-                        : Colors.grey.withValues(alpha: 0.2),
+                        ? AppColors.lightCoral.withValues(alpha: 0.1)
+                        : AppColors.greyText,
                   ),
                 ),
                 child: Padding(
@@ -673,12 +921,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
             // Recurrence Section
             Container(
               decoration: BoxDecoration(
-                color: AppColors.grey.withValues(alpha: 0.2),
+                color: AppColors.dialogBackground.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: _recurrence != null 
-                      ? AppColors.lightCoral.withValues(alpha: 0.3)
-                      : Colors.grey.withValues(alpha: 0.2),
+                      ? AppColors.lightCoral.withValues(alpha: 0.1)
+                      : AppColors.greyText,
                 ),
               ),
               child: InkWell(
@@ -693,14 +941,14 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                         decoration: BoxDecoration(
                           color: (_recurrence != null 
                               ? AppColors.lightCoral
-                              : Colors.grey).withValues(alpha: 0.1),
+                              : AppColors.greyText).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
                           Icons.repeat_rounded,
                           color: _recurrence != null 
                               ? AppColors.lightCoral
-                              : Colors.grey,
+                              : AppColors.greyText,
                           size: 24,
                         ),
                       ),
@@ -711,12 +959,10 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                           children: [
                             Text(
                               'Recurrence',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: _recurrence != null 
-                                    ? AppColors.lightCoral
-                                    : Colors.grey,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.greyText,
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -724,12 +970,10 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                               _recurrence != null
                                   ? _recurrence!.getDisplayText()
                                   : 'Optional',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 14,
-                                color: _recurrence != null 
-                                    ? AppColors.lightCoral
-                                    : Colors.grey,
-                                fontWeight: _recurrence != null ? FontWeight.w500 : FontWeight.normal,
+                                color: AppColors.greyText,
+                                fontWeight: FontWeight.normal,
                               ),
                             ),
                           ],
@@ -742,12 +986,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             _onFieldChanged();
                           },
                           icon: const Icon(Icons.clear_rounded),
-                          color: Colors.grey,
+                          color: AppColors.greyText,
                         )
                       else
                         Icon(
                           Icons.chevron_right_rounded,
-                          color: Colors.grey,
+                          color: AppColors.greyText,
                         ),
                     ],
                   ),
@@ -764,7 +1008,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   }
 
   void _selectDeadline() async {
-    final date = await showDatePicker(
+    final date = await DatePickerUtils.showStyledDatePicker(
       context: context,
       initialDate: _deadline ?? DateTime.now(),
       firstDate: DateTime.now(),
@@ -777,34 +1021,16 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   }
 
   void _selectReminderTime() async {
-    // Regular reminder time always allows both date and time selection
-    // First, select the date
-    final selectedDate = await showDatePicker(
+    final selectedDateTime = await DatePickerUtils.showStyledDateTimePicker(
       context: context,
-      initialDate: _reminderTime ?? DateTime.now(),
+      initialDateTime: _reminderTime,
       firstDate: DateTime.now().subtract(const Duration(days: 1)), // Allow yesterday for flexibility
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-
-    if (selectedDate == null) return;
-    if (!mounted) return;
-
-    // Then, select the time
-    final selectedTime = await TimePickerUtils.showStyledTimePicker(
-      context: context,
-      initialTime: _reminderTime != null
-          ? TimeOfDay.fromDateTime(_reminderTime!)
-          : TimeOfDay.now(),
-    );
-    if (selectedTime != null) {
+    
+    if (selectedDateTime != null) {
       setState(() {
-        _reminderTime = DateTime(
-          selectedDate.year, 
-          selectedDate.month, 
-          selectedDate.day, 
-          selectedTime.hour, 
-          selectedTime.minute
-        );
+        _reminderTime = selectedDateTime;
       });
       _onFieldChanged();
     }
@@ -843,6 +1069,16 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     if (recurrence != _recurrence) {
       setState(() {
         _recurrence = recurrence;
+        // If we set a recurrence and the task doesn't have a scheduled date,
+        // set it to today if the recurrence makes the task due today
+        if (recurrence != null && _currentTask?.scheduledDate == null) {
+          final today = DateTime.now();
+          final todayDate = DateTime(today.year, today.month, today.day);
+          if (recurrence.isDueOn(todayDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
+            // Set scheduled date to today so the "scheduled today" chip appears
+            // We'll update the task's scheduledDate when we save
+          }
+        }
       });
       _onFieldChanged();
     }

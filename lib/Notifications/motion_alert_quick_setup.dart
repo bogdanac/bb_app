@@ -161,7 +161,7 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
                 child: ListTile(
                   leading: Icon(
                     Icons.nightlight_round,
-                    color: _nightMode && _isEnabled ? AppColors.yellow : Colors.grey,
+                    color: _nightMode && _isEnabled ? AppColors.yellow : AppColors.greyText,
                   ),
                   title: const Text('Night Mode'),
                   subtitle: const Text('Alerts only between 22:00-08:00 (recommended)'),
@@ -191,7 +191,7 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
                 child: ListTile(
                   leading: Icon(
                     Icons.luggage_rounded,
-                    color: _vacationMode && _isEnabled ? AppColors.orange : Colors.grey,
+                    color: _vacationMode && _isEnabled ? AppColors.orange : AppColors.greyText,
                   ),
                   title: const Text('Vacation Mode'),
                   subtitle: const Text('24/7 alerts (higher battery usage)'),

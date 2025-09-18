@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../theme/app_colors.dart';
 import 'menstrual_cycle_utils.dart';
 
 class MenstrualCycleCard extends StatefulWidget {
@@ -87,7 +88,7 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: _getPhaseColor().withValues(alpha: 0.15),
+          color: AppColors.homeCardBackground, // Home card background
         ),
         child: GestureDetector(
           onTap: widget.onTap,
@@ -107,7 +108,7 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
                       _getCyclePhase(),
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                         color: Colors.white,
                       ),
                     ),
@@ -116,8 +117,8 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
                       _getCycleInfo(),
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.white60,
-                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w400,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,

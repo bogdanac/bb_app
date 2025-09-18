@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'food_tracking_data_models.dart';
 
@@ -6,7 +7,16 @@ class FoodTrackingService {
 
   static Future<List<FoodEntry>> getAllEntries() async {
     final prefs = await SharedPreferences.getInstance();
-    final entriesJson = prefs.getStringList(_entriesKey) ?? [];
+    List<String> entriesJson;
+    try {
+      entriesJson = prefs.getStringList(_entriesKey) ?? [];
+    } catch (e) {
+      if (kDebugMode) {
+        print('ERROR: Food tracking data type mismatch, clearing corrupted data');
+      }
+      await prefs.remove(_entriesKey);
+      entriesJson = [];
+    }
     
     return entriesJson
         .map((json) => FoodEntry.fromJsonString(json))

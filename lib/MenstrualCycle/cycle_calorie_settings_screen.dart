@@ -206,7 +206,7 @@ class _CycleCalorieSettingsScreenState extends State<CycleCalorieSettingsScreen>
                     phase,
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                       color: color,
                     ),
                   ),

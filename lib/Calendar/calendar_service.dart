@@ -30,7 +30,7 @@ class CalendarService {
       return hasPermission;
     } catch (e) {
       if (kDebugMode) {
-        print('Error checking calendar permission: $e');
+        print('ERROR checking calendar permission: $e');
       }
       return false;
     }
@@ -63,13 +63,13 @@ class CalendarService {
             throw Exception('Calendar permission was denied. Please enable it manually in Settings.');
           }
         }
-        throw Exception('Failed to get calendar permission. Please try again or enable it manually in Settings.');
+        throw Exception('ERROR get calendar permission. Please try again or enable it manually in Settings.');
       }
       
       return success;
     } catch (e) {
       if (kDebugMode) {
-        print('Error requesting calendar permission: $e');
+        print('ERROR requesting calendar permission: $e');
       }
       rethrow; // Let the UI handle the specific error message
     }
@@ -89,7 +89,7 @@ class CalendarService {
       final calendarsResult = await _deviceCalendarPlugin.retrieveCalendars();
       if (!calendarsResult.isSuccess || calendarsResult.data == null) {
         if (kDebugMode) {
-          print('Failed to retrieve calendars');
+          print('ERROR retrieve calendars');
         }
         return [];
       }
@@ -116,7 +116,7 @@ class CalendarService {
           }
         } catch (e) {
           if (kDebugMode) {
-            print('Error retrieving events from calendar ${calendar.name}: $e');
+            print('ERROR retrieving events from calendar ${calendar.name}: $e');
           }
         }
       }
@@ -150,7 +150,7 @@ class CalendarService {
       return currentAndFutureEvents;
     } catch (e) {
       if (kDebugMode) {
-        print('Error getting today\'s events: $e');
+        print('ERROR getting today\'s events: $e');
       }
       return [];
     }

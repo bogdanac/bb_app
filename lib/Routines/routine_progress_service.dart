@@ -175,7 +175,16 @@ class RoutineProgressService {
   static Future<String?> _getRoutineTitle(String routineId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final routinesJson = prefs.getStringList('routines') ?? [];
+      List<String> routinesJson;
+      try {
+        routinesJson = prefs.getStringList('routines') ?? [];
+      } catch (e) {
+        if (kDebugMode) {
+          print('Warning: Routines data type mismatch, clearing corrupted data');
+        }
+        await prefs.remove('routines');
+        routinesJson = [];
+      }
       
       for (final routineJson in routinesJson) {
         final routine = Routine.fromJson(jsonDecode(routineJson));

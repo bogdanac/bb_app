@@ -133,9 +133,9 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
 
   Color _getProgressColor() {
     final healthyPercentage = _getHealthyPercentage() * 100;
-    if (healthyPercentage >= 80) return AppColors.successGreen;
-    if (healthyPercentage >= 60) return AppColors.orange;
-    return AppColors.redPrimary;
+    if (healthyPercentage >= 80) return AppColors.lightGreen;
+    if (healthyPercentage >= 60) return AppColors.pastelGreen;
+    return AppColors.red;
   }
 
   @override
@@ -149,7 +149,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.successGreen.withValues(alpha: 0.2),
+          color: AppColors.homeCardBackground, // Home card background
         ),
         child: Column(
           children: [
@@ -158,12 +158,12 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
               onTap: _toggleExpanded,
               borderRadius: BorderRadius.circular(16),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
+                padding: const EdgeInsets.fromLTRB(16, 4, 12, 0),
                 child: Row(
                   children: [
                     Icon(
                       Icons.restaurant,
-                      color: AppColors.successGreen,
+                      color: AppColors.pastelGreen,
                       size: 24,
                     ),
                     const SizedBox(width: 12),
@@ -174,8 +174,8 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                           Text(
                             total == 0 
                               ? 'Food Tracking'
-                              : 'Food: ${healthyPercentage.round()}% healthy',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                              : '${healthyPercentage.round()}% healthy',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                           ),
                         ],
                       ),
@@ -185,19 +185,19 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.successGreen.withValues(alpha: 0.2),
+                          color: AppColors.pastelGreen.withValues(alpha: 0.25), // Golden yellow
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: AppColors.successGreen.withValues(alpha: 0.4),
+                            color: AppColors.pastelGreen.withValues(alpha: 0.4),
                             width: 1,
                           ),
                         ),
                         child: Text(
-                          '$_currentPhaseCalories',
+                          '$_currentPhaseCalories kcal',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 14,
                             fontWeight: FontWeight.w500,
-                            color: AppColors.successGreen,
+                            color: AppColors.pastelGreen,
                           ),
                         ),
                       ),
@@ -208,11 +208,13 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                       icon: const Icon(Icons.calendar_month_rounded),
                       tooltip: 'View History',
                     ),
+                    const SizedBox(width: 2),
                     AnimatedRotation(
                       turns: _isExpanded ? 0.5 : 0,
                       duration: const Duration(milliseconds: 300),
                       child: const Icon(Icons.expand_more),
                     ),
+                    const SizedBox(width: 4),
                   ],
                 ),
               ),
@@ -229,11 +231,11 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                 );
               },
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Column(
                   children: [
                     const Divider(color: AppColors.white24),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 2),
                     // Action buttons with pie chart
                     Row(
                       children: [
@@ -243,7 +245,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                             icon: const Icon(Icons.add, size: 16),
                             label: const Text('Healthy'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.successGreen,
+                              backgroundColor: AppColors.pastelGreen,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -252,7 +254,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 24),
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: _addProcessed,
@@ -268,7 +270,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 24),
                         // Pie chart on the right
                         SizedBox(
                           width: 60,
@@ -322,7 +324,7 @@ class FoodPieChartPainter extends CustomPainter {
     
     // Background circle
     final backgroundPaint = Paint()
-      ..color = AppColors.orange.withValues(alpha: 0.3)
+      ..color = AppColors.pastelGreen.withValues(alpha: 0.3)
       ..style = PaintingStyle.fill;
     
     canvas.drawCircle(center, radius, backgroundPaint);

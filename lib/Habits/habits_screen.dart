@@ -120,15 +120,15 @@ class _HabitsScreenState extends State<HabitsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.psychology_rounded, size: 64, color: Colors.grey),
+                  Icon(Icons.psychology_rounded, size: 64, color: AppColors.greyText),
                   SizedBox(height: 16),
                   Text(
                     'No habits yet',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                    style: TextStyle(fontSize: 18, color: AppColors.greyText),
                   ),
                   Text(
                     'Create your first habit to get started',
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(color: AppColors.greyText),
                   ),
                 ],
               ),
@@ -144,7 +144,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
                         child: Text(
                           'Tap to edit • Swipe left to delete • Toggle switch to activate',
                           style: TextStyle(
-                            color: Colors.grey,
+                            color: AppColors.greyText,
                             fontSize: 12,
                           ),
                         ),
@@ -165,6 +165,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
                       return Dismissible(
                         key: ValueKey(habit.id),
                         direction: DismissDirection.endToStart,
+                        dismissThresholds: const {DismissDirection.endToStart: 0.8},
                         confirmDismiss: (direction) async {
                           return await showDialog<bool>(
                             context: context,
@@ -208,7 +209,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
                         background: Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
-                            color: AppColors.redPrimary,
+                            color: AppColors.deleteRed,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           alignment: Alignment.centerRight,
@@ -226,7 +227,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
                                 'Delete',
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w500,
                                   fontSize: 12,
                                 ),
                               ),
@@ -258,14 +259,14 @@ class _HabitsScreenState extends State<HabitsScreen> {
                                               style: TextStyle(
                                                 fontSize: 18,
                                                 fontWeight: FontWeight.bold,
-                                                color: habit.isActive ? null : Colors.grey,
+                                                color: habit.isActive ? null : AppColors.greyText,
                                               ),
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
                                               'Cycle ${habit.currentCycle} • ${habit.getCurrentCycleProgress()}/21 days',
                                               style: TextStyle(
-                                                color: habit.isActive ? AppColors.orange : Colors.grey[600],
+                                                color: habit.isActive ? AppColors.orange : AppColors.greyText,
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w500,
                                               ),
@@ -287,10 +288,10 @@ class _HabitsScreenState extends State<HabitsScreen> {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                           decoration: BoxDecoration(
-                                            color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+                                            color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.1) : AppColors.dialogCardBackground,
                                             borderRadius: BorderRadius.circular(12),
                                             border: Border.all(
-                                              color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.3) : Colors.grey.withValues(alpha: 0.3),
+                                              color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.3) : AppColors.dialogCardBackground,
                                             ),
                                           ),
                                           child: Row(
@@ -298,7 +299,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
                                             children: [
                                               Icon(
                                                 isCompletedToday ? Icons.check_circle : Icons.radio_button_unchecked,
-                                                color: isCompletedToday ? AppColors.orange : Colors.grey,
+                                                color: isCompletedToday ? AppColors.orange : AppColors.greyText,
                                                 size: 16,
                                               ),
                                               const SizedBox(width: 4),
@@ -307,7 +308,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
                                                 style: TextStyle(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w500,
-                                                  color: isCompletedToday ? AppColors.orange : Colors.grey,
+                                                  color: isCompletedToday ? AppColors.orange : AppColors.greyText,
                                                 ),
                                               ),
                                             ],

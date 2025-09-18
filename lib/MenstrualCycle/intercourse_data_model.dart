@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
@@ -38,7 +39,19 @@ class IntercourseService {
 
   static Future<List<IntercourseRecord>> loadIntercourseRecords() async {
     final prefs = await SharedPreferences.getInstance();
-    final recordsJson = prefs.getStringList(_storageKey) ?? [];
+    
+    // Handle potential type mismatch - data might be stored as String instead of List<String>
+    List<String> recordsJson;
+    try {
+      recordsJson = prefs.getStringList(_storageKey) ?? [];
+    } catch (e) {
+      // If getStringList fails, try to get as String and clear corrupted data
+      if (kDebugMode) {
+        print('Warning: Intercourse data type mismatch, clearing corrupted data');
+      }
+      await prefs.remove(_storageKey);
+      recordsJson = [];
+    }
     
     return recordsJson.map((jsonString) {
       final json = jsonDecode(jsonString);

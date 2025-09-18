@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
@@ -9,9 +10,11 @@ import '../Notifications/notification_service.dart';
 import 'fasting_phases.dart';
 import 'fasting_utils.dart';
 import '../theme/app_colors.dart';
+import '../shared/date_picker_utils.dart';
 import '../shared/time_picker_utils.dart';
 import 'fasting_stage_timeline.dart';
 import 'scheduled_fastings_service.dart';
+import '../MenstrualCycle/menstrual_cycle_utils.dart';
 
 class FastingScreen extends StatefulWidget {
   const FastingScreen({super.key});
@@ -36,6 +39,7 @@ class _FastingScreenState extends State<FastingScreen>
   final FastingNotifier _notifier = FastingNotifier();
   final NotificationService _notificationService = NotificationService();
   String _recommendedFastType = '';
+  bool _hasLateLutealWarning = false;
 
   @override
   void initState() {
@@ -80,7 +84,16 @@ class _FastingScreenState extends State<FastingScreen>
     _currentFastType = prefs.getString('current_fast_type') ?? '';
 
     // Load fasting history
-    final historyStr = prefs.getStringList('fasting_history') ?? [];
+    List<String> historyStr;
+    try {
+      historyStr = prefs.getStringList('fasting_history') ?? [];
+    } catch (e) {
+      if (kDebugMode) {
+        print('Warning: Fasting history data type mismatch, clearing corrupted data');
+      }
+      await prefs.remove('fasting_history');
+      historyStr = [];
+    }
     _fastingHistory = historyStr
         .map((item) => Map<String, dynamic>.from(jsonDecode(item) as Map))
         .toList();
@@ -102,7 +115,55 @@ class _FastingScreenState extends State<FastingScreen>
       _notificationService.cancelFastingProgressNotification();
     }
 
+    // Check for late luteal phase conflicts
+    await _checkLateLutealConflicts();
+
     if (mounted) setState(() {});
+  }
+
+  Future<void> _checkLateLutealConflicts() async {
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      // Check if today's fast conflicts with late luteal phase
+      _hasLateLutealWarning = await MenstrualCycleUtils.isFastingConflictWithLateLuteal(today);
+
+    } catch (e) {
+      _hasLateLutealWarning = false;
+    }
+  }
+
+  Future<void> _deactivateScheduledFast(DateTime date) async {
+    try {
+      final scheduledFastings = await ScheduledFastingsService.getScheduledFastings();
+      final fastToDeactivate = scheduledFastings.firstWhere(
+        (fast) => fast.date.year == date.year &&
+                  fast.date.month == date.month &&
+                  fast.date.day == date.day,
+      );
+
+      final updatedFast = fastToDeactivate.copyWith(isEnabled: false);
+      await ScheduledFastingsService.updateScheduledFasting(updatedFast);
+
+      // Refresh data
+      await _loadFastingData();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Scheduled fast deactivated for your wellbeing 💝'),
+            backgroundColor: AppColors.successGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deactivating fast: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _saveFastingData() async {
@@ -148,24 +209,50 @@ class _FastingScreenState extends State<FastingScreen>
 
   final Set<int> _triggeredMilestones = <int>{};
 
-  void _checkFastingMilestones(Duration previousElapsed, Duration currentElapsed) {
+  void _checkFastingMilestones(
+      Duration previousElapsed, Duration currentElapsed) {
     final previousHours = previousElapsed.inHours;
     final currentHours = currentElapsed.inHours;
-    
+
     // Define milestone hours and their messages
     final milestones = {
-      4: {'phase': 'Digestion Complete', 'message': 'Your body has finished processing your last meal! 🍽️'},
-      8: {'phase': 'Glycogen Depletion', 'message': 'Now switching to stored energy sources! ⚡'},
-      12: {'phase': 'Fat Burning Mode', 'message': 'Your body is now burning fat for fuel! 🔥'},
-      16: {'phase': 'Ketosis Beginning', 'message': 'Ketone production is starting! Mental clarity incoming! 🧠'},
-      20: {'phase': 'Deep Ketosis', 'message': 'You\'re in deep ketosis - feel that energy surge! ✨'},
-      24: {'phase': 'Growth Hormone Peak', 'message': 'HGH levels are significantly elevated! 💪'},
-      36: {'phase': 'Autophagy Active', 'message': 'Cellular repair and regeneration is in full swing! 🔄'},
-      48: {'phase': 'Enhanced Autophagy', 'message': 'Peak cellular cleanup - your body is rejuvenating! 🌟'},
+      4: {
+        'phase': 'Digestion Complete',
+        'message': 'Your body has finished processing your last meal! 🍽️'
+      },
+      8: {
+        'phase': 'Glycogen Depletion',
+        'message': 'Now switching to stored energy sources! ⚡'
+      },
+      12: {
+        'phase': 'Fat Burning Mode',
+        'message': 'Your body is now burning fat for fuel! 🔥'
+      },
+      16: {
+        'phase': 'Ketosis Beginning',
+        'message': 'Ketone production is starting! Mental clarity incoming! 🧠'
+      },
+      20: {
+        'phase': 'Deep Ketosis',
+        'message': 'You\'re in deep ketosis - feel that energy surge! ✨'
+      },
+      24: {
+        'phase': 'Growth Hormone Peak',
+        'message': 'HGH levels are significantly elevated! 💪'
+      },
+      36: {
+        'phase': 'Autophagy Active',
+        'message': 'Cellular repair and regeneration is in full swing! 🔄'
+      },
+      48: {
+        'phase': 'Enhanced Autophagy',
+        'message': 'Peak cellular cleanup - your body is rejuvenating! 🌟'
+      },
     };
-    
+
     for (final milestoneHour in milestones.keys) {
-      if (previousHours < milestoneHour && currentHours >= milestoneHour && 
+      if (previousHours < milestoneHour &&
+          currentHours >= milestoneHour &&
           !_triggeredMilestones.contains(milestoneHour)) {
         _triggeredMilestones.add(milestoneHour);
         final milestone = milestones[milestoneHour]!;
@@ -207,33 +294,38 @@ class _FastingScreenState extends State<FastingScreen>
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
-    
+    final twoDaysAgo = today.subtract(const Duration(days: 2));
+
     // Get all scheduled fastings
-    final scheduledFastings = await ScheduledFastingsService.getScheduledFastings();
-    
-    // Check if there's a scheduled fast for today or yesterday
-    final hasScheduledFastToday = scheduledFastings.any((fasting) => 
-      fasting.isEnabled && 
-      fasting.date.year == today.year && 
-      fasting.date.month == today.month && 
-      fasting.date.day == today.day
-    );
-    
-    final hasScheduledFastYesterday = scheduledFastings.any((fasting) => 
-      fasting.isEnabled && 
-      fasting.date.year == yesterday.year && 
-      fasting.date.month == yesterday.month && 
-      fasting.date.day == yesterday.day
-    );
-    
+    final scheduledFastings =
+        await ScheduledFastingsService.getScheduledFastings();
+
+    // Check if there's a scheduled fast for today, yesterday, or 2 days ago
+    final hasScheduledFastToday = scheduledFastings.any((fasting) =>
+        fasting.isEnabled &&
+        fasting.date.year == today.year &&
+        fasting.date.month == today.month &&
+        fasting.date.day == today.day);
+
+    final hasScheduledFastYesterday = scheduledFastings.any((fasting) =>
+        fasting.isEnabled &&
+        fasting.date.year == yesterday.year &&
+        fasting.date.month == yesterday.month &&
+        fasting.date.day == yesterday.day);
+
+    final hasScheduledFastTwoDaysAgo = scheduledFastings.any((fasting) =>
+        fasting.isEnabled &&
+        fasting.date.year == twoDaysAgo.year &&
+        fasting.date.month == twoDaysAgo.month &&
+        fasting.date.day == twoDaysAgo.day);
+
     String recommendedFast = '';
-    
-    // Only show button if there's a scheduled fast for today or yesterday
-    if (hasScheduledFastToday || hasScheduledFastYesterday) {
-      // Use existing logic to determine the fast type
+
+    // Show button if there's a scheduled fast for today, yesterday, or 2 days ago (3-day grace period)
+    if (hasScheduledFastToday || hasScheduledFastYesterday || hasScheduledFastTwoDaysAgo) {
       recommendedFast = _getRecommendedFastTypeFromLogic();
     }
-    
+
     if (mounted) {
       setState(() {
         _recommendedFastType = recommendedFast;
@@ -266,123 +358,129 @@ class _FastingScreenState extends State<FastingScreen>
       final month = now.month;
       String longerFastType;
       if (month == 1 || month == 9) {
-        longerFastType = '3-Day Water Fast';
+        longerFastType = FastingUtils.waterFast;
       } else if (month % 3 == 1) {
-        longerFastType = '48h Quarterly Fast';
+        longerFastType = FastingUtils.quarterlyFast;
       } else {
-        longerFastType = '36h Monthly Fast';
+        longerFastType = FastingUtils.monthlyFast;
       }
-      
+
       // Check if Friday was within the last 4-6 days or will be within next 4-6 days
-      final daysUntilFriday = (5 - now.weekday + 7) % 7; // Days until next Friday (0 if today is Friday)
-      final daysSinceLastFriday = now.weekday >= 5 ? now.weekday - 5 : now.weekday + 2; // Days since last Friday
-      
+      final daysUntilFriday = (5 - now.weekday + 7) %
+          7; // Days until next Friday (0 if today is Friday)
+      final daysSinceLastFriday = now.weekday >= 5
+          ? now.weekday - 5
+          : now.weekday + 2; // Days since last Friday
+
       // If Friday is close (within 6 days either way), skip Friday fast and do the longer fast on 25th
       if (daysSinceLastFriday <= 6 || daysUntilFriday <= 6) {
         return longerFastType; // Do the longer fast on the 25th
       }
-      
+
       return longerFastType;
     }
-    
+
     // If today is Friday, check if 25th is close
     if (isFriday) {
       final daysUntil25th = 25 - now.day;
-      
+
       // If 25th is within 4-6 days, do the longer fast on Friday instead
       if (daysUntil25th >= 0 && daysUntil25th <= 6) {
         final month = now.month;
-        
+
         // Use the appropriate longer fast type
         if (month == 1 || month == 9) {
-          return '3-Day Water Fast';
+          return FastingUtils.waterFast;
         } else if (month % 3 == 1) {
-          return '48h Quarterly Fast';
+          return FastingUtils.quarterlyFast;
         } else {
-          return '36h Monthly Fast';
+          return FastingUtils.monthlyFast;
         }
       }
-      
-      // Check if 25th was recent (within last 6 days) 
-      if (now.day < 25 && (25 - now.day) > 25) { // 25th was last month
+
+      // Check if 25th was recent (within last 6 days)
+      if (now.day < 25 && (25 - now.day) > 25) {
+        // 25th was last month
         final lastMonth = now.month == 1 ? 12 : now.month - 1;
-        final daysSince25thLastMonth = now.day + (DateTime(now.year, now.month, 0).day - 25);
-        
+        final daysSince25thLastMonth =
+            now.day + (DateTime(now.year, now.month, 0).day - 25);
+
         if (daysSince25thLastMonth <= 6) {
           // 25th was recent, do the longer fast type on Friday
           if (lastMonth == 1 || lastMonth == 9) {
-            return '3-Day Water Fast';
+            return FastingUtils.waterFast;
           } else if (lastMonth % 3 == 1) {
-            return '48h Quarterly Fast';
+            return FastingUtils.quarterlyFast;
           } else {
-            return '36h Monthly Fast';
+            return FastingUtils.monthlyFast;
           }
         }
       }
-      
-      return '24h Weekly Fast'; // Normal Friday fast
+
+      return FastingUtils.weeklyFast; // Normal Friday fast
     }
-    
+
     return '';
   }
 
   // Get recommended fast with 5-day grace period (for fasting screen only)
   String _getRecommendedFastWithGracePeriod(DateTime now) {
     // Check if Friday was within the last 5 days
-    final daysSinceLastFriday = now.weekday >= 5 ? now.weekday - 5 : now.weekday + 2;
+    final daysSinceLastFriday =
+        now.weekday >= 5 ? now.weekday - 5 : now.weekday + 2;
     if (daysSinceLastFriday <= 5 && daysSinceLastFriday > 0) {
       // Calculate what the fast would have been on that Friday
       final lastFriday = now.subtract(Duration(days: daysSinceLastFriday));
       final daysUntil25thFromLastFriday = 25 - lastFriday.day;
-      
+
       // Check if 25th was close to that Friday
-      if (daysUntil25thFromLastFriday >= 0 && daysUntil25thFromLastFriday <= 6) {
+      if (daysUntil25thFromLastFriday >= 0 &&
+          daysUntil25thFromLastFriday <= 6) {
         final month = lastFriday.month;
         if (month == 1 || month == 9) {
-          return '3-Day Water Fast';
+          return FastingUtils.waterFast;
         } else if (month % 3 == 1) {
-          return '48h Quarterly Fast';
+          return FastingUtils.quarterlyFast;
         } else {
-          return '36h Monthly Fast';
+          return FastingUtils.monthlyFast;
         }
       } else {
-        return '24h Weekly Fast';
+        return FastingUtils.weeklyFast;
       }
     }
-    
+
     // Check if 25th was within the last 5 days
     final daysSince25th = now.day > 25 ? now.day - 25 : 0;
     if (daysSince25th <= 5 && daysSince25th > 0) {
       final month = now.month;
       if (month == 1 || month == 9) {
-        return '3-Day Water Fast';
+        return FastingUtils.waterFast;
       } else if (month % 3 == 1) {
-        return '48h Quarterly Fast';
+        return FastingUtils.quarterlyFast;
       } else {
-        return '36h Monthly Fast';
+        return FastingUtils.monthlyFast;
       }
     }
-    
+
     // Check if 25th was in the previous month within 5 days
     if (now.day <= 5) {
       final lastMonth = now.month == 1 ? 12 : now.month - 1;
       final daysInLastMonth = DateTime(now.year, now.month, 0).day;
       final daysSince25thLastMonth = now.day + (daysInLastMonth - 25);
-      
+
       if (daysSince25thLastMonth <= 5) {
         if (lastMonth == 1 || lastMonth == 9) {
-          return '3-Day Water Fast';
+          return FastingUtils.waterFast;
         } else if (lastMonth % 3 == 1) {
-          return '48h Quarterly Fast';
+          return FastingUtils.quarterlyFast;
         } else {
-          return '36h Monthly Fast';
+          return FastingUtils.monthlyFast;
         }
       }
     }
 
     return '';
   }
-
 
   void _startFast(String fastType) {
     final now = DateTime.now();
@@ -396,7 +494,7 @@ class _FastingScreenState extends State<FastingScreen>
       _elapsedTime = Duration.zero;
       _totalFastDuration = duration;
     });
-    
+
     // Reset milestone tracking for new fast
     _triggeredMilestones.clear();
 
@@ -435,7 +533,7 @@ class _FastingScreenState extends State<FastingScreen>
       _elapsedTime = Duration.zero;
       _totalFastDuration = duration;
     });
-    
+
     // Reset milestone tracking for new fast
     _triggeredMilestones.clear();
 
@@ -501,7 +599,7 @@ class _FastingScreenState extends State<FastingScreen>
   void _postponeFast() {
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     final newStartTime =
-    DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 14, 0);
+        DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 14, 0);
 
     setState(() {
       _currentFastStart = newStartTime;
@@ -536,7 +634,7 @@ class _FastingScreenState extends State<FastingScreen>
             const SizedBox(height: 16),
             const Text(
               'Choose new start time:',
-              style: TextStyle(fontWeight: FontWeight.w600),
+              style: TextStyle(fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -549,11 +647,12 @@ class _FastingScreenState extends State<FastingScreen>
             onPressed: () async {
               final currentContext = context;
               Navigator.pop(currentContext);
-              final TimeOfDay? picked = await TimePickerUtils.showStyledTimePicker(
+              final TimeOfDay? picked =
+                  await TimePickerUtils.showStyledTimePicker(
                 context: currentContext,
                 initialTime: TimeOfDay.fromDateTime(_currentFastStart!),
               );
-              
+
               if (picked != null) {
                 _updateFastStartTime(picked);
               }
@@ -580,7 +679,7 @@ class _FastingScreenState extends State<FastingScreen>
     // Calculate new end time based on original duration
     final newEndTime = newStartTime.add(_totalFastDuration);
     final now = DateTime.now();
-    
+
     // Validate that start time is not in the future
     if (newStartTime.isAfter(now)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -602,10 +701,10 @@ class _FastingScreenState extends State<FastingScreen>
     });
 
     _saveFastingData();
-    
+
     // Immediately update the notification with correct progress
     _updateFastingNotification();
-    
+
     // Check if we should trigger any milestones that were missed due to the time change
     _checkFastingMilestones(Duration.zero, _elapsedTime);
 
@@ -646,7 +745,6 @@ class _FastingScreenState extends State<FastingScreen>
     );
   }
 
-
   // Enhanced fasting phases with detailed information
   Map<String, dynamic> _getFastingPhaseInfo() {
     return FastingPhases.getFastingPhaseInfo(_elapsedTime, _isFasting);
@@ -673,186 +771,183 @@ class _FastingScreenState extends State<FastingScreen>
 
   // Select start time - suppress linter warning as context is safe to use here
   // ignore: use_build_context_synchronously
-  void _selectStartTime(BuildContext context, Function(DateTime) onTimeSelected, DateTime? currentStartTime, DateTime now) async {
-    final date = await showDatePicker(
+  void _selectStartTime(BuildContext context, Function(DateTime) onTimeSelected,
+      DateTime? currentStartTime, DateTime now) async {
+    final selectedDateTime = await DatePickerUtils.showStyledDateTimePicker(
       context: context,
-      initialDate: currentStartTime ?? now.subtract(const Duration(days: 1)),
+      initialDateTime: currentStartTime ?? now.subtract(const Duration(days: 1)),
       firstDate: now.subtract(const Duration(days: 30)),
       lastDate: now,
-      builder: (builderContext, child) {
-        return Theme(
-          data: Theme.of(builderContext).copyWith(
-            colorScheme: Theme.of(builderContext).colorScheme.copyWith(
-              primary: AppColors.lightGreen,
-              onPrimary: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
-    
-    if (date == null || !mounted) return;
-    
-    final time = await TimePickerUtils.showStyledTimePicker(
-      // ignore: use_build_context_synchronously
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(currentStartTime ?? now.subtract(const Duration(hours: 24))),
-    );
-    
-    if (time != null && mounted) {
-      onTimeSelected(DateTime(date.year, date.month, date.day, time.hour, time.minute));
+
+    if (selectedDateTime != null && mounted) {
+      onTimeSelected(selectedDateTime);
     }
   }
 
   // Select end time - suppress linter warning as context is safe to use here
   // ignore: use_build_context_synchronously
-  void _selectEndTime(BuildContext context, Function(DateTime) onTimeSelected, DateTime? currentEndTime, DateTime? startTime, DateTime now) async {
-    final date = await showDatePicker(
+  void _selectEndTime(BuildContext context, Function(DateTime) onTimeSelected,
+      DateTime? currentEndTime, DateTime? startTime, DateTime now) async {
+    final selectedDateTime = await DatePickerUtils.showStyledDateTimePicker(
       context: context,
-      initialDate: currentEndTime ?? now,
+      initialDateTime: currentEndTime ?? now,
       firstDate: startTime ?? now.subtract(const Duration(days: 30)),
       lastDate: now,
-      builder: (builderContext, child) {
-        return Theme(
-          data: Theme.of(builderContext).copyWith(
-            colorScheme: Theme.of(builderContext).colorScheme.copyWith(
-              primary: AppColors.lightGreen,
-              onPrimary: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
-    
-    if (date == null || !mounted) return;
-    
-    final time = await TimePickerUtils.showStyledTimePicker(
-      // ignore: use_build_context_synchronously
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(currentEndTime ?? now),
-    );
-    
-    if (time != null && mounted) {
-      onTimeSelected(DateTime(date.year, date.month, date.day, time.hour, time.minute));
+
+    if (selectedDateTime != null && mounted) {
+      onTimeSelected(selectedDateTime);
     }
   }
-
 
   // Show manual fast entry dialog
   Future<void> _showManualFastDialog() async {
     final currentContext = context;
     DateTime? startTime;
     DateTime? endTime;
-    String fastType = '24h Weekly Fast';
+    String fastType = FastingUtils.weeklyFast;
     final now = DateTime.now();
 
     final result = await showDialog<Map<String, dynamic>>(
       context: currentContext,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: AppColors.darkSurface,
-          title: const Text(
-            'Add Completed Fast',
-            style: TextStyle(color: Colors.white),
-          ),
+          backgroundColor: AppColors.dialogBackground,
+          title: Center(
+              child: const Text(
+              'Add Completed Fast',
+              style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 20),
+          )),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Fast type selection
-              const Text(
-                'Fast Type:',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
-              ),
               const SizedBox(height: 8),
-              DropdownButton<String>(
-                value: fastType,
-                dropdownColor: AppColors.darkSurface,
-                style: const TextStyle(color: Colors.white),
-                items: const [
-                  DropdownMenuItem(value: '24h Weekly Fast', child: Text('24h Weekly Fast')),
-                  DropdownMenuItem(value: '36h Monthly Fast', child: Text('36h Monthly Fast')),
-                  DropdownMenuItem(value: '48h Quarterly Fast', child: Text('48h Quarterly Fast')),
-                  DropdownMenuItem(value: '3-Day Water Fast', child: Text('3-Day Water Fast')),
+              Row(
+                children: [
+                  const Text(
+                    'Fast Type:',
+                    style: TextStyle(
+                        color: Colors.green,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(width: 16),
+                  DropdownButton<String>(
+                    value: fastType,
+                    dropdownColor: AppColors.dialogBackground,
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                    underline: Container(),
+                    items: FastingUtils.fastTypes
+                        .map((String type) => DropdownMenuItem(
+                            value: type,
+                            child: Text(type,
+                                style: const TextStyle(fontSize: 16))))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() {
+                          fastType = value;
+                        });
+                      }
+                    },
+                  ),
                 ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setDialogState(() {
-                      fastType = value;
-                    });
-                  }
-                },
               ),
-              
-              const SizedBox(height: 20),
-              
-              // Start time
-              const Text(
-                'Start Time:',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 8),
-              InkWell(
-                onTap: () {
-                  _selectStartTime(context, (DateTime selectedTime) {
-                    setDialogState(() {
-                      startTime = selectedTime;
-                    });
-                  }, startTime, now);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.pastelGreen),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    startTime != null 
-                        ? '${startTime!.day}/${startTime!.month} at ${startTime!.hour.toString().padLeft(2, '0')}:${startTime!.minute.toString().padLeft(2, '0')}'
-                        : 'Select start time',
-                    style: TextStyle(color: startTime != null ? Colors.white : AppColors.white54),
-                  ),
-                ),
-              ),
-              
+
               const SizedBox(height: 16),
-              
-              // End time
-              const Text(
-                'End Time:',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 8),
-              InkWell(
-                onTap: () {
-                  _selectEndTime(context, (DateTime selectedTime) {
-                    setDialogState(() {
-                      endTime = selectedTime;
-                    });
-                  }, endTime, startTime, now);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.pastelGreen),
-                    borderRadius: BorderRadius.circular(8),
+
+              Row(
+                children: [
+                  // Start time
+                  const Text(
+                    'Start Time:',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400),
                   ),
-                  child: Text(
-                    endTime != null 
-                        ? '${endTime!.day}/${endTime!.month} at ${endTime!.hour.toString().padLeft(2, '0')}:${endTime!.minute.toString().padLeft(2, '0')}'
-                        : 'Select end time',
-                    style: TextStyle(color: endTime != null ? Colors.white : AppColors.white54),
+                  const SizedBox(width: 24),
+                  InkWell(
+                    onTap: () {
+                      _selectStartTime(context, (DateTime selectedTime) {
+                        setDialogState(() {
+                          startTime = selectedTime;
+                        });
+                      }, startTime, now);
+                    },
+                    child: Container(
+                      padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.pastelGreen),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        startTime != null
+                            ? '${startTime!.day}/${startTime!.month} at ${startTime!.hour.toString().padLeft(2, '0')}:${startTime!.minute.toString().padLeft(2, '0')}'
+                            : 'Select start time',
+                        style: TextStyle(
+                            color: startTime != null
+                                ? Colors.white
+                                : AppColors.greyText),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-              
+
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  // End time
+                  const Text(
+                    'End Time:',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400),
+                  ),
+                  const SizedBox(width: 36),
+                  InkWell(
+                    onTap: () {
+                      _selectEndTime(context, (DateTime selectedTime) {
+                        setDialogState(() {
+                          endTime = selectedTime;
+                        });
+                      }, endTime, startTime, now);
+                    },
+                    child: Container(
+                      padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.pastelGreen),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        endTime != null
+                            ? '${endTime!.day}/${endTime!.month} at ${endTime!.hour.toString().padLeft(2, '0')}:${endTime!.minute.toString().padLeft(2, '0')}'
+                            : 'Select end time',
+                        style: TextStyle(
+                            color:
+                            endTime != null ? Colors.white : AppColors.greyText),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
               if (startTime != null && endTime != null) ...[
                 const SizedBox(height: 12),
                 Text(
                   'Duration: ${FastingUtils.formatDuration(endTime!.difference(startTime!))}',
-                  style: const TextStyle(color: AppColors.successGreen, fontSize: 14, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                      color: AppColors.successGreen,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600),
                 ),
               ],
             ],
@@ -860,20 +955,24 @@ class _FastingScreenState extends State<FastingScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: AppColors.white54)),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppColors.greyText, fontSize: 16)),
             ),
-            TextButton(
-              onPressed: startTime != null && endTime != null && endTime!.isAfter(startTime!)
+            ElevatedButton(
+              onPressed: startTime != null &&
+                      endTime != null &&
+                      endTime!.isAfter(startTime!)
                   ? () => Navigator.pop(context, {
                         'startTime': startTime,
                         'endTime': endTime,
                         'fastType': fastType,
                       })
                   : null,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.lightGreen,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.successGreen,
+                foregroundColor: Colors.white,
               ),
-              child: const Text('Add Fast'),
+              child: const Text('Add Fast', style: TextStyle(fontSize: 16)),
             ),
           ],
         ),
@@ -890,10 +989,11 @@ class _FastingScreenState extends State<FastingScreen>
   }
 
   // Add manual fast to history
-  Future<void> _addManualFastToHistory(DateTime startTime, DateTime endTime, String fastType) async {
+  Future<void> _addManualFastToHistory(
+      DateTime startTime, DateTime endTime, String fastType) async {
     final actualDuration = endTime.difference(startTime);
     final plannedDuration = FastingUtils.getFastDuration(fastType);
-    
+
     final fastEntry = {
       'startTime': startTime.toIso8601String(),
       'endTime': endTime.toIso8601String(),
@@ -904,7 +1004,16 @@ class _FastingScreenState extends State<FastingScreen>
     };
 
     final prefs = await SharedPreferences.getInstance();
-    final historyStrings = prefs.getStringList('fasting_history') ?? [];
+    List<String> historyStrings;
+    try {
+      historyStrings = prefs.getStringList('fasting_history') ?? [];
+    } catch (e) {
+      if (kDebugMode) {
+        print('Warning: Fasting history data type mismatch, clearing corrupted data');
+      }
+      await prefs.remove('fasting_history');
+      historyStrings = [];
+    }
     historyStrings.add(jsonEncode(fastEntry));
     await prefs.setStringList('fasting_history', historyStrings);
 
@@ -914,7 +1023,8 @@ class _FastingScreenState extends State<FastingScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✅ Added $fastType (${FastingUtils.formatDuration(actualDuration)}) to history'),
+          content: Text(
+              '✅ Added $fastType (${FastingUtils.formatDuration(actualDuration)}) to history'),
           backgroundColor: AppColors.lightGreen,
         ),
       );
@@ -945,7 +1055,8 @@ class _FastingScreenState extends State<FastingScreen>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: phaseInfo['color'].withValues(alpha: 0.3 * _pulseController.value),
+                        color: phaseInfo['color']
+                            .withValues(alpha: 0.3 * _pulseController.value),
                         blurRadius: 20,
                         spreadRadius: 5,
                       ),
@@ -970,7 +1081,7 @@ class _FastingScreenState extends State<FastingScreen>
                 child: CircularProgressIndicator(
                   value: totalProgress.clamp(0.0, 1.0),
                   strokeWidth: 12,
-                  backgroundColor: AppColors.grey.withValues(alpha: 0.2),
+                  backgroundColor: AppColors.dialogBackground,
                   valueColor: AlwaysStoppedAnimation<Color>(phaseInfo['color']),
                 ),
               ),
@@ -984,22 +1095,21 @@ class _FastingScreenState extends State<FastingScreen>
                   strokeWidth: 8,
                   backgroundColor: AppColors.transparent,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                      phaseInfo['color'].withValues(alpha: 0.6)
-                  ),
+                      phaseInfo['color'].withValues(alpha: 0.2)),
                 ),
               ),
 
               // Center content
               Container(
-                width: 160,
+                width: 200,
                 height: 160,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Theme.of(context).scaffoldBackgroundColor,
+                  color: AppColors.normalCardBackground,
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.black.withValues(alpha: 0.1),
-                      blurRadius: 10,
+                      color: AppColors.black,
+                      blurRadius: 20,
                       spreadRadius: 2,
                     ),
                   ],
@@ -1020,16 +1130,14 @@ class _FastingScreenState extends State<FastingScreen>
                         Text(
                           'of ${FastingUtils.formatDuration(_totalFastDuration)}',
                           style: const TextStyle(
-                              fontSize: 14,
-                              color: AppColors.grey
-                          ),
+                              fontSize: 14, color: AppColors.greyText),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '${(totalProgress * 100).toInt()}%',
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                             color: phaseInfo['color'],
                           ),
                         ),
@@ -1045,16 +1153,16 @@ class _FastingScreenState extends State<FastingScreen>
                     ] else ...[
                       Icon(
                         Icons.timer_outlined,
-                        size: 48,
-                        color: phaseInfo['color'],
+                        size: 36,
+                        color: AppColors.greyText,
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Ready',
+                        'No fasting started',
                         style: TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold
-                        ),
+                            fontWeight: FontWeight.normal,
+                            color: AppColors.greyText),
                       ),
                     ],
                   ],
@@ -1071,9 +1179,7 @@ class _FastingScreenState extends State<FastingScreen>
   Widget build(BuildContext context) {
     final recommendedFast = _getRecommendedFastType();
     final phaseInfo = _getFastingPhaseInfo();
-    final now = DateTime.now();
-    final showPostponeButton =
-        now.hour >= 17 && !_isFasting && recommendedFast.isNotEmpty;
+    final showPostponeButton = !_isFasting && recommendedFast.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -1090,22 +1196,6 @@ class _FastingScreenState extends State<FastingScreen>
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: IconButton(
-              icon: const Icon(Icons.event_note_rounded),
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ScheduledFastingsScreen(),
-                  ),
-                );
-                // Refresh data when returning from scheduled fastings
-                _loadFastingData();
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: IconButton(
               icon: const Icon(Icons.calendar_month_rounded),
               onPressed: () async {
                 await Navigator.push(
@@ -1120,6 +1210,22 @@ class _FastingScreenState extends State<FastingScreen>
               },
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: IconButton(
+              icon: const Icon(Icons.schedule_rounded),
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ScheduledFastingsScreen(),
+                  ),
+                );
+                // Refresh data when returning from scheduled fastings
+                _loadFastingData();
+              },
+            ),
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -1127,6 +1233,79 @@ class _FastingScreenState extends State<FastingScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Late luteal phase warning
+            if (_hasLateLutealWarning && !_isFasting) ...[
+              Card(
+                color: AppColors.orange.withValues(alpha: 0.1),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.warning_rounded, color: AppColors.orange, size: 24),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Late Luteal Phase Warning',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.orange,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Fasting during late luteal phase may add extra stress to your body.',
+                        style: TextStyle(
+                          color: AppColors.greyText,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                await _deactivateScheduledFast(DateTime.now());
+                              },
+                              icon: Icon(Icons.spa_rounded, size: 18),
+                              label: Text('Deactivate Fast'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.orange,
+                                side: BorderSide(color: AppColors.orange),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _hasLateLutealWarning = false;
+                                });
+                              },
+                              icon: Icon(Icons.check_rounded, size: 18),
+                              label: Text('No, it\'s okay'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppColors.greyText,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
             // Quick start buttons - always visible at top
             if (!_isFasting) ...[
               Card(
@@ -1143,9 +1322,10 @@ class _FastingScreenState extends State<FastingScreen>
                               icon: const Icon(Icons.timer_outlined),
                               label: const Text('12h Fast'),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.successGreen.withValues(alpha: 0.8),
+                                backgroundColor: AppColors.successGreen,
                                 foregroundColor: AppColors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -1159,9 +1339,10 @@ class _FastingScreenState extends State<FastingScreen>
                               icon: const Icon(Icons.timer_outlined),
                               label: const Text('16h Fast'),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.lime.withValues(alpha: 0.8),
+                                backgroundColor: Colors.lime,
                                 foregroundColor: AppColors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -1170,13 +1351,64 @@ class _FastingScreenState extends State<FastingScreen>
                           ),
                         ],
                       ),
+
+                      // Recommended fast button
+                      if (recommendedFast.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _startFast(recommendedFast),
+                            icon: const Padding(
+                              padding: EdgeInsets.only(right: 2),
+                              child: Icon(Icons.play_arrow_rounded, size: 20),
+                            ),
+                            label: Padding(
+                              padding: EdgeInsets.only(left: 2),
+                              child: Text('Start $recommendedFast',
+                                  style: TextStyle(fontSize: 16)),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.yellow,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // Postpone button
+                        if (showPostponeButton) ...[
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _postponeFast,
+                              icon: const Icon(Icons.schedule_rounded),
+                              label: const Text('Postpone to Tomorrow'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.yellow,
+                                side: const BorderSide(color: AppColors.yellow),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 4),
             ],
-            
+
+            const SizedBox(height: 12),
+
             // Enhanced Current Fast Status Card
             Card(
               elevation: 8,
@@ -1184,7 +1416,7 @@ class _FastingScreenState extends State<FastingScreen>
                   borderRadius: BorderRadius.circular(20)),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
                   gradient: LinearGradient(
@@ -1201,16 +1433,20 @@ class _FastingScreenState extends State<FastingScreen>
                     // Enhanced Circular Progress
                     _buildEnhancedCircularProgress(),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
 
                     // Phase Information
                     Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: phaseInfo['color'].withValues(alpha: 0.15),
+                        color: _isFasting
+                            ? phaseInfo['color'].withValues(alpha: 0.15)
+                            : AppColors.greyText.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: phaseInfo['color'].withValues(alpha: 0.3),
+                          color: _isFasting
+                              ? phaseInfo['color'].withValues(alpha: 0.3)
+                              : AppColors.greyText.withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),
@@ -1221,7 +1457,9 @@ class _FastingScreenState extends State<FastingScreen>
                             children: [
                               Icon(
                                 _isFasting ? Icons.bolt : Icons.timer_outlined,
-                                color: phaseInfo['color'],
+                                color: _isFasting
+                                    ? phaseInfo['color']
+                                    : AppColors.greyText,
                                 size: 20,
                               ),
                               const SizedBox(width: 8),
@@ -1230,7 +1468,9 @@ class _FastingScreenState extends State<FastingScreen>
                                 style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
-                                  color: phaseInfo['color'],
+                                  color: _isFasting
+                                      ? phaseInfo['color']
+                                      : AppColors.greyText,
                                 ),
                               ),
                             ],
@@ -1240,7 +1480,7 @@ class _FastingScreenState extends State<FastingScreen>
                             phaseInfo['message'],
                             style: const TextStyle(
                               fontSize: 16,
-                              color: AppColors.grey,
+                              color: AppColors.greyText,
                               fontStyle: FontStyle.italic,
                             ),
                             textAlign: TextAlign.center,
@@ -1248,7 +1488,7 @@ class _FastingScreenState extends State<FastingScreen>
                         ],
                       ),
                     ),
-                    
+
                     // Fasting Stage Timeline
                     if (_isFasting) ...[
                       const SizedBox(height: 24),
@@ -1262,10 +1502,9 @@ class _FastingScreenState extends State<FastingScreen>
                   ],
                 ),
               ),
-              
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 2),
 
             // Control Buttons
             if (_isFasting) ...[
@@ -1308,43 +1547,6 @@ class _FastingScreenState extends State<FastingScreen>
                   ),
                 ],
               ),
-            ] else if (recommendedFast.isNotEmpty) ...[
-              // Show scheduled fast start button if available  
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _startFast(recommendedFast),
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: Text('Start $recommendedFast'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.yellow.withValues(alpha: 0.8),
-                    foregroundColor: AppColors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              if (showPostponeButton) ...[
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _postponeFast,
-                    icon: const Icon(Icons.schedule_rounded),
-                    label: const Text('Postpone to Tomorrow'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.waterBlue,
-                      side: const BorderSide(color: AppColors.waterBlue),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
             ],
 
             const SizedBox(height: 12),
@@ -1362,7 +1564,7 @@ class _FastingScreenState extends State<FastingScreen>
                     const Text(
                       'Your Progress',
                       style:
-                      TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.white70),
                     ),
                     const SizedBox(height: 20),
                     Row(
@@ -1408,7 +1610,7 @@ class _FastingScreenState extends State<FastingScreen>
         ),
         Text(
           label,
-          style: const TextStyle(fontSize: 14, color: AppColors.grey),
+          style: const TextStyle(fontSize: 14, color: AppColors.greyText),
         ),
       ],
     );

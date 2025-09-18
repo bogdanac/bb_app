@@ -123,7 +123,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: AppColors.waterBlue.withValues(alpha: 0.15), // Water blue theme
+          color: AppColors.homeCardBackground, // Home card background
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,7 +132,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
               children: [
                 const Icon(
                   Icons.water_drop_rounded,
-                  color: AppColors.waterBlue, // Special water blue
+                  color: AppColors.waterBlue, // Dark sky blue
                   size: 24,
                 ),
                 const SizedBox(width: 16),
@@ -165,12 +165,12 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                                     gradient: LinearGradient(
                                       colors: _progressAnimation.value > 0.9
                                           ? [AppColors.successGreen, AppColors.lightGreen] // Keep green for success
-                                          : [AppColors.waterBlue, AppColors.waterBlue.withValues(alpha: 0.7)], // Water blue for progress
+                                          : [AppColors.waterBlue, AppColors.waterBlue.withValues(alpha: 0.7)], // Sky blue for progress
                                     ),
                                     boxShadow: _progressAnimation.value > 0.0
                                         ? [
                                       BoxShadow(
-                                        color: AppColors.waterBlue.withValues(alpha: 0.3),
+                                        color: AppColors.waterBlue.withValues(alpha: 0.4),
                                         blurRadius: 4,
                                         offset: const Offset(0, 2),
                                       ),
@@ -196,7 +196,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                                 : '🎉 Goal reached!',
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w500,
                               color: _progressAnimation.value > 0.5
                                   ? AppColors.white
                                   : AppColors.white54,
@@ -234,7 +234,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                       '+',
                       style: TextStyle(
                         fontSize: 24, // Larger plus sign
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),

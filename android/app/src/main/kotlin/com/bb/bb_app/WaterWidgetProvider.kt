@@ -14,7 +14,7 @@ class WaterWidgetProvider : AppWidgetProvider() {
     companion object {
         private const val ACTION_ADD_WATER = "com.bb.bb_app.ADD_WATER"
         private const val WATER_GOAL = 1500
-        private const val WATER_INCREMENT = 125
+        private const val DEFAULT_WATER_INCREMENT = 125
     }
 
     override fun onUpdate(
@@ -46,20 +46,69 @@ class WaterWidgetProvider : AppWidgetProvider() {
         }
     }
 
+    private fun getWaterAmountPerTap(context: Context): Int {
+        val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+
+        // Try multiple key formats that Flutter might use - order matters!
+        // Try flutter. prefix first as that's what we explicitly save
+        val possibleKeys = listOf(
+            "flutter.water_amount_per_tap",
+            "water_amount_per_tap"
+        )
+
+        android.util.Log.d("WaterWidget", "=== WATER AMOUNT LOOKUP START ===")
+
+        // Debug: List all water-related keys
+        val allKeys = prefs.all.keys
+        android.util.Log.d("WaterWidget", "All keys containing 'water': ${allKeys.filter { it.contains("water") }}")
+
+        for (key in possibleKeys) {
+            try {
+                // Try as Int first
+                val value = prefs.getInt(key, -1)
+                if (value > 0 && value <= 1000) { // Validate range
+                    android.util.Log.d("WaterWidget", "✓ Found water amount setting (Int): ${value}ml for key: $key")
+                    return value
+                }
+                android.util.Log.d("WaterWidget", "Key $key returned invalid int: $value")
+            } catch (e: ClassCastException) {
+                android.util.Log.d("WaterWidget", "Key $key not an int, trying Long...")
+                try {
+                    // Flutter might store as Long, try that
+                    val longValue = prefs.getLong(key, -1L)
+                    if (longValue > 0 && longValue <= 1000) { // Validate range
+                        android.util.Log.d("WaterWidget", "✓ Found water amount setting (Long): ${longValue}ml for key: $key")
+                        return longValue.toInt()
+                    }
+                    android.util.Log.d("WaterWidget", "Key $key returned invalid long: $longValue")
+                } catch (e2: ClassCastException) {
+                    android.util.Log.d("WaterWidget", "Key $key failed both Int and Long: $e2")
+                }
+            }
+        }
+
+        android.util.Log.d("WaterWidget", "⚠ No water amount setting found, using default: ${DEFAULT_WATER_INCREMENT}ml")
+        android.util.Log.d("WaterWidget", "=== WATER AMOUNT LOOKUP END ===")
+        return DEFAULT_WATER_INCREMENT
+    }
+
     private fun addWater(context: Context) {
         // Try Flutter's actual SharedPreferences file
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        
+
+        // Get customizable water amount
+        val waterIncrement = getWaterAmountPerTap(context)
+
         // Try multiple key formats to find the correct one
         val possibleKeys = listOf(
             "flutter.water_$today",
             "water_$today"
         )
-        
+
         var currentIntake = 0
         var correctKey = ""
-        
+
         for (key in possibleKeys) {
             try {
                 // Try as Int first
@@ -85,20 +134,20 @@ class WaterWidgetProvider : AppWidgetProvider() {
                 }
             }
         }
-        
+
         if (correctKey.isEmpty()) {
             // No existing data found, use the flutter. prefixed key
             correctKey = "flutter.water_$today"
             android.util.Log.d("WaterWidget", "No existing data found, using key: $correctKey")
         }
-        
+
         // Don't add water if goal is already reached
         if (currentIntake >= WATER_GOAL) {
             android.util.Log.d("WaterWidget", "Goal already reached: $currentIntake >= $WATER_GOAL")
             return
         }
-        
-        val newIntake = currentIntake + WATER_INCREMENT
+
+        val newIntake = currentIntake + waterIncrement
         
         // Save as Long to match Flutter's format
         prefs.edit()
@@ -106,7 +155,7 @@ class WaterWidgetProvider : AppWidgetProvider() {
             .putString("flutter.last_water_reset_date", today)
             .apply()
             
-        android.util.Log.d("WaterWidget", "Water added: $currentIntake -> $newIntake")
+        android.util.Log.d("WaterWidget", "Water added: $currentIntake -> $newIntake (+${waterIncrement}ml)")
         android.util.Log.d("WaterWidget", "Saved to key: $correctKey")
     }
 

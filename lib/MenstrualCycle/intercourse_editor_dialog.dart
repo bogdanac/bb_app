@@ -72,7 +72,7 @@ class _IntercourseEditorDialogState extends State<IntercourseEditorDialog> {
           Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.grey300),
+              border: Border.all(color: AppColors.grey700),
             ),
             child: SwitchListTile(
               title: const Text(
@@ -82,7 +82,7 @@ class _IntercourseEditorDialogState extends State<IntercourseEditorDialog> {
               subtitle: Text(
                 _hadOrgasm ? 'Yes' : 'No',
                 style: TextStyle(
-                  color: _hadOrgasm ? AppColors.successGreen : AppColors.grey,
+                  color: _hadOrgasm ? AppColors.successGreen : AppColors.greyText,
                 ),
               ),
               value: _hadOrgasm,
@@ -102,7 +102,7 @@ class _IntercourseEditorDialogState extends State<IntercourseEditorDialog> {
           Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.grey300),
+              border: Border.all(color: AppColors.grey700),
             ),
             child: SwitchListTile(
               title: const Text(

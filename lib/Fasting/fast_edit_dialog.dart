@@ -1,6 +1,7 @@
+import 'package:bb_app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../shared/time_picker_utils.dart';
+import '../shared/date_picker_utils.dart';
 
 // FAST EDIT DIALOG
 class FastEditDialog extends StatefulWidget {
@@ -33,55 +34,40 @@ class _FastEditDialogState extends State<FastEditDialog> {
   Future<void> _selectDateTime(bool isStart) async {
     final currentTime = isStart ? _startTime : _endTime;
 
-    final date = await showDatePicker(
+    final newDateTime = await DatePickerUtils.showStyledDateTimePicker(
       context: context,
-      initialDate: currentTime,
+      initialDateTime: currentTime,
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
     );
 
-    if (date != null && mounted) {
-      final time = await TimePickerUtils.showStyledTimePicker(
-        context: context,
-        initialTime: TimeOfDay.fromDateTime(currentTime),
-      );
-
-      if (time != null) {
-        final newDateTime = DateTime(
-          date.year,
-          date.month,
-          date.day,
-          time.hour,
-          time.minute,
-        );
-
-        setState(() {
-          if (isStart) {
-            _startTime = newDateTime;
-          } else {
-            _endTime = newDateTime;
-          }
-        });
-      }
+    if (newDateTime != null && mounted) {
+      setState(() {
+        if (isStart) {
+          _startTime = newDateTime;
+        } else {
+          _endTime = newDateTime;
+        }
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Edit Fast Times'),
+      title: const Text('Edit Fast Times', style: TextStyle(fontSize: 18),),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
-            leading: const Icon(Icons.play_arrow_rounded),
+            leading: const Icon(Icons.play_arrow_rounded, color: AppColors.successGreen,),
             title: const Text('Start Time'),
             subtitle: Text(DateFormat('MMM dd, yyyy HH:mm').format(_startTime)),
             onTap: () => _selectDateTime(true),
           ),
           ListTile(
-            leading: const Icon(Icons.stop_rounded),
+            leading: const Icon(Icons.stop_rounded, color: AppColors.lightRed),
             title: const Text('End Time'),
             subtitle: Text(DateFormat('MMM dd, yyyy HH:mm').format(_endTime)),
             onTap: () => _selectDateTime(false),
@@ -91,7 +77,8 @@ class _FastEditDialogState extends State<FastEditDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: const Text('Cancel',
+              style: TextStyle(color: AppColors.greyText)),
         ),
         ElevatedButton(
           onPressed: _endTime.isAfter(_startTime)
@@ -100,6 +87,10 @@ class _FastEditDialogState extends State<FastEditDialog> {
             Navigator.pop(context);
           }
               : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.successGreen,
+            foregroundColor: Colors.white,
+          ),
           child: const Text('Save'),
         ),
       ],

@@ -41,7 +41,7 @@ class BBetterApp extends StatelessWidget {
         );
       },
       theme: AppTheme.theme,
-      home: const LauncherScreen(),
+      home: const MainScreen(), // TODO: Change back to LauncherScreen (use MainScreen() for hot reload testing)
       debugShowCheckedModeBanner: false,
     );
   }
@@ -139,7 +139,7 @@ class _LauncherScreenState extends State<LauncherScreen>
       try {
         hasWidgetIntent = await TaskWidgetService.checkForWidgetIntent();
       } catch (e) {
-        if (kDebugMode) print("Error checking widget intent: $e");
+        if (kDebugMode) print("ERROR checking widget intent: $e");
       }
       
       // If widget intent detected, skip launcher and go directly to main screen with task dialog
@@ -154,7 +154,6 @@ class _LauncherScreenState extends State<LauncherScreen>
       _emergencyTimer = Timer(const Duration(seconds: 15), () {
         if (mounted && Navigator.of(context).canPop() == false) {
           if (kDebugMode) {
-            print("Emergency navigation triggered - launcher took too long");
           }
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const MainScreen()),
@@ -179,13 +178,13 @@ class _LauncherScreenState extends State<LauncherScreen>
         // Wrap entire initialization in a timeout
         await _initializeApp().timeout(Duration(seconds: 10)).catchError((error) {
           if (kDebugMode) {
-            print("App initialization failed or timed out: $error");
+            print("App initialization ERROR: $error");
           }
         });
       }
 
-      // Navigate to main screen
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Navigate to main screen (reduced delay since native splash handles initial display)
+      await Future.delayed(const Duration(milliseconds: 200));
       if (mounted && Navigator.of(context).canPop() == false) {
         // Cancel emergency timer since we're navigating normally
         _emergencyTimer?.cancel();
@@ -216,7 +215,7 @@ class _LauncherScreenState extends State<LauncherScreen>
         _emergencyTimer?.cancel();
       }
     } catch (e) {
-      if (kDebugMode) print("Error in animation sequence: $e");
+      if (kDebugMode) print("ERROR in animation sequence: $e");
       // Fallback to main screen
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -239,7 +238,7 @@ class _LauncherScreenState extends State<LauncherScreen>
         await taskService.forceRescheduleAllNotifications();
       })().timeout(Duration(seconds: 10)).catchError((error) {
         if (kDebugMode) {
-          print("Notification initialization failed or timed out: $error");
+          print("Notification initialization ERROR: $error");
         }
       });
       
@@ -247,7 +246,6 @@ class _LauncherScreenState extends State<LauncherScreen>
       try {
         await NotificationListenerService.initialize().timeout(Duration(seconds: 5));
         if (kDebugMode) {
-          print("✅ NotificationListenerService initialized successfully in debug mode");
         }
       } catch (error) {
         if (kDebugMode) {
@@ -259,28 +257,28 @@ class _LauncherScreenState extends State<LauncherScreen>
       // Perform auto-backup check (non-blocking with timeout)
       BackupService.performAutoBackup().timeout(Duration(seconds: 8)).catchError((error) {
         if (kDebugMode) {
-          print("Auto backup check failed or timed out: $error");
+          print("Auto backup check ERROR: $error");
         }
       });
 
       // Check for weekly cloud backup reminder
       BackupService.checkWeeklyCloudBackupReminder().timeout(Duration(seconds: 5)).catchError((error) {
         if (kDebugMode) {
-          print("Cloud backup reminder check failed or timed out: $error");
+          print("Cloud backup reminder check ERROR: $error");
         }
       });
 
       // Schedule nightly backups (non-blocking with timeout)
       BackupService.scheduleNightlyBackups().timeout(Duration(seconds: 5)).catchError((error) {
         if (kDebugMode) {
-          print("Nightly backup scheduling failed or timed out: $error");
+          print("Nightly backup scheduling ERROR: $error");
         }
       });
 
       // Schedule daily food tracking reminders (non-blocking with timeout)
       NotificationService().scheduleFoodTrackingReminder().timeout(Duration(seconds: 5)).catchError((error) {
         if (kDebugMode) {
-          print("Food tracking reminder scheduling failed or timed out: $error");
+          print("Food tracking reminder scheduling ERROR: $error");
         }
       });
 
@@ -293,11 +291,11 @@ class _LauncherScreenState extends State<LauncherScreen>
             }
           }
         }).catchError((error) {
-          if (kDebugMode) print("Error requesting notification permission or timed out: $error");
+          if (kDebugMode) print("ERROR requesting notification permission or timed out: $error");
         });
       }
     } catch (e) {
-      if (kDebugMode) print("Error initializing app: $e");
+      if (kDebugMode) print("ERROR initializing app: $e");
       // Continue regardless of initialization errors
     }
   }
@@ -317,19 +315,18 @@ class _LauncherScreenState extends State<LauncherScreen>
       animation: Listenable.merge([_logoController, _textController, _backgroundController]),
       builder: (context, child) {
         return Scaffold(
-          backgroundColor: _backgroundColor.value ?? AppColors.darkBackground,
+          backgroundColor: _backgroundColor.value ?? AppColors.normalCardBackground,
           body: Container(
             decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: const Alignment(0.0, -0.3),
-                radius: 1.2,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
                 colors: [
-                  AppColors.redPrimary, // Red/Pink
-                  AppColors.orange, // Orange
-                  AppColors.lightPink, // Purple
-                  const Color(0x77E81EE8)
+                  AppColors.orange, // Orange top
+                  AppColors.purple, // Purple middle
+                  AppColors.black, // Black bottom
                 ],
-                stops: const [0.0, 0.3, 0.7, 1.0],
+                stops: const [0.0, 0.5, 1.0],
               ),
             ),
             child: Center(
@@ -347,14 +344,14 @@ class _LauncherScreenState extends State<LauncherScreen>
                         decoration: BoxDecoration(
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.redPrimary.withValues(alpha: 0.4),
-                              blurRadius: 25,
-                              spreadRadius: 8,
+                              color: AppColors.purple.withValues(alpha: 0.6),
+                              blurRadius: 20,
+                              spreadRadius: 5,
                             ),
                             BoxShadow(
-                              color: AppColors.orange.withValues(alpha: 0.3),
-                              blurRadius: 15,
-                              spreadRadius: 3,
+                              color: AppColors.orange.withValues(alpha: 0.4),
+                              blurRadius: 30,
+                              spreadRadius: 10,
                             ),
                           ],
                         ),
@@ -481,7 +478,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
           }
         }
       } catch (e) {
-        debugPrint('Error handling widget intent: $e');
+        debugPrint('ERROR handling widget intent: $e');
       }
     }
   }
@@ -530,7 +527,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
       bottomNavigationBar: Container(
         height: 70 + MediaQuery.of(context).padding.bottom, // Increased from 60 to 70
         decoration: BoxDecoration(
-          color: AppColors.darkBackground,
+          color: AppColors.appBackground,
           boxShadow: [
             BoxShadow(
               color: AppColors.black.withValues(alpha: 0.3),
@@ -545,11 +542,11 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: List.generate(5, (index) {
             final colors = [
-              AppColors.yellow,
-              AppColors.redPrimary,
-              AppColors.pink,
-              AppColors.coral,
-              AppColors.orange,
+              AppColors.yellow,        // Fasting - yellow
+              AppColors.red,    // Menstrual - red
+              AppColors.pink,          // Home - pink
+              AppColors.coral,         // Tasks - coral
+              AppColors.orange,        // Routines - orange
             ];
 
             final isSelected = _selectedIndex == index;
@@ -562,18 +559,18 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
                 margin: const EdgeInsets.symmetric(vertical: 7), // Increased margin slightly
                 decoration: BoxDecoration(
                   color: isSelected 
-                      ? colors[index].withValues(alpha: 0.25) // More subtle selected state
-                      : colors[index].withValues(alpha: 0.08), // Very subtle unselected
+                      ? colors[index].withValues(alpha: 0.25) // More visible when selected
+                      : colors[index].withValues(alpha: 0.08), // Subtle when not selected
                   borderRadius: BorderRadius.circular(20),
-                  border: isSelected 
-                      ? Border.all(color: colors[index].withValues(alpha: 0.6), width: 1.5) // Subtle border when selected
-                      : null,
+                  border: isSelected
+                    ? Border.all(color: colors[index].withValues(alpha: 0.6), width: 1.5)
+                    : Border.all(color: colors[index].withValues(alpha: 0.6), width: 0.5)
                 ),
                 child: Center(
                   child: Icon(
                     [Icons.local_fire_department, Icons.local_florist_rounded, Icons.home_rounded, Icons.task_alt_rounded, Icons.auto_awesome_rounded][index],
-                    color: isSelected ? colors[index] : colors[index].withValues(alpha: 0.7),
-                    size: isSelected ? 32 : 30,
+                    color: colors[index].withValues(alpha: 0.7),
+                    size: isSelected ? 33 : 30,
                   ),
                 ),
               ),

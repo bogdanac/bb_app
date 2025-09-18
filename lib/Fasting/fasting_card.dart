@@ -8,6 +8,7 @@ import 'fasting_notifier.dart';
 import '../Notifications/notification_service.dart';
 import 'fasting_utils.dart';
 import 'fasting_phases.dart';
+import '../MenstrualCycle/menstrual_cycle_utils.dart';
 
 class FastingCard extends StatefulWidget {
   final VoidCallback? onHiddenForToday;
@@ -29,6 +30,7 @@ class _FastingCardState extends State<FastingCard> {
   String recommendedFast = '';
   final FastingNotifier _notifier = FastingNotifier();
   final NotificationService _notificationService = NotificationService();
+  bool _hasLateLutealWarning = false;
 
   @override
   void initState() {
@@ -118,6 +120,22 @@ class _FastingCardState extends State<FastingCard> {
 
     // Load recommended fast
     await _loadRecommendedFast();
+
+    // Check for late luteal phase conflicts
+    await _checkLateLutealConflicts();
+  }
+
+  Future<void> _checkLateLutealConflicts() async {
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      // Check if today's fast conflicts with late luteal phase
+      _hasLateLutealWarning = await MenstrualCycleUtils.isFastingConflictWithLateLuteal(today);
+
+    } catch (e) {
+      _hasLateLutealWarning = false;
+    }
   }
 
   // Save fasting state (sincronizat cu FastingScreen)
@@ -228,23 +246,50 @@ class _FastingCardState extends State<FastingCard> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8), // Reduced right padding for update button
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: isFasting 
-              ? AppColors.lightGreen.withValues(alpha: 0.15) // Green theme when fasting
-              : AppColors.pastelGreen.withValues(alpha: 0.15), // Green theme when not fasting
+          color: AppColors.homeCardBackground, // Home card background
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Small late luteal phase warning
+            if (_hasLateLutealWarning && !isFasting) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.orange.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_rounded, color: AppColors.orange, size: 16),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Late luteal phase - may add extra stress',
+                        style: TextStyle(
+                          color: AppColors.orange,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             if (isFasting) ...[
               // Progress section when fasting
               Row(
                 children: [
                   Icon(
                     Icons.local_fire_department,
-                    color: AppColors.lightGreen,
+                    color: AppColors.yellow,
                     size: 24,
                   ),
                   const SizedBox(width: 12),
@@ -254,7 +299,7 @@ class _FastingCardState extends State<FastingCard> {
                       children: [
                         Text(
                           '${FastingUtils.formatDuration(fastingDuration)} / $currentFastType',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                         ),
                         if (fastingEndTime != null)
                           Text(
@@ -274,7 +319,7 @@ class _FastingCardState extends State<FastingCard> {
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
                   value: _getProgress(),
-                  backgroundColor: AppColors.grey.withValues(alpha: 0.2),
+                  backgroundColor: AppColors.appBackground,
                   valueColor: AlwaysStoppedAnimation<Color>(_getCurrentPhaseColor()),
                   minHeight: 12,
                 ),
@@ -285,31 +330,31 @@ class _FastingCardState extends State<FastingCard> {
                 children: [
                   Icon(
                     Icons.restaurant_menu,
-                    color: AppColors.pastelGreen,
+                    color: AppColors.yellow,
                     size: 24,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: recommendedFast.isNotEmpty
                     ? Text(
-                        'Start fast $recommendedFast',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        recommendedFast,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                       )
                     : const Text(
                         'No fast today',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.white70),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.white70),
                           ),
                   ),
                   if (recommendedFast.isNotEmpty) ...[
                     ElevatedButton(
                       onPressed: _startFast,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.lightGreen,
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.yellow,
+                        foregroundColor: Colors.black54,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        padding: const EdgeInsets.fromLTRB(0, 4, 4, 8),
+                        padding: const EdgeInsets.fromLTRB(0, 8, 4, 8),
                         minimumSize: const Size(65, 35),
                       ),
                       child: Row(
@@ -317,13 +362,13 @@ class _FastingCardState extends State<FastingCard> {
                         children: [
                           const Icon(Icons.play_arrow_rounded, size: 16),
                           const SizedBox(width: 2), // Closer spacing
-                          const Text('Start', style: TextStyle(fontSize: 16)),
+                          const Text('Start', style: TextStyle(fontSize: 15)),
                         ],
                       ),
                     ),
                     // Not Today button inline with Start button
                     if (widget.onHiddenForToday != null) ...[
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 4),
                       OutlinedButton(
                         onPressed: widget.onHiddenForToday,
                         style: OutlinedButton.styleFrom(

@@ -5,12 +5,12 @@ import 'package:intl/intl.dart';
 import 'package:bb_app/Routines/routine_data_models.dart';
 import '../Notifications/notification_service.dart';
 import 'routine_widget_service.dart';
+import 'routine_progress_service.dart';
 
 class RoutineService {
   static const String _routinesKey = 'routines';
   static const String _morningRoutineProgressPrefix = 'morning_routine_progress_';
   static const String _morningRoutineLastDateKey = 'morning_routine_last_date';
-  static const String _activeRoutineOverrideKey = 'active_routine_override';
 
   /// Get today's date in yyyy-MM-dd format
   static String getTodayString() {
@@ -33,7 +33,16 @@ class RoutineService {
   /// Load all routines from SharedPreferences
   static Future<List<Routine>> loadRoutines() async {
     final prefs = await SharedPreferences.getInstance();
-    final routinesJson = prefs.getStringList(_routinesKey) ?? [];
+    List<String> routinesJson;
+    try {
+      routinesJson = prefs.getStringList(_routinesKey) ?? [];
+    } catch (e) {
+      if (kDebugMode) {
+        print('Warning: Routines data type mismatch, clearing corrupted data');
+      }
+      await prefs.remove(_routinesKey);
+      routinesJson = [];
+    }
 
     if (routinesJson.isEmpty) {
       // Return default morning routine
@@ -83,134 +92,89 @@ class RoutineService {
     }
   }
 
-  /// Set a routine as active for today (manual override)
-  static Future<void> setActiveRoutineForToday(String routineId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final today = getEffectiveDate();
-    
-    final overrideData = {
-      'routineId': routineId,
-      'date': today,
-    };
-    
-    await prefs.setString(_activeRoutineOverrideKey, jsonEncode(overrideData));
-  }
 
-  /// Clear the active routine override
-  static Future<void> clearActiveRoutineOverride() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_activeRoutineOverrideKey);
-  }
-
-  /// Get the overridden active routine for today
-  static Future<String?> getActiveRoutineOverride() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final overrideJson = prefs.getString(_activeRoutineOverrideKey);
-      
-      if (overrideJson == null) return null;
-      
-      try {
-        final overrideData = jsonDecode(overrideJson);
-        final savedDate = overrideData['date'];
-        final today = getEffectiveDate();
-        
-        if (savedDate == today) {
-          return overrideData['routineId'];
-        } else {
-          // Override is from a different effective day (after 2 AM), clear it
-          await clearActiveRoutineOverride();
-          return null;
-        }
-      } catch (jsonError) {
-        if (kDebugMode) {
-          print('Error parsing override JSON: $jsonError');
-        }
-        // Clear corrupted data
-        await clearActiveRoutineOverride();
-        return null;
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error in getActiveRoutineOverride: $e');
-      }
-      return null;
-    }
-  }
-
-  /// Find morning routine from a list of routines that is active today
-  static Future<Routine?> findMorningRoutine(List<Routine> routines) async {
+  /// Get the currently active routine (unified method for all screens)
+  /// This method considers:
+  /// 1. Routine with progress today (in-progress or has saved progress)
+  /// 2. Routines scheduled for today
+  /// 3. Fallback logic
+  static Future<Routine?> getCurrentActiveRoutine(List<Routine> routines) async {
     try {
       if (routines.isEmpty) return null;
-      
-      // Check if there's a manual override for today
-      final overrideRoutineId = await getActiveRoutineOverride();
-      if (overrideRoutineId != null && overrideRoutineId.isNotEmpty) {
+
+      // First priority: Check if there's a routine with progress today
+      final inProgressRoutineId = await RoutineProgressService.getInProgressRoutineId();
+      if (inProgressRoutineId != null) {
         try {
-          final overrideRoutine = routines.firstWhere(
-            (routine) => routine.id == overrideRoutineId,
+          final inProgressRoutine = routines.firstWhere(
+            (routine) => routine.id == inProgressRoutineId,
           );
-          return overrideRoutine;
+          return inProgressRoutine;
         } catch (e) {
-          if (kDebugMode) {
-            print('Override routine with ID $overrideRoutineId not found, falling back to normal logic');
-          }
-          // Clear the invalid override
-          await clearActiveRoutineOverride();
+          // In-progress routine not found, clear the stale reference
+          await RoutineProgressService.clearInProgressStatus();
         }
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error checking routine override: $e');
+
+      // Check all routines for any with progress today
+      for (final routine in routines) {
+        final progress = await RoutineProgressService.loadRoutineProgress(routine.id);
+        if (progress != null) {
+          final completedSteps = List<bool>.from(progress['completedSteps'] ?? []);
+          final allCompleted = completedSteps.isNotEmpty && completedSteps.every((step) => step);
+          if (!allCompleted) {
+            return routine;
+          }
+        }
       }
-    }
-    
-    final now = DateTime.now();
-    final today = now.weekday; // 1=Monday, 7=Sunday
-    
-    // First, find all morning routines that are active today
-    final activeMorningRoutines = routines.where((routine) =>
-      routine.title.toLowerCase().contains('morning') && 
-      routine.activeDays.contains(today)
-    ).toList();
-    
-    if (activeMorningRoutines.isNotEmpty) {
-      return activeMorningRoutines.first;
-    }
-    
-    // If no active morning routine found, look for any routine active today
-    final anyActiveRoutine = routines.where((routine) =>
-      routine.activeDays.contains(today)
-    ).toList();
-    
-    if (anyActiveRoutine.isNotEmpty) {
-      return anyActiveRoutine.first;
-    }
-    
-    // Fallback to first morning routine regardless of day
-    if (routines.isEmpty) {
-      // Return a default routine if none exist
-      return Routine(
-        id: 'default',
-        title: 'No Routine',
-        items: [],
-        reminderEnabled: false,
-        activeDays: {},
-      );
-    }
-    
-    try {
-      return routines.firstWhere(
-        (routine) => routine.title.toLowerCase().contains('morning'),
-        orElse: () => routines.first,
-      );
+
+      // Second priority: Find routines scheduled for today
+      final now = DateTime.now();
+      final today = now.weekday; // 1=Monday, 7=Sunday
+
+      // Find morning routines that are active today
+      final activeMorningRoutines = routines.where((routine) =>
+        routine.title.toLowerCase().contains('morning') &&
+        routine.activeDays.contains(today)
+      ).toList();
+
+      if (activeMorningRoutines.isNotEmpty) {
+        return activeMorningRoutines.first;
+      }
+
+      // Find any routine active today
+      final anyActiveRoutine = routines.where((routine) =>
+        routine.activeDays.contains(today)
+      ).toList();
+
+      if (anyActiveRoutine.isNotEmpty) {
+        return anyActiveRoutine.first;
+      }
+
+      // Third priority: Fallback to first morning routine regardless of day
+      try {
+        return routines.firstWhere(
+          (routine) => routine.title.toLowerCase().contains('morning'),
+          orElse: () => routines.first,
+        );
+      } catch (e) {
+        return routines.isNotEmpty ? routines.first : null;
+      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error in final fallback routine selection: $e');
+        print('Error in getCurrentActiveRoutine: $e');
       }
       return routines.isNotEmpty ? routines.first : null;
     }
   }
+
+  /// Find morning routine from a list of routines that is active today
+  /// @deprecated Use getCurrentActiveRoutine instead for consistency
+  static Future<Routine?> findMorningRoutine(List<Routine> routines) async {
+    // Just delegate to the new unified method
+    return getCurrentActiveRoutine(routines);
+  }
+
 
   /// Save morning routine progress for today
   static Future<void> saveMorningRoutineProgress({

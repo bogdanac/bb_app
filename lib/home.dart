@@ -15,6 +15,8 @@ import 'package:bb_app/Habits/habit_service.dart';
 import 'package:bb_app/Notifications/notification_service.dart';
 import 'package:bb_app/FoodTracking/food_tracking_card.dart';
 import 'package:bb_app/home_settings_screen.dart';
+import 'package:bb_app/Data/backup_service.dart';
+import 'package:bb_app/Data/backup_screen.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 
@@ -35,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isLoading = true;
   bool _isDisposed = false;
   Timer? _waterSyncTimer;
+  bool _backupOverdue = false;
 
   // Method channel for communicating with Android widget
   static const platform = MethodChannel('com.bb.bb_app/water_widget');
@@ -50,6 +53,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initializeData();
+    _checkBackupStatus();
     _startWaterSyncTimer();
   }
 
@@ -64,6 +68,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _initializeData() async {
     try {
       await _loadWaterIntake();
+      await _initializeWaterAmountSetting();
       _checkFastingVisibility();
       _checkMorningRoutineVisibility();
       await _checkHabitCardVisibility();
@@ -77,12 +82,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         });
       }
     } catch (e) {
-      debugPrint('Error initializing home data: $e');
+      debugPrint('ERROR initializing home data: $e');
       if (!_isDisposed && mounted) {
         setState(() {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _initializeWaterAmountSetting() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Initialize water amount setting if it doesn't exist
+      if (!prefs.containsKey('water_amount_per_tap')) {
+        debugPrint('Initializing water amount setting to default 125ml');
+        await prefs.setInt('water_amount_per_tap', 125);
+        // Also save with flutter. prefix for widget compatibility
+        await prefs.setInt('flutter.water_amount_per_tap', 125);
+      }
+    } catch (e) {
+      debugPrint('ERROR initializing water amount setting: $e');
     }
   }
 
@@ -105,6 +126,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _checkBackupStatus() async {
+    try {
+      final backupStatus = await BackupService.getDetailedBackupStatus();
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _backupOverdue = backupStatus['any_overdue'] ?? false;
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ERROR checking backup status: $e');
+      }
+      // Don't show warning icon for technical errors - only for actual overdue backups
+      // User can still access backup screen via settings if needed
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _backupOverdue = false; // Don't show false alarms
+        });
+      }
+    }
+  }
+
   // This method is called when the app comes back to foreground
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -113,6 +156,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _loadWaterIntake();
       // Refresh the menstrual cycle card when returning to the app
       _refreshMenstrualCycleData();
+      // Refresh backup status when returning to the app
+      _checkBackupStatus();
       // Force refresh of all home screen widgets including tasks
       setState(() {});
       debugPrint('App resumed - refreshed all home screen data');
@@ -199,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         });
       }
     } catch (e) {
-      debugPrint('Error loading water intake: $e');
+      debugPrint('ERROR loading water intake: $e');
     }
   }
 
@@ -225,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       return false; // No reset needed
     } catch (e) {
-      debugPrint('Error parsing last reset date: $e');
+      debugPrint('ERROR parsing last reset date: $e');
       return false; // In case of error, don't reset to preserve data
     }
   }
@@ -398,7 +443,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           await calendarState.refreshEvents();
         }
       } catch (e) {
-        debugPrint('Error refreshing calendar events: $e');
+        debugPrint('ERROR refreshing calendar events: $e');
       }
 
       // Check and update other sections
@@ -420,7 +465,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       debugPrint('Manual refresh completed successfully');
     } catch (e) {
-      debugPrint('Error refreshing data: $e');
+      debugPrint('ERROR refreshing data: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -437,8 +482,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final prefs = await SharedPreferences.getInstance();
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      // Get customizable water amount
+      final waterAmountPerTap = prefs.getInt('water_amount_per_tap') ?? 125;
+
       final oldIntake = waterIntake;
-      final newIntake = waterIntake + 125;
+      final newIntake = waterIntake + waterAmountPerTap;
       const int goal = 1500;
 
       if (!_isDisposed && mounted) {
@@ -480,7 +529,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await notificationService.checkAndCancelWaterNotifications(newIntake);
       }
     } catch (e) {
-      debugPrint('Error adding water: $e');
+      debugPrint('ERROR adding water: $e');
     }
   }
 
@@ -530,7 +579,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error in _forceShowMorningRoutine: $e');
+        print('ERROR in _forceShowMorningRoutine: $e');
       }
     }
 
@@ -554,7 +603,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return Scaffold(
         appBar: AppBar(
           title: const Text('BBetter',
-              style: TextStyle(fontWeight: FontWeight.w600)),
+              style: TextStyle(fontWeight: FontWeight.w500)),
           backgroundColor: AppColors.transparent,
         ),
         body: const Center(
@@ -568,9 +617,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         title: const Text('bbetter',
-            style: TextStyle(fontWeight: FontWeight.w600)),
+            style: TextStyle(fontWeight: FontWeight.w500)),
         backgroundColor: AppColors.transparent,
         actions: [
+          if (_backupOverdue)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: IconButton(
+                icon: const Icon(Icons.backup_outlined, color: Colors.orange),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const BackupScreen(),
+                    ),
+                  ).then((_) {
+                    // Refresh backup status when returning from backup screen
+                    _checkBackupStatus();
+                  });
+                },
+                tooltip: 'Backup Overdue - Tap to backup your data',
+              ),
+            ),
           if (kDebugMode)
             Padding(
               padding: const EdgeInsets.only(right: 4),

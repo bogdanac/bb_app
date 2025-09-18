@@ -1,0 +1,446 @@
+# Tasks System Documentation
+
+## Table of Contents
+1. [Architecture Overview](#architecture-overview)
+2. [Data Models](#data-models)
+3. [Core Services](#core-services)
+4. [UI Components](#ui-components)
+5. [Business Logic](#business-logic)
+6. [User Workflows](#user-workflows)
+7. [Features](#features)
+8. [Integration Points](#integration-points)
+
+## Architecture Overview
+
+The Tasks system follows a layered architecture with clear separation of concerns:
+
+```
+┌─────────────────────────────────────────┐
+│                UI Layer                 │
+├─────────────────────────────────────────┤
+│ • TodoScreen (main interface)           │
+│ • DailyTasksCard (home widget)         │
+│ • TaskEditScreen (CRUD operations)     │
+│ • TaskCard (individual task display)   │
+└─────────────────────────────────────────┘
+                    │
+┌─────────────────────────────────────────┐
+│              Service Layer              │
+├─────────────────────────────────────────┤
+│ • TaskService (business logic)          │
+│ • TaskCardUtils (display utilities)    │
+│ • NotificationService (reminders)      │
+└─────────────────────────────────────────┘
+                    │
+┌─────────────────────────────────────────┐
+│               Data Layer                │
+├─────────────────────────────────────────┤
+│ • Task (main entity)                    │
+│ • TaskCategory (organization)           │
+│ • TaskRecurrence (scheduling)           │
+│ • SharedPreferences (persistence)      │
+└─────────────────────────────────────────┘
+```
+
+## Data Models
+
+### Task (`tasks_data_models.dart`)
+
+The core entity representing a user task.
+
+```dart
+class Task {
+  final String id;              // Unique identifier
+  String title;                 // Task name
+  String description;           // Optional details
+  List<String> categoryIds;     // Associated categories
+  DateTime? deadline;           // Hard deadline
+  DateTime? scheduledDate;      // When task is scheduled for (recurring tasks)
+  DateTime? reminderTime;       // Notification time
+  bool isImportant;            // Priority flag
+  TaskRecurrence? recurrence;   // Recurring pattern
+  bool isCompleted;            // Completion status
+  DateTime? completedAt;        // Completion timestamp
+  DateTime createdAt;          // Creation timestamp
+}
+```
+
+**Key Methods:**
+- `isDueToday()` - Determines if task should appear today based on priority logic
+- `getNextDueDate()` - Calculates next occurrence for recurring tasks
+
+**Priority Logic (in `isDueToday()`):**
+1. **Deadline** (highest priority) - Tasks with deadlines today or overdue
+2. **ScheduledDate** - Tasks explicitly scheduled for today
+3. **Recurrence** - Recurring tasks due today (only if no scheduledDate)
+4. **ReminderTime** - Tasks with reminders set for today
+
+### TaskCategory (`tasks_data_models.dart`)
+
+Organizational structure for grouping tasks.
+
+```dart
+class TaskCategory {
+  final String id;
+  String name;
+  Color color;
+  int order;                   // Display priority (lower = higher priority)
+}
+```
+
+### TaskRecurrence (`tasks_data_models.dart`)
+
+Complex recurring pattern definitions supporting multiple recurrence types.
+
+```dart
+class TaskRecurrence {
+  final List<RecurrenceType> types;  // Multiple recurrence patterns
+  final int interval;                // Frequency multiplier
+  final List<int> weekDays;         // Weekly: days of week (1-7)
+  final int? dayOfMonth;            // Monthly: specific day
+  final bool isLastDayOfMonth;      // Monthly: last day option
+  final DateTime? startDate;        // When pattern begins
+  final DateTime? endDate;          // When pattern ends
+  final int? phaseDay;              // Menstrual cycle: specific day in phase
+  final int? daysAfterPeriod;       // Menstrual cycle: days after period
+  final TimeOfDay? reminderTime;    // Default reminder time
+}
+```
+
+**Supported Recurrence Types:**
+- `daily` - Every N days
+- `weekly` - Specific days of week
+- `monthly` - Specific day of month or last day
+- `yearly` - Specific date annually
+- `menstrualPhase` - During menstrual cycle phases
+- `follicularPhase` - During follicular phase
+- `ovulationPhase` - During ovulation phase
+- `earlyLutealPhase` - During early luteal phase
+- `lateLutealPhase` - During late luteal phase
+- `menstrualStartDay` - Specific cycle day
+- `ovulationPeakDay` - Peak ovulation day
+- `custom` - Custom period-based patterns
+
+## Core Services
+
+### TaskService (`task_service.dart`)
+
+Central service managing all task operations with singleton pattern.
+
+**Key Responsibilities:**
+- Task CRUD operations
+- Priority calculation and sorting
+- Recurring task management
+- Notification scheduling
+- Global change notifications
+- Data persistence
+
+**Priority Scoring System:**
+The service uses a sophisticated point-based system to prioritize tasks:
+
+```dart
+// Scoring ranges (lower = higher priority):
+// 0-99:    Critical (overdue, due today, urgent reminders)
+// 100-199: High (important tasks, close deadlines)  
+// 200-299: Medium (scheduled tomorrow, upcoming deadlines)
+// 300+:    Low (distant tasks, postponed recurring tasks)
+```
+
+**Priority Calculation Logic:**
+1. **Overdue tasks** - 0-50 points (highest priority)
+2. **Due today** - 50-100 points
+3. **Important tasks** - 100 points
+4. **Scheduled tomorrow** - 25-300 points (time-contextual)
+5. **Recurring tasks** - Base priority with modifiers
+6. **Category priority** - Used as tie-breaker
+
+**Global Change Notification System:**
+```dart
+// Listeners for synchronizing UI across components
+void addTaskChangeListener(VoidCallback listener);
+void removeTaskChangeListener(VoidCallback listener);
+void _notifyTasksChanged(); // Called after task modifications
+```
+
+### TaskCardUtils (`task_card_utils.dart`)
+
+Utility class for task display and formatting.
+
+**Key Functions:**
+- `getTaskPriorityReason(Task)` - Determines display reason ("today", "overdue", etc.)
+- `getPriorityColor(String)` - Maps reasons to colors
+- `getScheduledDateText(Task, String)` - Formats scheduled dates with overlap prevention
+- `buildInfoChip()` - Creates consistent chip widgets
+- `getShortRecurrenceText()` - Abbreviated recurrence descriptions
+
+## UI Components
+
+### TodoScreen (`todo_screen.dart`)
+
+Main task management interface with full functionality.
+
+**Features:**
+- Task list with priority sorting
+- Category filtering
+- Menstrual cycle filtering
+- Completed task toggle
+- Pull-to-refresh (configurable)
+- Task randomizer
+- Full CRUD operations
+
+**Parameters:**
+- `showFilters` - Show/hide filter UI
+- `showAddButton` - Show/hide floating action button  
+- `enableRefresh` - Enable/disable pull-to-refresh
+- `onTasksChanged` - Callback for task modifications
+
+### DailyTasksCard (`daily_tasks_card.dart`)
+
+Compact task widget for home screen integration.
+
+**Features:**
+- Embedded TodoScreen with limited functionality
+- Fixed height (400px)
+- No filters or add button
+- Disabled refresh to prevent scroll conflicts
+- Automatic task loading and synchronization
+
+### TaskCard (`task_card_widget.dart`)
+
+Individual task display component with rich interactions.
+
+**Features:**
+- Bidirectional swipe gestures (80% threshold)
+  - Swipe right → Postpone task
+  - Swipe left → Delete task
+- Tap to edit
+- Checkbox for completion toggle
+- Information chips display:
+  1. Priority reason (highest priority)
+  2. Scheduled date (with overlap prevention)
+  3. Deadline (most important)
+  4. Reminder time
+  5. Recurrence pattern
+  6. Category tags
+- Important task highlighting
+- Visual completion states
+
+### TaskEditScreen (`task_edit_screen.dart`)
+
+Comprehensive task creation and editing interface.
+
+**Form Organization:**
+1. **Deadline** - Hard deadline with date/time picker
+2. **Reminder Time** - Notification scheduling
+3. **Important** - Priority toggle
+4. **Title** - Task name (required)
+5. **Description** - Optional details
+6. **Categories** - Multi-select organization
+7. **Recurrence** - Complex pattern definition
+
+**Validation:**
+- Title required
+- Date consistency checks
+- Recurrence pattern validation
+
+### RecurrenceDialog (`recurrence_dialog.dart`)
+
+Specialized dialog for defining recurring patterns.
+
+**Capabilities:**
+- Multiple recurrence type selection
+- Interval configuration
+- Start/end date settings
+- Menstrual cycle integration
+- Day-specific options
+- Reminder time for recurring tasks
+
+## Business Logic
+
+### Task Completion Flow
+
+**Regular Tasks:**
+1. Toggle completion status
+2. Set/clear completion timestamp
+3. Save to persistent storage
+4. Notify change listeners
+5. Update UI animations
+
+**Recurring Tasks:**
+1. Calculate next due date using recurrence pattern
+2. Reset completion status to false
+3. Update scheduledDate to next occurrence
+4. Preserve original deadline
+5. Adjust reminder time to new date
+6. Save updated task
+7. Notify listeners
+
+### Priority System
+
+The system uses contextual priority scoring that adapts to time of day:
+
+```dart
+int _getContextualTomorrowPriority(DateTime now) {
+  final hour = now.hour;
+  if (hour < 12) return 50;   // Morning: focus on today
+  if (hour < 18) return 150;  // Afternoon: light planning  
+  return 300;                 // Evening: prepare for tomorrow
+}
+```
+
+**Special Rules:**
+- Postponed recurring tasks get very low priority (30 points)
+- Important tasks get consistent boost (+100 points)
+- Menstrual cycle tasks get distance-based priority
+- Categories only used as tie-breakers in final sorting
+
+### Menstrual Cycle Integration
+
+Tasks can be tied to menstrual cycle phases for health tracking:
+
+**Supported Patterns:**
+- Phase-based (menstrual, follicular, ovulation, luteal phases)
+- Specific cycle days (day 1, ovulation peak)
+- Days after period ends
+- Combination patterns (e.g., "weekly on Mondays during ovulation phase")
+
+**Filtering:**
+- Flower icon toggles cycle-based filtering
+- When enabled: shows only current phase tasks + non-cycle tasks
+- When disabled: shows all tasks regardless of cycle phase
+
+## User Workflows
+
+### Creating a Task
+
+1. Tap floating action button or use task edit
+2. Fill required title field
+3. Optionally set deadline, reminder, importance
+4. Choose categories for organization
+5. Configure recurrence if needed
+6. Save - task appears in prioritized list
+
+### Completing a Task
+
+**One-time Task:**
+1. Tap checkbox or swipe to complete
+2. Task moves to completed section
+3. Completion animation plays
+4. Task hidden from main list
+
+**Recurring Task:**
+1. Tap checkbox to complete current occurrence
+2. Task automatically reschedules to next due date
+3. Appears as new incomplete task
+4. Maintains all original settings
+
+### Task Postponement
+
+1. Swipe right on task card (80% threshold required)
+2. Task scheduledDate moves to tomorrow
+3. Priority automatically adjusts
+4. Task appears lower in list until due
+
+### Category Management
+
+1. Access via category icon in TodoScreen
+2. Create categories with custom colors and names
+3. Assign order for priority tie-breaking
+4. Filter tasks by category using chip filters
+
+### Task Prioritization
+
+Tasks automatically sort by calculated priority considering:
+1. Urgency (overdue, due today)
+2. Importance (user-flagged important tasks)
+3. Time context (morning vs evening planning)
+4. Recurrence patterns
+5. Category organization
+
+## Features
+
+### Advanced Scheduling
+
+- **Multi-pattern Recurrence**: Tasks can have multiple recurrence types
+- **Smart Rescheduling**: Completed recurring tasks automatically find next occurrence
+- **Start/End Dates**: Recurrence patterns can be time-bounded
+- **Menstrual Integration**: Health-focused scheduling options
+
+### Intelligent Prioritization
+
+- **Context-Aware**: Priority changes based on time of day
+- **Multi-factor Scoring**: Considers deadlines, importance, recurrence, categories
+- **Tie-breaking**: Category order used for final sorting
+
+### Flexible Display
+
+- **Chip System**: Visual information tags with overlap prevention
+- **Scheduled Date Display**: Shows when recurring tasks are next due
+- **Priority Indicators**: Color-coded importance levels
+- **Completion Animation**: Smooth visual feedback
+
+### Integration Features
+
+- **Global Synchronization**: Changes propagate across all UI components
+- **Notification System**: Reminder scheduling with recurring task support  
+- **Home Screen Widget**: Compact daily task view
+- **Swipe Gestures**: Quick actions without menu navigation
+
+### Accessibility & UX
+
+- **Pull-to-Refresh Control**: Configurable per component
+- **Visual Feedback**: Haptic feedback and animations
+- **Consistent UI**: Standardized chip design and colors
+- **Error Handling**: Graceful failure with debug information
+
+## Integration Points
+
+### Home Screen
+
+- `DailyTasksCard` provides compact task overview
+- Integrates with home screen refresh functionality
+- Shows top priority tasks only
+- Links to full TodoScreen for detailed management
+
+### Notifications
+
+- `NotificationService` handles reminder scheduling
+- Supports both one-time and recurring reminders
+- Calculates next reminder times for recurring tasks
+- Maintains notification consistency across app lifecycle
+
+### Menstrual Cycle System
+
+- Tasks can be filtered by cycle phase
+- Recurrence patterns support cycle-based scheduling
+- Integration with menstrual cycle tracking
+- Phase-aware task prioritization
+
+### Data Persistence
+
+- `SharedPreferences` for local storage
+- JSON serialization for complex data structures
+- Automatic migration for data model changes
+- Error recovery and fallback mechanisms
+
+---
+
+## File Structure
+
+```
+lib/Tasks/
+├── tasks_data_models.dart      # Core data structures
+├── task_service.dart          # Business logic service
+├── task_card_utils.dart       # Display utilities
+├── todo_screen.dart           # Main task interface
+├── daily_tasks_card.dart      # Home widget
+├── task_card_widget.dart      # Individual task display
+├── task_edit_screen.dart      # Task creation/editing
+├── recurrence_dialog.dart     # Recurrence configuration
+├── task_categories_screen.dart # Category management
+├── category_edit_dialog.dart   # Category editing
+├── task_completion_animation.dart # Visual feedback
+└── task_widget_service.dart    # Widget-specific services
+```
+
+This documentation covers the complete Tasks system architecture, from data models to user interactions, providing a comprehensive reference for understanding and extending the functionality.
