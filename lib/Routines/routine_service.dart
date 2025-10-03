@@ -1,33 +1,25 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 import 'package:bb_app/Routines/routine_data_models.dart';
-import '../Notifications/notification_service.dart';
+import '../Notifications/centralized_notification_manager.dart';
 import 'routine_widget_service.dart';
 import 'routine_progress_service.dart';
+import '../shared/timezone_utils.dart';
 
 class RoutineService {
   static const String _routinesKey = 'routines';
-  static const String _morningRoutineProgressPrefix = 'morning_routine_progress_';
-  static const String _morningRoutineLastDateKey = 'morning_routine_last_date';
+  static const String _routineProgressPrefix = 'routine_progress_';
+  static const String _routineLastDateKey = 'routine_last_date';
 
   /// Get today's date in yyyy-MM-dd format
   static String getTodayString() {
-    return DateFormat('yyyy-MM-dd').format(DateTime.now());
+    return TimezoneUtils.getTodayString();
   }
 
   /// Get the effective date for routine purposes (after 2 AM)
   static String getEffectiveDate() {
-    final now = DateTime.now();
-    
-    // If it's before 2 AM, consider it as the previous day
-    if (now.hour < 2) {
-      final previousDay = now.subtract(const Duration(days: 1));
-      return DateFormat('yyyy-MM-dd').format(previousDay);
-    }
-    
-    return DateFormat('yyyy-MM-dd').format(now);
+    return TimezoneUtils.getEffectiveDateString();
   }
 
   /// Load all routines from SharedPreferences
@@ -45,11 +37,11 @@ class RoutineService {
     }
 
     if (routinesJson.isEmpty) {
-      // Return default morning routine
+      // Return default routine
       return [
         Routine(
           id: '1',
-          title: 'Morning Routine',
+          title: 'Daily Routine',
           items: [
             RoutineItem(id: '1', text: '☀️ Stretch and breathe', isCompleted: false),
             RoutineItem(id: '2', text: '💧 Drink a glass of water', isCompleted: false),
@@ -76,20 +68,9 @@ class RoutineService {
     // Update Android widget
     await RoutineWidgetService.updateWidget();
     
-    // Update notification schedules
-    final notificationService = NotificationService();
-    for (final routine in routines) {
-      if (routine.reminderEnabled) {
-        await notificationService.scheduleRoutineNotification(
-          routine.id,
-          routine.title,
-          routine.reminderHour,
-          routine.reminderMinute,
-        );
-      } else {
-        await notificationService.cancelRoutineNotification(routine.id);
-      }
-    }
+    // Update notification schedules through centralized manager
+    final notificationManager = CentralizedNotificationManager();
+    await notificationManager.forceRescheduleAll();
   }
 
 
@@ -132,14 +113,13 @@ class RoutineService {
       final now = DateTime.now();
       final today = now.weekday; // 1=Monday, 7=Sunday
 
-      // Find morning routines that are active today
-      final activeMorningRoutines = routines.where((routine) =>
-        routine.title.toLowerCase().contains('morning') &&
+      // Find routines that are active today
+      final activeRoutines = routines.where((routine) =>
         routine.activeDays.contains(today)
       ).toList();
 
-      if (activeMorningRoutines.isNotEmpty) {
-        return activeMorningRoutines.first;
+      if (activeRoutines.isNotEmpty) {
+        return activeRoutines.first;
       }
 
       // Find any routine active today
@@ -151,12 +131,9 @@ class RoutineService {
         return anyActiveRoutine.first;
       }
 
-      // Third priority: Fallback to first morning routine regardless of day
+      // Third priority: Fallback to first routine regardless of day
       try {
-        return routines.firstWhere(
-          (routine) => routine.title.toLowerCase().contains('morning'),
-          orElse: () => routines.first,
-        );
+        return routines.first;
       } catch (e) {
         return routines.isNotEmpty ? routines.first : null;
       }
@@ -168,16 +145,16 @@ class RoutineService {
     }
   }
 
-  /// Find morning routine from a list of routines that is active today
+  /// Find routine from a list of routines that is active today
   /// @deprecated Use getCurrentActiveRoutine instead for consistency
-  static Future<Routine?> findMorningRoutine(List<Routine> routines) async {
+  static Future<Routine?> findRoutine(List<Routine> routines) async {
     // Just delegate to the new unified method
     return getCurrentActiveRoutine(routines);
   }
 
 
-  /// Save morning routine progress for today
-  static Future<void> saveMorningRoutineProgress({
+  /// Save routine progress for today
+  static Future<void> saveRoutineProgress({
     required int currentStepIndex,
     required List<RoutineItem> items,
   }) async {
@@ -191,24 +168,24 @@ class RoutineService {
       'lastUpdated': DateTime.now().toIso8601String(),
     };
 
-    await prefs.setString('$_morningRoutineProgressPrefix$today', jsonEncode(progressData));
-    await prefs.setString(_morningRoutineLastDateKey, today);
+    await prefs.setString('$_routineProgressPrefix$today', jsonEncode(progressData));
+    await prefs.setString(_routineLastDateKey, today);
     
     // Update Android widget with new progress
     await RoutineWidgetService.updateWidget();
   }
 
-  /// Load morning routine progress for today
-  static Future<Map<String, dynamic>?> loadMorningRoutineProgress() async {
+  /// Load routine progress for today
+  static Future<Map<String, dynamic>?> loadRoutineProgress() async {
     final prefs = await SharedPreferences.getInstance();
     final today = getTodayString();
-    final lastSavedDate = prefs.getString(_morningRoutineLastDateKey);
+    final lastSavedDate = prefs.getString(_routineLastDateKey);
     
     if (lastSavedDate != today) {
       return null; // Progress is from a different day
     }
     
-    final progressJson = prefs.getString('$_morningRoutineProgressPrefix$today');
+    final progressJson = prefs.getString('$_routineProgressPrefix$today');
     if (progressJson == null) {
       return null;
     }
@@ -216,12 +193,12 @@ class RoutineService {
     return jsonDecode(progressJson);
   }
 
-  /// Clear morning routine progress for today
-  static Future<void> clearMorningRoutineProgress() async {
+  /// Clear routine progress for today
+  static Future<void> clearRoutineProgress() async {
     final prefs = await SharedPreferences.getInstance();
     final today = getTodayString();
     
-    await prefs.remove('$_morningRoutineProgressPrefix$today');
-    await prefs.setString(_morningRoutineLastDateKey, today);
+    await prefs.remove('$_routineProgressPrefix$today');
+    await prefs.setString(_routineLastDateKey, today);
   }
 }

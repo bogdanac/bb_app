@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import 'food_tracking_service.dart';
 import 'food_tracking_data_models.dart';
+import '../shared/date_picker_utils.dart';
 
 class FoodTrackingHistoryScreen extends StatefulWidget {
   const FoodTrackingHistoryScreen({super.key});
@@ -15,8 +16,8 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   List<FoodEntry> _entries = [];
   bool _isLoading = true;
   Map<String, List<FoodEntry>> _groupedEntries = {};
-  List<Map<String, dynamic>> _weeklyStats = [];
-  bool _showWeeklyStats = false;
+  List<Map<String, dynamic>> _periodHistory = [];
+  bool _showPeriodHistory = false;
 
   @override
   void initState() {
@@ -27,11 +28,11 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   Future<void> _loadEntries() async {
     setState(() => _isLoading = true);
     final entries = await FoodTrackingService.getAllEntries();
-    final weeklyStats = await FoodTrackingService.getAllWeeklyStats();
+    final periodHistory = await FoodTrackingService.getPeriodHistory();
     _groupedEntries = _groupEntriesByDate(entries);
     setState(() {
       _entries = entries;
-      _weeklyStats = weeklyStats;
+      _periodHistory = periodHistory;
       _isLoading = false;
     });
   }
@@ -89,6 +90,54 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
       await FoodTrackingService.deleteEntry(entry.id);
       HapticFeedback.lightImpact();
       await _loadEntries();
+    }
+  }
+
+  Future<void> _showChangeDateDialog(FoodEntry entry) async {
+    final selectedDate = await DatePickerUtils.showStyledDatePicker(
+      context: context,
+      initialDate: entry.timestamp,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 30)),
+    );
+
+    if (selectedDate != null) {
+      await _changeEntryDate(entry, selectedDate);
+    }
+  }
+
+  Future<void> _changeEntryDate(FoodEntry entry, DateTime newDate) async {
+    // Create new entry with updated timestamp but keep same time
+    final newTimestamp = DateTime(
+      newDate.year,
+      newDate.month,
+      newDate.day,
+      entry.timestamp.hour,
+      entry.timestamp.minute,
+    );
+
+    final newEntry = FoodEntry(
+      id: '', // Will get new ID
+      type: entry.type,
+      timestamp: newTimestamp,
+    );
+
+    // Delete old entry and add new one
+    await FoodTrackingService.deleteEntry(entry.id);
+    await FoodTrackingService.addEntry(newEntry);
+
+    HapticFeedback.mediumImpact();
+    await _loadEntries();
+
+    if (mounted) {
+      final dateString = _formatDate(newTimestamp);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Food entry moved to $dateString'),
+          backgroundColor: AppColors.successGreen,
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -209,10 +258,22 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
               ),
             ),
             subtitle: Text(_formatTime(entry.timestamp)),
-            trailing: IconButton(
-              onPressed: () => _deleteEntry(entry),
-              icon: const Icon(Icons.delete_outline),
-              color: AppColors.deleteRed.withValues(alpha: 0.7),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: () => _showChangeDateDialog(entry),
+                  icon: const Icon(Icons.edit_calendar),
+                  color: AppColors.waterBlue.withValues(alpha: 0.7),
+                  tooltip: 'Change Date',
+                ),
+                IconButton(
+                  onPressed: () => _deleteEntry(entry),
+                  icon: const Icon(Icons.delete_outline),
+                  color: AppColors.deleteRed.withValues(alpha: 0.7),
+                  tooltip: 'Delete',
+                ),
+              ],
             ),
           ),
         ),
@@ -232,10 +293,22 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
             ),
           ),
           subtitle: Text(_formatTime(entry.timestamp)),
-          trailing: IconButton(
-            onPressed: () => _deleteEntry(entry),
-            icon: const Icon(Icons.delete_outline),
-            color: AppColors.deleteRed.withValues(alpha: 0.7),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                onPressed: () => _showChangeDateDialog(entry),
+                icon: const Icon(Icons.edit_calendar),
+                color: AppColors.waterBlue.withValues(alpha: 0.7),
+                tooltip: 'Change Date',
+              ),
+              IconButton(
+                onPressed: () => _deleteEntry(entry),
+                icon: const Icon(Icons.delete_outline),
+                color: AppColors.deleteRed.withValues(alpha: 0.7),
+                tooltip: 'Delete',
+              ),
+            ],
           ),
         ),
       ),
@@ -243,24 +316,24 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   }
 
   Widget _buildWeeklyStatsSection() {
-    if (_weeklyStats.isEmpty) return const SizedBox.shrink();
+    if (_periodHistory.isEmpty) return const SizedBox.shrink();
 
     return Column(
       children: [
         Card(
           margin: const EdgeInsets.all(16),
           child: ExpansionTile(
-            initiallyExpanded: _showWeeklyStats,
+            initiallyExpanded: _showPeriodHistory,
             onExpansionChanged: (expanded) {
-              setState(() => _showWeeklyStats = expanded);
+              setState(() => _showPeriodHistory = expanded);
             },
             title: const Text(
-              'Weekly Statistics',
+              'Period History',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            subtitle: Text('${_weeklyStats.length} weeks of data'),
+            subtitle: Text('${_periodHistory.length} periods completed'),
             children: [
-              ..._weeklyStats.map((week) => _buildWeeklyStatTile(week)),
+              ..._periodHistory.map((period) => _buildPeriodTile(period)),
               const SizedBox(height: 8),
             ],
           ),
@@ -269,16 +342,17 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     );
   }
 
-  Widget _buildWeeklyStatTile(Map<String, dynamic> week) {
-    final healthyPercentage = week['healthyPercentage'] as int;
-    final healthy = week['healthy'] as int;
-    final processed = week['processed'] as int;
-    final weekLabel = week['weekLabel'] as String;
+  Widget _buildPeriodTile(Map<String, dynamic> period) {
+    final percentage = period['percentage'] as int;
+    final healthy = period['healthy'] as int;
+    final processed = period['processed'] as int;
+    final periodLabel = period['periodLabel'] as String;
+    final frequency = period['frequency'] as String;
 
     Color statusColor;
-    if (healthyPercentage >= 80) {
+    if (percentage >= 80) {
       statusColor = AppColors.successGreen;
-    } else if (healthyPercentage >= 60) {
+    } else if (percentage >= 60) {
       statusColor = AppColors.orange;
     } else {
       statusColor = AppColors.red;
@@ -288,7 +362,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
       leading: CircleAvatar(
         backgroundColor: statusColor.withValues(alpha: 0.2),
         child: Text(
-          '$healthyPercentage%',
+          '$percentage%',
           style: TextStyle(
             color: statusColor,
             fontSize: 12,
@@ -296,8 +370,8 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
           ),
         ),
       ),
-      title: Text(weekLabel),
-      subtitle: Text('$healthy healthy, $processed processed'),
+      title: Text(periodLabel),
+      subtitle: Text('$healthy healthy, $processed processed • ${frequency == "monthly" ? "Monthly" : "Weekly"}'),
       trailing: Container(
         width: 60,
         height: 6,
@@ -307,7 +381,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
         ),
         child: FractionallySizedBox(
           alignment: Alignment.centerLeft,
-          widthFactor: healthyPercentage / 100,
+          widthFactor: percentage / 100,
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(3),
@@ -326,8 +400,9 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     final healthyPercentage = total > 0 ? (healthyCount / total * 100).round() : 0;
 
     return DragTarget<FoodEntry>(
-      onWillAccept: (entry) => entry != null,
-      onAccept: (entry) {
+      onWillAcceptWithDetails: (details) => true,
+      onAcceptWithDetails: (details) {
+        final entry = details.data;
         // Don't move if dropping on the same date
         final entryDateKey = _formatDate(entry.timestamp);
         if (entryDateKey != date) {
@@ -451,7 +526,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
                       'Track your food intake to maintain a healthy balance:\n\n'
                       '• Aim for 80% healthy foods\n'
                       '• Limit processed foods to 20%\n'
-                      '• Counts reset weekly\n'
+                      '• Counts reset monthly (configurable in settings)\n'
                       '• Swipe or tap delete to remove entries',
                     ),
                     actions: [

@@ -313,28 +313,50 @@ class RoutineWidgetProvider : AppWidgetProvider() {
             }
             
             // No override or override not found, use normal logic
+            // This mirrors the logic from Flutter's getCurrentActiveRoutine method
+
             val currentWeekday = getCurrentWeekday()
-            
-            // First, find all morning routines that are active today
+            val today = getTodayString()
+
+            // First priority: Check all routines for any with incomplete progress today
             for (routine in validRoutines) {
-                val routineTitle = routine.optString("title", "").lowercase()
-                val activeDays = routine.optJSONArray("activeDays")
-                
-                // Check if it's a morning routine and active today (case-insensitive)
-                if (routineTitle.contains("morning") && activeDays != null) {
-                    for (i in 0 until activeDays.length()) {
-                        val dayValue = activeDays.getInt(i)
-                        if (dayValue == currentWeekday) {
-                            return routine
+                val routineId = routine.optString("id", "")
+                if (routineId.isNotEmpty()) {
+                    val progressJson = prefs.getString("flutter.routine_progress_${routineId}_$today", null)
+                        ?: prefs.getString("flutter.morning_routine_progress_$today", null)
+
+                    if (progressJson != null) {
+                        try {
+                            val progress = JSONObject(progressJson)
+                            val completedSteps = progress.optJSONArray("completedSteps")
+                            val skippedSteps = progress.optJSONArray("skippedSteps")
+
+                            // Check if all steps are completed (not skipped)
+                            if (completedSteps != null) {
+                                var allCompleted = true
+                                for (i in 0 until completedSteps.length()) {
+                                    if (!completedSteps.optBoolean(i, false)) {
+                                        allCompleted = false
+                                        break
+                                    }
+                                }
+
+                                // If not all completed, this is the active routine
+                                if (!allCompleted) {
+                                    return routine
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Continue to next routine
                         }
                     }
                 }
             }
-            
-            // Fallback: find any routine active today
+
+            // Second priority: Find routines scheduled for today
             for (routine in validRoutines) {
                 val activeDays = routine.optJSONArray("activeDays")
-                
+
                 if (activeDays != null) {
                     for (i in 0 until activeDays.length()) {
                         if (activeDays.getInt(i) == currentWeekday) {
@@ -343,12 +365,9 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                     }
                 }
             }
-            
-            // Final fallback: return the first routine even if not active today
-            if (validRoutines.isNotEmpty()) {
-                val fallbackRoutine = validRoutines.first()
-                return fallbackRoutine
-            }
+
+            // No routine with progress or scheduled for today - return null
+            return null
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -441,13 +460,23 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 // Mark current step as completed
                 completedSteps[currentIndex] = true
                 skippedSteps[currentIndex] = false
-                
+
                 // Find next uncompleted step
                 var nextStepIndex = currentIndex + 1
                 while (nextStepIndex < items.length() && completedSteps[nextStepIndex]) {
                     nextStepIndex++
                 }
-                
+
+                // If we've gone past all steps, check for skipped steps to show again
+                if (nextStepIndex >= items.length()) {
+                    for (i in 0 until items.length()) {
+                        if (skippedSteps[i] && !completedSteps[i]) {
+                            nextStepIndex = i
+                            break
+                        }
+                    }
+                }
+
                 // Save progress
                 val progressData = JSONObject().apply {
                     put("currentStepIndex", nextStepIndex)
@@ -515,13 +544,23 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 
                 // Mark current step as skipped
                 skippedSteps[currentIndex] = true
-                
+
                 // Find next uncompleted step
                 var nextStepIndex = currentIndex + 1
                 while (nextStepIndex < items.length() && completedSteps[nextStepIndex]) {
                     nextStepIndex++
                 }
-                
+
+                // If we've gone past all steps, check for skipped steps to show again
+                if (nextStepIndex >= items.length()) {
+                    for (i in 0 until items.length()) {
+                        if (skippedSteps[i] && !completedSteps[i]) {
+                            nextStepIndex = i
+                            break
+                        }
+                    }
+                }
+
                 // Save progress
                 val progressData = JSONObject().apply {
                     put("currentStepIndex", nextStepIndex)

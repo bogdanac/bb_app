@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'routine_data_models.dart';
 import '../theme/app_colors.dart';
-import '../Notifications/notification_service.dart';
+import '../Notifications/centralized_notification_manager.dart';
 
 class RoutineReminderSettingsScreen extends StatefulWidget {
   final List<Routine> routines;
@@ -197,16 +197,9 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
   }
 
   void _saveSettings() async {
-    // Update notification schedules
-    final notificationService = NotificationService();
-    
-    for (final routine in _routines) {
-      if (routine.reminderEnabled) {
-        await _scheduleRoutineNotification(routine, notificationService);
-      } else {
-        await _cancelRoutineNotification(routine, notificationService);
-      }
-    }
+    // Update notification schedules through centralized manager
+    final notificationManager = CentralizedNotificationManager();
+    await notificationManager.forceRescheduleAll();
 
     widget.onSave(_routines);
     if (mounted) {
@@ -214,27 +207,4 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
     }
   }
 
-  Future<void> _scheduleRoutineNotification(Routine routine, NotificationService notificationService) async {
-    try {
-      await notificationService.scheduleRoutineNotification(
-        routine.id,
-        routine.title,
-        routine.reminderHour,
-        routine.reminderMinute,
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to schedule reminder for "${routine.title}"'),
-            backgroundColor: AppColors.warning,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _cancelRoutineNotification(Routine routine, NotificationService notificationService) async {
-    await notificationService.cancelRoutineNotification(routine.id);
-  }
 }

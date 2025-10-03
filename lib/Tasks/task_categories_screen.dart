@@ -32,6 +32,7 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
   void _addCategory() {
     showDialog(
       context: context,
+      useRootNavigator: true,
       builder: (context) => CategoryEditDialog(
         onSave: (name, color) {
           setState(() {
@@ -51,6 +52,7 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
   void _editCategory(TaskCategory category) {
     showDialog(
       context: context,
+      useRootNavigator: true,
       builder: (context) => CategoryEditDialog(
         initialName: category.name,
         initialColor: category.color,

@@ -67,6 +67,197 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
     }
   }
 
+  Future<void> _showRestartCycleDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.restart_alt, color: AppColors.orange, size: 28),
+            const SizedBox(width: 8),
+            const Text('Restart Cycle?'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to restart the current 21-day cycle for "${widget.habit!.name}"?',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.warning, color: Colors.orange, size: 16),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'This will:',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('• Clear all progress in the current cycle'),
+                  const Text('• Reset to day 1 of 21'),
+                  const Text('• Keep the same cycle number'),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Restart Cycle'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _restartCurrentCycle();
+    }
+  }
+
+  Future<void> _restartCurrentCycle() async {
+    if (widget.habit != null) {
+      // Clear all completed dates to restart the cycle
+      widget.habit!.completedDates.clear();
+
+      // Save the updated habit
+      await HabitService.updateHabit(widget.habit!);
+
+      setState(() {
+        // Trigger UI refresh
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cycle restarted for "${widget.habit!.name}"! Starting fresh from day 1.'),
+            backgroundColor: AppColors.orange,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showContinueToNextCycleDialog() async {
+    final nextCycle = widget.habit!.currentCycle + 1;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.arrow_forward, color: AppColors.successGreen, size: 28),
+            const SizedBox(width: 8),
+            Text('Continue to Cycle $nextCycle?'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Start cycle $nextCycle for "${widget.habit!.name}"?',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.successGreen.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.successGreen.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.info, color: AppColors.successGreen, size: 16),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'This will:',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text('• Start cycle $nextCycle'),
+                  const Text('• Clear current progress'),
+                  const Text('• Begin a fresh 21-day challenge'),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.successGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Start Cycle $nextCycle'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _continueToNextCycle();
+    }
+  }
+
+  Future<void> _continueToNextCycle() async {
+    if (widget.habit != null) {
+      // Use the existing method from habit data model
+      widget.habit!.continueToNextCycle();
+
+      // Save the updated habit
+      await HabitService.updateHabit(widget.habit!);
+
+      setState(() {
+        // Trigger UI refresh
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Started cycle ${widget.habit!.currentCycle} for "${widget.habit!.name}"! Let\'s build this habit! 🎯'),
+            backgroundColor: AppColors.successGreen,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _build21DayCalendar() {
     if (widget.habit == null) return const SizedBox.shrink();
 
@@ -347,6 +538,34 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
                             foregroundColor: Colors.white,
                           ),
                         ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _showRestartCycleDialog(),
+                              icon: const Icon(Icons.restart_alt, size: 18),
+                              label: const Text('Restart Cycle'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.orange,
+                                side: BorderSide(color: AppColors.orange),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _showContinueToNextCycleDialog(),
+                              icon: const Icon(Icons.arrow_forward, size: 18),
+                              label: Text('Cycle ${widget.habit!.currentCycle + 1}'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.successGreen,
+                                side: BorderSide(color: AppColors.successGreen),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),

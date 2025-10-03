@@ -97,7 +97,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
         decoration: BoxDecoration(
           color: isSelected 
               ? AppColors.yellow 
-              : AppColors.greyText,
+              : AppColors.normalCardBackground,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isSelected 

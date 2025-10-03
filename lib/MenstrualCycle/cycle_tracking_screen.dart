@@ -4,9 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'dart:math';
-import '../Notifications/notification_service.dart';
-import 'package:timezone/timezone.dart' as tz;
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../Notifications/centralized_notification_manager.dart';
 import 'menstrual_cycle_utils.dart';
 import 'cycle_calorie_settings_screen.dart';
 import 'intercourse_data_model.dart';
@@ -494,14 +492,6 @@ class _CycleScreenState extends State<CycleScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: IconButton(
-              icon: const Icon(Icons.refresh_rounded),
-              onPressed: _recalculateMenstrualPhaseTasks,
-              tooltip: 'Recalculate Phase Tasks',
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: IconButton(
               icon: const Icon(Icons.calendar_month_rounded),
               onPressed: () {
                 Navigator.push(
@@ -766,26 +756,28 @@ class _CycleScreenState extends State<CycleScreen> {
           ),
           const SizedBox(height: 12),
         ],
-        Row(
-          children: [
-            // End Period button
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: _isCurrentlyOnPeriod() ? () => _endPeriodOnDate(_selectedDate!) : null,
-                icon: const Icon(Icons.stop_rounded),
-                label: const Text('End Period'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isCurrentlyOnPeriod() ? AppColors.normalCardBackground : AppColors.lightRed,
-                  foregroundColor: AppColors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+        // Only show End Period button when currently on period
+        if (_isCurrentlyOnPeriod())
+          Row(
+            children: [
+              // End Period button
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _endPeriodOnDate(_selectedDate!),
+                  icon: const Icon(Icons.stop_rounded),
+                  label: const Text('End Period'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.normalCardBackground,
+                    foregroundColor: AppColors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
       ],
     );
   }
@@ -976,66 +968,9 @@ class _CycleScreenState extends State<CycleScreen> {
   }
 
   Future<void> _scheduleCycleNotifications() async {
-    if (_lastPeriodStart == null) return;
-
-    final now = DateTime.now();
-    final notificationService = NotificationService();
-
-    try {
-      // Cancel existing cycle notifications first to avoid duplicates
-      await notificationService.flutterLocalNotificationsPlugin.cancel(1001);
-      await notificationService.flutterLocalNotificationsPlugin.cancel(1002);
-      // Schedule ovulation notification (day before ovulation = day 13)
-      final ovulationDate = _lastPeriodStart!.add(const Duration(days: 13));
-      final ovulationNotificationDate = ovulationDate.subtract(const Duration(days: 1));
-      
-      if (ovulationNotificationDate.isAfter(now)) {
-        await notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
-          1001, // Unique ID for ovulation notification
-          'Ovulation Tomorrow! 🥚',
-          'Your ovulation window is starting tomorrow. Time to pay attention to your body!',
-          tz.TZDateTime.from(ovulationNotificationDate, tz.UTC),
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'cycle_reminders',
-              'Cycle Reminders',
-              channelDescription: 'Important menstrual cycle reminders',
-              importance: Importance.high,
-              priority: Priority.high,
-            ),
-          ),
-          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        );
-      }
-
-      // Schedule menstruation notification (day before expected period)
-      final nextPeriodDate = _lastPeriodStart!.add(Duration(days: _averageCycleLength));
-      final menstruationNotificationDate = nextPeriodDate.subtract(const Duration(days: 1));
-      
-      if (menstruationNotificationDate.isAfter(now)) {
-        await notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
-          1002, // Unique ID for menstruation notification
-          'Period Expected Tomorrow 🩸',
-          'Your period is expected to start tomorrow. Make sure you\'re prepared!',
-          tz.TZDateTime.from(menstruationNotificationDate, tz.UTC),
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'cycle_reminders',
-              'Cycle Reminders',
-              channelDescription: 'Important menstrual cycle reminders',
-              importance: Importance.high,
-              priority: Priority.high,
-            ),
-          ),
-          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        );
-      }
-      debugPrint('Cycle notifications scheduled successfully');
-    } catch (e) {
-      debugPrint('Error scheduling cycle notifications: $e');
-    }
+    // Delegate to centralized notification manager
+    final notificationManager = CentralizedNotificationManager();
+    await notificationManager.forceRescheduleAll();
   }
 
   Widget _buildStatItem(String label, String value, IconData icon, Color color) {

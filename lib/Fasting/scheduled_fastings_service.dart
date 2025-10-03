@@ -26,27 +26,32 @@ class ScheduledFastingsService {
     await prefs.setString(_scheduledFastingsKey, jsonString);
   }
 
-  /// Generate default schedule based on current logic (Fridays and 25th) with overlap prevention
+  /// Generate default schedule based on preferred day and 25th with overlap prevention
   static Future<List<ScheduledFasting>> generateDefaultSchedule() async {
     final List<ScheduledFasting> schedule = [];
     final now = DateTime.now();
     final endDate = DateTime(now.year, now.month + 2, now.day);
 
+    // Get preferred fasting days from settings
+    final prefs = await SharedPreferences.getInstance();
+    final preferredDay = prefs.getInt('preferred_fasting_day') ?? 5; // Default to Friday
+    final preferredMonthlyDay = prefs.getInt('preferred_monthly_fasting_day') ?? 25; // Default to 25th
+
     DateTime current = DateTime(now.year, now.month, now.day - 3); // Start from 3 days ago for grace period
     DateTime? lastFastEnd; // Track when the last fast ends
 
     while (current.isBefore(endDate)) {
-      final isFriday = current.weekday == 5;
-      final is25th = current.day == 25;
+      final isPreferredDay = current.weekday == preferredDay;
+      final isPreferredMonthlyDay = current.day == preferredMonthlyDay;
 
-      if (isFriday || is25th) {
+      if (isPreferredDay || isPreferredMonthlyDay) {
         // Check if we need to skip this date due to ongoing fast
         if (lastFastEnd != null && current.isBefore(lastFastEnd)) {
           current = current.add(const Duration(days: 1));
           continue; // Skip this date as we're still in a previous fast
         }
 
-        final (fastType, shouldSkipFriday) = _getSmartFastTypeForDate(current, isFriday, is25th, schedule);
+        final (fastType, shouldSkipPreferredDay) = _getSmartFastTypeForDate(current, isPreferredDay, isPreferredMonthlyDay, schedule, preferredDay, preferredMonthlyDay);
         
         if (fastType.isNotEmpty) {
           final newFast = ScheduledFasting(
@@ -62,13 +67,13 @@ class ScheduledFastingsService {
           // Update lastFastEnd to prevent overlaps
           lastFastEnd = current.add(newFast.duration);
           
-          // If we scheduled a long fast on 25th that covers Friday, mark it to skip Friday
-          if (is25th && shouldSkipFriday) {
-            // Find and remove any Friday fast that would overlap
-            schedule.removeWhere((fast) => 
-              fast.date.isAfter(current) && 
+          // If we scheduled a long fast on monthly day that covers preferred day, mark it to skip preferred day
+          if (isPreferredMonthlyDay && shouldSkipPreferredDay) {
+            // Find and remove any preferred day fast that would overlap
+            schedule.removeWhere((fast) =>
+              fast.date.isAfter(current) &&
               fast.date.isBefore(lastFastEnd!) &&
-              fast.date.weekday == 5
+              fast.date.weekday == preferredDay
             );
           }
         }
@@ -81,9 +86,9 @@ class ScheduledFastingsService {
     return schedule;
   }
 
-  /// Smart scheduling logic for a specific date - returns (fastType, shouldSkipFriday)
-  static (String, bool) _getSmartFastTypeForDate(DateTime date, bool isFriday, bool is25th, List<ScheduledFasting> existingSchedule) {
-    if (is25th) {
+  /// Smart scheduling logic for a specific date - returns (fastType, shouldSkipPreferredDay)
+  static (String, bool) _getSmartFastTypeForDate(DateTime date, bool isPreferredDay, bool isPreferredMonthlyDay, List<ScheduledFasting> existingSchedule, int preferredDay, int preferredMonthlyDay) {
+    if (isPreferredMonthlyDay) {
       final month = date.month;
       String longerFastType;
       if (month == 1 || month == 9) {
@@ -94,57 +99,57 @@ class ScheduledFastingsService {
         longerFastType = FastingUtils.monthlyFast;
       }
 
-      // Check if Friday is close (within the duration of this fast)
+      // Check if preferred day is close (within the duration of this fast)
       final fastDuration = FastingUtils.getFastDuration(longerFastType);
       final fastEndDate = date.add(fastDuration);
-      
-      // Check if there's a Friday within the fast duration
+
+      // Check if there's a preferred day within the fast duration
       DateTime checkDate = date.add(const Duration(days: 1));
-      bool willCoverFriday = false;
-      
+      bool willCoverPreferredDay = false;
+
       while (checkDate.isBefore(fastEndDate)) {
-        if (checkDate.weekday == 5) { // Friday
-          willCoverFriday = true;
+        if (checkDate.weekday == preferredDay) {
+          willCoverPreferredDay = true;
           break;
         }
         checkDate = checkDate.add(const Duration(days: 1));
       }
 
-      return (longerFastType, willCoverFriday);
+      return (longerFastType, willCoverPreferredDay);
     }
 
-    if (isFriday) {
-      final daysUntil25th = 25 - date.day;
+    if (isPreferredDay) {
+      final daysUntilMonthlyDay = preferredMonthlyDay - date.day;
       final nextMonth = date.month == 12 ? 1 : date.month + 1;
 
-      // Check if 25th of this month or next month is within 6 days
-      bool is25thClose = false;
-      
-      if (date.day <= 25) {
-        // 25th of this month
-        is25thClose = daysUntil25th <= 6;
+      // Check if preferred monthly day of this month or next month is within 6 days
+      bool isMonthlyDayClose = false;
+
+      if (date.day <= preferredMonthlyDay) {
+        // Monthly day is later this month
+        isMonthlyDayClose = daysUntilMonthlyDay <= 6;
       } else {
-        // 25th of next month
-        final nextMonth25th = DateTime(date.year, nextMonth, 25);
-        final daysToNextMonth25th = nextMonth25th.difference(date).inDays;
-        is25thClose = daysToNextMonth25th <= 6;
+        // Monthly day of next month
+        final nextMonthMonthlyDay = DateTime(date.year, nextMonth, preferredMonthlyDay);
+        final daysToNextMonthMonthlyDay = nextMonthMonthlyDay.difference(date).inDays;
+        isMonthlyDayClose = daysToNextMonthMonthlyDay <= 6;
       }
 
-      // If 25th is close, check if there's already a longer fast scheduled
-      if (is25thClose) {
-        final upcoming25th = date.day <= 25 
-            ? DateTime(date.year, date.month, 25)
-            : DateTime(date.year, nextMonth, 25);
-            
-        // Check if there's already a fast scheduled for that 25th
-        final existing25thFast = existingSchedule.any((fast) => 
-          fast.date.year == upcoming25th.year && 
-          fast.date.month == upcoming25th.month && 
-          fast.date.day == 25
+      // If monthly day is close, check if there's already a longer fast scheduled
+      if (isMonthlyDayClose) {
+        final upcomingMonthlyDay = date.day <= preferredMonthlyDay
+            ? DateTime(date.year, date.month, preferredMonthlyDay)
+            : DateTime(date.year, nextMonth, preferredMonthlyDay);
+
+        // Check if there's already a fast scheduled for that monthly day
+        final existingMonthlyFast = existingSchedule.any((fast) =>
+          fast.date.year == upcomingMonthlyDay.year &&
+          fast.date.month == upcomingMonthlyDay.month &&
+          fast.date.day == preferredMonthlyDay
         );
-        
-        if (existing25thFast) {
-          return ('', false); // Skip this Friday, 25th fast will handle it
+
+        if (existingMonthlyFast) {
+          return ('', false); // Skip this preferred day, monthly fast will handle it
         }
       }
 

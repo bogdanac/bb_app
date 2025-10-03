@@ -1,5 +1,6 @@
 #!/usr/bin/env dart
 
+// ignore: dangling_library_doc_comments
 /// Simple test runner script for backup system tests
 ///
 /// Usage:

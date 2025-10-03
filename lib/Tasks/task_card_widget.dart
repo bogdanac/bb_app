@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 import 'tasks_data_models.dart';
 import '../theme/app_colors.dart';
 import 'task_card_utils.dart';
@@ -33,6 +34,90 @@ class TaskCard extends StatefulWidget {
 class _TaskCardState extends State<TaskCard> {
   bool _isAtThreshold = false;
   bool _isCompleting = false;
+  bool _isHoldingForPostpone = false;
+  bool _isHoldingForDelete = false;
+  bool _actionExecuted = false; // Prevent gesture loops after action
+  bool _showPostponeConfirm = false;
+  bool _showDeleteConfirm = false;
+  Timer? _holdTimer;
+  Timer? _confirmTimer;
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    _confirmTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startHoldTimer(DismissDirection direction) {
+    // Don't start a new timer if one is already running
+    if (_holdTimer != null) return;
+
+    if (direction == DismissDirection.startToEnd && widget.onPostpone != null) {
+      setState(() => _isHoldingForPostpone = true);
+      _holdTimer = Timer(const Duration(seconds: 1), () {
+        if (mounted && _isHoldingForPostpone && _isAtThreshold) {
+          setState(() {
+            _isHoldingForPostpone = false;
+            _showPostponeConfirm = true; // Show confirmation message
+          });
+          _holdTimer?.cancel();
+          _holdTimer = null;
+
+          // Show confirmation for 1 second, then execute action
+          _confirmTimer = Timer(const Duration(seconds: 1), () {
+            if (mounted) {
+              setState(() {
+                _actionExecuted = true; // Mark action as executed
+                _showPostponeConfirm = false;
+              });
+              widget.onPostpone!();
+            }
+          });
+        }
+      });
+    } else if (direction == DismissDirection.endToStart) {
+      setState(() => _isHoldingForDelete = true);
+      _holdTimer = Timer(const Duration(seconds: 1), () {
+        if (mounted && _isHoldingForDelete && _isAtThreshold) {
+          setState(() {
+            _isHoldingForDelete = false;
+            _showDeleteConfirm = true; // Show confirmation message
+          });
+          _holdTimer?.cancel();
+          _holdTimer = null;
+
+          // Show confirmation for 1 second, then execute action
+          _confirmTimer = Timer(const Duration(seconds: 1), () {
+            if (mounted) {
+              setState(() {
+                _actionExecuted = true; // Mark action as executed
+                _showDeleteConfirm = false;
+              });
+              widget.onDelete();
+            }
+          });
+        }
+      });
+    }
+  }
+
+  void _cancelHoldTimer() {
+    _holdTimer?.cancel();
+    _confirmTimer?.cancel();
+    _holdTimer = null;
+    _confirmTimer = null;
+    if (mounted) {
+      setState(() {
+        _isAtThreshold = false;
+        _isHoldingForPostpone = false;
+        _isHoldingForDelete = false;
+        _showPostponeConfirm = false;
+        _showDeleteConfirm = false;
+        // Don't reset _actionExecuted here - it needs to stay true until swipe is released
+      });
+    }
+  }
 
   void _handleCompletion() {
     if (_isCompleting) return;
@@ -70,41 +155,45 @@ class _TaskCardState extends State<TaskCard> {
       key: ValueKey(widget.task.id),
       direction: widget.onPostpone != null ? DismissDirection.horizontal : DismissDirection.endToStart,
       dismissThresholds: widget.onPostpone != null ? const {
-        DismissDirection.endToStart: 0.8, // Require 80% swipe left to delete
-        DismissDirection.startToEnd: 0.8, // Require 80% swipe right to postpone
+        DismissDirection.endToStart: 0.7, // Lower threshold to make swiping easier
+        DismissDirection.startToEnd: 0.7, // Lower threshold for postpone
       } : const {
-        DismissDirection.endToStart: 0.8, // Only delete swipe for completed tasks
+        DismissDirection.endToStart: 0.7, // Only delete swipe for completed tasks
       },
       confirmDismiss: (direction) async {
-        return true; // Skip confirmation dialog
-      },
-      onDismissed: (direction) {
-        if (direction == DismissDirection.endToStart) {
-          debugPrint('=== SWIPE DELETE: ${widget.task.title} ===');
-          widget.onDelete();
-        } else if (direction == DismissDirection.startToEnd && widget.onPostpone != null) {
-          debugPrint('=== SWIPE POSTPONE: ${widget.task.title} ===');
-          widget.onPostpone!();
-        }
+        return false; // Never auto-dismiss, require manual hold confirmation
       },
       onUpdate: (details) {
-        // Visual feedback when reaching threshold
-        final threshold = 0.8;
+        final threshold = 0.7;
         final reachedThreshold = details.progress >= threshold;
 
-        if (reachedThreshold != _isAtThreshold) {
+        // Reset action flag when swipe is completely released
+        if (details.progress == 0 && _actionExecuted) {
           setState(() {
-            _isAtThreshold = reachedThreshold;
+            _actionExecuted = false;
           });
+        }
+
+        // When threshold reached, start hold detection
+        if (reachedThreshold && !_isAtThreshold && _holdTimer == null && !_actionExecuted) {
+          setState(() => _isAtThreshold = true);
+          _startHoldTimer(details.direction);
+        } else if (!reachedThreshold && _isAtThreshold && !_actionExecuted && !_showPostponeConfirm && !_showDeleteConfirm) {
+          // Cancel hold if swipe is released before threshold (but not if action was executed or confirmation is showing)
+          _cancelHoldTimer();
         }
       },
       background: widget.onPostpone != null ? Container(
         decoration: BoxDecoration(
-          color: _isAtThreshold ? AppColors.yellow : AppColors.yellow.withValues(alpha: 0.8),
+          color: _showPostponeConfirm
+              ? AppColors.successGreen
+              : _isHoldingForPostpone
+                  ? AppColors.yellow
+                  : AppColors.yellow.withValues(alpha: 0.8),
           borderRadius: BorderRadius.circular(16),
-          boxShadow: _isAtThreshold ? [
+          boxShadow: (_isHoldingForPostpone || _showPostponeConfirm) ? [
             BoxShadow(
-              color: AppColors.yellow.withValues(alpha: 0.6),
+              color: (_showPostponeConfirm ? AppColors.successGreen : AppColors.yellow).withValues(alpha: 0.6),
               blurRadius: 12,
               spreadRadius: 0,
             )
@@ -116,13 +205,21 @@ class _TaskCardState extends State<TaskCard> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              _isAtThreshold ? Icons.check_circle : Icons.schedule_rounded,
+              _showPostponeConfirm
+                  ? Icons.check_circle_rounded
+                  : _isHoldingForPostpone
+                      ? Icons.timer_rounded
+                      : Icons.schedule_rounded,
               color: Colors.white,
               size: 32,
             ),
             const SizedBox(height: 4),
             Text(
-              _isAtThreshold ? 'Ready!' : 'Postpone',
+              _showPostponeConfirm
+                  ? 'Postponed!'
+                  : _isHoldingForPostpone
+                      ? 'Hold to Postpone'
+                      : 'Postpone',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
@@ -134,11 +231,15 @@ class _TaskCardState extends State<TaskCard> {
       ) : Container(), // Empty container instead of null to satisfy Flutter requirement
       secondaryBackground: Container(
         decoration: BoxDecoration(
-          color: _isAtThreshold ? AppColors.deleteRed : AppColors.deleteRed.withValues(alpha: 0.8),
+          color: _showDeleteConfirm
+              ? AppColors.successGreen
+              : _isHoldingForDelete
+                  ? AppColors.deleteRed
+                  : AppColors.deleteRed.withValues(alpha: 0.8),
           borderRadius: BorderRadius.circular(16),
-          boxShadow: _isAtThreshold ? [
+          boxShadow: (_isHoldingForDelete || _showDeleteConfirm) ? [
             BoxShadow(
-              color: AppColors.deleteRed.withValues(alpha: 0.6),
+              color: (_showDeleteConfirm ? AppColors.successGreen : AppColors.deleteRed).withValues(alpha: 0.6),
               blurRadius: 12,
               spreadRadius: 0,
             )
@@ -150,13 +251,21 @@ class _TaskCardState extends State<TaskCard> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              _isAtThreshold ? Icons.delete_sweep : Icons.delete_rounded,
+              _showDeleteConfirm
+                  ? Icons.check_circle_rounded
+                  : _isHoldingForDelete
+                      ? Icons.timer_rounded
+                      : Icons.delete_rounded,
               color: Colors.white,
               size: 32,
             ),
             const SizedBox(height: 4),
             Text(
-              _isAtThreshold ? 'Ready!' : 'Delete',
+              _showDeleteConfirm
+                  ? 'Deleted!'
+                  : _isHoldingForDelete
+                      ? 'Hold to Delete'
+                      : 'Delete',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
@@ -172,7 +281,7 @@ class _TaskCardState extends State<TaskCard> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: widget.task.isImportant
-              ? BorderSide(color: AppColors.coral.withValues(alpha: 0.3), width: 1)
+              ? BorderSide(color: AppColors.coral.withValues(alpha: 0.3), width: 2)
               : BorderSide.none,
         ),
         child: InkWell(

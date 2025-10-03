@@ -124,6 +124,31 @@ void main() {
         expect(status['days_since_manual'], 15);
         expect(status['days_since_auto'], 10);
       });
+
+      test('should skip auto backup when disabled', () async {
+        SharedPreferences.setMockInitialValues({
+          'auto_backup_enabled': false,
+        });
+
+        // This should complete without error and not create a backup
+        await BackupService.performAutoBackup();
+
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getString('last_auto_backup'), isNull);
+      });
+
+      test('should attempt auto backup when enabled but rollback on failure', () async {
+        SharedPreferences.setMockInitialValues({
+          'auto_backup_enabled': true,
+        });
+
+        // This should attempt the backup, set timestamp, but then rollback when export fails
+        await BackupService.performAutoBackup();
+
+        final prefs = await SharedPreferences.getInstance();
+        // Should have rolled back the timestamp since backup failed in test environment
+        expect(prefs.getString('last_auto_backup'), isNull);
+      });
     });
 
     group('Backup File Paths', () {

@@ -19,7 +19,7 @@ class _BackupScreenState extends State<BackupScreen> {
   Map<String, dynamic>? _detailedBackupStatus;
   bool _isLoading = true;
   bool _autoBackupEnabled = true;
-  int _overdueThreshold = 7; // Days
+  int _overdueThreshold = 6; // Days
   DateTime? _lastSessionBackup; // Track backup performed in current session
 
   @override
@@ -338,7 +338,14 @@ class _BackupScreenState extends State<BackupScreen> {
       final date = DateTime.parse(isoString);
       final now = DateTime.now();
       final difference = now.difference(date).inDays;
-      
+
+      // Debug timestamp issues
+      if (difference < 0) {
+        debugPrint('WARNING: Backup date is in the future! Date: $date, Now: $now, Difference: $difference days');
+        // If date is in the future, show it as "Today" with time
+        return 'Today ${DateFormat('HH:mm').format(date)} (⚠️ Future timestamp)';
+      }
+
       if (difference == 0) {
         return 'Today ${DateFormat('HH:mm').format(date)}';
       } else if (difference == 1) {
@@ -361,6 +368,59 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 
   Future<void> _processImport(String filePath) async {
+    // Show confirmation dialog first
+    final fileName = filePath.split(Platform.pathSeparator).last;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.dialogBackground,
+        title: const Row(
+          children: [
+            Icon(Icons.warning_rounded, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('⚠️ Import Backup?', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This will REPLACE all your current app data with the backup data.',
+              style: TextStyle(color: AppColors.white70, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'File: $fileName',
+              style: const TextStyle(color: Colors.blue, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Your current data will be lost! Make sure you have a recent backup of your current data before proceeding.',
+              style: TextStyle(color: Colors.red, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Import & Replace Data'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     setState(() {
       _isLoading = true;
     });
@@ -438,6 +498,12 @@ class _BackupScreenState extends State<BackupScreen> {
         if (filePath != null) {
           // Directly share the file
           await _shareBackupFile(filePath);
+
+          // Refresh backup info after sharing to update cloud share status
+          await _loadBackupInfo();
+          if (mounted) {
+            setState(() {}); // Force UI refresh
+          }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -720,104 +786,6 @@ class _BackupScreenState extends State<BackupScreen> {
                         ),
                       ),
                     ),
-
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: Column(
-                          children: [
-                            SwitchListTile(
-                              title: const Text('Automatic Daily Backups'),
-                              subtitle: const Text('Auto-backup every day at midnight'),
-                              value: _autoBackupEnabled,
-                              onChanged: (value) async {
-                                setState(() {
-                                  _autoBackupEnabled = value;
-                                });
-                                // Save this setting
-                                final prefs = await SharedPreferences.getInstance();
-                                await prefs.setBool('auto_backup_enabled', value);
-                              },
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            const Divider(),
-                            ListTile(
-                              title: const Text('Overdue Warning Threshold'),
-                              subtitle: Text('Show warnings after $_overdueThreshold days'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.remove),
-                                    onPressed: _overdueThreshold > 1 ? () async {
-                                      final newThreshold = _overdueThreshold - 1;
-                                      await BackupService.setBackupOverdueThreshold(newThreshold);
-
-                                      // Just update the threshold and recalculate overdue status
-                                      final updatedStatus = await BackupService.getDetailedBackupStatus();
-                                      setState(() {
-                                        _overdueThreshold = newThreshold;
-                                        _detailedBackupStatus = updatedStatus;
-                                      });
-                                    } : null,
-                                  ),
-                                  Text('$_overdueThreshold'),
-                                  IconButton(
-                                    icon: const Icon(Icons.add),
-                                    onPressed: _overdueThreshold < 30 ? () async {
-                                      final newThreshold = _overdueThreshold + 1;
-                                      await BackupService.setBackupOverdueThreshold(newThreshold);
-
-                                      // Just update the threshold and recalculate overdue status
-                                      final updatedStatus = await BackupService.getDetailedBackupStatus();
-                                      setState(() {
-                                        _overdueThreshold = newThreshold;
-                                        _detailedBackupStatus = updatedStatus;
-                                      });
-                                    } : null,
-                                  ),
-                                ],
-                              ),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            if (_autoBackupEnabled) ...[
-                              const Divider(),
-                              const Text(
-                                '💡 Auto backups happen daily at midnight. Manual backups and cloud sharing should be done regularly for extra protection.',
-                                style: TextStyle(fontSize: 12, color: AppColors.greyText),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-
-                  // Original backup info for file details
-                  if (_backupInfo != null && !_backupInfo!.containsKey('error')) ...[
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            _buildInfoRow(Icons.data_usage, 'Total Items', '${_backupInfo!['total_items']} items'),
-                            const Divider(),
-                            _buildInfoRow(Icons.timer, 'Fasting Progress', '${_backupInfo!['categories']['fasting']} records'),
-                            _buildInfoRow(Icons.favorite, 'Menstrual Cycle', '${_backupInfo!['categories']['menstrual_cycle']} records'),
-                          _buildInfoRow(Icons.task_alt, 'Tasks & Categories', '${_backupInfo!['categories']['tasks'] + _backupInfo!['categories']['task_categories']} items'),
-                            _buildInfoRow(Icons.auto_awesome, 'Routines', '${_backupInfo!['categories']['routines']} items'),
-                            _buildInfoRow(Icons.water_drop, 'Water Tracking', '${_backupInfo!['categories']['water_tracking']} items'),
-                            _buildInfoRow(Icons.notifications, 'Notifications', '${_backupInfo!['categories']['notifications']} items'),
-                            _buildInfoRow(Icons.settings, 'Settings & Preferences', '${_backupInfo!['categories']['settings'] + _backupInfo!['categories']['app_preferences']} items'),
-                            const Divider(),
-                            _buildInfoRow(Icons.storage, 'Backup Size', '~${_backupInfo!['backup_size_kb']} KB'),
-                            _buildInfoRow(Icons.schedule, 'Last Backup', _formatLastBackup(_backupInfo!['last_backup_time'])),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
                   ],
 
                   // Export Section
@@ -883,6 +851,117 @@ class _BackupScreenState extends State<BackupScreen> {
                       ],
                     ),
                   ),
+
+                  const SizedBox(height: 16),
+
+                  // Auto backup settings moved to position 6
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Column(
+                        children: [
+                          SwitchListTile(
+                            title: const Text('Automatic Daily Backups'),
+                            subtitle: const Text('Auto-backup when app starts (once per day)'),
+                            value: _autoBackupEnabled,
+                            onChanged: (value) async {
+                              setState(() {
+                                _autoBackupEnabled = value;
+                              });
+                              // Save this setting
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setBool('auto_backup_enabled', value);
+
+                              // Just save the setting - backup will check on next startup
+                              // No need for complex timers
+                            },
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          const Divider(),
+                          ListTile(
+                            title: const Text('Backup Warning Threshold'),
+                            subtitle: Text('Show overdue warnings after $_overdueThreshold days without backup'),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.remove),
+                                  onPressed: _overdueThreshold > 1 ? () async {
+                                    final newThreshold = _overdueThreshold - 1;
+                                    await BackupService.setBackupOverdueThreshold(newThreshold);
+
+                                    // Just update the threshold and recalculate overdue status
+                                    final updatedStatus = await BackupService.getDetailedBackupStatus();
+                                    setState(() {
+                                      _overdueThreshold = newThreshold;
+                                      _detailedBackupStatus = updatedStatus;
+                                    });
+                                  } : null,
+                                ),
+                                Text('$_overdueThreshold'),
+                                IconButton(
+                                  icon: const Icon(Icons.add),
+                                  onPressed: _overdueThreshold < 30 ? () async {
+                                    final newThreshold = _overdueThreshold + 1;
+                                    await BackupService.setBackupOverdueThreshold(newThreshold);
+
+                                    // Just update the threshold and recalculate overdue status
+                                    final updatedStatus = await BackupService.getDetailedBackupStatus();
+                                    setState(() {
+                                      _overdueThreshold = newThreshold;
+                                      _detailedBackupStatus = updatedStatus;
+                                    });
+                                  } : null,
+                                ),
+                              ],
+                            ),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          if (_autoBackupEnabled) ...[
+                            const Divider(),
+                            const Text(
+                              '💡 Auto backups happen once per day when you open the app. Manual backups and cloud sharing should be done regularly for extra protection.',
+                              style: TextStyle(fontSize: 12, color: AppColors.greyText),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Original backup info for file details moved to bottom
+                  if (_backupInfo != null && !_backupInfo!.containsKey('error')) ...[
+                    const Center(
+                      child: Text(
+                        'Backup Details',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            _buildInfoRow(Icons.data_usage, 'Total Items', '${_backupInfo!['total_items']} items'),
+                            const Divider(),
+                            _buildInfoRow(Icons.timer, 'Fasting Progress', '${_backupInfo!['categories']['fasting']} records'),
+                            _buildInfoRow(Icons.favorite, 'Menstrual Cycle', '${_backupInfo!['categories']['menstrual_cycle']} records'),
+                          _buildInfoRow(Icons.task_alt, 'Tasks & Categories', '${_backupInfo!['categories']['tasks'] + _backupInfo!['categories']['task_categories']} items'),
+                            _buildInfoRow(Icons.auto_awesome, 'Routines', '${_backupInfo!['categories']['routines']} items'),
+                            _buildInfoRow(Icons.water_drop, 'Water Tracking', '${_backupInfo!['categories']['water_tracking']} items'),
+                            _buildInfoRow(Icons.notifications, 'Notifications', '${_backupInfo!['categories']['notifications']} items'),
+                            _buildInfoRow(Icons.settings, 'Settings & Preferences', '${_backupInfo!['categories']['settings'] + _backupInfo!['categories']['app_preferences']} items'),
+                            const Divider(),
+                            _buildInfoRow(Icons.storage, 'Backup Size', '~${_backupInfo!['backup_size_kb']} KB'),
+                            _buildInfoRow(Icons.schedule, 'Last Backup', _formatLastBackup(_backupInfo!['last_backup_time'])),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -918,7 +997,14 @@ class _BackupFilesFullScreen extends StatelessWidget {
       final date = DateTime.parse(isoString);
       final now = DateTime.now();
       final difference = now.difference(date).inDays;
-      
+
+      // Debug timestamp issues
+      if (difference < 0) {
+        debugPrint('WARNING: Backup date is in the future! Date: $date, Now: $now, Difference: $difference days');
+        // If date is in the future, show it as "Today" with time
+        return 'Today ${DateFormat('HH:mm').format(date)} (⚠️ Future timestamp)';
+      }
+
       if (difference == 0) {
         return 'Today ${DateFormat('HH:mm').format(date)}';
       } else if (difference == 1) {

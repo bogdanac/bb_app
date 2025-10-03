@@ -17,6 +17,7 @@ class DatePickerUtils {
       initialDate: initialDate ?? DateTime.now(),
       firstDate: firstDate ?? DateTime.now(),
       lastDate: lastDate ?? DateTime.now().add(const Duration(days: 365)),
+      locale: const Locale('ro', 'RO'),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(

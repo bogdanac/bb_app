@@ -13,10 +13,24 @@ class TaskService {
   factory TaskService() => _instance;
   TaskService._internal();
 
-  final NotificationService _notificationService = NotificationService();
-  
+  late NotificationService _notificationService;
+  bool _isNotificationServiceInitialized = false;
+
   // Global task change notifier
   final List<VoidCallback> _taskChangeListeners = [];
+
+  // Initialize notification service
+  Future<void> _ensureNotificationServiceInitialized() async {
+    if (!_isNotificationServiceInitialized) {
+      _notificationService = NotificationService();
+      await _notificationService.initializeNotifications();
+      _isNotificationServiceInitialized = true;
+
+      if (kDebugMode) {
+        print('📋 TaskService notification service initialized');
+      }
+    }
+  }
   
   // Add listener for task changes
   void addTaskChangeListener(VoidCallback listener) {
@@ -55,8 +69,29 @@ class TaskService {
           .map((json) => Task.fromJson(jsonDecode(json)))
           .toList();
 
+      // Ensure all recurring tasks have scheduled dates
+      // Only auto-calculate if user hasn't manually postponed/rescheduled
+      bool tasksUpdated = false;
+      for (int i = 0; i < tasks.length; i++) {
+        if (tasks[i].recurrence != null && tasks[i].scheduledDate == null && !tasks[i].isPostponed) {
+          final updatedTask = await _calculateNextScheduledDate(tasks[i], prefs);
+          if (updatedTask != null) {
+            tasks[i] = updatedTask;
+            tasksUpdated = true;
+          }
+        }
+      }
+
       // Check for menstrual tasks that should be prioritized today due to phaseDay
       await _updateMenstrualTaskPriorities(tasks, prefs);
+
+      // Save tasks if any were updated with new scheduled dates
+      if (tasksUpdated) {
+        final tasksJson = tasks
+            .map((task) => jsonEncode(task.toJson()))
+            .toList();
+        await prefs.setStringList('tasks', tasksJson);
+      }
 
       return tasks;
     } catch (e) {
@@ -232,6 +267,7 @@ class TaskService {
         scheduledDate: postponeDate, // Move scheduled date to postpone date
         reminderTime: newReminderTime,
         isImportant: task.isImportant,
+        isPostponed: true, // Mark as user-postponed
         recurrence: task.recurrence,
         isCompleted: task.isCompleted,
         completedAt: task.completedAt,
@@ -297,12 +333,18 @@ class TaskService {
     // Filter tasks based on completion status
     final availableTasks = includeCompleted ? tasks : tasks.where((task) => !task.isCompleted).toList();
 
+    // Pre-calculate priority scores for all tasks to avoid recalculation during sort
+    final taskScores = <Task, int>{};
+    for (final task in availableTasks) {
+      taskScores[task] = _calculateTaskPriorityScore(task, now, today, categories);
+    }
+
     // Sort by priority with enhanced logic
     availableTasks.sort((a, b) {
-      // Calculate priority scores for better comparison
-      final aPriorityScore = _calculateTaskPriorityScore(a, now, today, categories);
-      final bPriorityScore = _calculateTaskPriorityScore(b, now, today, categories);
-      
+      // Use pre-calculated scores
+      final aPriorityScore = taskScores[a] ?? 0;
+      final bPriorityScore = taskScores[b] ?? 0;
+
       if (aPriorityScore != bPriorityScore) {
         return bPriorityScore.compareTo(aPriorityScore); // Higher score = higher priority
       }
@@ -372,7 +414,7 @@ class TaskService {
     if (task.reminderTime != null) {
       final reminderDiff = task.reminderTime!.difference(now).inMinutes;
       final isReminderToday = _isReminderToday(task.reminderTime!, now);
-      
+
       // Past reminders (overdue) get highest priority
       if (reminderDiff < 0) {
         final hoursPast = (-reminderDiff) / 60;
@@ -412,7 +454,7 @@ class TaskService {
       else {
         // Special handling for postponed recurring tasks - absolute lowest priority
         final tomorrow = today.add(const Duration(days: 1));
-        if (task.recurrence != null && task.scheduledDate != null && 
+        if (task.recurrence != null && task.scheduledDate != null &&
             (task.scheduledDate!.isAfter(today) || _isSameDay(task.scheduledDate!, tomorrow))) {
           score += 0; // No priority for postponed recurring tasks - they should appear last
         } else {
@@ -461,7 +503,8 @@ class TaskService {
     }
 
     // AUTO-FIX: Update scheduledDate for recurring tasks if outdated OR missing
-    if (task.recurrence != null) {
+    // Only auto-fix if user hasn't manually postponed/rescheduled the task
+    if (task.recurrence != null && !task.isPostponed) {
       // Check if task would be due today according to its recurrence pattern
       if (task.recurrence!.isDueOn(today, taskCreatedAt: task.createdAt)) {
         // Update if scheduledDate is missing OR outdated
@@ -475,7 +518,7 @@ class TaskService {
 
     // 5. MEDIUM-HIGH PRIORITY: Recurring tasks due today
     if (task.recurrence != null && task.isDueToday()) {
-      
+
       // If task was postponed (has scheduledDate for future), reduce recurring priority
       if (task.scheduledDate != null && task.scheduledDate!.isAfter(today)) {
         score += 5; // Much lower priority for postponed recurring tasks
@@ -501,7 +544,15 @@ class TaskService {
       }
     }
 
-    // 5b. SCHEDULED TODAY: Tasks scheduled for today (should appear before unscheduled important tasks)
+    // 5b. OVERDUE SCHEDULED TASKS: Tasks scheduled in the past (but not recurring)
+    if (task.scheduledDate != null && task.scheduledDate!.isBefore(today) && task.recurrence == null) {
+      final daysOverdue = today.difference(DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)).inDays;
+      // Priority decreases slightly over time, but stays below "scheduled today"
+      // Starts at 590 for 1 day overdue, decreases by 5 per day
+      score += math.max(550, 595 - (daysOverdue * 5));
+    }
+
+    // 5c. SCHEDULED TODAY: Tasks scheduled for today (should appear before unscheduled important tasks)
     if (task.scheduledDate != null && _isSameDay(task.scheduledDate!, today)) {
       score += 600; // High priority for tasks scheduled today, higher than important tasks
     }
@@ -518,7 +569,7 @@ class TaskService {
       // Category order 1 = +40 points, order 2 = +35 points, order 5 = +20 points, etc.
       if (categoryImportance < 999) {
         int baseScore = math.max(10, 45 - (categoryImportance * 5));
-        
+
         // Bonus for multiple categories: +2 points per additional category (max +10)
         // This makes tasks with multiple high-priority categories rank higher
         int categoryBonus = math.min(10, (task.categoryIds.length - 1) * 2);
@@ -639,6 +690,9 @@ class TaskService {
     try {
       if (task.reminderTime == null) return;
 
+      // Ensure notification service is initialized
+      await _ensureNotificationServiceInitialized();
+
       final now = DateTime.now();
       DateTime scheduledDate = task.reminderTime!;
 
@@ -660,12 +714,34 @@ class TaskService {
       // Cancel existing notification first to avoid duplicates
       await _notificationService.cancelTaskNotification(task.id);
 
+      // Determine recurrence type for proper notification scheduling
+      String? recurrenceType;
+      if (task.recurrence != null && task.recurrence!.types.isNotEmpty) {
+        // Get the primary recurrence type for notification scheduling
+        final primaryType = task.recurrence!.types.first;
+        switch (primaryType) {
+          case RecurrenceType.daily:
+            recurrenceType = 'daily';
+            break;
+          case RecurrenceType.weekly:
+            recurrenceType = 'weekly';
+            break;
+          case RecurrenceType.monthly:
+            recurrenceType = 'monthly';
+            break;
+          default:
+            // For other types, we'll let the service handle rescheduling
+            recurrenceType = null;
+        }
+      }
+
       // Use NotificationService to schedule the notification
       await _notificationService.scheduleTaskNotification(
         task.id,
         task.title,
         scheduledDate,
         isRecurring: task.recurrence != null,
+        recurrenceType: recurrenceType,
       );
 
     } catch (e) {
@@ -735,12 +811,90 @@ class TaskService {
   // Force reschedule all task notifications (useful for debugging)
   Future<void> forceRescheduleAllNotifications() async {
     try {
+      // Ensure notification service is initialized
+      await _ensureNotificationServiceInitialized();
+
       final tasks = await loadTasks();
       await _scheduleAllTaskNotifications(tasks);
     } catch (e) {
       if (kDebugMode) {
         print('ERROR force rescheduling notifications: $e');
       }
+    }
+  }
+
+  // Public method to recalculate all recurring task scheduled dates
+  Future<int> recalculateAllRecurringTasks() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final tasks = await loadTasks();
+      int updatedCount = 0;
+
+      // Pre-calculate menstrual cycle data once (if needed)
+      String? lastPeriodStartStr;
+      DateTime? lastPeriodStart;
+      int? averageCycleLength;
+      Map<String, DateTime>? phaseStartDates;
+
+      // Check if any tasks need menstrual calculations
+      final hasMenstrualTasks = tasks.any((t) =>
+        t.recurrence != null && _isMenstrualCycleTask(t.recurrence!));
+
+      if (hasMenstrualTasks) {
+        lastPeriodStartStr = prefs.getString('last_period_start');
+        if (lastPeriodStartStr != null) {
+          lastPeriodStart = DateTime.parse(lastPeriodStartStr);
+          averageCycleLength = prefs.getInt('average_cycle_length') ?? 31;
+          phaseStartDates = _calculatePhaseStartDates(lastPeriodStart, averageCycleLength);
+        }
+      }
+
+      // Process all recurring tasks with cached data
+      for (int i = 0; i < tasks.length; i++) {
+        if (tasks[i].recurrence != null) {
+          Task? updatedTask;
+
+          // Use cached menstrual data if applicable
+          if (_isMenstrualCycleTask(tasks[i].recurrence!) && phaseStartDates != null) {
+            final scheduledDate = _calculateMenstrualDateFromCache(tasks[i], phaseStartDates);
+            if (scheduledDate != null && scheduledDate != tasks[i].scheduledDate) {
+              updatedTask = Task(
+                id: tasks[i].id,
+                title: tasks[i].title,
+                description: tasks[i].description,
+                categoryIds: tasks[i].categoryIds,
+                deadline: tasks[i].deadline,
+                scheduledDate: scheduledDate,
+                reminderTime: tasks[i].reminderTime,
+                isImportant: tasks[i].isImportant,
+                isPostponed: false,
+                recurrence: tasks[i].recurrence,
+                isCompleted: tasks[i].isCompleted,
+                completedAt: tasks[i].completedAt,
+                createdAt: tasks[i].createdAt,
+              );
+            }
+          } else {
+            updatedTask = await _calculateNextScheduledDate(tasks[i], prefs);
+          }
+
+          if (updatedTask != null && updatedTask.scheduledDate != tasks[i].scheduledDate) {
+            tasks[i] = updatedTask;
+            updatedCount++;
+          }
+        }
+      }
+
+      if (updatedCount > 0) {
+        await saveTasks(tasks);
+      }
+
+      return updatedCount;
+    } catch (e) {
+      if (kDebugMode) {
+        print('ERROR recalculating recurring tasks: $e');
+      }
+      return 0;
     }
   }
 
@@ -760,7 +914,205 @@ class TaskService {
     if (task.reminderTime != null) {
       await scheduleTaskNotification(task);
     }
+  }
 
+  // Calculate the next scheduled date for a recurring task
+  Future<Task?> _calculateNextScheduledDate(Task task, SharedPreferences prefs) async {
+    if (task.recurrence == null) return null;
+
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    DateTime? newScheduledDate;
+
+    // Handle menstrual cycle tasks
+    if (_isMenstrualCycleTask(task.recurrence!)) {
+      newScheduledDate = await _calculateMenstrualTaskScheduledDate(task, prefs);
+    } else {
+      // Handle regular recurring tasks (daily, weekly, monthly, yearly)
+      newScheduledDate = _calculateRegularRecurringTaskDate(task, todayDate);
+    }
+
+    if (newScheduledDate != null) {
+      return Task(
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        categoryIds: task.categoryIds,
+        deadline: task.deadline,
+        scheduledDate: newScheduledDate,
+        reminderTime: task.reminderTime,
+        isImportant: task.isImportant,
+        isPostponed: false, // Auto-calculated, not user-postponed
+        recurrence: task.recurrence,
+        isCompleted: task.isCompleted,
+        completedAt: task.completedAt,
+        createdAt: task.createdAt,
+      );
+    }
+
+    return null;
+  }
+
+  // Calculate scheduled date for menstrual cycle tasks
+  Future<DateTime?> _calculateMenstrualTaskScheduledDate(Task task, SharedPreferences prefs) async {
+    final lastStartStr = prefs.getString('last_period_start');
+    if (lastStartStr == null) return null;
+
+    final lastPeriodStart = DateTime.parse(lastStartStr);
+    final averageCycleLength = prefs.getInt('average_cycle_length') ?? 31;
+
+    // Calculate phase start dates for current cycle
+    final phaseStartDates = _calculatePhaseStartDates(lastPeriodStart, averageCycleLength);
+
+    final recurrence = task.recurrence!;
+    for (final recurrenceType in recurrence.types) {
+      DateTime? phaseStart;
+
+      switch (recurrenceType) {
+        case RecurrenceType.menstrualPhase:
+          phaseStart = phaseStartDates['menstrual'];
+          break;
+        case RecurrenceType.follicularPhase:
+          phaseStart = phaseStartDates['follicular'];
+          break;
+        case RecurrenceType.ovulationPhase:
+          phaseStart = phaseStartDates['ovulation'];
+          break;
+        case RecurrenceType.earlyLutealPhase:
+          phaseStart = phaseStartDates['earlyLuteal'];
+          break;
+        case RecurrenceType.lateLutealPhase:
+          phaseStart = phaseStartDates['lateLuteal'];
+          break;
+        default:
+          continue;
+      }
+
+      if (phaseStart != null && recurrence.phaseDay != null) {
+        final dayInPhase = recurrence.phaseDay!;
+        return phaseStart.add(Duration(days: dayInPhase - 1)); // Day 1 = 0 days offset
+      }
+    }
+
+    return null;
+  }
+
+  // Calculate scheduled date for regular recurring tasks - OPTIMIZED
+  DateTime? _calculateRegularRecurringTaskDate(Task task, DateTime todayDate) {
+    final recurrence = task.recurrence!;
+
+    // Check if it's due today
+    if (recurrence.isDueOn(todayDate, taskCreatedAt: task.createdAt)) {
+      return todayDate;
+    }
+
+    // Optimize for common recurrence types
+    if (recurrence.types.contains(RecurrenceType.daily)) {
+      return todayDate.add(const Duration(days: 1));
+    } else if (recurrence.types.contains(RecurrenceType.weekly)) {
+      // For weekly, only check next 7 days
+      for (int i = 1; i <= 7; i++) {
+        final checkDate = todayDate.add(Duration(days: i));
+        if (recurrence.isDueOn(checkDate, taskCreatedAt: task.createdAt)) {
+          return checkDate;
+        }
+      }
+    } else if (recurrence.types.contains(RecurrenceType.monthly)) {
+      // Calculate directly for monthly
+      final targetDay = recurrence.dayOfMonth ?? task.createdAt.day;
+      var nextMonth = todayDate.month;
+      var nextYear = todayDate.year;
+
+      // Move to next month if we've passed the target day
+      if (todayDate.day >= targetDay) {
+        nextMonth++;
+        if (nextMonth > 12) {
+          nextMonth = 1;
+          nextYear++;
+        }
+      }
+
+      // Handle edge cases for days that don't exist in some months
+      final daysInMonth = DateTime(nextYear, nextMonth + 1, 0).day;
+      final actualDay = targetDay > daysInMonth ? daysInMonth : targetDay;
+      return DateTime(nextYear, nextMonth, actualDay);
+    } else if (recurrence.types.contains(RecurrenceType.yearly)) {
+      // Calculate directly for yearly
+      final targetMonth = recurrence.interval; // For yearly, interval represents the month
+      final targetDay = recurrence.dayOfMonth ?? task.createdAt.day;
+      var nextYear = todayDate.year;
+
+      // Check if we need to move to next year
+      final targetDate = DateTime(nextYear, targetMonth, targetDay);
+      if (todayDate.isAfter(targetDate) || todayDate.isAtSameMomentAs(targetDate)) {
+        nextYear++;
+      }
+
+      return DateTime(nextYear, targetMonth, targetDay);
+    } else {
+      // For custom recurrence, limit to 30 days to avoid performance issues
+      for (int i = 1; i <= 30; i++) {
+        final checkDate = todayDate.add(Duration(days: i));
+        if (recurrence.isDueOn(checkDate, taskCreatedAt: task.createdAt)) {
+          return checkDate;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  // Calculate phase start dates (reused from cycle_tracking_screen.dart logic)
+  Map<String, DateTime> _calculatePhaseStartDates(DateTime lastPeriodStart, int averageCycleLength) {
+    final menstrualStart = lastPeriodStart;
+    final follicularStart = menstrualStart.add(const Duration(days: 5)); // End of menstrual phase
+    final ovulationStart = menstrualStart.add(Duration(days: averageCycleLength ~/ 2 - 1)); // Mid-cycle
+    final earlyLutealStart = ovulationStart.add(const Duration(days: 3)); // 3 days after ovulation
+    final lateLutealStart = menstrualStart.add(Duration(days: (averageCycleLength * 0.75).round())); // Last quarter
+
+    return {
+      'menstrual': menstrualStart,
+      'follicular': follicularStart,
+      'ovulation': ovulationStart,
+      'earlyLuteal': earlyLutealStart,
+      'lateLuteal': lateLutealStart,
+    };
+  }
+
+  // Calculate menstrual task date from cached phase data
+  DateTime? _calculateMenstrualDateFromCache(Task task, Map<String, DateTime> phaseStartDates) {
+    final recurrence = task.recurrence!;
+
+    for (final recurrenceType in recurrence.types) {
+      DateTime? phaseStart;
+
+      switch (recurrenceType) {
+        case RecurrenceType.menstrualPhase:
+          phaseStart = phaseStartDates['menstrual'];
+          break;
+        case RecurrenceType.follicularPhase:
+          phaseStart = phaseStartDates['follicular'];
+          break;
+        case RecurrenceType.ovulationPhase:
+          phaseStart = phaseStartDates['ovulation'];
+          break;
+        case RecurrenceType.earlyLutealPhase:
+          phaseStart = phaseStartDates['earlyLuteal'];
+          break;
+        case RecurrenceType.lateLutealPhase:
+          phaseStart = phaseStartDates['lateLuteal'];
+          break;
+        default:
+          continue;
+      }
+
+      if (phaseStart != null && recurrence.phaseDay != null) {
+        final dayInPhase = recurrence.phaseDay!;
+        return phaseStart.add(Duration(days: dayInPhase - 1)); // Day 1 = 0 days offset
+      }
+    }
+
+    return null;
   }
 
   // Check menstrual tasks and set scheduledDate for those on their target phaseDay

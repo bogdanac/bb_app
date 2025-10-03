@@ -47,18 +47,38 @@ class HabitService {
   }
 
   /// Toggle habit completion for today
-  static Future<void> toggleHabitCompletion(String habitId) async {
+  /// Returns a map with completion info: {'cycleCompleted': bool, 'habit': Habit?}
+  static Future<Map<String, dynamic>> toggleHabitCompletion(String habitId) async {
     final habits = await loadHabits();
     final habitIndex = habits.indexWhere((h) => h.id == habitId);
 
     if (habitIndex != -1) {
-      if (habits[habitIndex].isCompletedToday()) {
-        habits[habitIndex].markUncompleted();
+      final habit = habits[habitIndex];
+      bool cycleCompleted = false;
+
+      if (habit.isCompletedToday()) {
+        habit.markUncompleted();
       } else {
-        habits[habitIndex].markCompleted();
+        habit.markCompleted();
+
+        // Check if this completion completed the 21-day cycle
+        if (habit.getCurrentCycleProgress() >= 21) {
+          cycleCompleted = true;
+        }
       }
+
       await saveHabits(habits);
+
+      return {
+        'cycleCompleted': cycleCompleted,
+        'habit': cycleCompleted ? habit : null,
+      };
     }
+
+    return {
+      'cycleCompleted': false,
+      'habit': null,
+    };
   }
 
   /// Toggle habit completion for a specific date
@@ -97,12 +117,24 @@ class HabitService {
     await saveHabits(habits);
   }
 
+  /// Start a new 21-day cycle for a habit
+  static Future<void> startNewCycle(String habitId) async {
+    final habits = await loadHabits();
+    final habitIndex = habits.indexWhere((h) => h.id == habitId);
+
+    if (habitIndex != -1) {
+      final habit = habits[habitIndex];
+      habit.completedDates.clear();
+      await saveHabits(habits);
+    }
+  }
+
   /// Clean up old completed dates (older than 1 year) to keep storage size manageable
   static Future<void> cleanupOldData() async {
     final habits = await loadHabits();
     final oneYearAgo = DateTime.now().subtract(const Duration(days: 365));
     final cutoffDate = "${oneYearAgo.year}-${oneYearAgo.month.toString().padLeft(2, '0')}-${oneYearAgo.day.toString().padLeft(2, '0')}";
-    
+
     var hasChanges = false;
     for (final habit in habits) {
       final originalCount = habit.completedDates.length;
@@ -111,7 +143,7 @@ class HabitService {
         hasChanges = true;
       }
     }
-    
+
     if (hasChanges) {
       await saveHabits(habits);
     }

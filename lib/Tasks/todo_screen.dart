@@ -212,6 +212,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
         scheduledDate: DateTime(today.year, today.month, today.day),
         reminderTime: task.reminderTime,
         isImportant: task.isImportant,
+        isPostponed: task.isPostponed,
         recurrence: task.recurrence,
         isCompleted: task.isCompleted,
         completedAt: task.completedAt,
@@ -296,6 +297,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
             
             // Category filters (optional)
             Container(
+              width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,7 +312,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
                     runSpacing: 4,
                     children: [
                       FilterChip(
-                        label: const Text('All'),
+                        label: const Text('All', style: TextStyle(fontSize: 12)),
                         selected: _selectedCategoryFilters.isEmpty,
                         onSelected: (selected) {
                           setState(() {
@@ -324,8 +326,8 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
                         label: Text(
                           category.name,
                           style: TextStyle(
-                            color: _selectedCategoryFilters.contains(category.id) 
-                                ? Colors.white 
+                            color: _selectedCategoryFilters.contains(category.id)
+                                ? Colors.white
                                 : null,
                             fontSize: 12,
                           ),
@@ -693,10 +695,13 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
 
 class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   List<Task> _tasks = [];
+  List<Task> _displayTasks = []; // Tasks to display after filtering/sorting
   List<TaskCategory> _categories = [];
   List<String> _selectedCategoryFilters = [];
   bool _showCompleted = false;
   late bool _showAllTasks; // Will be initialized in initState
+  bool _isRecalculating = false;
+  bool _isLoading = true;
   final TaskService _taskService = TaskService();
 
   @override
@@ -706,64 +711,68 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     _showAllTasks = widget.initialShowAllTasks ?? true;
     WidgetsBinding.instance.addObserver(this);
     _loadData();
-    
-    // Listen for global task changes
-    _taskService.addTaskChangeListener(_refreshTasks);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _taskService.removeTaskChangeListener(_refreshTasks);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (mounted && state == AppLifecycleState.resumed) {
-      // Refresh data when app comes back to foreground
-      _loadData();
-    }
+    // Removed automatic refresh on app resume to prevent unwanted UI updates
+    // Tasks will refresh only when explicitly triggered by user actions
   }
 
   Future<void> _loadData() async {
+    setState(() => _isLoading = true);
     await _loadCategories();
-    await _loadCategoryFilters();
+    // Only load category filters when filters UI is shown
+    if (widget.showFilters) {
+      await _loadCategoryFilters();
+    }
     await _loadTasks();
+    _updateDisplayTasks();
+    setState(() => _isLoading = false);
   }
 
-  bool _isUpdatingTask = false;
-
-  Future<void> _refreshTasks() async {
-    // Don't refresh if we're in the middle of updating a task
-    if (_isUpdatingTask) {
-      if (kDebugMode) {
-        print('Skipping task refresh - currently updating task');
-      }
-      return;
+  void _updateDisplayTasks() async {
+    // For simple cases, use sync filtering for immediate update
+    if (_showAllTasks || _showCompleted) {
+      final filteredTasks = _getFilteredTasks();
+      _displayTasks = _taskService.getPrioritizedTasks(
+        filteredTasks,
+        _categories,
+        100,
+        includeCompleted: _showCompleted,
+      );
+      setState(() {});
+    } else {
+      // For menstrual cycle filtering, use async
+      final filteredTasks = await _getFilteredTasksAsync();
+      _displayTasks = _taskService.getPrioritizedTasks(
+        filteredTasks,
+        _categories,
+        100,
+        includeCompleted: _showCompleted,
+      );
+      setState(() {});
     }
-
-    if (kDebugMode) {
-      print('Refreshing tasks...');
-    }
-    await _loadData();
   }
+
 
   Future<void> _loadCategories() async {
     final categories = await _taskService.loadCategories();
     if (mounted) {
-      setState(() {
-        _categories = categories;
-      });
+      _categories = categories;
     }
   }
 
   Future<void> _loadCategoryFilters() async {
     final savedFilters = await _taskService.loadSelectedCategoryFilters();
     if (mounted) {
-      setState(() {
-        _selectedCategoryFilters = savedFilters;
-      });
+      _selectedCategoryFilters = savedFilters;
     }
   }
 
@@ -791,9 +800,8 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     }
 
     if (mounted) {
-      setState(() {
-        _tasks = cleanTasks;
-      });
+      _tasks = cleanTasks;
+      _updateDisplayTasks();
     }
   }
 
@@ -809,23 +817,25 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           categories: _categories,
           initialCategoryIds: _selectedCategoryFilters.isNotEmpty ? _selectedCategoryFilters : null,
           onSave: (task) async {
-
-            // Load fresh task list and add/update the task
-            final allTasks = await _taskService.loadTasks();
-            final existingIndex = allTasks.indexWhere((t) => t.id == task.id);
-            
+            // Update in-memory list immediately for instant UI update
+            final existingIndex = _tasks.indexWhere((t) => t.id == task.id);
             if (existingIndex != -1) {
-              allTasks[existingIndex] = task;
+              _tasks[existingIndex] = task;
+            } else {
+              _tasks.add(task);
+            }
+            _updateDisplayTasks(); // Immediate UI refresh
+
+            // Save to disk asynchronously
+            final allTasks = await _taskService.loadTasks();
+            final diskIndex = allTasks.indexWhere((t) => t.id == task.id);
+            if (diskIndex != -1) {
+              allTasks[diskIndex] = task;
             } else {
               allTasks.add(task);
             }
-            
             await _taskService.saveTasks(allTasks);
-            
-            // Reload local list to stay synchronized
-            await _loadTasks();
-            
-            // Task added silently - no snackbar needed
+            widget.onTasksChanged?.call();
           },
         ),
       ),
@@ -840,24 +850,20 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           task: task,
           categories: _categories,
           onSave: (updatedTask) async {
-
-            // Load fresh task list to avoid conflicts with daily tasks card
-            final allTasks = await _taskService.loadTasks();
-            final taskIndex = allTasks.indexWhere((t) => t.id == task.id);
-            
-            
+            // Update in-memory list immediately for instant UI update
+            final taskIndex = _tasks.indexWhere((t) => t.id == task.id);
             if (taskIndex != -1) {
-              // Update the existing task
-              allTasks[taskIndex] = updatedTask;
+              _tasks[taskIndex] = updatedTask;
+              _updateDisplayTasks(); // Immediate UI refresh
+            }
+
+            // Save to disk asynchronously
+            final allTasks = await _taskService.loadTasks();
+            final diskIndex = allTasks.indexWhere((t) => t.id == task.id);
+            if (diskIndex != -1) {
+              allTasks[diskIndex] = updatedTask;
               await _taskService.saveTasks(allTasks);
-              
-              // Reload the local list to stay synchronized
-              await _loadTasks();
-              
-            } else {
-              if (kDebugMode) {
-                print('ERROR: Task not found for update: ${task.id}');
-              }
+              widget.onTasksChanged?.call();
             }
           },
         ),
@@ -866,14 +872,16 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   }
 
   void _toggleTaskCompletion(Task task) async {
-
-    // Set flag to prevent automatic refresh from overriding our changes
-    _isUpdatingTask = true;
-
     final newCompletionStatus = !task.isCompleted;
 
-    // Update ALL tasks with the same ID (in case of duplicates)
-    final updatedLocalTask = Task(
+    // For recurring tasks being completed, reschedule immediately instead of marking as completed
+    if (!task.isCompleted && task.recurrence != null && newCompletionStatus) {
+      await _handleRecurringTaskCompletion(task);
+      return; // Exit early - the recurring handler will update the task
+    }
+
+    // For non-recurring tasks or uncompleting a task, just toggle the status
+    final updatedTask = Task(
       id: task.id,
       title: task.title,
       description: task.description,
@@ -882,61 +890,27 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       scheduledDate: task.scheduledDate,
       reminderTime: task.reminderTime,
       isImportant: task.isImportant,
+      isPostponed: task.isPostponed,
       recurrence: task.recurrence,
       isCompleted: newCompletionStatus,
       completedAt: newCompletionStatus ? DateTime.now() : null,
       createdAt: task.createdAt,
     );
 
-    // Update ALL instances of this task
-    for (int i = 0; i < _tasks.length; i++) {
-      if (_tasks[i].id == task.id) {
-        _tasks[i] = updatedLocalTask;
-      }
+    // Update in-memory list immediately for instant UI update
+    final taskIndex = _tasks.indexWhere((t) => t.id == task.id);
+    if (taskIndex != -1) {
+      _tasks[taskIndex] = updatedTask;
+      _updateDisplayTasks(); // Immediate UI refresh
     }
 
-    // Then trigger rebuild
-    setState(() {
-      // State is already updated above, this just triggers rebuild
-    });
-
-    // Defer the save operation to after the frame is built
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _saveTaskCompletion(updatedLocalTask, newCompletionStatus);
-    });
-
-    // Handle recurring task completion logic - only when completing (not uncompleting)
-    if (!task.isCompleted && task.recurrence != null && newCompletionStatus) {
-      await _handleRecurringTaskCompletion(task);
-    }
-
-    // Clear the update flag
-    _isUpdatingTask = false;
-
-  }
-
-  Future<void> _saveTaskCompletion(Task updatedTask, bool newCompletionStatus) async {
-    try {
-      // Load fresh task list and update it
-      final allTasks = await _taskService.loadTasks();
-      final savedTaskIndex = allTasks.indexWhere((t) => t.id == updatedTask.id);
-
-      if (savedTaskIndex != -1) {
-        allTasks[savedTaskIndex] = updatedTask;
-        await _taskService.saveTasks(allTasks);
-
-        // Notify parent widget that tasks have changed
-        widget.onTasksChanged?.call();
-
-      } else {
-        if (kDebugMode) {
-          print('ERROR: Task not found in allTasks for saving');
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR saving task completion: $e');
-      }
+    // Save to disk asynchronously
+    final allTasks = await _taskService.loadTasks();
+    final diskTaskIndex = allTasks.indexWhere((t) => t.id == task.id);
+    if (diskTaskIndex != -1) {
+      allTasks[diskTaskIndex] = updatedTask;
+      await _taskService.saveTasks(allTasks);
+      widget.onTasksChanged?.call();
     }
   }
 
@@ -974,11 +948,12 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         categoryIds: List.from(task.categoryIds),
         deadline: task.deadline, // Keep original deadline unchanged
         scheduledDate: nextDueDate, // Update scheduled date to next occurrence
-        reminderTime: task.reminderTime != null 
+        reminderTime: task.reminderTime != null
             ? DateTime(nextDueDate.year, nextDueDate.month, nextDueDate.day,
                        task.reminderTime!.hour, task.reminderTime!.minute)
             : null,
         isImportant: task.isImportant,
+        isPostponed: false, // Reset postponed status - it's now scheduled naturally
         recurrence: task.recurrence,
         isCompleted: false, // Reset completion status
         completedAt: null,  // Clear completion timestamp
@@ -992,10 +967,17 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       if (currentTaskIndex != -1) {
         allTasks[currentTaskIndex] = updatedTask;
         await _taskService.saveTasks(allTasks);
-        
+
         // Reschedule notification for the updated recurring task
         await _taskService.scheduleTaskNotification(updatedTask);
-        
+
+        // Update in-memory list immediately
+        final memoryTaskIndex = _tasks.indexWhere((t) => t.id == task.id);
+        if (memoryTaskIndex != -1) {
+          _tasks[memoryTaskIndex] = updatedTask;
+          _updateDisplayTasks();
+        }
+
         await _loadTasks();
         
         if (kDebugMode) {
@@ -1012,15 +994,36 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       
     } else {
       // If no next date found, just mark as completed
-      task.isCompleted = true;
-      task.completedAt = DateTime.now();
-      
+      final completedTask = Task(
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        categoryIds: task.categoryIds,
+        deadline: task.deadline,
+        scheduledDate: task.scheduledDate,
+        reminderTime: task.reminderTime,
+        isImportant: task.isImportant,
+        isPostponed: task.isPostponed,
+        recurrence: task.recurrence,
+        isCompleted: true,
+        completedAt: DateTime.now(),
+        createdAt: task.createdAt,
+      );
+
       final allTasks = await _taskService.loadTasks();
       final taskIndex = allTasks.indexWhere((t) => t.id == task.id);
-      
+
       if (taskIndex != -1) {
-        allTasks[taskIndex] = task;
+        allTasks[taskIndex] = completedTask;
         await _taskService.saveTasks(allTasks);
+
+        // Update in-memory list immediately
+        final memoryTaskIndex = _tasks.indexWhere((t) => t.id == task.id);
+        if (memoryTaskIndex != -1) {
+          _tasks[memoryTaskIndex] = completedTask;
+          _updateDisplayTasks();
+        }
+
         await _loadTasks();
       }
     }
@@ -1041,6 +1044,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           scheduledDate: task.scheduledDate,
           reminderTime: task.reminderTime,
           isImportant: task.isImportant,
+          isPostponed: task.isPostponed,
           recurrence: task.recurrence,
           isCompleted: true,
           completedAt: DateTime.now(),
@@ -1053,6 +1057,14 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         if (taskIndex != -1) {
           allTasks[taskIndex] = completedTask;
           await _taskService.saveTasks(allTasks);
+
+          // Update in-memory list immediately
+          final memoryTaskIndex = _tasks.indexWhere((t) => t.id == task.id);
+          if (memoryTaskIndex != -1) {
+            _tasks[memoryTaskIndex] = completedTask;
+            _updateDisplayTasks();
+          }
+
           await _loadTasks();
           widget.onTasksChanged?.call();
         }
@@ -1069,49 +1081,49 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   }
 
   void _deleteTask(Task task) async {
-    if (kDebugMode) {
-      print('=== DELETING TASK DEBUG ===');
-      print('Task: ${task.title}');
-      print('Task ID: ${task.id}');
-      print('Has recurrence: ${task.recurrence != null}');
-      print('Is completed: ${task.isCompleted}');
-    }
-    
-    // Load fresh task list and remove the task
+    // Update in-memory list immediately for instant UI update
+    _tasks.removeWhere((t) => t.id == task.id);
+    _updateDisplayTasks(); // Immediate UI refresh
+
+    // Save to disk asynchronously
     final allTasks = await _taskService.loadTasks();
-    final beforeCount = allTasks.length;
     allTasks.removeWhere((t) => t.id == task.id);
-    final afterCount = allTasks.length;
-    
-    if (kDebugMode) {
-      print('Tasks before deletion: $beforeCount');
-      print('Tasks after deletion: $afterCount');
-      print('Removed ${beforeCount - afterCount} task(s)');
-    }
-    
     await _taskService.saveTasks(allTasks);
-    
-    // Reload local list to stay synchronized
-    await _loadTasks();
-    
+
     // Notify parent widget that tasks have changed
     widget.onTasksChanged?.call();
-    
-    if (kDebugMode) {
-      print('=== END DELETING TASK DEBUG ===');
-    }
   }
 
   Future<void> _postponeTask(Task task) async {
-    debugPrint('=== _postponeTask called for: ${task.title} ===');
     try {
+      // Calculate tomorrow's date
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      final postponedTask = Task(
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        categoryIds: List.from(task.categoryIds),
+        deadline: task.deadline,
+        scheduledDate: DateTime(tomorrow.year, tomorrow.month, tomorrow.day),
+        reminderTime: task.reminderTime,
+        isImportant: task.isImportant,
+        isPostponed: true,
+        recurrence: task.recurrence,
+        isCompleted: task.isCompleted,
+        completedAt: task.completedAt,
+        createdAt: task.createdAt,
+      );
+
+      // Update in-memory list immediately for instant UI update
+      final taskIndex = _tasks.indexWhere((t) => t.id == task.id);
+      if (taskIndex != -1) {
+        _tasks[taskIndex] = postponedTask;
+        _updateDisplayTasks(); // Immediate UI refresh
+      }
+
+      // Save to disk asynchronously
       await _taskService.postponeTaskToTomorrow(task);
-      await _loadTasks(); // Reload to reflect changes
-      
-      // Notify parent widget that tasks have changed
       widget.onTasksChanged?.call();
-      
-      // Removed postpone snackbar notification as requested
     } catch (e) {
       if (kDebugMode) {
         print('Error postponing task: $e');
@@ -1128,36 +1140,107 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _recalculateRecurringTasks() async {
+    if (_isRecalculating) return;
 
-  void _selectRandomTask() async {
-    final availableTasks = (await _getFilteredTasks()).where((task) =>
-      !task.isCompleted && task.recurrence == null  // Filter out completed AND recurring tasks
-    ).toList();
+    setState(() {
+      _isRecalculating = true;
+    });
 
-    if (availableTasks.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No tasks available for random selection')),
-      );
-      return;
+    try {
+      final updatedCount = await _taskService.recalculateAllRecurringTasks();
+
+      if (mounted) {
+        // Reload tasks to show updated scheduled dates
+        await _loadTasks();
+
+        // Notify parent widget that tasks have changed
+        widget.onTasksChanged?.call();
+
+        // Show appropriate feedback
+        String message;
+        Color backgroundColor;
+
+        if (updatedCount > 0) {
+          message = '✅ Updated $updatedCount recurring task${updatedCount == 1 ? '' : 's'} with new scheduled dates';
+          backgroundColor = AppColors.successGreen;
+        } else {
+          message = 'ℹ️ All recurring tasks already have current scheduled dates';
+          backgroundColor = AppColors.greyText;
+        }
+
+        if (mounted && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: backgroundColor,
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error recalculating recurring tasks: $e');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Failed to recalculate tasks: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRecalculating = false;
+        });
+      }
     }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => _AnimatedTaskRandomizer(
-        tasks: availableTasks,
-        onTaskSelected: (task) {
-          Navigator.pop(context);
-          _toggleTaskCompletion(task);
-        },
-        onCancel: () => Navigator.pop(context),
-        categories: _categories,
-      ),
-    );
   }
 
 
-  Future<List<Task>> _getFilteredTasks() async {
+  void _selectRandomTask() {
+    _getFilteredTasksAsync().then((filteredTasks) {
+      if (!mounted) return;
+
+      final availableTasks = filteredTasks.where((task) =>
+        !task.isCompleted && task.recurrence == null  // Filter out completed AND recurring tasks
+      ).toList();
+
+      if (availableTasks.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No tasks available for random selection')),
+          );
+        }
+        return;
+      }
+
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => _AnimatedTaskRandomizer(
+            tasks: availableTasks,
+            onTaskSelected: (task) {
+              Navigator.pop(context);
+              _toggleTaskCompletion(task);
+            },
+            onCancel: () => Navigator.pop(context),
+            categories: _categories,
+          ),
+        );
+      }
+    });
+  }
+
+
+  Future<List<Task>> _getFilteredTasksAsync() async {
     List<Task> filtered = _tasks;
 
     if (!_showCompleted) {
@@ -1199,22 +1282,40 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     if (widget.showFilters && _selectedCategoryFilters.isNotEmpty) {
       filtered = filtered.where((task) =>
           task.categoryIds.isNotEmpty &&
-          task.categoryIds.any((id) => _selectedCategoryFilters.contains(id))
+          // Check that the task has ALL selected categories (not just any)
+          _selectedCategoryFilters.every((selectedCategoryId) => task.categoryIds.contains(selectedCategoryId))
       ).toList();
     }
 
     return filtered;
   }
 
-  Future<List<Task>> _getPrioritizedTasks() async {
-    final filteredTasks = await _getFilteredTasks();
+  List<Task> _getFilteredTasks() {
+    // Simple synchronous filtering for immediate UI updates
+    List<Task> filtered = _tasks;
 
-    // For completed tasks view, don't re-prioritize - keep the completion date order
-    if (_showCompleted) {
-      return filteredTasks;
+    if (!_showCompleted) {
+      filtered = filtered.where((task) => !task.isCompleted).toList();
+    } else {
+      filtered = filtered.where((task) => task.isCompleted).toList();
+      filtered.sort((a, b) {
+        if (a.completedAt == null && b.completedAt == null) return 0;
+        if (a.completedAt == null) return 1;
+        if (b.completedAt == null) return -1;
+        return b.completedAt!.compareTo(a.completedAt!);
+      });
     }
 
-    return _taskService.getPrioritizedTasks(filteredTasks, _categories, 100, includeCompleted: false);
+    // Apply category filters
+    if (_selectedCategoryFilters.isNotEmpty) {
+      filtered = filtered.where((task) {
+        if (task.categoryIds.isEmpty) return false;
+        return task.categoryIds.any((categoryId) =>
+          _selectedCategoryFilters.contains(categoryId));
+      }).toList();
+    }
+
+    return filtered;
   }
 
   bool _isMenstrualCycleTask(TaskRecurrence recurrence) {
@@ -1377,24 +1478,17 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Task>>(
-      future: _getPrioritizedTasks(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            appBar: widget.showFilters ? AppBar(
-              title: const Text('Tasks'),
-              backgroundColor: Colors.transparent,
-            ) : null,
-            body: const Center(child: CircularProgressIndicator()),
-          );
-        }
+    if (_isLoading) {
+      return Scaffold(
+        appBar: widget.showFilters ? AppBar(
+          title: const Text('Tasks'),
+          backgroundColor: Colors.transparent,
+        ) : null,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
-        final prioritizedTasks = snapshot.data ?? [];
-
-        return _buildMainScaffold(prioritizedTasks);
-      },
-    );
+    return _buildMainScaffold(_displayTasks);
   }
 
   Widget _buildMainScaffold(List<Task> prioritizedTasks) {
@@ -1403,6 +1497,23 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         title: const Text('Tasks'),
         backgroundColor: Colors.transparent,
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: IconButton(
+              icon: _isRecalculating
+                  ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.orange),
+                ),
+              )
+                  : const Icon(Icons.auto_fix_high),
+              tooltip: 'Recalculate Recurring Tasks',
+              onPressed: _isRecalculating ? null : _recalculateRecurringTasks,
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: IconButton(
@@ -1415,6 +1526,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                 setState(() {
                   _showAllTasks = !_showAllTasks;
                 });
+                _updateDisplayTasks();
               },
             ),
           ),
@@ -1430,6 +1542,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                 setState(() {
                   _showCompleted = !_showCompleted;
                 });
+                _updateDisplayTasks();
               },
             ),
           ),
@@ -1484,6 +1597,13 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                     FilterChip(
                       label: const Text('All'),
                       selected: _selectedCategoryFilters.isEmpty,
+                      backgroundColor: Colors.grey.withValues(alpha: 0.1),
+                      selectedColor: Colors.grey.withValues(alpha: 0.3),
+                      checkmarkColor: Colors.grey,
+                      side: BorderSide(color: Colors.grey.withValues(alpha: 0.5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       visualDensity: VisualDensity.compact,
                       onSelected: (selected) {
@@ -1491,6 +1611,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                           _selectedCategoryFilters.clear();
                         });
                         _saveCategoryFilters();
+                        _updateDisplayTasks();
                       },
                     ),
                     ..._categories.map((category) => FilterChip(
@@ -1500,6 +1621,9 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                       selectedColor: category.color.withValues(alpha: 0.3),
                       checkmarkColor: category.color,
                       side: BorderSide(color: category.color.withValues(alpha: 0.5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       visualDensity: VisualDensity.compact,
                       onSelected: (selected) {
@@ -1511,6 +1635,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                           }
                         });
                         _saveCategoryFilters();
+                        _updateDisplayTasks();
                       },
                     )),
                   ],
@@ -1522,14 +1647,14 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
           // Tasks List
           Expanded(
-            child: widget.enableRefresh 
-              ? RefreshIndicator(
-                  onRefresh: _refreshTasks,
-                  color: AppColors.coral,
-                  backgroundColor: AppColors.coral,
-                  child: _buildTasksList(prioritizedTasks),
-                )
-              : _buildTasksList(prioritizedTasks),
+            child: RefreshIndicator(
+                onRefresh: () async {
+                  await _loadData();
+                },
+                color: AppColors.coral,
+                backgroundColor: AppColors.coral,
+                child: _buildTasksList(prioritizedTasks),
+              ),
           ),
         ],
       ),

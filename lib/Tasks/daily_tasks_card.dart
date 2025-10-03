@@ -1,7 +1,5 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
-import '../Tasks/tasks_data_models.dart';
 import '../Tasks/task_service.dart';
 import '../Tasks/todo_screen.dart';
 import '../Tasks/task_edit_screen.dart';
@@ -14,65 +12,24 @@ class DailyTasksCard extends StatefulWidget {
 }
 
 class _DailyTasksCardState extends State<DailyTasksCard> {
-  List<Task> _prioritizedTasks = [];
-  List<TaskCategory> _categories = [];
-  final TaskService _taskService = TaskService();
-  bool _isLoading = false;
+  // Track if we need to refresh
+  int _refreshCounter = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadTasks();
-    
-    // Listen for global task changes
-    _taskService.addTaskChangeListener(_loadTasks);
   }
-  
+
   @override
   void dispose() {
-    // Remove listener to prevent memory leaks
-    _taskService.removeTaskChangeListener(_loadTasks);
     super.dispose();
   }
 
-  Future<void> _loadTasks() async {
-    if (!mounted) return;
-    
+  void _refreshTasks() {
+    // Increment counter to force TodoScreen rebuild
     setState(() {
-      _isLoading = true;
+      _refreshCounter++;
     });
-
-    try {
-      final tasks = await _taskService.loadTasks();
-      final categories = await _taskService.loadCategories();
-
-      if (!mounted) return;
-
-      // Filter to only show non-completed tasks (like TodoScreen's default behavior)
-      final filteredTasks = tasks.where((task) => !task.isCompleted).toList();
-      
-      // Let TodoScreen handle all the filtering - it already knows how to handle scheduledDate vs deadline properly
-
-      final prioritized = _taskService.getPrioritizedTasks(
-        filteredTasks, 
-        categories, 
-        100, // Limit to top 100
-        includeCompleted: false
-      );
-
-      setState(() {
-        _prioritizedTasks = prioritized;
-        _categories = categories;
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-      debugPrint('Error loading tasks: $e');
-    }
   }
 
   @override
@@ -93,51 +50,21 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  
-                  // Tasks Display
-                  if (_isLoading)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(40),
-                        child: CircularProgressIndicator(),
-                      ),
-                    )
-                  else if (_prioritizedTasks.isEmpty)
-                    SizedBox(
-                      height: 100,
-                      child: const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.check_circle_outline_rounded, size: 48, color: Colors.grey),
-                            SizedBox(height: 12),
-                            Text(
-                              'All caught up!',
-                              style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.w500),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              'No urgent tasks for today',
-                              style: TextStyle(color: Colors.white70),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    // Use TodoScreen for consistent task display
-                    SizedBox(
-                      height: 400, // Reduced height to leave space for button
-                      child: Material(
-                        color: Colors.transparent,
-                        child: TodoScreen(
-                          showFilters: false,
-                          showAddButton: false,
-                          enableRefresh: false, // Disable pull-to-refresh in daily tasks card
-                          onTasksChanged: _loadTasks, // Reload daily tasks when embedded TodoScreen tasks change
-                        ),
+                  // Use TodoScreen for consistent task display
+                  SizedBox(
+                    height: 400,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: TodoScreen(
+                        key: ValueKey(_refreshCounter), // Force rebuild when counter changes
+                        showFilters: false,
+                        showAddButton: false,
+                        enableRefresh: false, // Disable pull-to-refresh in daily tasks card
+                        onTasksChanged: _refreshTasks, // Refresh when tasks change
+                        initialShowAllTasks: false, // Keep menstrual cycle filtering active, but disable category filters
                       ),
                     ),
+                  ),
 
                   // Space for the add button
                   const SizedBox(height: 30),
@@ -167,23 +94,31 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(18),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
+                  onTap: () async {
+                    // Get categories from TodoScreen
+                    final categories = await TaskService().loadCategories();
+
+                    if (context.mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
                         builder: (context) => TaskEditScreen(
-                          categories: _categories,
+                          categories: categories,
                           onSave: (newTask) async {
-                            final allTasks = await _taskService.loadTasks();
+                            final taskService = TaskService();
+                            final allTasks = await taskService.loadTasks();
                             allTasks.add(newTask);
-                            await _taskService.saveTasks(allTasks);
+                            await taskService.saveTasks(allTasks);
+
+                            // Refresh the embedded TodoScreen
                             if (mounted) {
-                              await _loadTasks();
+                              _refreshTasks();
                             }
                           },
                         ),
-                      ),
-                    );
+                        ),
+                      );
+                    }
                   },
                   child: const Icon(
                     Icons.add_rounded,

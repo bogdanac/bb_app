@@ -33,14 +33,116 @@ class _HabitCardState extends State<HabitCard> {
   }
 
   Future<void> _toggleHabit(Habit habit) async {
-    await HabitService.toggleHabitCompletion(habit.id);
+    final result = await HabitService.toggleHabitCompletion(habit.id);
     await _loadActiveHabits(); // Reload to get updated completion status
-    
+
+    // Check for cycle completion
+    if (result['cycleCompleted'] == true && result['habit'] != null) {
+      final completedHabit = result['habit'] as Habit;
+      _showCycleCompletionDialog(completedHabit);
+    }
+
     // Check if all habits are now completed
     final allCompleted = _activeHabits.every((h) => h.isCompletedToday());
     if (allCompleted) {
       widget.onAllCompleted();
     }
+  }
+
+  void _showCycleCompletionDialog(Habit habit) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.celebration, color: AppColors.successGreen, size: 28),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Cycle Complete!',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.successGreen,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Congratulations! You\'ve completed a 21-day cycle for "${habit.name}".',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.successGreen.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.successGreen.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.trending_up, color: AppColors.successGreen),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '21 days completed! This is a major milestone in building lasting habits.',
+                      style: TextStyle(
+                        color: AppColors.successGreen.withValues(alpha: 0.9),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Would you like to start a new 21-day cycle for this habit?',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Keep Current Progress',
+              style: TextStyle(color: AppColors.greyText),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await HabitService.startNewCycle(habit.id);
+              await _loadActiveHabits();
+
+              // Show confirmation
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('New 21-day cycle started for "${habit.name}"!'),
+                    backgroundColor: AppColors.successGreen,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.successGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Start New Cycle'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

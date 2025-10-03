@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
-class MorningRoutineScreen extends StatefulWidget {
+class RoutineScreen extends StatefulWidget {
   final VoidCallback onCompleted;
 
-  const MorningRoutineScreen({super.key, required this.onCompleted});
+  const RoutineScreen({super.key, required this.onCompleted});
 
   @override
-  State<MorningRoutineScreen> createState() => _MorningRoutineScreenState();
+  State<RoutineScreen> createState() => _RoutineScreenState();
 }
 
-class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
+class _RoutineScreenState extends State<RoutineScreen> {
   final List<Map<String, dynamic>> _routineItems = [
     {'text': '☀️ Stretch and breathe', 'completed': false},
     {'text': '💧 Drink a glass of water', 'completed': false},
@@ -25,7 +25,7 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Morning Routine'),
+        title: const Text('Routine'),
         backgroundColor: AppColors.orange.withValues(alpha: 0.3),
       ),
       body: Container(
@@ -50,12 +50,12 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
                   child: Column(
                     children: [
                       const Text(
-                        '🌅 Good Morning!',
+                        '✨ Let\'s Go!',
                         style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Complete your morning routine ($completedCount/${_routineItems.length})',
+                        'Complete your routine ($completedCount/${_routineItems.length})',
                         style: const TextStyle(fontSize: 16, color: AppColors.greyText),
                       ),
                       const SizedBox(height: 20),
@@ -110,7 +110,7 @@ class _MorningRoutineScreenState extends State<MorningRoutineScreen> {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('🎉 Morning routine completed! Have a great day!'),
+                          content: Text('🎉 Routine completed! Great job!'),
                           backgroundColor: Colors.green,
                         ),
                       );

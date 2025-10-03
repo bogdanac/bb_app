@@ -30,6 +30,8 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   List<String> _selectedCategoryIds = [];
   DateTime? _deadline;
   DateTime? _reminderTime;
+  DateTime? _scheduledDate; // For manually scheduled non-recurring tasks
+  bool _hasUserModifiedScheduledDate = false; // Track if user has touched scheduled date
   bool _isImportant = false;
   TaskRecurrence? _recurrence;
   Timer? _saveTimer;
@@ -48,6 +50,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
       _selectedCategoryIds = List.from(task.categoryIds);
       _deadline = task.deadline;
       _reminderTime = task.reminderTime;
+      _scheduledDate = task.scheduledDate;
       _isImportant = task.isImportant;
       _recurrence = task.recurrence;
     } else if (widget.initialCategoryIds != null) {
@@ -73,6 +76,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
       _selectedCategoryIds = List.from(task.categoryIds);
       _deadline = task.deadline;
       _reminderTime = task.reminderTime;
+      _scheduledDate = task.scheduledDate;
       _isImportant = task.isImportant;
       _recurrence = task.recurrence;
       _currentTask = task;
@@ -85,8 +89,53 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   void dispose() {
     _saveTimer?.cancel();
     _savedTimer?.cancel();
+
+    // Save immediately if there are unsaved changes when exiting
+    if (_hasUnsavedChanges && _titleController.text.trim().isNotEmpty) {
+      _autoSaveTask();
+    }
+
     _titleController.dispose();
     super.dispose();
+  }
+
+  // Synchronous save for immediate persistence (used on back button)
+  Future<void> _saveTaskImmediately() async {
+    if (_titleController.text.trim().isEmpty) return;
+
+    try {
+      final task = Task(
+        id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        title: _titleController.text.trim(),
+        description: '',
+        categoryIds: _selectedCategoryIds,
+        deadline: _deadline,
+        scheduledDate: _hasUserModifiedScheduledDate
+            ? _scheduledDate
+            : (_scheduledDate ?? (_currentTask == null ? _getScheduledDate() : _currentTask?.scheduledDate)),
+        reminderTime: _reminderTime,
+        isImportant: _isImportant,
+        isPostponed: _scheduledDate != null,
+        recurrence: _recurrence,
+        isCompleted: _currentTask?.isCompleted ?? false,
+        completedAt: _currentTask?.completedAt,
+        createdAt: _currentTask?.createdAt ?? DateTime.now(),
+      );
+
+      // Call the onSave callback and wait if it returns a Future
+      final result = widget.onSave(task);
+      if (result is Future) {
+        await result;
+      }
+
+      // Update current task reference after save
+      _currentTask = task;
+      _hasUnsavedChanges = false;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving task immediately: $e');
+      }
+    }
   }
 
   void _onFieldChanged() {
@@ -99,7 +148,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
 
   void _scheduleAutoSave() {
     _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(seconds: 2), () {
+    _saveTimer = Timer(const Duration(milliseconds: 500), () {
       if (_hasUnsavedChanges && _titleController.text.trim().isNotEmpty) {
         _autoSaveTask();
       }
@@ -116,9 +165,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         description: '',
         categoryIds: _selectedCategoryIds,
         deadline: _deadline,
-        scheduledDate: _getScheduledDate(),
+        scheduledDate: _hasUserModifiedScheduledDate
+            ? _scheduledDate
+            : (_scheduledDate ?? (_currentTask == null ? _getScheduledDate() : _currentTask?.scheduledDate)),
         reminderTime: _reminderTime,
         isImportant: _isImportant,
+        isPostponed: _scheduledDate != null, // User manually set scheduled date
         recurrence: _recurrence,
         isCompleted: _currentTask?.isCompleted ?? false,
         completedAt: _currentTask?.completedAt,
@@ -160,47 +212,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     }
   }
 
-  void _completeTask() async {
-    if (_titleController.text.trim().isEmpty) return;
-
-    final task = Task(
-      id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      title: _titleController.text.trim(),
-      description: '',
-      categoryIds: _selectedCategoryIds,
-      deadline: _deadline,
-      scheduledDate: _getScheduledDate(),
-      reminderTime: _reminderTime,
-      isImportant: _isImportant,
-      recurrence: _recurrence,
-      isCompleted: true,
-      completedAt: DateTime.now(),
-      createdAt: _currentTask?.createdAt ?? DateTime.now(),
-    );
-
-    // Show success feedback before closing
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ Task "${task.title}" completed!'),
-          backgroundColor: AppColors.successGreen,
-          duration: const Duration(seconds: 1),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-
-    // Save the task
-    widget.onSave(task);
-
-    // Small delay to ensure the snackbar shows and save completes
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    // Close the dialog/screen after completing the task
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
-  }
 
   void _skipTask() async {
     if (_titleController.text.trim().isEmpty) return;
@@ -251,6 +262,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
       scheduledDate: nextScheduledDate,
       reminderTime: _reminderTime,
       isImportant: _isImportant,
+      isPostponed: nextScheduledDate != null, // Mark as postponed if we calculated a new date
       recurrence: _recurrence,
       isCompleted: false,
       completedAt: null,
@@ -290,24 +302,63 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     if (_currentTask?.scheduledDate != null) {
       return _currentTask!.scheduledDate;
     }
-    
+
     // If we have a recurrence, calculate the next scheduled date
     if (_recurrence != null) {
       final today = DateTime.now();
       final todayDate = DateTime(today.year, today.month, today.day);
-      
+
       // Check if it's due today
       if (_recurrence!.isDueOn(todayDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
         return todayDate;
       }
-      
-      // For monthly and yearly recurrences, calculate next occurrence
-      if (_recurrence!.types.contains(RecurrenceType.monthly) || 
-          _recurrence!.types.contains(RecurrenceType.yearly)) {
-        // For yearly: search up to 367 days to handle leap years and ensure we find the next occurrence
-        // For monthly: 365 days is more than enough (12 months)
-        final maxDays = _recurrence!.types.contains(RecurrenceType.yearly) ? 367 : 365;
-        for (int i = 1; i <= maxDays; i++) {
+
+      // Optimize for common recurrence types
+      if (_recurrence!.types.contains(RecurrenceType.daily)) {
+        return todayDate.add(const Duration(days: 1));
+      } else if (_recurrence!.types.contains(RecurrenceType.weekly)) {
+        // For weekly, find the next matching weekday
+        for (int i = 1; i <= 7; i++) {
+          final checkDate = todayDate.add(Duration(days: i));
+          if (_recurrence!.isDueOn(checkDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
+            return checkDate;
+          }
+        }
+      } else if (_recurrence!.types.contains(RecurrenceType.monthly)) {
+        // For monthly, calculate directly based on day of month
+        final targetDay = _recurrence!.dayOfMonth ?? todayDate.day;
+        var nextMonth = todayDate.month;
+        var nextYear = todayDate.year;
+
+        // Move to next month if we've passed the target day this month
+        if (todayDate.day >= targetDay) {
+          nextMonth++;
+          if (nextMonth > 12) {
+            nextMonth = 1;
+            nextYear++;
+          }
+        }
+
+        // Clamp the day to the last day of the month if necessary
+        final daysInMonth = DateTime(nextYear, nextMonth + 1, 0).day;
+        final actualDay = targetDay > daysInMonth ? daysInMonth : targetDay;
+        return DateTime(nextYear, nextMonth, actualDay);
+      } else if (_recurrence!.types.contains(RecurrenceType.yearly)) {
+        // For yearly, calculate directly
+        final targetMonth = _recurrence!.interval; // For yearly, interval represents the month
+        final targetDay = _recurrence!.dayOfMonth ?? todayDate.day;
+        var nextYear = todayDate.year;
+
+        // Move to next year if we've passed the target date this year
+        final targetDate = DateTime(nextYear, targetMonth, targetDay);
+        if (todayDate.isAfter(targetDate)) {
+          nextYear++;
+        }
+
+        return DateTime(nextYear, targetMonth, targetDay);
+      } else {
+        // Fallback for custom or other recurrence types - limit search to 30 days
+        for (int i = 1; i <= 30; i++) {
           final checkDate = todayDate.add(Duration(days: i));
           if (_recurrence!.isDueOn(checkDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
             return checkDate;
@@ -358,10 +409,18 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      onPopInvokedWithResult: (bool didPop, dynamic result) {
+      canPop: false, // We'll handle pop manually
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
         // Auto-save before leaving if there are unsaved changes
-        if (_hasUnsavedChanges && _titleController.text.trim().isNotEmpty) {
-          _autoSaveTask();
+        if (!didPop && _hasUnsavedChanges && _titleController.text.trim().isNotEmpty) {
+          // Save synchronously to ensure it completes before pop
+          await _saveTaskImmediately();
+        }
+        // Now pop manually
+        if (!didPop && mounted) {
+          if (context.mounted) {
+            Navigator.of(context).pop();
+          }
         }
       },
       child: Scaffold(
@@ -404,7 +463,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.check_circle_rounded,
                       size: 16,
                       color: AppColors.successGreen,
@@ -428,176 +487,183 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Complete Task Section
-            Container(
-              decoration: BoxDecoration(
-                color: _titleController.text.trim().isEmpty 
-                    ? AppColors.dialogBackground
-                    : AppColors.successGreen.withValues(alpha: 0.03),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _titleController.text.trim().isEmpty 
-                      ? AppColors.greyText
-                      : AppColors.successGreen.withValues(alpha: 0.1),
-                ),
-              ),
-              child: InkWell(
-                onTap: _titleController.text.trim().isEmpty ? null : _completeTask,
-                borderRadius: BorderRadius.circular(16),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: (_titleController.text.trim().isEmpty 
-                              ? AppColors.greyText
-                              : AppColors.successGreen).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.check_circle_rounded,
-                          color: _titleController.text.trim().isEmpty 
-                              ? AppColors.greyText
-                              : AppColors.successGreen,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Complete Task',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.greyText,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Mark as finished',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: AppColors.greyText,
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Transform.scale(
-                        scale: 1.2,
-                        child: Checkbox(
-                          value: false,
-                          onChanged: _titleController.text.trim().isEmpty 
-                              ? null 
-                              : (_) => _completeTask(),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          activeColor: AppColors.successGreen,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
 
-            const SizedBox(height: 12),
-
-            // Skip Task Section
-            Container(
-              decoration: BoxDecoration(
-                color: _titleController.text.trim().isEmpty
-                    ? AppColors.dialogBackground
-                    : AppColors.lightCoral.withValues(alpha: 0.03),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
+            // Skip Task / Set Scheduled Day Section
+            if (_recurrence != null) ...[
+              // Skip Task Section (for recurring tasks)
+              Container(
+                decoration: BoxDecoration(
                   color: _titleController.text.trim().isEmpty
-                      ? AppColors.greyText
-                      : AppColors.lightCoral.withValues(alpha: 0.1),
+                      ? AppColors.dialogBackground
+                      : AppColors.lightCoral.withValues(alpha: 0.03),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _titleController.text.trim().isEmpty
+                        ? AppColors.greyText
+                        : AppColors.lightCoral.withValues(alpha: 0.1),
+                  ),
                 ),
-              ),
-              child: InkWell(
-                onTap: _titleController.text.trim().isEmpty ? null : _skipTask,
-                borderRadius: BorderRadius.circular(16),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: (_titleController.text.trim().isEmpty
-                              ? AppColors.greyText
-                              : AppColors.lightCoral).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  onTap: _titleController.text.trim().isEmpty ? null : _skipTask,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: (_titleController.text.trim().isEmpty
+                                ? AppColors.greyText
+                                : AppColors.lightCoral).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.skip_next_rounded,
+                            color: _titleController.text.trim().isEmpty
+                                ? AppColors.greyText
+                                : AppColors.lightCoral,
+                            size: 24,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.skip_next_rounded,
-                          color: _titleController.text.trim().isEmpty
-                              ? AppColors.greyText
-                              : AppColors.lightCoral,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Skip Task',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.greyText,
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Skip Task',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.greyText,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _recurrence != null && _recurrence!.types.any((type) => [
-                                RecurrenceType.menstrualPhase,
-                                RecurrenceType.follicularPhase,
-                                RecurrenceType.ovulationPhase,
-                                RecurrenceType.earlyLutealPhase,
-                                RecurrenceType.lateLutealPhase
-                              ].contains(type))
-                                  ? 'Put on hold until next appropriate phase'
-                                  : 'Postpone to next occurrence',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.white24,
+                              const SizedBox(height: 2),
+                              Text(
+                                _recurrence!.types.any((type) => [
+                                  RecurrenceType.menstrualPhase,
+                                  RecurrenceType.follicularPhase,
+                                  RecurrenceType.ovulationPhase,
+                                  RecurrenceType.earlyLutealPhase,
+                                  RecurrenceType.lateLutealPhase
+                                ].contains(type))
+                                    ? 'Put on hold until next appropriate phase'
+                                    : 'Postpone to next occurrence',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.white24,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      Transform.scale(
-                        scale: 1.2,
-                        child: Icon(
-                          Icons.skip_next_rounded,
-                          color: _titleController.text.trim().isEmpty
-                              ? AppColors.greyText
-                              : AppColors.lightCoral,
-                          size: 20,
+                        Transform.scale(
+                          scale: 1.2,
+                          child: Icon(
+                            Icons.skip_next_rounded,
+                            color: _titleController.text.trim().isEmpty
+                                ? AppColors.greyText
+                                : AppColors.lightCoral,
+                            size: 20,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
+            ] else ...[
+              // Set Scheduled Day Section (for non-recurring tasks)
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.dialogBackground.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _scheduledDate != null
+                        ? AppColors.successGreen.withValues(alpha: 0.1)
+                        : AppColors.greyText,
+                  ),
+                ),
+                child: InkWell(
+                  onTap: _selectScheduledDate,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: (_scheduledDate != null
+                                ? AppColors.successGreen.withValues(alpha: 0.3)
+                                : AppColors.greyText).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.calendar_today_rounded,
+                            color: _scheduledDate != null
+                                ? AppColors.successGreen
+                                : AppColors.greyText,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Set Scheduled Day',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.greyText,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _scheduledDate != null
+                                    ? DateFormat('EEEE, MMMM dd').format(_scheduledDate!)
+                                    : 'Choose when to do this task',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.greyText,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_scheduledDate != null)
+                          IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _scheduledDate = null;
+                                _hasUserModifiedScheduledDate = true;
+                              });
+                              _onFieldChanged();
+                            },
+                            icon: const Icon(Icons.clear_rounded),
+                            color: AppColors.greyText,
+                          )
+                        else
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.greyText,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
 
             const SizedBox(height: 12),
 
-            // Deadline Section
-            Container(
+            // Deadline Section (only for non-recurring tasks)
+            if (_recurrence == null)
+              Container(
               decoration: BoxDecoration(
                 color: AppColors.dialogBackground.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
@@ -667,7 +733,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                           color: AppColors.greyText,
                         )
                       else
-                        Icon(
+                        const Icon(
                           Icons.chevron_right_rounded,
                           color: AppColors.greyText,
                         ),
@@ -676,11 +742,13 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 ),
               ),
             ),
-            
-            const SizedBox(height: 12),
 
-            // Reminder Time Section
-            Container(
+            // Only add spacing if deadline section was shown
+            if (_recurrence == null) const SizedBox(height: 12),
+
+            // Reminder Time Section (only for non-recurring tasks)
+            if (_recurrence == null)
+              Container(
               decoration: BoxDecoration(
                 color: AppColors.dialogBackground.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
@@ -750,7 +818,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                           color: AppColors.greyText,
                         )
                       else
-                        Icon(
+                        const Icon(
                           Icons.chevron_right_rounded,
                           color: AppColors.greyText,
                         ),
@@ -759,8 +827,9 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 ),
               ),
             ),
-            
-            const SizedBox(height: 12),
+
+            // Only add spacing if reminder section was shown
+            if (_recurrence == null) const SizedBox(height: 12),
 
             // Important Section
             Container(
@@ -982,14 +1051,16 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                       if (_recurrence != null)
                         IconButton(
                           onPressed: () {
-                            setState(() => _recurrence = null);
+                            setState(() {
+                              _recurrence = null;
+                            });
                             _onFieldChanged();
                           },
                           icon: const Icon(Icons.clear_rounded),
                           color: AppColors.greyText,
                         )
                       else
-                        Icon(
+                        const Icon(
                           Icons.chevron_right_rounded,
                           color: AppColors.greyText,
                         ),
@@ -1065,7 +1136,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         initialRecurrence: _recurrence,
       ),
     );
-    
+
     if (recurrence != _recurrence) {
       setState(() {
         _recurrence = recurrence;
@@ -1075,10 +1146,31 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
           final today = DateTime.now();
           final todayDate = DateTime(today.year, today.month, today.day);
           if (recurrence.isDueOn(todayDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
-            // Set scheduled date to today so the "scheduled today" chip appears
-            // We'll update the task's scheduledDate when we save
           }
         }
+        // Clear manually set scheduled date, deadline, and reminder when setting recurrence
+        if (recurrence != null) {
+          _scheduledDate = null;
+          _hasUserModifiedScheduledDate = true;
+          _deadline = null; // Deadlines don't make sense for recurring tasks
+          _reminderTime = null; // Reminders are for deadlines, not recurring tasks
+        }
+      });
+      _onFieldChanged();
+    }
+  }
+
+  void _selectScheduledDate() async {
+    final date = await DatePickerUtils.showStyledDatePicker(
+      context: context,
+      initialDate: _scheduledDate ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (date != null) {
+      setState(() {
+        _scheduledDate = date;
+        _hasUserModifiedScheduledDate = true;
       });
       _onFieldChanged();
     }

@@ -117,6 +117,7 @@ class FastingUtils {
   @Deprecated('Use getRecommendedFastType() async version instead')
   static String getRecommendedFastTypeSync() {
     final now = DateTime.now();
+    // Note: This sync version can't access SharedPreferences, so it defaults to Friday
     final isFriday = now.weekday == 5;
     final is25th = now.day == 25;
 

@@ -4,6 +4,7 @@ import 'package:bb_app/Routines/routine_reminder_settings_screen.dart';
 import 'package:bb_app/Habits/habit_edit_screen.dart';
 import 'package:bb_app/Habits/habit_statistics_screen.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:bb_app/Routines/routine_data_models.dart';
 import 'package:bb_app/Habits/habit_data_models.dart';
 import '../theme/app_colors.dart';
@@ -28,6 +29,14 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
   bool _isLoading = true;
   String? _inProgressRoutineId;
 
+  // Hold state tracking
+  bool _isHoldingForRoutineDelete = false;
+  bool _isHoldingForHabitDelete = false;
+  String? _holdingRoutineId;
+  String? _holdingHabitId;
+  Timer? _routineHoldTimer;
+  Timer? _habitHoldTimer;
+
   @override
   void initState() {
     super.initState();
@@ -40,6 +49,8 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
 
   @override
   void dispose() {
+    _routineHoldTimer?.cancel();
+    _habitHoldTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -77,6 +88,62 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
 
   Future<void> _saveRoutines() async {
     await RoutineService.saveRoutines(_routines);
+  }
+
+  void _startRoutineHoldTimer(Routine routine) {
+    // Cancel any existing timer to prevent duplicates
+    _routineHoldTimer?.cancel();
+
+    setState(() {
+      _holdingRoutineId = routine.id;
+      _isHoldingForRoutineDelete = true;
+    });
+
+    _routineHoldTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted && _isHoldingForRoutineDelete && _holdingRoutineId == routine.id) {
+        _deleteRoutine(routine);
+        _cancelRoutineHoldTimer();
+      }
+    });
+  }
+
+  void _cancelRoutineHoldTimer() {
+    _routineHoldTimer?.cancel();
+    _routineHoldTimer = null;
+    if (mounted) {
+      setState(() {
+        _isHoldingForRoutineDelete = false;
+        _holdingRoutineId = null;
+      });
+    }
+  }
+
+  void _startHabitHoldTimer(Habit habit) {
+    // Cancel any existing timer to prevent duplicates
+    _habitHoldTimer?.cancel();
+
+    setState(() {
+      _holdingHabitId = habit.id;
+      _isHoldingForHabitDelete = true;
+    });
+
+    _habitHoldTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted && _isHoldingForHabitDelete && _holdingHabitId == habit.id) {
+        _deleteHabit(habit);
+        _cancelHabitHoldTimer();
+      }
+    });
+  }
+
+  void _cancelHabitHoldTimer() {
+    _habitHoldTimer?.cancel();
+    _habitHoldTimer = null;
+    if (mounted) {
+      setState(() {
+        _isHoldingForHabitDelete = false;
+        _holdingHabitId = null;
+      });
+    }
   }
 
   // Routine methods
@@ -565,43 +632,20 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
     return Dismissible(
       key: ValueKey(routine.id),
       direction: DismissDirection.endToStart,
-      dismissThresholds: const {DismissDirection.endToStart: 0.8},
+      dismissThresholds: const {DismissDirection.endToStart: 0.7},
       confirmDismiss: (direction) async {
-        return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Row(
-              children: [
-                Icon(
-                  Icons.delete_outline_rounded,
-                  color: AppColors.lightYellow,
-                  size: 28,
-                ),
-                SizedBox(width: 12),
-                Text('Delete Routine'),
-              ],
-            ),
-            content: Text('Are you sure you want to delete "${routine.title}"?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.lightYellow,
-                  foregroundColor: AppColors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        ) ?? false;
+        return false; // Never auto-dismiss, require manual hold confirmation
+      },
+      onUpdate: (details) {
+        final threshold = 0.7;
+        final reachedThreshold = details.progress >= threshold;
+
+        // When threshold reached, start hold detection
+        if (reachedThreshold && _holdingRoutineId != routine.id) {
+          _startRoutineHoldTimer(routine);
+        } else if (!reachedThreshold && _holdingRoutineId == routine.id) {
+          _cancelRoutineHoldTimer();
+        }
       },
       onDismissed: (direction) {
         _deleteRoutine(routine);
@@ -609,23 +653,36 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
       background: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: AppColors.deleteRed,
+          color: (_isHoldingForRoutineDelete && _holdingRoutineId == routine.id)
+              ? AppColors.deleteRed
+              : AppColors.deleteRed.withValues(alpha: 0.8),
           borderRadius: BorderRadius.circular(12),
+          boxShadow: (_isHoldingForRoutineDelete && _holdingRoutineId == routine.id) ? [
+            BoxShadow(
+              color: AppColors.deleteRed.withValues(alpha: 0.6),
+              blurRadius: 12,
+              spreadRadius: 0,
+            )
+          ] : null,
         ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 24),
-        child: const Column(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.delete_rounded,
+              (_isHoldingForRoutineDelete && _holdingRoutineId == routine.id)
+                  ? Icons.timer_rounded
+                  : Icons.delete_rounded,
               color: AppColors.white,
               size: 32,
             ),
-            SizedBox(height: 4),
+            const SizedBox(height: 4),
             Text(
-              'Delete',
-              style: TextStyle(
+              (_isHoldingForRoutineDelete && _holdingRoutineId == routine.id)
+                  ? 'Hold to Delete'
+                  : 'Delete',
+              style: const TextStyle(
                 color: AppColors.white,
                 fontWeight: FontWeight.w500,
                 fontSize: 12,
@@ -857,43 +914,20 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
     return Dismissible(
       key: ValueKey(habit.id),
       direction: DismissDirection.endToStart,
-      dismissThresholds: const {DismissDirection.endToStart: 0.8},
+      dismissThresholds: const {DismissDirection.endToStart: 0.7},
       confirmDismiss: (direction) async {
-        return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Row(
-              children: [
-                Icon(
-                  Icons.delete_outline_rounded,
-                  color: AppColors.lightYellow,
-                  size: 28,
-                ),
-                SizedBox(width: 12),
-                Text('Delete Habit'),
-              ],
-            ),
-            content: Text('Are you sure you want to delete "${habit.name}"? This will permanently remove all tracking data.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.lightYellow,
-                  foregroundColor: AppColors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        ) ?? false;
+        return false; // Never auto-dismiss, require manual hold confirmation
+      },
+      onUpdate: (details) {
+        final threshold = 0.7;
+        final reachedThreshold = details.progress >= threshold;
+
+        // When threshold reached, start hold detection
+        if (reachedThreshold && _holdingHabitId != habit.id) {
+          _startHabitHoldTimer(habit);
+        } else if (!reachedThreshold && _holdingHabitId == habit.id) {
+          _cancelHabitHoldTimer();
+        }
       },
       onDismissed: (direction) {
         _deleteHabit(habit);
@@ -901,23 +935,36 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
       background: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: AppColors.deleteRed,
+          color: (_isHoldingForHabitDelete && _holdingHabitId == habit.id)
+              ? AppColors.deleteRed
+              : AppColors.deleteRed.withValues(alpha: 0.8),
           borderRadius: BorderRadius.circular(12),
+          boxShadow: (_isHoldingForHabitDelete && _holdingHabitId == habit.id) ? [
+            BoxShadow(
+              color: AppColors.deleteRed.withValues(alpha: 0.6),
+              blurRadius: 12,
+              spreadRadius: 0,
+            )
+          ] : null,
         ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 24),
-        child: const Column(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.delete_rounded,
+              (_isHoldingForHabitDelete && _holdingHabitId == habit.id)
+                  ? Icons.timer_rounded
+                  : Icons.delete_rounded,
               color: AppColors.white,
               size: 32,
             ),
-            SizedBox(height: 4),
+            const SizedBox(height: 4),
             Text(
-              'Delete',
-              style: TextStyle(
+              (_isHoldingForHabitDelete && _holdingHabitId == habit.id)
+                  ? 'Hold to Delete'
+                  : 'Delete',
+              style: const TextStyle(
                 color: AppColors.white,
                 fontWeight: FontWeight.w500,
                 fontSize: 12,
@@ -983,10 +1030,10 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.1) : AppColors.greyText,
+                          color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.1) : AppColors.normalCardBackground,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.3) : AppColors.greyText,
+                            color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.3) : AppColors.grey300,
                           ),
                         ),
                         child: Row(
@@ -1014,7 +1061,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppColors.greyText,
+                            color: AppColors.normalCardBackground,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(

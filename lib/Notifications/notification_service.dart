@@ -5,9 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import '../Fasting/fasting_phases.dart';
-import '../Data/backup_service.dart';
 import '../Tasks/task_service.dart';
+import '../shared/timezone_utils.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -108,12 +107,15 @@ class NotificationService {
       final androidImplementation = flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
-      
-      if (androidImplementation != null) {
-        await androidImplementation.requestNotificationsPermission();
 
-        // Request exact alarm permission for Android 12+
-        await androidImplementation.requestExactAlarmsPermission();
+      if (androidImplementation != null) {
+        final notificationPermission = await androidImplementation.requestNotificationsPermission();
+        final exactAlarmPermission = await androidImplementation.requestExactAlarmsPermission();
+
+        if (kDebugMode) {
+          print('Notification permission: $notificationPermission');
+          print('Exact alarm permission: $exactAlarmPermission');
+        }
       }
 
       // Test immediate notification to verify setup
@@ -158,8 +160,7 @@ class NotificationService {
     } else if (payload == 'fasting_reminder') {
       // Fasting reminder notification tapped
     } else if (payload == 'auto_backup_trigger') {
-      // Auto backup notification triggered - perform backup
-      _handleAutoBackupTrigger();
+      // Legacy auto backup trigger - no longer used (now using timer system)
     } else if (payload == 'cloud_backup_reminder') {
       // Cloud backup reminder notification tapped
     } else if (payload == 'food_tracking_reminder') {
@@ -184,10 +185,6 @@ class NotificationService {
       await prefs.remove('morning_notification_enabled');
       await prefs.remove('morning_notification_hour');
       await prefs.remove('morning_notification_minute');
-      
-      // After cleanup, reschedule water notifications to make sure they're active
-      await scheduleWaterReminders();
-      
     } catch (e) {
       if (kDebugMode) {
         print('ERROR cancelling legacy morning notifications: $e');
@@ -196,33 +193,54 @@ class NotificationService {
   }
 
   // Task notification methods
-  Future<void> scheduleTaskNotification(String taskId, String title, DateTime reminderTime, {bool isRecurring = false}) async {
+  Future<void> scheduleTaskNotification(String taskId, String title, DateTime reminderTime, {bool isRecurring = false, String? recurrenceType}) async {
     try {
       final notificationId = 1000 + taskId.hashCode.abs() % 9000; // Keep task notifications in 1000-9999 range
 
       final now = DateTime.now();
       var scheduledDate = reminderTime;
 
-
       // Don't schedule if the time has already passed
       if (scheduledDate.isBefore(now)) {
+        if (kDebugMode) {
+          print('⚠️ Task notification not scheduled - time already passed: $title at $scheduledDate');
+        }
         return;
       }
 
-      // Use local timezone instead of UTC for proper scheduling
-      tz.Location location;
-      try {
-        location = tz.local;
-      } catch (e) {
-        // Fallback to UTC if local timezone is not available
-        location = tz.UTC;
+      if (kDebugMode) {
+        print('📋 Scheduling task notification: "$title" at $scheduledDate (recurring: $isRecurring, type: ${recurrenceType ?? 'none'})');
       }
 
+      // Determine if we should set up recurring based on the task type
+      // Different DateTimeComponents for different recurrence patterns
+      DateTimeComponents? matchComponents;
+      if (isRecurring && recurrenceType != null) {
+        switch (recurrenceType) {
+          case 'daily':
+            matchComponents = DateTimeComponents.time; // Repeats daily at same time
+            break;
+          case 'weekly':
+            matchComponents = DateTimeComponents.dayOfWeekAndTime; // Repeats weekly on same day and time
+            break;
+          case 'monthly':
+            matchComponents = DateTimeComponents.dayOfMonthAndTime; // Repeats monthly on same day and time
+            break;
+          default:
+            // For other patterns (yearly, custom), we'll schedule one-time and let TaskService reschedule
+            matchComponents = null;
+        }
+      } else if (isRecurring) {
+        // Default to daily if no type specified
+        matchComponents = DateTimeComponents.time;
+      }
+
+      // Use timezone utility for consistent scheduling
       await flutterLocalNotificationsPlugin.zonedSchedule(
         notificationId,
         '📋 Task Reminder',
         title,
-        tz.TZDateTime.from(scheduledDate, location),
+        TimezoneUtils.forNotification(scheduledDate),
         const NotificationDetails(
           android: AndroidNotificationDetails(
             'task_reminders',
@@ -243,9 +261,13 @@ class NotificationService {
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: null, // Don't use automatic recurring - TaskService handles the logic
+        matchDateTimeComponents: matchComponents, // For recurring tasks, this will repeat daily
         payload: 'task_reminder_$taskId',
       );
+
+      if (kDebugMode) {
+        print('✅ Task notification scheduled successfully with ID: $notificationId');
+      }
 
     } catch (e) {
       if (kDebugMode) {
@@ -286,9 +308,82 @@ class NotificationService {
   static const int _waterReminder2PM = 3;
   static const int _waterReminder4PM = 4;
 
-  // Schedulează toate notificările de apă
-  Future<void> scheduleWaterReminders() async {
+  // Centralized notification scheduling - prevents duplicates
+  static bool _waterRemindersScheduled = false;
+
+  /// Get notification details for water reminders
+  static NotificationDetails getWaterNotificationDetails(String channelId) {
+    String channelName;
+    String channelDescription;
+
+    switch (channelId) {
+      case 'water_gentle':
+        channelName = 'Gentle Water Reminders';
+        channelDescription = 'Gentle reminders to drink water';
+        break;
+      case 'water_aggressive':
+        channelName = 'Urgent Water Reminders';
+        channelDescription = 'Important water reminders when you\'re behind';
+        break;
+      case 'water_behind':
+        channelName = 'Hydration Progress Reminders';
+        channelDescription = 'Reminders when you\'re behind on hydration goals';
+        break;
+      default:
+        channelName = 'Water Reminders';
+        channelDescription = 'Water intake reminders';
+    }
+
+    return NotificationDetails(
+      android: AndroidNotificationDetails(
+        channelId,
+        channelName,
+        channelDescription: channelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        showWhen: true,
+      ),
+    );
+  }
+
+  /// Get notification details for routine reminders
+  static NotificationDetails getRoutineNotificationDetails() {
+    return const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'routine_reminders',
+        'Routine Reminders',
+        channelDescription: 'Daily routine reminders',
+        importance: Importance.high,
+        priority: Priority.high,
+        showWhen: true,
+      ),
+    );
+  }
+
+  /// Get notification details for cycle reminders
+  static NotificationDetails getCycleNotificationDetails() {
+    return const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'cycle_reminders',
+        'Cycle Reminders',
+        channelDescription: 'Important menstrual cycle reminders',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+    );
+  }
+
+  /// Schedule all water reminders (only once per app session unless forced)
+  Future<void> scheduleWaterReminders({bool force = false}) async {
+    if (!force && _waterRemindersScheduled) {
+      if (kDebugMode) {
+        print('Water reminders already scheduled, skipping duplicate');
+      }
+      return;
+    }
+
     if (kDebugMode) {
+      print('Scheduling water reminders...');
     }
 
     try {
@@ -296,6 +391,7 @@ class NotificationService {
       await _scheduleWaterReminder10AM();
       await _scheduleWaterReminder2PM();
       await _scheduleWaterReminder4PM();
+      _waterRemindersScheduled = true;
     } catch (e) {
       if (kDebugMode) {
         print('ERROR schedule water notifications: $e');
@@ -318,13 +414,12 @@ class NotificationService {
         scheduledDate = scheduledDate.add(const Duration(days: 1));
       }
 
-      // Use UTC timezone to avoid initialization issues
-      final location = tz.UTC;
+      // Use timezone utility for consistent scheduling
       await flutterLocalNotificationsPlugin.zonedSchedule(
         _waterReminder9AM,
         '💧 Gentle Hydration Reminder',
         'Start your day with some water! Your body will thank you 🌱',
-        tz.TZDateTime.from(scheduledDate, location),
+        TimezoneUtils.forWaterReminder(scheduledDate),
         const NotificationDetails(
           android: AndroidNotificationDetails(
             'water_gentle',
@@ -362,13 +457,12 @@ class NotificationService {
         scheduledDate = scheduledDate.add(const Duration(days: 1));
       }
 
-      // Use UTC timezone to avoid initialization issues
-      final location = tz.UTC;
+      // Use timezone utility for consistent scheduling
       await flutterLocalNotificationsPlugin.zonedSchedule(
         _waterReminder10AM,
         '🚨 DRINK WATER NOW!',
         'You need at least 300ml by now! Your health depends on it! 💪',
-        tz.TZDateTime.from(scheduledDate, location),
+        TimezoneUtils.forWaterReminder(scheduledDate),
         const NotificationDetails(
           android: AndroidNotificationDetails(
             'water_aggressive',
@@ -412,13 +506,12 @@ class NotificationService {
         scheduledDate = scheduledDate.add(const Duration(days: 1));
       }
 
-      // Use UTC timezone to avoid initialization issues
-      final location = tz.UTC;
+      // Use timezone utility for consistent scheduling
       await flutterLocalNotificationsPlugin.zonedSchedule(
         _waterReminder2PM,
         '⏰ You\'re Behind on Hydration!',
         'You should have 1L by now! Time to catch up - drink up! 🏃‍♀️💧',
-        tz.TZDateTime.from(scheduledDate, location),
+        TimezoneUtils.forWaterReminder(scheduledDate),
         const NotificationDetails(
           android: AndroidNotificationDetails(
             'water_behind',
@@ -461,13 +554,12 @@ class NotificationService {
         scheduledDate = scheduledDate.add(const Duration(days: 1));
       }
 
-      // Use UTC timezone to avoid initialization issues
-      final location = tz.UTC;
+      // Use timezone utility for consistent scheduling
       await flutterLocalNotificationsPlugin.zonedSchedule(
         _waterReminder4PM,
         '⚡ Afternoon Hydration Check!',
         'You should have 1.2L by now! Only 300ml left to reach your goal! 💪💧',
-        tz.TZDateTime.from(scheduledDate, location),
+        TimezoneUtils.forWaterReminder(scheduledDate),
         const NotificationDetails(
           android: AndroidNotificationDetails(
             'water_behind',
@@ -535,7 +627,20 @@ class NotificationService {
 
   // Reprogramează notificările pentru ziua următoare
   Future<void> rescheduleWaterNotificationsForTomorrow() async {
-    await scheduleWaterReminders();
+    await scheduleWaterReminders(force: true);
+  }
+
+  /// Schedule routine notifications for all enabled routines (centralized)
+  Future<void> scheduleAllRoutineNotifications(List<dynamic> routines) async {
+    if (kDebugMode) {
+      print('Scheduling routine notifications for ${routines.length} routines...');
+    }
+
+    for (final routine in routines) {
+      if (routine.reminderEnabled == true) {
+        await scheduleRoutineNotification(routine.id, routine.title, routine.reminderHour, routine.reminderMinute);
+      }
+    }
   }
 
   // Routine notification methods
@@ -555,13 +660,12 @@ class NotificationService {
         scheduledDate = scheduledDate.add(const Duration(days: 1));
       }
 
-      // Use UTC timezone like other notifications
-      final location = tz.UTC;
+      // Use timezone utility for consistent scheduling
       await flutterLocalNotificationsPlugin.zonedSchedule(
         notificationId,
         '✨ $routineTitle',
         'Time to start your routine! Let\'s make today amazing! 🌟',
-        tz.TZDateTime.from(scheduledDate, location),
+        TimezoneUtils.forRoutineReminder(scheduledDate),
         const NotificationDetails(
           android: AndroidNotificationDetails(
             'routine_reminders',
@@ -630,8 +734,7 @@ class NotificationService {
         await flutterLocalNotificationsPlugin.cancel(i);
       }
 
-      // Reschedule water notifications to ensure they're active
-      await scheduleWaterReminders();
+      // Water notifications will be scheduled once during app startup
 
     } catch (e) {
       if (kDebugMode) {
@@ -650,10 +753,13 @@ class NotificationService {
     required String currentPhase,
   }) async {
     try {
+      // Always cancel the previous progress notification first to prevent duplicates
+      await flutterLocalNotificationsPlugin.cancel(_fastingProgressNotificationId);
+
       final hours = elapsedTime.inHours;
       final minutes = elapsedTime.inMinutes.remainder(60);
-      
-      final progress = totalDuration.inMinutes > 0 
+
+      final progress = totalDuration.inMinutes > 0
           ? (elapsedTime.inMinutes / totalDuration.inMinutes * 100).round()
           : 0;
 
@@ -693,8 +799,8 @@ class NotificationService {
         payload: 'fasting_progress',
       );
 
-      // Schedule multiple follow-up notifications at different intervals
-      await _scheduleProgressReminders(fastType, elapsedTime, totalDuration);
+      // Note: Scheduled progress reminders disabled to prevent notification spam
+      // The main app timer handles regular updates of the progress notification
 
     } catch (e) {
       if (kDebugMode) {
@@ -703,75 +809,6 @@ class NotificationService {
     }
   }
 
-  // Schedule multiple progress reminder notifications
-  Future<void> _scheduleProgressReminders(
-    String fastType,
-    Duration elapsedTime, 
-    Duration totalDuration,
-  ) async {
-    try {
-      // Cancel existing scheduled reminders
-      for (int i = 1; i <= 20; i++) {
-        await flutterLocalNotificationsPlugin.cancel(_fastingProgressNotificationId + i);
-      }
-      
-      final location = tz.UTC;
-      
-      // Schedule reminders every 30 minutes for the next 10 hours
-      for (int i = 1; i <= 20; i++) {
-        final reminderTime = DateTime.now().add(Duration(minutes: 30 * i));
-        final futureElapsed = elapsedTime + Duration(minutes: 30 * i);
-        
-        // Don't schedule if past the total duration
-        if (futureElapsed >= totalDuration) break;
-        
-        final futureHours = futureElapsed.inHours;
-        final futureMinutes = futureElapsed.inMinutes.remainder(60);
-        final futureProgress = totalDuration.inMinutes > 0 
-            ? (futureElapsed.inMinutes / totalDuration.inMinutes * 100).round()
-            : 0;
-
-        // Determine phase using proper fasting phases utility
-        final phaseInfo = FastingPhases.getFastingPhaseInfo(futureElapsed, true);
-        String phase = phaseInfo['phase'];
-
-        await flutterLocalNotificationsPlugin.zonedSchedule(
-          _fastingProgressNotificationId + i,
-          '🔥 $fastType Fast: $phase',
-          '${futureHours}h ${futureMinutes}m completed • $futureProgress% • Keep going!',
-          tz.TZDateTime.from(reminderTime, location),
-          NotificationDetails(
-            android: AndroidNotificationDetails(
-              'fasting_progress',
-              'Fasting Progress',
-              channelDescription: 'Ongoing fasting progress updates',
-              importance: Importance.max,
-              priority: Priority.high,
-              icon: '@mipmap/ic_launcher',
-              color: const Color(0xFFF98834),
-              ongoing: true,
-              autoCancel: false,
-              showProgress: true,
-              progress: futureProgress.clamp(0, 100),
-              maxProgress: 100,
-              enableVibration: false,
-              playSound: false,
-              category: AndroidNotificationCategory.workout,
-              visibility: NotificationVisibility.public,
-            ),
-          ),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-          payload: 'fasting_progress_reminder',
-        );
-      }
-
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR scheduling progress reminders: $e');
-      }
-    }
-  }
 
 
   Future<void> cancelFastingProgressNotification() async {
@@ -929,12 +966,11 @@ class NotificationService {
         return;
       }
 
-      final location = tz.UTC;
       await flutterLocalNotificationsPlugin.zonedSchedule(
         notificationId,
         '⏰ Time to Fast!',
         'Your scheduled $fastType is about to begin. Are you ready? 🚀',
-        tz.TZDateTime.from(reminderTime, location),
+        TimezoneUtils.forNotification(reminderTime),
         const NotificationDetails(
           android: AndroidNotificationDetails(
             'fasting_reminder',
@@ -988,58 +1024,6 @@ class NotificationService {
   }
 
   // Handle auto backup trigger from notification
-  void _handleAutoBackupTrigger() async {
-    try {
-      
-      // Perform the backup
-      await BackupService.performAutoBackup();
-      
-      // Show completion notification
-      await flutterLocalNotificationsPlugin.show(
-        8889, // Different ID for completion notification
-        '✅ Backup Complete',
-        'Nightly backup completed successfully',
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'auto_backup',
-            'Automatic Backups',
-            channelDescription: 'Automatic nightly data backups',
-            importance: Importance.low,
-            priority: Priority.low,
-            showWhen: false,
-            playSound: false,
-            enableVibration: false,
-            timeoutAfter: 5000, // Auto dismiss after 5 seconds
-          ),
-        ),
-      );
-      
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR handling auto backup trigger: $e');
-      }
-      
-      // Show error notification
-      await flutterLocalNotificationsPlugin.show(
-        8890, // ERROR notification ID
-        '⚠️ Backup Error',
-        'Nightly backup failed. Try manual backup.',
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'auto_backup',
-            'Automatic Backups',
-            channelDescription: 'Automatic nightly data backups',
-            importance: Importance.low,
-            priority: Priority.low,
-            showWhen: false,
-            playSound: false,
-            enableVibration: false,
-            timeoutAfter: 10000, // Auto dismiss after 10 seconds
-          ),
-        ),
-      );
-    }
-  }
 
   // Schedule daily food tracking reminder at 8 PM
   Future<void> scheduleFoodTrackingReminder() async {
@@ -1068,14 +1052,13 @@ class NotificationService {
       
       const notificationDetails = NotificationDetails(android: androidDetails);
       
-      // Convert to timezone-aware datetime  
-      final scheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
+      // Convert to timezone-aware datetime
       
       await flutterLocalNotificationsPlugin.zonedSchedule(
         7777, // Unique ID for food tracking reminders
         '🍽️ Food Tracking Time',
         'Don\'t forget to log what you ate today! Tap to track your meals.',
-        scheduledDate,
+        TimezoneUtils.forNotification(scheduledTime),
         notificationDetails,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
@@ -1115,13 +1098,12 @@ class NotificationService {
       const notificationDetails = NotificationDetails(android: androidDetails);
       
       // Convert to timezone-aware datetime
-      final scheduledDate = tz.TZDateTime.from(reminderTime, tz.local);
-      
+
       await flutterLocalNotificationsPlugin.zonedSchedule(
         7776, // Different ID for next day's reminder
         '🍽️ Food Tracking Time',
         'Don\'t forget to log what you ate today! Tap to track your meals.',
-        scheduledDate,
+        TimezoneUtils.forNotification(reminderTime),
         notificationDetails,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
@@ -1189,5 +1171,50 @@ class NotificationService {
         print('ERROR rescheduling all task notifications: $e');
       }
     }
+  }
+
+  /// Check notification permissions and return status
+  Future<bool> areNotificationsEnabled() async {
+    try {
+      final androidImpl = flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+      if (androidImpl != null) {
+        final granted = await androidImpl.areNotificationsEnabled();
+        return granted ?? false;
+      }
+
+      // For iOS, assume enabled if we got this far
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error checking notification permissions: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Show a user-friendly dialog when notifications are blocked
+  void showNotificationBlockedDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.dialogBackground,
+        title: const Text(
+          '🔕 Notifications Blocked',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Notifications are currently blocked for this app. You won\'t receive reminders for water, fasting, routines, or tasks.\n\nTo enable notifications:\n1. Go to Settings\n2. Find this app\n3. Enable Notifications',
+          style: TextStyle(color: AppColors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: AppColors.coral)),
+          ),
+        ],
+      ),
+    );
   }
 }

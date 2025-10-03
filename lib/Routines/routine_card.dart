@@ -7,21 +7,21 @@ import 'routine_widget_service.dart';
 import 'routine_progress_service.dart';
 import 'dart:async';
 
-class MorningRoutineCard extends StatefulWidget {
+class RoutineCard extends StatefulWidget {
   final VoidCallback onCompleted;
   final VoidCallback onHiddenForToday;
 
-  const MorningRoutineCard({
+  const RoutineCard({
     super.key,
     required this.onCompleted,
     required this.onHiddenForToday,
   });
 
   @override
-  State<MorningRoutineCard> createState() => _MorningRoutineCardState();
+  State<RoutineCard> createState() => _RoutineCardState();
 }
 
-class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBindingObserver {
+class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
   Routine? _currentRoutine;
   int _currentStepIndex = 0;
   bool _isLoading = true;
@@ -49,13 +49,19 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
+
     // Save progress when app goes to background or when pausing
-    if ((state == AppLifecycleState.paused || 
+    if ((state == AppLifecycleState.paused ||
          state == AppLifecycleState.inactive ||
-         state == AppLifecycleState.detached) && 
+         state == AppLifecycleState.detached) &&
         _currentRoutine != null) {
       _saveProgress();
+    }
+
+    // Sync with widget and reload routine when app comes back to foreground
+    if (state == AppLifecycleState.resumed) {
+      RoutineWidgetService.syncWithWidget();
+      _loadCurrentRoutine();
     }
   }
 
@@ -69,7 +75,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
       final routines = await RoutineService.loadRoutines();
 
       if (kDebugMode) {
-        print('Loading morning routine - Found ${routines.length} routines');
+        print('Loading routine - Found ${routines.length} routines');
         print('Available routines: ${routines.map((r) => r.title).toList()}');
         // Force widget update for debugging
         await RoutineWidgetService.forceRefreshWidget();
@@ -113,7 +119,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
           }
           
           if (kDebugMode) {
-            print('Resumed morning routine from step $_currentStepIndex');
+            print('Resumed routine from step $_currentStepIndex');
           }
         } else {
           // Reset for new day or first time today
@@ -124,10 +130,10 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
           }
           
           // Clear old progress
-          await RoutineService.clearMorningRoutineProgress();
+          await RoutineService.clearRoutineProgress();
           
           if (kDebugMode) {
-            print('Started fresh morning routine for ${RoutineService.getTodayString()}');
+            print('Started fresh routine for ${RoutineService.getTodayString()}');
           }
         }
       }
@@ -165,7 +171,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
       // Retry once after a short delay
       await Future.delayed(const Duration(milliseconds: 100));
       try {
-        await RoutineService.saveMorningRoutineProgress(
+        await RoutineService.saveRoutineProgress(
           currentStepIndex: _currentStepIndex,
           items: _currentRoutine!.items,
         );
@@ -228,7 +234,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🎉 Morning routine completed! Great job!'),
+            content: Text('🎉 Routine completed! Great job!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -340,13 +346,13 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
                   ),
                   const SizedBox(width: 12),
                   const Text(
-                    'Morning Routine',
+                    'Routine',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              const Text('No morning routine found. Create one in the Routines tab.'),
+              const Text('No routine found. Create one in the Routines tab.'),
             ],
           ),
         ),
@@ -420,7 +426,7 @@ class _MorningRoutineCardState extends State<MorningRoutineCard> with WidgetsBin
                   children: [
                     Icon(Icons.check_circle, color: Colors.green),
                     SizedBox(width: 8),
-                    Text('Morning routine completed! 🎉'),
+                    Text('Routine completed! 🎉'),
                   ],
                 ),
               ),

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'Fasting/fasting_screen.dart';
 import 'MenstrualCycle/cycle_tracking_screen.dart';
 import 'Routines/routines_habits_screen.dart';
 import 'Tasks/todo_screen.dart';
 import 'Tasks/task_widget_service.dart';
 import 'home.dart';
-import 'Notifications/notification_service.dart';
+import 'Notifications/centralized_notification_manager.dart';
 import 'Notifications/notification_listener_service.dart';
 import 'Data/backup_service.dart';
-import 'Tasks/task_service.dart';
 import 'theme/app_colors.dart';
 import 'dart:io';
 import 'dart:math';
@@ -34,6 +34,15 @@ class BBetterApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'BB',
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en', 'US'), // English
+        Locale('ro', 'RO'), // Romanian
+      ],
       builder: (BuildContext context, Widget? child) {
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
@@ -41,7 +50,7 @@ class BBetterApp extends StatelessWidget {
         );
       },
       theme: AppTheme.theme,
-      home: const MainScreen(), // TODO: Change back to LauncherScreen (use MainScreen() for hot reload testing)
+      home: const LauncherScreen(), // TODO: Change back to LauncherScreen (use MainScreen() for hot reload testing)
       debugShowCheckedModeBanner: false,
     );
   }
@@ -227,18 +236,14 @@ class _LauncherScreenState extends State<LauncherScreen>
 
   Future<void> _initializeApp() async {
     try {
-      // Initialize notifications with timeout protection
+      // Initialize centralized notification manager with timeout protection
       await (() async {
-        final notificationService = NotificationService();
-        await notificationService.initializeNotifications();
-        await notificationService.scheduleWaterReminders();
-        
-        // Initialize task notifications
-        final taskService = TaskService();
-        await taskService.forceRescheduleAllNotifications();
-      })().timeout(Duration(seconds: 10)).catchError((error) {
+        final notificationManager = CentralizedNotificationManager();
+        await notificationManager.initialize();
+        await notificationManager.scheduleAllNotifications();
+      })().timeout(Duration(seconds: 15)).catchError((error) {
         if (kDebugMode) {
-          print("Notification initialization ERROR: $error");
+          print("Centralized notification initialization ERROR: $error");
         }
       });
       
@@ -254,33 +259,14 @@ class _LauncherScreenState extends State<LauncherScreen>
         }
       }
 
-      // Perform auto-backup check (non-blocking with timeout)
-      BackupService.performAutoBackup().timeout(Duration(seconds: 8)).catchError((error) {
+      // Check for auto backup on startup (non-blocking)
+      BackupService.checkStartupAutoBackup().timeout(Duration(seconds: 10)).catchError((error) {
         if (kDebugMode) {
-          print("Auto backup check ERROR: $error");
+          print("Startup auto backup check ERROR: $error");
         }
       });
 
-      // Check for weekly cloud backup reminder
-      BackupService.checkWeeklyCloudBackupReminder().timeout(Duration(seconds: 5)).catchError((error) {
-        if (kDebugMode) {
-          print("Cloud backup reminder check ERROR: $error");
-        }
-      });
-
-      // Schedule nightly backups (non-blocking with timeout)
-      BackupService.scheduleNightlyBackups().timeout(Duration(seconds: 5)).catchError((error) {
-        if (kDebugMode) {
-          print("Nightly backup scheduling ERROR: $error");
-        }
-      });
-
-      // Schedule daily food tracking reminders (non-blocking with timeout)
-      NotificationService().scheduleFoodTrackingReminder().timeout(Duration(seconds: 5)).catchError((error) {
-        if (kDebugMode) {
-          print("Food tracking reminder scheduling ERROR: $error");
-        }
-      });
+      // Food tracking reminders are now handled by the centralized notification manager
 
       // Request notification permissions (non-blocking with timeout)
       if (Platform.isAndroid) {
@@ -457,6 +443,16 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
       vsync: this,
     );
     _checkForWidgetIntent();
+    _checkNotificationPermissions();
+  }
+
+  void _checkNotificationPermissions() async {
+    // Give the app time to fully load before checking permissions
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) {
+      final notificationManager = CentralizedNotificationManager();
+      await notificationManager.checkNotificationPermissions(context);
+    }
   }
 
   void _checkForWidgetIntent() async {

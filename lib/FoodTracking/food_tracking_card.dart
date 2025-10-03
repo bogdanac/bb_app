@@ -23,7 +23,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
   bool _isExpanded = false;
   int _healthyCount = 0;
   int _processedCount = 0;
-  String _weekResetInfo = '';
+  String _resetInfo = '';
   int _currentPhaseCalories = 0;
 
   @override
@@ -37,7 +37,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
       parent: _controller,
       curve: Curves.easeInOut,
     );
-    _loadWeeklyCounts();
+    _loadCurrentPeriodCounts();
     _loadCalories();
   }
 
@@ -58,13 +58,13 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
     }
   }
 
-  Future<void> _loadWeeklyCounts() async {
-    final counts = await FoodTrackingService.getWeeklyCounts();
-    final resetInfo = FoodTrackingService.getWeekResetInfo();
+  Future<void> _loadCurrentPeriodCounts() async {
+    final counts = await FoodTrackingService.getCurrentPeriodCounts();
+    final resetInfo = await FoodTrackingService.getResetInfo();
     setState(() {
       _healthyCount = counts['healthy']!;
       _processedCount = counts['processed']!;
-      _weekResetInfo = resetInfo;
+      _resetInfo = resetInfo;
     });
   }
 
@@ -103,7 +103,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
       timestamp: DateTime.now(),
     );
     await FoodTrackingService.addEntry(entry);
-    await _loadWeeklyCounts();
+    await _loadCurrentPeriodCounts();
   }
 
   void _addProcessed() async {
@@ -114,7 +114,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
       timestamp: DateTime.now(),
     );
     await FoodTrackingService.addEntry(entry);
-    await _loadWeeklyCounts();
+    await _loadCurrentPeriodCounts();
   }
 
   void _showHistory() {
@@ -122,7 +122,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
       MaterialPageRoute(
         builder: (context) => const FoodTrackingHistoryScreen(),
       ),
-    ).then((_) => _loadWeeklyCounts());
+    ).then((_) => _loadCurrentPeriodCounts());
   }
 
   double _getHealthyPercentage() {
@@ -287,7 +287,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Target: 80% healthy • $_weekResetInfo',
+                      'Target: 80% healthy • $_resetInfo',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.white54,

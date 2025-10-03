@@ -58,6 +58,7 @@ class Task {
   DateTime? scheduledDate;      // When task is scheduled for (recurring tasks)
   DateTime? reminderTime;       // Notification time
   bool isImportant;            // Priority flag
+  bool isPostponed;            // True if user manually postponed/rescheduled
   TaskRecurrence? recurrence;   // Recurring pattern
   bool isCompleted;            // Completion status
   DateTime? completedAt;        // Completion timestamp
@@ -139,20 +140,27 @@ Central service managing all task operations with singleton pattern.
 The service uses a sophisticated point-based system to prioritize tasks:
 
 ```dart
-// Scoring ranges (lower = higher priority):
-// 0-99:    Critical (overdue, due today, urgent reminders)
-// 100-199: High (important tasks, close deadlines)  
-// 200-299: Medium (scheduled tomorrow, upcoming deadlines)
-// 300+:    Low (distant tasks, postponed recurring tasks)
+// Scoring ranges (higher score = higher priority):
+// 1200+:   Critical overdue reminders (within 1 hour)
+// 900-1200: Overdue reminders and deadlines
+// 700-900:  Recurring tasks due today, upcoming reminders
+// 600:      Tasks scheduled for today
+// 550-595:  Overdue scheduled tasks (decreasing by 5 points/day)
+// 50:       Important tasks
+// 10-45:    Category-based priority
+// 1:        Postponed recurring tasks (lowest)
 ```
 
 **Priority Calculation Logic:**
-1. **Overdue tasks** - 0-50 points (highest priority)
-2. **Due today** - 50-100 points
-3. **Important tasks** - 100 points
-4. **Scheduled tomorrow** - 25-300 points (time-contextual)
-5. **Recurring tasks** - Base priority with modifiers
-6. **Category priority** - Used as tie-breaker
+1. **Overdue/upcoming reminders** - 800-1200 points (time-based)
+2. **Overdue deadlines** - 900 points (decreasing over time)
+3. **Deadlines today** - 800 points
+4. **Recurring tasks due today** - 700 points
+5. **Scheduled today** - 600 points
+6. **Overdue scheduled tasks** - 550-595 points (decreases 5 points/day)
+7. **Important tasks** - 50 points
+8. **Category priority** - 10-45 points (based on category order)
+9. **Postponed recurring tasks** - 1 point (lowest priority)
 
 **Global Change Notification System:**
 ```dart
@@ -210,11 +218,13 @@ Compact task widget for home screen integration.
 Individual task display component with rich interactions.
 
 **Features:**
-- Bidirectional swipe gestures (80% threshold)
-  - Swipe right → Postpone task
-  - Swipe left → Delete task
+- **Swipe & Hold gestures** (70% threshold, 2-second hold):
+  - Swipe right & hold → Postpone task to tomorrow
+  - Swipe left & hold → Delete task
+  - Visual feedback: timer icon → checkmark with green background
+  - Confirmation executes after 1 second, even if released
 - Tap to edit
-- Checkbox for completion toggle
+- Checkbox for completion toggle with confetti animation (1200ms)
 - Information chips display:
   1. Priority reason (highest priority)
   2. Scheduled date (with overlap prevention)
@@ -222,7 +232,9 @@ Individual task display component with rich interactions.
   4. Reminder time
   5. Recurrence pattern
   6. Category tags
-- Important task highlighting
+- **Important task highlighting**:
+  - 2px coral border (alpha: 0.3)
+  - Elevated shadow (elevation: 6)
 - Visual completion states
 
 ### TaskEditScreen (`task_edit_screen.dart`)
@@ -260,20 +272,29 @@ Specialized dialog for defining recurring patterns.
 ### Task Completion Flow
 
 **Regular Tasks:**
-1. Toggle completion status
-2. Set/clear completion timestamp
-3. Save to persistent storage
-4. Notify change listeners
-5. Update UI animations
+1. User taps checkbox → completion animation starts (1200ms)
+2. Animation completes → toggle completion status
+3. Set/clear completion timestamp
+4. Save to persistent storage
+5. Notify change listeners
+6. Update UI with fade out
 
-**Recurring Tasks:**
-1. Calculate next due date using recurrence pattern
-2. Reset completion status to false
-3. Update scheduledDate to next occurrence
-4. Preserve original deadline
-5. Adjust reminder time to new date
-6. Save updated task
-7. Notify listeners
+**Recurring Tasks (Daily/Weekly/etc):**
+1. User taps checkbox → completion animation starts
+2. Animation completes → trigger recurring task handler
+3. Calculate next due date using recurrence pattern
+4. Create updated task with:
+   - Reset completion status to false
+   - Updated scheduledDate to next occurrence
+   - Reset isPostponed flag
+   - Preserved original deadline
+   - Adjusted reminder time to new date
+5. Save updated task (replaces current task, same ID)
+6. Reschedule notification for new date
+7. Update UI immediately - task appears for next occurrence
+8. Notify change listeners
+
+**Note:** Daily recurring tasks now properly reset to uncompleted and schedule for tomorrow, appearing as a new task the next day.
 
 ### Priority System
 
@@ -336,10 +357,16 @@ Tasks can be tied to menstrual cycle phases for health tracking:
 
 ### Task Postponement
 
-1. Swipe right on task card (80% threshold required)
-2. Task scheduledDate moves to tomorrow
-3. Priority automatically adjusts
-4. Task appears lower in list until due
+1. Swipe right on task card (70% threshold required)
+2. Hold for 2 seconds - timer icon appears
+3. After 2 seconds, confirmation appears (green checkmark)
+4. Release anytime after confirmation - action executes after 1 second
+5. Task scheduledDate moves to tomorrow
+6. isPostponed flag set to true
+7. Priority automatically adjusts
+8. Task appears lower in list until due
+
+**Note:** Once confirmation shows, you can release immediately and the postponement will still execute.
 
 ### Category Management
 
@@ -365,6 +392,13 @@ Tasks automatically sort by calculated priority considering:
 - **Smart Rescheduling**: Completed recurring tasks automatically find next occurrence
 - **Start/End Dates**: Recurrence patterns can be time-bounded
 - **Menstrual Integration**: Health-focused scheduling options
+- **Overdue Scheduled Tasks**: Tasks scheduled in the past (non-recurring) automatically get elevated priority:
+  - 1 day overdue: 590 points
+  - 2 days overdue: 585 points
+  - 3 days overdue: 580 points
+  - Priority decreases by 5 points per day
+  - Minimum priority: 550 points
+  - Always appears right after "scheduled today" tasks
 
 ### Intelligent Prioritization
 
@@ -377,7 +411,11 @@ Tasks automatically sort by calculated priority considering:
 - **Chip System**: Visual information tags with overlap prevention
 - **Scheduled Date Display**: Shows when recurring tasks are next due
 - **Priority Indicators**: Color-coded importance levels
-- **Completion Animation**: Smooth visual feedback
+- **Completion Animation**: 1200ms confetti animation with:
+  - 25 colorful particles bursting from center
+  - Card scaling and green glow effect
+  - Fade out with opacity transition
+  - Automatic task rescheduling (recurring) or removal (one-time)
 
 ### Integration Features
 

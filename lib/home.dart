@@ -8,15 +8,14 @@ import 'package:bb_app/Calendar/events_card.dart';
 import 'package:bb_app/MenstrualCycle/menstrual_cycle_card.dart';
 import 'package:bb_app/WaterTracking/water_tracking_card.dart';
 import 'package:bb_app/Tasks/daily_tasks_card.dart';
-import 'package:bb_app/Routines/morning_routine_card.dart';
+import 'package:bb_app/Routines/routine_card.dart';
 import 'package:bb_app/Fasting/fasting_card.dart';
 import 'package:bb_app/Habits/habit_card.dart';
 import 'package:bb_app/Habits/habit_service.dart';
-import 'package:bb_app/Notifications/notification_service.dart';
+import 'package:bb_app/Notifications/centralized_notification_manager.dart';
 import 'package:bb_app/FoodTracking/food_tracking_card.dart';
 import 'package:bb_app/home_settings_screen.dart';
 import 'package:bb_app/Data/backup_service.dart';
-import 'package:bb_app/Data/backup_screen.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 
@@ -32,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int waterIntake = 0;
   bool showFastingSection = false;
   bool _isFastingInProgress = false;
-  bool showMorningRoutine = true;
+  bool showRoutine = true;
   bool showHabitCard = false;
   bool _isLoading = true;
   bool _isDisposed = false;
@@ -70,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await _loadWaterIntake();
       await _initializeWaterAmountSetting();
       _checkFastingVisibility();
-      _checkMorningRoutineVisibility();
+      _checkRoutineVisibility();
       await _checkHabitCardVisibility();
 
       // Inițializează și programează notificările de apă
@@ -108,13 +107,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _initializeWaterNotifications() async {
-    final notificationService = NotificationService();
-
-    // Programează notificările de apă pentru ziua curentă
-    await notificationService.scheduleWaterReminders();
+    final notificationManager = CentralizedNotificationManager();
 
     // Verifică dacă trebuie să anuleze notificări pe baza progresului curent
-    await notificationService.checkAndCancelWaterNotifications(waterIntake);
+    await notificationManager.checkAndCancelWaterNotifications(waterIntake);
   }
 
   // Start periodic water sync timer (checks every 30 seconds)
@@ -187,8 +183,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await prefs.setString('last_water_reset_date', today);
 
         // Reprogramează notificările pentru ziua nouă
-        final notificationService = NotificationService();
-        await notificationService.rescheduleWaterNotificationsForTomorrow();
+        final notificationManager = CentralizedNotificationManager();
+        await notificationManager.forceRescheduleAll();
 
       } else {
         // Load data for current day - prioritize widget data
@@ -277,9 +273,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _checkFastingVisibility() async {
     final now = DateTime.now();
-    final isFriday = now.weekday == 5;
-    final is25th = now.day == 25;
     final prefs = await SharedPreferences.getInstance();
+    final preferredDay = prefs.getInt('preferred_fasting_day') ?? 5; // Default to Friday
+    final preferredMonthlyDay = prefs.getInt('preferred_monthly_fasting_day') ?? 25; // Default to 25th
+    final isPreferredDay = now.weekday == preferredDay;
+    final isPreferredMonthlyDay = now.day == preferredMonthlyDay;
 
     bool shouldShow = false;
 
@@ -297,9 +295,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Show the card if there's an active fast OR if there's a fast scheduled for today
     if (hasActiveFast) {
       shouldShow = true;
-    } else if (isFriday || is25th) {
+    } else if (isPreferredDay || isPreferredMonthlyDay) {
       // Check if there's a recommended fast for today
-      shouldShow = _hasRecommendedFastForToday(now, isFriday, is25th);
+      shouldShow = _hasRecommendedFastForToday(now, isPreferredDay, isPreferredMonthlyDay);
     } else {
       shouldShow = false;
     }
@@ -312,41 +310,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   // Check if there's actually a recommended fast for today (more strict than fasting screen)
-  bool _hasRecommendedFastForToday(DateTime now, bool isFriday, bool is25th) {
-    // If today is the 25th, check if there was a recent Friday or upcoming Friday
-    if (is25th) {
-      final daysUntilFriday = (5 - now.weekday + 7) % 7;
-      final daysSinceLastFriday =
-          now.weekday >= 5 ? now.weekday - 5 : now.weekday + 2;
-
-      // If Friday is close (within 6 days either way), do the longer fast on 25th
-      if (daysSinceLastFriday <= 6 || daysUntilFriday <= 6) {
-        return true; // Show fast on 25th
-      }
-      return true; // Always show on 25th
+  bool _hasRecommendedFastForToday(DateTime now, bool isPreferredDay, bool isPreferredMonthlyDay) {
+    // If today is the preferred monthly day, always show
+    if (isPreferredMonthlyDay) {
+      return true; // Always show on preferred monthly day
     }
 
-    // If today is Friday, check if 25th is close
-    if (isFriday) {
-      final daysUntil25th = 25 - now.day;
-
-      // If 25th is within 4-6 days, do the longer fast on Friday instead
-      if (daysUntil25th >= 0 && daysUntil25th <= 6) {
-        return true; // Show longer fast on Friday
-      }
-
-      // Check if 25th was recent (last month)
-      if (now.day < 25) {
-        // 25th is later this month, show normal Friday fast
-        return true;
-      } else {
-        // Check if 25th was recent from last month
-        final daysSince25thLastMonth = now.day - 25;
-        if (daysSince25thLastMonth <= 6) {
-          return false; // Don't show Friday fast if 25th was very recent
-        }
-        return true; // Show normal Friday fast
-      }
+    // If today is the preferred day, show normal weekly fast
+    if (isPreferredDay) {
+      return true; // Show normal preferred day fast
     }
 
     return false;
@@ -365,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _checkMorningRoutineVisibility() async {
+  void _checkRoutineVisibility() async {
     final now = DateTime.now();
     final prefs = await SharedPreferences.getInstance();
     final today = DateFormat('yyyy-MM-dd').format(now);
@@ -373,31 +345,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Clean up old hidden and completed flags (more than 2 days old)
     final allKeys = prefs.getKeys();
     final oldKeys = allKeys.where((key) =>
-        (key.startsWith('morning_routine_hidden_') ||
-            key.startsWith('morning_routine_completed_')) &&
+        (key.startsWith('routine_hidden_') ||
+            key.startsWith('routine_completed_')) &&
         !key.endsWith(today));
     for (final key in oldKeys) {
       await prefs.remove(key);
     }
 
-    final hiddenToday = prefs.getBool('morning_routine_hidden_$today') ?? false;
+    final hiddenToday = prefs.getBool('routine_hidden_$today') ?? false;
     final completedToday =
-        prefs.getBool('morning_routine_completed_$today') ?? false;
+        prefs.getBool('routine_completed_$today') ?? false;
 
     if (kDebugMode) {
       print(
-          'Morning routine check - Hour: ${now.hour}, Hidden today: $hiddenToday, Completed today: $completedToday, Today: $today');
+          'Routine check - Hour: ${now.hour}, Hidden today: $hiddenToday, Completed today: $completedToday, Today: $today');
       print('Cleaned up ${oldKeys.length} old flags');
     }
 
     if (!_isDisposed && mounted) {
       setState(() {
         // Show only if: not hidden AND not completed today (allow routines 24/7)
-        showMorningRoutine = !hiddenToday && !completedToday;
+        showRoutine = !hiddenToday && !completedToday;
       });
 
       if (kDebugMode) {
-        print('Morning routine visibility: $showMorningRoutine');
+        print('Routine visibility: $showRoutine');
       }
     }
   }
@@ -448,7 +420,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       // Check and update other sections
       _checkFastingVisibility();
-      _checkMorningRoutineVisibility();
+      _checkRoutineVisibility();
       await _checkHabitCardVisibility();
       _refreshMenstrualCycleData();
 
@@ -525,66 +497,66 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         }
 
         // Verifică și anulează notificările pe baza noului progres
-        final notificationService = NotificationService();
-        await notificationService.checkAndCancelWaterNotifications(newIntake);
+        final notificationManager = CentralizedNotificationManager();
+        await notificationManager.checkAndCancelWaterNotifications(newIntake);
       }
     } catch (e) {
       debugPrint('ERROR adding water: $e');
     }
   }
 
-  void _onMorningRoutineCompleted() async {
+  void _onRoutineCompleted() async {
     if (!_isDisposed && mounted) {
       // Save completion status for today
       final prefs = await SharedPreferences.getInstance();
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      await prefs.setBool('morning_routine_completed_$today', true);
+      await prefs.setBool('routine_completed_$today', true);
 
       setState(() {
-        showMorningRoutine = false;
+        showRoutine = false;
       });
     }
   }
 
-  void _onMorningRoutineHiddenForToday() async {
+  void _onRoutineHiddenForToday() async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    await prefs.setBool('morning_routine_hidden_$today', true);
+    await prefs.setBool('routine_hidden_$today', true);
 
     if (kDebugMode) {
-      print('Morning routine hidden for today: $today');
+      print('Routine hidden for today: $today');
     }
 
     if (!_isDisposed && mounted) {
       setState(() {
-        showMorningRoutine = false;
+        showRoutine = false;
       });
     }
   }
 
-  // Method to force show morning routine for debugging
-  void _forceShowMorningRoutine() async {
+  // Method to force show routine for debugging
+  void _forceShowRoutine() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
       // Clear the hidden and completed flags
-      await prefs.remove('morning_routine_hidden_$today');
-      await prefs.remove('morning_routine_completed_$today');
+      await prefs.remove('routine_hidden_$today');
+      await prefs.remove('routine_completed_$today');
 
       if (!_isDisposed && mounted) {
         setState(() {
-          showMorningRoutine = true;
+          showRoutine = true;
         });
       }
     } catch (e) {
       if (kDebugMode) {
-        print('ERROR in _forceShowMorningRoutine: $e');
+        print('ERROR in _forceShowRoutine: $e');
       }
     }
 
     if (kDebugMode) {
-      print('Forced morning routine to show');
+      print('Forced routine to show');
     }
   }
 
@@ -625,18 +597,69 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               padding: const EdgeInsets.only(right: 4),
               child: IconButton(
                 icon: const Icon(Icons.backup_outlined, color: Colors.orange),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const BackupScreen(),
+                onPressed: () async {
+                  // Show loading indicator
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Row(
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Creating backup...'),
+                        ],
+                      ),
+                      duration: Duration(seconds: 30),
                     ),
-                  ).then((_) {
-                    // Refresh backup status when returning from backup screen
-                    _checkBackupStatus();
-                  });
+                  );
+
+                  try {
+                    // Perform quick backup
+                    final backupPath = await BackupService.exportToFile();
+
+                    if (!context.mounted) return;
+
+                    // Hide loading and show success
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+                    if (backupPath != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('✅ Backup completed! Saved to: ${backupPath.split('/').last}'),
+                          backgroundColor: Colors.green,
+                          duration: const Duration(seconds: 4),
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('❌ Backup failed - check storage permissions'),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 4),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (!context.mounted) return;
+
+                    // Hide loading and show error
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('❌ Backup failed: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
+                  }
+
+                  // Refresh backup status
+                  _checkBackupStatus();
                 },
-                tooltip: 'Backup Overdue - Tap to backup your data',
+                tooltip: 'Quick Backup - Tap to backup your data now',
               ),
             ),
           if (kDebugMode)
@@ -644,8 +667,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               padding: const EdgeInsets.only(right: 4),
               child: IconButton(
                 icon: const Icon(Icons.wb_sunny),
-                onPressed: _forceShowMorningRoutine,
-                tooltip: 'Force Show Morning Routine',
+                onPressed: _forceShowRoutine,
+                tooltip: 'Force Show Routine',
               ),
             ),
           Padding(
@@ -720,11 +743,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(height: 4), // Consistent spacing
               ],
 
-              // Morning Routine Section (conditional)
-              if (showMorningRoutine) ...[
-                MorningRoutineCard(
-                  onCompleted: _onMorningRoutineCompleted,
-                  onHiddenForToday: _onMorningRoutineHiddenForToday,
+              // Routine Section (conditional)
+              if (showRoutine) ...[
+                RoutineCard(
+                  onCompleted: _onRoutineCompleted,
+                  onHiddenForToday: _onRoutineHiddenForToday,
                 ),
                 const SizedBox(height: 4), // Consistent spacing
               ],

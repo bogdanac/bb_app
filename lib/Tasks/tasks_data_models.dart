@@ -12,6 +12,7 @@ class Task {
   DateTime? scheduledDate; // For recurring tasks, this is when the task is scheduled for
   DateTime? reminderTime;
   bool isImportant;
+  bool isPostponed; // True if user manually postponed/rescheduled this task
   TaskRecurrence? recurrence;
   bool isCompleted;
   DateTime? completedAt;
@@ -26,6 +27,7 @@ class Task {
     this.scheduledDate,
     this.reminderTime,
     this.isImportant = false,
+    this.isPostponed = false,
     this.recurrence,
     this.isCompleted = false,
     this.completedAt,
@@ -36,34 +38,40 @@ class Task {
   bool isDueToday() {
     final today = DateTime.now();
 
-    // Priority 1: Check deadline (today or overdue) - deadlines are most important
-    if (deadline != null && (_isSameDay(deadline!, today) || deadline!.isBefore(today))) {
-      return true;
-    }
+    // Priority 1: For recurring tasks, check both recurrence pattern AND scheduled date
+    if (recurrence != null) {
+      // First check if specifically scheduled for today (from postponing)
+      if (scheduledDate != null && _isSameDay(scheduledDate!, today)) {
+        return true;
+      }
 
-    // Priority 2: If task has a scheduled date, check that date
-    if (scheduledDate != null) {
-      final result = _isSameDay(scheduledDate!, today);
-      return result;
-    }
-
-    // Priority 3: Check if recurring task is due today - only if no deadline or scheduled date
-    if (recurrence != null && scheduledDate == null) {
+      // Then check recurrence pattern
       // Special exception: Show Ovulation Peak Day and Menstrual Start Day tasks for 2 days
-      if (recurrence!.type == RecurrenceType.ovulationPeakDay || 
+      if (recurrence!.type == RecurrenceType.ovulationPeakDay ||
           recurrence!.type == RecurrenceType.menstrualStartDay) {
         final yesterday = today.subtract(const Duration(days: 1));
-        return recurrence!.isDueOn(today, taskCreatedAt: createdAt) || 
+        return recurrence!.isDueOn(today, taskCreatedAt: createdAt) ||
                recurrence!.isDueOn(yesterday, taskCreatedAt: createdAt);
       }
-      
+
       if (recurrence!.isDueOn(today, taskCreatedAt: createdAt)) {
         return true;
       }
     }
 
-    // Priority 4: Check if reminder is set for today - lowest priority
-    if (reminderTime != null && _isSameDay(reminderTime!, today)) {
+    // Priority 2: For non-recurring tasks, check deadline (today or overdue)
+    if (recurrence == null && deadline != null && (_isSameDay(deadline!, today) || deadline!.isBefore(today))) {
+      return true;
+    }
+
+    // Priority 3: For non-recurring tasks, check scheduled date
+    if (recurrence == null && scheduledDate != null) {
+      final result = _isSameDay(scheduledDate!, today);
+      return result;
+    }
+
+    // Priority 4: For non-recurring tasks, check if reminder is set for today
+    if (recurrence == null && reminderTime != null && _isSameDay(reminderTime!, today)) {
       return true;
     }
 
@@ -93,6 +101,7 @@ class Task {
     'scheduledDate': scheduledDate?.toIso8601String(),
     'reminderTime': reminderTime?.toIso8601String(),
     'isImportant': isImportant,
+    'isPostponed': isPostponed,
     'recurrence': recurrence?.toJson(),
     'isCompleted': isCompleted,
     'completedAt': completedAt?.toIso8601String(),
@@ -108,6 +117,7 @@ class Task {
     scheduledDate: json['scheduledDate'] != null ? DateTime.parse(json['scheduledDate']) : null,
     reminderTime: json['reminderTime'] != null ? DateTime.parse(json['reminderTime']) : null,
     isImportant: json['isImportant'] ?? false,
+    isPostponed: json['isPostponed'] ?? false,
     recurrence: json['recurrence'] != null ? TaskRecurrence.fromJson(json['recurrence']) : null,
     isCompleted: json['isCompleted'] ?? false,
     completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt']) : null,
@@ -218,7 +228,16 @@ class TaskRecurrence {
         return true; // Daily (every day)
 
       case RecurrenceType.weekly:
-        return weekDays.contains(date.weekday);
+        if (!weekDays.contains(date.weekday)) {
+          return false;
+        }
+        if (interval > 1) {
+          final referenceDate = startDate ?? taskCreatedAt ?? DateTime(2024, 1, 1);
+          final daysSinceReference = date.difference(DateTime(referenceDate.year, referenceDate.month, referenceDate.day)).inDays;
+          final weeksSinceReference = daysSinceReference ~/ 7;
+          return weeksSinceReference >= 0 && weeksSinceReference % interval == 0;
+        }
+        return true;
 
       case RecurrenceType.monthly:
         if (isLastDayOfMonth) {

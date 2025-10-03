@@ -13,25 +13,42 @@ class RoutineWidgetService {
       // Get current routines from SharedPreferences and save them in the format the widget expects
       final routines = await RoutineService.loadRoutines();
       final prefs = await SharedPreferences.getInstance();
-      
+
       if (routines.isEmpty) {
         return;
       }
-      
+
+      // Use the same method as the main app to identify the active routine
+      final activeRoutine = await RoutineService.getCurrentActiveRoutine(routines);
+
       // Convert routines to JSON format that Android can read
       final routinesJson = routines.map((routine) => jsonEncode(routine.toJson())).toList();
-      
+
       // Save routines for Android widget to read
       // Flutter automatically adds 'flutter.' prefix to all keys
       await prefs.setStringList('routines', routinesJson);
-      
+
       // Also save individual routines for easier Android access
       await prefs.setInt('routines_count', routinesJson.length);
       for (int i = 0; i < routinesJson.length; i++) {
         await prefs.setString('routine_$i', routinesJson[i]);
       }
-      
-      
+
+      // Save the active routine ID and data for the widget to use
+      if (activeRoutine != null) {
+        await prefs.setString('active_routine_id', activeRoutine.id);
+        await prefs.setString('active_routine_data', jsonEncode(activeRoutine.toJson()));
+        if (kDebugMode) {
+          print('Widget: Set active routine to ${activeRoutine.title}');
+        }
+      } else {
+        await prefs.remove('active_routine_id');
+        await prefs.remove('active_routine_data');
+        if (kDebugMode) {
+          print('Widget: No active routine found');
+        }
+      }
+
       // Trigger widget update via platform channel
       await _platform.invokeMethod('updateRoutineWidget');
     } catch (e) {
@@ -47,7 +64,7 @@ class RoutineWidgetService {
       
       // Check if widget has made progress
       final widgetProgressJson = prefs.getString('flutter.morning_routine_progress_$today');
-      final appProgressJson = await RoutineService.loadMorningRoutineProgress();
+      final appProgressJson = await RoutineService.loadRoutineProgress();
       
       if (widgetProgressJson != null && appProgressJson != null) {
         final widgetProgress = jsonDecode(widgetProgressJson);

@@ -519,7 +519,7 @@ class _FastingScreenState extends State<FastingScreen>
     );
   }
 
-  // Start quick fast (12h or 16h)
+  // Start quick fast (20h or 16h)
   void _startQuickFast(int hours) {
     final now = DateTime.now();
     final duration = Duration(hours: hours);
@@ -559,6 +559,95 @@ class _FastingScreenState extends State<FastingScreen>
   }
 
   void _endFast() {
+    if (_currentFastStart != null) {
+      final currentDuration = DateTime.now().difference(_currentFastStart!);
+      _showEndFastConfirmationDialog(currentDuration);
+    }
+  }
+
+  void _showEndFastConfirmationDialog(Duration currentDuration) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.dialogBackground,
+        title: const Text(
+          'End Fast?',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to end your $_currentFastType?',
+              style: const TextStyle(color: AppColors.white70, fontSize: 16),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.dialogCardBackground,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.greyText.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.timer, color: AppColors.coral, size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Current Duration:',
+                        style: TextStyle(color: AppColors.white70, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    FastingUtils.formatDuration(currentDuration),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (_totalFastDuration.inMinutes > 0) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Target: ${FastingUtils.formatDuration(_totalFastDuration)}',
+                      style: const TextStyle(
+                        color: AppColors.white54,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Continue Fasting', style: TextStyle(color: AppColors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _confirmEndFast();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('End Fast'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmEndFast() {
     if (_currentFastStart != null) {
       final endTime = DateTime.now();
       final actualDuration = endTime.difference(_currentFastStart!);
@@ -1318,14 +1407,14 @@ class _FastingScreenState extends State<FastingScreen>
                         children: [
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed: () => _startQuickFast(12),
+                              onPressed: () => _startQuickFast(16),
                               icon: const Icon(Icons.timer_outlined),
-                              label: const Text('12h Fast'),
+                              label: const Text('16h Fast'),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.successGreen,
                                 foregroundColor: AppColors.white,
                                 padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
+                                const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -1335,14 +1424,14 @@ class _FastingScreenState extends State<FastingScreen>
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed: () => _startQuickFast(16),
+                              onPressed: () => _startQuickFast(20),
                               icon: const Icon(Icons.timer_outlined),
-                              label: const Text('16h Fast'),
+                              label: const Text('20h Fast'),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.lime,
                                 foregroundColor: AppColors.white,
                                 padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
+                                const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),

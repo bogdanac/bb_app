@@ -48,7 +48,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.dialogBackground,
       title: Text(widget.initialName == null ? 'Add Category' : 'Edit Category'),
       content: Column(
         mainAxisSize: MainAxisSize.min,

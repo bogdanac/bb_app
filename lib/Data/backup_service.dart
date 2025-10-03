@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -5,12 +6,37 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/timezone.dart' as tz;
-import '../Notifications/notification_service.dart';
 
 class BackupService {
   static const String _backupFileName = 'bbetter_backup';
+
+  // ===================================================================
+  // CENTRALIZED BACKUP PATHS - NEVER HARDCODE PATHS ANYWHERE ELSE!!!
+  // ===================================================================
+  // ALL backup paths MUST come from these centralized variables.
+  // If you need to change backup location, change ONLY these constants.
+  // If you hardcode a path anywhere else, you will be fired! 🔥
+  // ===================================================================
+
+  static const String _externalDownloadsPath = '/storage/emulated/0/Download';
+  static const String _backupFolderName = 'BBetter_Backups';
+
+  /// Get the main backup directory path (external Downloads/BBetter_Backups)
+  /// USE THIS for all backup operations! Never hardcode paths!
+  static String get backupDirectoryPath => '$_externalDownloadsPath/$_backupFolderName';
+
+  /// Get the external Downloads directory path
+  /// USE THIS for fallback searches! Never hardcode paths!
+  static String get externalDownloadsPath => _externalDownloadsPath;
+
+  /// Get the backup directory (creates it if it doesn't exist)
+  static Future<Directory> getBackupDirectory() async {
+    final backupDir = Directory(backupDirectoryPath);
+    if (!await backupDir.exists()) {
+      await backupDir.create(recursive: true);
+    }
+    return backupDir;
+  }
   
   // Comprehensive backup data structure
   static Future<Map<String, dynamic>> _getAllAppData() async {
@@ -145,26 +171,8 @@ class BackupService {
       
       try {
         if (Platform.isAndroid) {
-          // Try Downloads directory first (more accessible to users)
-          try {
-            directory = await getDownloadsDirectory();
-            if (directory != null) {
-              // Create BBetter subfolder in Downloads
-              final backupDir = Directory('${directory.path}/BBetter_Backups');
-              if (!await backupDir.exists()) {
-                await backupDir.create(recursive: true);
-              }
-              directory = backupDir;
-            }
-          } catch (e) {
-            debugPrint('Could not use Downloads directory: $e');
-            directory = null;
-          }
-          
-          // CRITICAL: Never fallback to app-internal storage - data will be lost on uninstall
-          if (directory == null) {
-            throw Exception('Cannot access external storage. Backups require Downloads directory access to survive app uninstalls.');
-          }
+          // Use centralized backup directory
+          directory = await getBackupDirectory();
         } else {
           // For other platforms - still require external storage
           try {
@@ -175,10 +183,6 @@ class BackupService {
           } catch (e) {
             throw Exception('Cannot access external storage. Backups require Downloads directory access to survive app uninstalls.');
           }
-        }
-
-        if (!await directory.exists()) {
-          throw Exception('Backup directory does not exist and cannot be created.');
         }
       } catch (e) {
         // No dangerous fallbacks - let it fail with clear error message
@@ -342,6 +346,14 @@ class BackupService {
   static Future<void> performAutoBackup() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+
+      // Check if auto backup is enabled
+      final autoBackupEnabled = prefs.getBool('auto_backup_enabled') ?? true;
+      if (!autoBackupEnabled) {
+        debugPrint('Auto backup skipped - disabled by user');
+        return;
+      }
+
       final lastBackup = prefs.getString('last_auto_backup');
       final now = DateTime.now();
 
@@ -351,8 +363,6 @@ class BackupService {
         final daysSinceBackup = now.difference(lastBackupDate).inDays;
         if (daysSinceBackup < 1) {
           debugPrint('Auto backup skipped - too recent (last: $lastBackup)');
-          // Still schedule next backup even if we skip this one
-          await _scheduleNextAutoBackup();
           return;
         }
       }
@@ -374,80 +384,50 @@ class BackupService {
         }
       }
 
-      // Always schedule next backup attempt, even if this one failed
-      await _scheduleNextAutoBackup();
-
     } catch (e) {
       debugPrint('Daily auto backup failed: $e');
-      // Still try to schedule next backup even if this one failed
-      try {
-        await _scheduleNextAutoBackup();
-      } catch (scheduleError) {
-        debugPrint('Failed to schedule next auto backup: $scheduleError');
+    }
+  }
+
+  // Check and perform auto backup on app startup
+  static Future<void> checkStartupAutoBackup() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final autoBackupEnabled = prefs.getBool('auto_backup_enabled') ?? true;
+
+      if (!autoBackupEnabled) {
+        debugPrint('Startup auto backup skipped - disabled by user');
+        return;
       }
-    }
-  }
 
-  // Schedule nightly auto backup
-  static Future<void> scheduleNightlyBackups() async {
-    try {
-      await _scheduleNextAutoBackup();
-      debugPrint('Nightly backup scheduling enabled');
-    } catch (e) {
-      debugPrint('Failed to schedule nightly backups: $e');
-    }
-  }
-
-  // Schedule the next auto backup notification for tonight
-  static Future<void> _scheduleNextAutoBackup() async {
-    try {
-      final notificationService = NotificationService();
-      
-      // Schedule for midnight tonight (or tomorrow if it's already past midnight)
       final now = DateTime.now();
-      final backupTime = DateTime(now.year, now.month, now.day, 0, 0); // 12:00 AM (midnight)
-      final scheduledTime = backupTime.isBefore(now) 
-          ? backupTime.add(const Duration(days: 1))
-          : backupTime;
-      
-      const androidDetails = AndroidNotificationDetails(
-        'auto_backup',
-        'Automatic Backups',
-        channelDescription: 'Automatic nightly data backups',
-        importance: Importance.low,
-        priority: Priority.low,
-        showWhen: false,
-        playSound: false,
-        enableVibration: false,
-        ongoing: false,
-      );
-      
-      const notificationDetails = NotificationDetails(android: androidDetails);
-      
-      // Convert to timezone-aware datetime with error handling
-      tz.TZDateTime scheduledDate;
-      try {
-        scheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
-      } catch (e) {
-        debugPrint('Timezone error, using UTC fallback: $e');
-        scheduledDate = tz.TZDateTime.from(scheduledTime.toUtc(), tz.UTC);
+      final lastAutoBackup = prefs.getString('last_auto_backup');
+
+      // Check if we should do backup (once per day)
+      bool shouldBackup = false;
+
+      if (lastAutoBackup == null) {
+        // Never backed up automatically
+        shouldBackup = true;
+        debugPrint('Auto backup needed - never backed up');
+      } else {
+        final lastBackupDate = DateTime.parse(lastAutoBackup);
+        final daysSinceBackup = now.difference(lastBackupDate).inDays;
+
+        if (daysSinceBackup >= 1) {
+          shouldBackup = true;
+          debugPrint('Auto backup needed - $daysSinceBackup days since last backup');
+        }
       }
-      
-      await notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
-        8888, // Unique ID for auto backup
-        '🔄 Auto Backup',
-        'Performing nightly backup...',
-        scheduledDate,
-        notificationDetails,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        payload: 'auto_backup_trigger',
-      );
-      
-      debugPrint('Next auto backup scheduled for: $scheduledTime');
-      
+
+      if (shouldBackup) {
+        debugPrint('Performing startup auto backup...');
+        await performAutoBackup();
+      } else {
+        debugPrint('Auto backup not needed - recent backup exists');
+      }
     } catch (e) {
-      debugPrint('Failed to schedule next auto backup: $e');
+      debugPrint('Error in startup auto backup check: $e');
     }
   }
   
@@ -468,88 +448,6 @@ class BackupService {
     }
   }
   
-  // Check and schedule weekly cloud backup reminder
-  static Future<void> checkWeeklyCloudBackupReminder() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastCloudReminder = prefs.getString('last_cloud_backup_reminder');
-      final now = DateTime.now();
-
-      // Check if we need to remind (every 7 days)
-      bool shouldRemind = false;
-      if (lastCloudReminder != null) {
-        final lastReminderDate = DateTime.parse(lastCloudReminder);
-        final daysSinceReminder = now.difference(lastReminderDate).inDays;
-        if (daysSinceReminder >= 7) {
-          shouldRemind = true;
-        }
-      } else {
-        // First time - remind after 2 days of using the app to encourage early adoption
-        shouldRemind = true;
-      }
-
-      if (shouldRemind) {
-        await _scheduleCloudBackupNotification();
-        await prefs.setString('last_cloud_backup_reminder', now.toIso8601String());
-        debugPrint('Weekly cloud backup reminder scheduled');
-      }
-
-    } catch (e) {
-      debugPrint('Cloud backup reminder check failed: $e');
-    }
-  }
-  
-  // Schedule the cloud backup reminder notification
-  static Future<void> _scheduleCloudBackupNotification() async {
-    try {
-      // Import the notification service and get direct access to the plugin
-      final notificationService = NotificationService();
-      
-      // Schedule notification for later today or tomorrow
-      final now = DateTime.now();
-      final reminderTime = DateTime(now.year, now.month, now.day, 19, 0); // 7 PM
-      final scheduledTime = reminderTime.isBefore(now) 
-          ? reminderTime.add(const Duration(days: 1))
-          : reminderTime;
-      
-      // Use the same pattern as other notifications in the service
-      const androidDetails = AndroidNotificationDetails(
-        'backup_reminders',
-        'Backup Reminders',
-        channelDescription: 'Weekly reminders to backup data to cloud storage',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
-        showWhen: true,
-      );
-      
-      const notificationDetails = NotificationDetails(android: androidDetails);
-      
-      // Convert to timezone-aware datetime with error handling
-      tz.TZDateTime scheduledDate;
-      try {
-        scheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
-      } catch (e) {
-        debugPrint('Cloud backup timezone error, using UTC fallback: $e');
-        scheduledDate = tz.TZDateTime.from(scheduledTime.toUtc(), tz.UTC);
-      }
-      
-      await notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
-        9999, // Unique ID for cloud backup reminders
-        '☁️ Protect Your Data - Cloud Backup Reminder',
-        'Your BBetter data is precious! Back it up to Google Drive, OneDrive, or Dropbox for ultimate safety. Tap to open backup settings.',
-        scheduledDate,
-        notificationDetails,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        payload: 'cloud_backup_reminder',
-      );
-      
-      debugPrint('Cloud backup reminder notification scheduled for: $scheduledTime');
-      
-    } catch (e) {
-      debugPrint('Failed to schedule cloud backup notification: $e');
-    }
-  }
   
   // Get all possible backup locations and existing files
   static Future<Map<String, dynamic>> getBackupLocations() async {
@@ -563,28 +461,21 @@ class BackupService {
       if (Platform.isAndroid) {
         List<String> possiblePaths = [];
         
-        // Check Downloads/BBetter_Backups (new location)
+        // Use centralized backup paths
         try {
-          final downloadsDir = await getDownloadsDirectory();
-          if (downloadsDir != null) {
-            final bbetterBackupsDir = Directory('${downloadsDir.path}/BBetter_Backups');
-            possiblePaths.add(bbetterBackupsDir.path);
-            if (await bbetterBackupsDir.exists()) {
-              locations['current_location'] = bbetterBackupsDir.path;
-            }
+          final bbetterBackupsDir = Directory(backupDirectoryPath);
+          final downloadsDir = Directory(externalDownloadsPath);
+
+          possiblePaths.add(backupDirectoryPath);
+          possiblePaths.add(externalDownloadsPath);
+
+          if (await bbetterBackupsDir.exists()) {
+            locations['current_location'] = backupDirectoryPath;
+          } else if (await downloadsDir.exists()) {
+            locations['current_location'] = externalDownloadsPath;
           }
         } catch (e) {
-          debugPrint('Could not check Downloads: $e');
-        }
-        
-        // Check Downloads root
-        try {
-          final downloadsDir = await getDownloadsDirectory();
-          if (downloadsDir != null) {
-            possiblePaths.add(downloadsDir.path);
-          }
-        } catch (e) {
-          debugPrint('Could not check Downloads root: $e');
+          debugPrint('Could not check external Downloads: $e');
         }
         
         locations['all_locations'] = possiblePaths;
@@ -618,11 +509,13 @@ class BackupService {
                   if (isLikelyBackup) {
                     try {
                       final stat = await file.stat();
+                      // Ensure the modified time is in local timezone
+                      final modifiedLocal = stat.modified.toLocal();
                       locations['found_files'].add({
                         'path': file.path,
                         'name': file.path.split(Platform.pathSeparator).last,
                         'size': stat.size,
-                        'modified': stat.modified.toIso8601String(),
+                        'modified': modifiedLocal.toIso8601String(),
                         'location': path,
                       });
                     } catch (e) {

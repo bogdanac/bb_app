@@ -4,6 +4,7 @@ import 'Data/backup_screen.dart';
 import 'Routines/widget_color_settings_screen.dart';
 import 'theme/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'FoodTracking/food_tracking_service.dart';
 
 class HomeSettingsScreen extends StatefulWidget {
   const HomeSettingsScreen({super.key});
@@ -14,11 +15,13 @@ class HomeSettingsScreen extends StatefulWidget {
 
 class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
   int _waterAmount = 125; // Default water amount
+  FoodTrackingResetFrequency _foodResetFrequency = FoodTrackingResetFrequency.monthly;
 
   @override
   void initState() {
     super.initState();
     _loadWaterAmount();
+    _loadFoodResetFrequency();
   }
 
   Future<void> _loadWaterAmount() async {
@@ -41,6 +44,21 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
       _waterAmount = amount;
     });
   }
+
+  Future<void> _loadFoodResetFrequency() async {
+    final frequency = await FoodTrackingService.getResetFrequency();
+    setState(() {
+      _foodResetFrequency = frequency;
+    });
+  }
+
+  Future<void> _saveFoodResetFrequency(FoodTrackingResetFrequency frequency) async {
+    await FoodTrackingService.setResetFrequency(frequency);
+    setState(() {
+      _foodResetFrequency = frequency;
+    });
+  }
+
 
   void _showWaterAmountDialog() {
     showDialog(
@@ -94,6 +112,63 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
       },
     );
   }
+
+  void _showFoodResetFrequencyDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Food Tracking Reset'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Choose when your food tracking counts should reset:'),
+              const SizedBox(height: 16),
+              ListTile(
+                title: const Text('Weekly (every Monday)'),
+                subtitle: const Text('Counts reset at the start of each week'),
+                leading: Icon(
+                  _foodResetFrequency == FoodTrackingResetFrequency.weekly
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  color: _foodResetFrequency == FoodTrackingResetFrequency.weekly
+                      ? Theme.of(context).primaryColor
+                      : null,
+                ),
+                onTap: () {
+                  _saveFoodResetFrequency(FoodTrackingResetFrequency.weekly);
+                  Navigator.pop(context);
+                },
+              ),
+              ListTile(
+                title: const Text('Monthly (1st of each month)'),
+                subtitle: const Text('Counts reset at the start of each month'),
+                leading: Icon(
+                  _foodResetFrequency == FoodTrackingResetFrequency.monthly
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  color: _foodResetFrequency == FoodTrackingResetFrequency.monthly
+                      ? Theme.of(context).primaryColor
+                      : null,
+                ),
+                onTap: () {
+                  _saveFoodResetFrequency(FoodTrackingResetFrequency.monthly);
+                  Navigator.pop(context);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -221,6 +296,70 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                               const SizedBox(height: 4),
                               Text(
                                 'Currently: ${_waterAmount}ml per tap',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.greyText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.greyText,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+
+              const SizedBox(height: 16),
+
+              // Food Tracking Reset Frequency Section
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.normalCardBackground,
+                  ),
+                ),
+                child: InkWell(
+                  onTap: _showFoodResetFrequencyDialog,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.pastelGreen.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.restaurant_rounded,
+                            color: AppColors.pastelGreen,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Food Tracking Reset',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Currently: ${_foodResetFrequency == FoodTrackingResetFrequency.weekly ? 'Weekly' : 'Monthly'}',
                                 style: const TextStyle(
                                   fontSize: 14,
                                   color: AppColors.greyText,
