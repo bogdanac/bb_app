@@ -41,6 +41,13 @@ class RoutineWidgetProvider : AppWidgetProvider() {
         
         private fun getCurrentWeekday(): Int {
             val calendar = Calendar.getInstance()
+            val hour = calendar.get(Calendar.HOUR_OF_DAY)
+
+            // If it's before 2 AM, consider it as the previous day
+            if (hour < 2) {
+                calendar.add(Calendar.DAY_OF_MONTH, -1)
+            }
+
             // Convert to Monday=1, Sunday=7 format
             return when (calendar.get(Calendar.DAY_OF_WEEK)) {
                 Calendar.MONDAY -> 1
@@ -316,44 +323,8 @@ class RoutineWidgetProvider : AppWidgetProvider() {
             // This mirrors the logic from Flutter's getCurrentActiveRoutine method
 
             val currentWeekday = getCurrentWeekday()
-            val today = getTodayString()
 
-            // First priority: Check all routines for any with incomplete progress today
-            for (routine in validRoutines) {
-                val routineId = routine.optString("id", "")
-                if (routineId.isNotEmpty()) {
-                    val progressJson = prefs.getString("flutter.routine_progress_${routineId}_$today", null)
-                        ?: prefs.getString("flutter.morning_routine_progress_$today", null)
-
-                    if (progressJson != null) {
-                        try {
-                            val progress = JSONObject(progressJson)
-                            val completedSteps = progress.optJSONArray("completedSteps")
-                            val skippedSteps = progress.optJSONArray("skippedSteps")
-
-                            // Check if all steps are completed (not skipped)
-                            if (completedSteps != null) {
-                                var allCompleted = true
-                                for (i in 0 until completedSteps.length()) {
-                                    if (!completedSteps.optBoolean(i, false)) {
-                                        allCompleted = false
-                                        break
-                                    }
-                                }
-
-                                // If not all completed, this is the active routine
-                                if (!allCompleted) {
-                                    return routine
-                                }
-                            }
-                        } catch (e: Exception) {
-                            // Continue to next routine
-                        }
-                    }
-                }
-            }
-
-            // Second priority: Find routines scheduled for today
+            // Find routines scheduled for today
             for (routine in validRoutines) {
                 val activeDays = routine.optJSONArray("activeDays")
 
@@ -366,7 +337,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 }
             }
 
-            // No routine with progress or scheduled for today - return null
+            // No routine scheduled for today
             return null
         } catch (e: Exception) {
             e.printStackTrace()
@@ -379,9 +350,9 @@ class RoutineWidgetProvider : AppWidgetProvider() {
         val routine = getCurrentRoutine(context) ?: return 0
         val routineId = routine.optString("id", "")
         if (routineId.isEmpty()) return 0
-        
+
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val today = getTodayString()
+        val today = getEffectiveDate()  // Use effective date (considers <2 AM as previous day)
         
         // Try routine-specific progress first
         var progressJson = prefs.getString("flutter.routine_progress_${routineId}_$today", null)
@@ -416,7 +387,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
 
     private fun completeCurrentStep(context: Context) {
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val today = getTodayString()
+        val today = getEffectiveDate()  // Use effective date (considers <2 AM as previous day)
         val routine = getCurrentRoutine(context) ?: return
         val routineId = routine.optString("id", "") 
         if (routineId.isEmpty()) return
@@ -499,7 +470,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
 
     private fun skipCurrentStep(context: Context) {
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val today = getTodayString()
+        val today = getEffectiveDate()  // Use effective date (considers <2 AM as previous day)
         val routine = getCurrentRoutine(context) ?: return
         val routineId = routine.optString("id", "")
         if (routineId.isEmpty()) return

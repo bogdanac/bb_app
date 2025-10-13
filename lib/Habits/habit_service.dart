@@ -124,7 +124,7 @@ class HabitService {
 
     if (habitIndex != -1) {
       final habit = habits[habitIndex];
-      habit.completedDates.clear();
+      habit.continueToNextCycle(); // Use the model's method which clears dates and updates cycle counter
       await saveHabits(habits);
     }
   }

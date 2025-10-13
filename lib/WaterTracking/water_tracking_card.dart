@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // WATER TRACKING CARD
 class WaterTrackingCard extends StatefulWidget {
@@ -23,10 +24,12 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
   late Animation<double> _progressAnimation;
   late AnimationController _buttonController;
   late Animation<double> _buttonScaleAnimation;
+  int _waterGoal = 1500; // Default water goal
 
   @override
   void initState() {
     super.initState();
+    _loadWaterGoal();
 
     // Progress bar animation controller
     _progressController = AnimationController(
@@ -49,8 +52,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
     ));
 
     // Initialize progress animation with initial value
-    const int goal = 1500;
-    final double initialProgress = (widget.waterIntake / goal).clamp(0.0, 1.0);
+    final double initialProgress = (widget.waterIntake / _waterGoal).clamp(0.0, 1.0);
     _progressAnimation = Tween<double>(
       begin: 0.0,
       end: initialProgress,
@@ -63,6 +65,17 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
     _progressController.forward();
   }
 
+  Future<void> _loadWaterGoal() async {
+    final prefs = await SharedPreferences.getInstance();
+    final goal = prefs.getInt('water_goal') ?? 1500;
+    if (mounted) {
+      setState(() {
+        _waterGoal = goal;
+      });
+      _updateProgressAnimation();
+    }
+  }
+
   @override
   void didUpdateWidget(WaterTrackingCard oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -72,9 +85,8 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
   }
 
   void _updateProgressAnimation() {
-    const int goal = 1500;
     final double currentProgress = _progressAnimation.value;
-    final double newProgress = (widget.waterIntake / goal).clamp(0.0, 1.0);
+    final double newProgress = (widget.waterIntake / _waterGoal).clamp(0.0, 1.0);
 
     _progressAnimation = Tween<double>(
       begin: currentProgress,
@@ -109,10 +121,8 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
 
   @override
   Widget build(BuildContext context) {
-    const int goal = 1500;
-
     // Hide card if water intake reaches or exceeds the goal
-    if (widget.waterIntake >= goal) {
+    if (widget.waterIntake >= _waterGoal) {
       return const SizedBox.shrink();
     }
 
@@ -187,8 +197,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                       AnimatedBuilder(
                         animation: _progressAnimation,
                         builder: (context, child) {
-                          const int goal = 1500;
-                          final int remaining = (goal - widget.waterIntake).clamp(0, goal);
+                          final int remaining = (_waterGoal - widget.waterIntake).clamp(0, _waterGoal);
 
                           return Text(
                             remaining > 0

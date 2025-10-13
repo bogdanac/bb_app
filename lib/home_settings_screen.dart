@@ -15,12 +15,14 @@ class HomeSettingsScreen extends StatefulWidget {
 
 class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
   int _waterAmount = 125; // Default water amount
+  int _waterGoal = 1500; // Default water goal
   FoodTrackingResetFrequency _foodResetFrequency = FoodTrackingResetFrequency.monthly;
 
   @override
   void initState() {
     super.initState();
     _loadWaterAmount();
+    _loadWaterGoal();
     _loadFoodResetFrequency();
   }
 
@@ -42,6 +44,25 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
 
     setState(() {
       _waterAmount = amount;
+    });
+  }
+
+  Future<void> _loadWaterGoal() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _waterGoal = prefs.getInt('water_goal') ?? 1500;
+    });
+  }
+
+  Future<void> _saveWaterGoal(int goal) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('water_goal', goal);
+
+    // ALSO save with flutter. prefix for Android widget compatibility
+    await prefs.setInt('flutter.water_goal', goal);
+
+    setState(() {
+      _waterGoal = goal;
     });
   }
 
@@ -102,6 +123,59 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
               onPressed: () {
                 if (tempAmount > 0 && tempAmount <= 1000) {
                   _saveWaterAmount(tempAmount);
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showWaterGoalDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        int tempGoal = _waterGoal;
+        return AlertDialog(
+          title: const Text('Daily Water Goal'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Current goal: ${_waterGoal}ml'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: TextEditingController(text: tempGoal.toString()),
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Goal (ml)',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (value) {
+                  final parsed = int.tryParse(value);
+                  if (parsed != null && parsed > 0 && parsed <= 5000) {
+                    tempGoal = parsed;
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Range: 1-5000ml',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (tempGoal > 0 && tempGoal <= 5000) {
+                  _saveWaterGoal(tempGoal);
                   Navigator.pop(context);
                 }
               },
@@ -253,7 +327,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
 
               const SizedBox(height: 16),
 
-              // Water Tracking Settings Section
+              // Water Tracking Settings Section (Combined)
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
@@ -262,58 +336,128 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                     color: AppColors.normalCardBackground,
                   ),
                 ),
-                child: InkWell(
-                  onTap: _showWaterAmountDialog,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.waterBlue.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            Icons.water_drop_rounded,
-                            color: AppColors.waterBlue,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Water Amount per Tap',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                child: Column(
+                  children: [
+                    // Water Amount per Tap
+                    InkWell(
+                      onTap: _showWaterAmountDialog,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.waterBlue.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Currently: ${_waterAmount}ml per tap',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.greyText,
-                                ),
+                              child: Icon(
+                                Icons.water_drop_rounded,
+                                color: AppColors.waterBlue,
+                                size: 20,
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Water Amount per Tap',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Currently: ${_waterAmount}ml per tap',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.greyText,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: AppColors.greyText,
+                            ),
+                          ],
                         ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.greyText,
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
+                    // Divider
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: AppColors.normalCardBackground,
+                      ),
+                    ),
+                    // Daily Water Goal
+                    InkWell(
+                      onTap: _showWaterGoalDialog,
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.waterBlue.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.flag_rounded,
+                                color: AppColors.waterBlue,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Daily Water Goal',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Currently: ${_waterGoal}ml per day',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.greyText,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: AppColors.greyText,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-
 
               const SizedBox(height: 16),
 

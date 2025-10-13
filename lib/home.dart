@@ -9,6 +9,7 @@ import 'package:bb_app/MenstrualCycle/menstrual_cycle_card.dart';
 import 'package:bb_app/WaterTracking/water_tracking_card.dart';
 import 'package:bb_app/Tasks/daily_tasks_card.dart';
 import 'package:bb_app/Routines/routine_card.dart';
+import 'package:bb_app/Routines/routine_widget_service.dart';
 import 'package:bb_app/Fasting/fasting_card.dart';
 import 'package:bb_app/Habits/habit_card.dart';
 import 'package:bb_app/Habits/habit_service.dart';
@@ -29,6 +30,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int waterIntake = 0;
+  int _waterGoal = 1500; // Default water goal
   bool showFastingSection = false;
   bool _isFastingInProgress = false;
   bool showRoutine = true;
@@ -43,6 +45,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Add a key to force rebuild of MenstrualCycleCard
   Key _menstrualCycleKey = UniqueKey();
+
+  // Add a key to force rebuild of RoutineCard
+  Key _routineCardKey = UniqueKey();
 
   // Key to access CalendarEventsCard for refresh
   final GlobalKey _calendarEventsKey = GlobalKey();
@@ -67,10 +72,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _initializeData() async {
     try {
       await _loadWaterIntake();
+      await _loadWaterGoal();
       await _initializeWaterAmountSetting();
       _checkFastingVisibility();
       _checkRoutineVisibility();
       await _checkHabitCardVisibility();
+
+      // Update routine widget when app opens
+      await RoutineWidgetService.updateWidget();
 
       // Inițializează și programează notificările de apă
       await _initializeWaterNotifications();
@@ -155,13 +164,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Refresh backup status when returning to the app
       _checkBackupStatus();
       // Force refresh of all home screen widgets including tasks
-      setState(() {});
+      setState(() {
+        _routineCardKey = UniqueKey(); // Force RoutineCard to reload from widget progress
+      });
       debugPrint('App resumed - refreshed all home screen data');
     }
   }
 
   bool get _shouldShowWaterTracking {
-    return waterIntake < 1500; // Changed to match the goal in WaterTrackingCard
+    return waterIntake < _waterGoal; // Show card if water intake is below goal
+  }
+
+  Future<void> _loadWaterGoal() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final goal = prefs.getInt('water_goal') ?? 1500;
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _waterGoal = goal;
+        });
+      }
+    } catch (e) {
+      debugPrint('ERROR loading water goal: $e');
+    }
   }
 
   Future<void> _loadWaterIntake() async {
@@ -182,9 +207,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await prefs.setInt('water_$today', intake);
         await prefs.setString('last_water_reset_date', today);
 
-        // Reprogramează notificările pentru ziua nouă
+        // Reprogramează notificările pentru ziua nouă (non-blocking)
         final notificationManager = CentralizedNotificationManager();
-        await notificationManager.forceRescheduleAll();
+        // Don't await - let it run in background to avoid blocking UI
+        notificationManager.forceRescheduleAll().catchError((e) {
+          debugPrint('ERROR rescheduling notifications: $e');
+        });
 
       } else {
         // Load data for current day - prioritize widget data
@@ -746,6 +774,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               // Routine Section (conditional)
               if (showRoutine) ...[
                 RoutineCard(
+                  key: _routineCardKey,
                   onCompleted: _onRoutineCompleted,
                   onHiddenForToday: _onRoutineHiddenForToday,
                 ),

@@ -143,6 +143,10 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
       // Clear all completed dates to restart the cycle
       widget.habit!.completedDates.clear();
 
+      // Update createdAt to today to reset the calendar
+      final now = DateTime.now();
+      widget.habit!.createdAt = DateTime(now.year, now.month, now.day);
+
       // Save the updated habit
       await HabitService.updateHabit(widget.habit!);
 

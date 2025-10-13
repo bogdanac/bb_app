@@ -60,7 +60,7 @@ class RoutineWidgetService {
   static Future<void> syncWithWidget() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final today = RoutineService.getTodayString();
+      final today = RoutineService.getEffectiveDate();  // Use effective date for consistency
       
       // Check if widget has made progress
       final widgetProgressJson = prefs.getString('flutter.morning_routine_progress_$today');
@@ -142,7 +142,7 @@ class RoutineWidgetService {
   static Future<void> checkDailyReset() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final today = RoutineService.getTodayString();
+      final today = RoutineService.getEffectiveDate();  // Use effective date for consistency
       final lastResetDate = prefs.getString('routine_widget_last_reset');
       
       if (lastResetDate != today) {

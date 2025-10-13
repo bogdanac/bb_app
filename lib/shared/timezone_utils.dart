@@ -113,15 +113,22 @@ class TimezoneUtils {
   /// Used by routines and other features that consider "yesterday" until 2 AM.
   /// This ensures consistency across the app for date-based logic.
   static String getEffectiveDateString() {
+    final effectiveDateTime = getEffectiveDateTime();
+    return formatDateForStorage(effectiveDateTime);
+  }
+
+  /// Gets the effective DateTime for app purposes (after 2 AM rule).
+  ///
+  /// Returns the DateTime that should be considered as "today" based on the 2 AM rule.
+  static DateTime getEffectiveDateTime() {
     final now = DateTime.now();
 
     // If it's before 2 AM, consider it as the previous day
     if (now.hour < 2) {
-      final previousDay = now.subtract(const Duration(days: 1));
-      return formatDateForStorage(previousDay);
+      return now.subtract(const Duration(days: 1));
     }
 
-    return formatDateForStorage(now);
+    return now;
   }
 
   /// Gets today's date string in a timezone-safe way.

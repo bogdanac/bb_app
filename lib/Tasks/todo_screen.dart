@@ -922,10 +922,62 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       print('Task ID: ${task.id}');
       print('Previous completion status: ${task.isCompleted}');
     }
-    
+
     try {
-    
-    // Get next due date for the recurring task
+
+    // Special handling for menstrual phase tasks with phaseDay:
+    // These should NOT auto-recalculate. User will manually recalculate when next period comes.
+    final isMenstrualPhaseTask = task.recurrence!.phaseDay != null &&
+        (task.recurrence!.types.contains(RecurrenceType.menstrualPhase) ||
+         task.recurrence!.types.contains(RecurrenceType.follicularPhase) ||
+         task.recurrence!.types.contains(RecurrenceType.ovulationPhase) ||
+         task.recurrence!.types.contains(RecurrenceType.earlyLutealPhase) ||
+         task.recurrence!.types.contains(RecurrenceType.lateLutealPhase));
+
+    if (isMenstrualPhaseTask) {
+      // For menstrual phase tasks with specific phaseDay, just clear scheduledDate
+      // and mark as completed - user will recalculate when next period comes
+      final updatedTask = Task(
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        categoryIds: List.from(task.categoryIds),
+        deadline: task.deadline,
+        scheduledDate: null, // Clear scheduled date - will be recalculated later
+        reminderTime: task.reminderTime,
+        isImportant: task.isImportant,
+        isPostponed: false,
+        recurrence: task.recurrence,
+        isCompleted: true, // Mark as completed
+        completedAt: DateTime.now(),
+        createdAt: task.createdAt,
+      );
+
+      final allTasks = await _taskService.loadTasks();
+      final currentTaskIndex = allTasks.indexWhere((t) => t.id == task.id);
+
+      if (currentTaskIndex != -1) {
+        allTasks[currentTaskIndex] = updatedTask;
+        await _taskService.saveTasks(allTasks);
+
+        // Update in-memory list immediately
+        final memoryTaskIndex = _tasks.indexWhere((t) => t.id == task.id);
+        if (memoryTaskIndex != -1) {
+          _tasks[memoryTaskIndex] = updatedTask;
+          _updateDisplayTasks();
+        }
+
+        await _loadTasks();
+
+        if (kDebugMode) {
+          print('✅ Menstrual phase task completed and scheduledDate cleared');
+          print('   Will be recalculated when user updates period info');
+        }
+      }
+      return;
+    }
+
+    // Get next due date for regular recurring tasks
     // For postponed tasks, we need to skip the current cycle to respect the postponement
     DateTime referenceDate;
     if (task.scheduledDate != null) {
@@ -936,7 +988,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       // Task completed on time - use natural recurrence from today
       referenceDate = DateTime.now();
     }
-    
+
     final nextDueDate = task.recurrence!.getNextDueDate(referenceDate);
     
     if (nextDueDate != null) {
@@ -1347,15 +1399,6 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     // If task has NO menstrual phases, use regular due today logic
     if (!hasMenstrualPhases) {
       return task.isDueToday();
-    }
-
-    // SPECIAL CASE: Postponed menstrual tasks should appear regardless of phase
-    // If task has a scheduledDate (was postponed), show it regardless of menstrual phase
-    if (task.scheduledDate != null) {
-      final today = DateTime.now();
-      final todayDate = DateTime(today.year, today.month, today.day);
-      final scheduledDate = DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day);
-      return scheduledDate.isAtSameMomentAs(todayDate) || scheduledDate.isBefore(todayDate);
     }
 
     // If task HAS menstrual phases, we need to check the current phase

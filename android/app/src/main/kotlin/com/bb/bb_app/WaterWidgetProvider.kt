@@ -13,7 +13,7 @@ import java.util.*
 class WaterWidgetProvider : AppWidgetProvider() {
     companion object {
         private const val ACTION_ADD_WATER = "com.bb.bb_app.ADD_WATER"
-        private const val WATER_GOAL = 1500
+        private const val DEFAULT_WATER_GOAL = 1500
         private const val DEFAULT_WATER_INCREMENT = 125
     }
 
@@ -92,6 +92,41 @@ class WaterWidgetProvider : AppWidgetProvider() {
         return DEFAULT_WATER_INCREMENT
     }
 
+    private fun getWaterGoal(context: Context): Int {
+        val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+
+        // Try multiple key formats that Flutter might use
+        val possibleKeys = listOf(
+            "flutter.water_goal",
+            "water_goal"
+        )
+
+        for (key in possibleKeys) {
+            try {
+                // Try as Int first
+                val value = prefs.getInt(key, -1)
+                if (value > 0 && value <= 5000) { // Validate range
+                    android.util.Log.d("WaterWidget", "✓ Found water goal setting (Int): ${value}ml for key: $key")
+                    return value
+                }
+            } catch (e: ClassCastException) {
+                try {
+                    // Flutter might store as Long, try that
+                    val longValue = prefs.getLong(key, -1L)
+                    if (longValue > 0 && longValue <= 5000) { // Validate range
+                        android.util.Log.d("WaterWidget", "✓ Found water goal setting (Long): ${longValue}ml for key: $key")
+                        return longValue.toInt()
+                    }
+                } catch (e2: ClassCastException) {
+                    // Continue to next key
+                }
+            }
+        }
+
+        android.util.Log.d("WaterWidget", "⚠ No water goal setting found, using default: ${DEFAULT_WATER_GOAL}ml")
+        return DEFAULT_WATER_GOAL
+    }
+
     private fun addWater(context: Context) {
         // Try Flutter's actual SharedPreferences file
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
@@ -142,8 +177,9 @@ class WaterWidgetProvider : AppWidgetProvider() {
         }
 
         // Don't add water if goal is already reached
-        if (currentIntake >= WATER_GOAL) {
-            android.util.Log.d("WaterWidget", "Goal already reached: $currentIntake >= $WATER_GOAL")
+        val waterGoal = getWaterGoal(context)
+        if (currentIntake >= waterGoal) {
+            android.util.Log.d("WaterWidget", "Goal already reached: $currentIntake >= $waterGoal")
             return
         }
 
@@ -202,7 +238,8 @@ class WaterWidgetProvider : AppWidgetProvider() {
         appWidgetId: Int
     ) {
         val currentIntake = getCurrentWaterIntake(context)
-        val isGoalReached = currentIntake >= WATER_GOAL
+        val waterGoal = getWaterGoal(context)
+        val isGoalReached = currentIntake >= waterGoal
         
         val views = RemoteViews(context.packageName, R.layout.water_widget)
         

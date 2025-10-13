@@ -80,7 +80,7 @@ class RoutineProgressService {
     required List<RoutineItem> items,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final today = getTodayString();
+    final today = getEffectiveDate();  // Use effective date for consistency
     
     final progressData = {
       'routineId': routineId,
@@ -105,7 +105,7 @@ class RoutineProgressService {
   /// Load routine progress
   static Future<Map<String, dynamic>?> loadRoutineProgress(String routineId) async {
     final prefs = await SharedPreferences.getInstance();
-    final today = getTodayString();
+    final today = getEffectiveDate();  // Use effective date for consistency
     
     // Try routine-specific key first
     var progressJson = prefs.getString('${_progressPrefix}${routineId}_$today');
@@ -142,7 +142,7 @@ class RoutineProgressService {
   /// Clear routine progress
   static Future<void> clearRoutineProgress(String routineId) async {
     final prefs = await SharedPreferences.getInstance();
-    final today = getTodayString();
+    final today = getEffectiveDate();  // Use effective date for consistency
     
     await prefs.remove('${_progressPrefix}${routineId}_$today');
     

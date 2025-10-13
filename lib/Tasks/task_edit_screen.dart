@@ -157,7 +157,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
 
   void _autoSaveTask() {
     if (_titleController.text.trim().isEmpty) return;
-    
+
     try {
       final task = Task(
         id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
@@ -1148,12 +1148,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
           if (recurrence.isDueOn(todayDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
           }
         }
-        // Clear manually set scheduled date, deadline, and reminder when setting recurrence
+        // Clear manually set scheduled date and deadline when setting recurrence
         if (recurrence != null) {
           _scheduledDate = null;
           _hasUserModifiedScheduledDate = true;
           _deadline = null; // Deadlines don't make sense for recurring tasks
-          _reminderTime = null; // Reminders are for deadlines, not recurring tasks
+          // Keep _reminderTime - recurring tasks CAN have reminders!
         }
       });
       _onFieldChanged();
