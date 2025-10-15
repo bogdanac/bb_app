@@ -12,6 +12,7 @@ import 'intercourse_editor_dialog.dart';
 import 'period_history_screen.dart';
 import '../Tasks/task_service.dart';
 import '../Tasks/tasks_data_models.dart';
+import 'friends_tab_screen.dart';
 
 class CycleScreen extends StatefulWidget {
   const CycleScreen({super.key});
@@ -20,7 +21,13 @@ class CycleScreen extends StatefulWidget {
   State<CycleScreen> createState() => _CycleScreenState();
 }
 
-class _CycleScreenState extends State<CycleScreen> {
+class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin {
+  // Tab controller
+  late TabController _tabController;
+
+  // GlobalKey for FriendsTabScreen to access its methods
+  final GlobalKey<FriendsTabScreenState> _friendsTabKey = GlobalKey<FriendsTabScreenState>();
+
   // State variables
   DateTime? _selectedDate;
   DateTime _calendarDate = DateTime.now();
@@ -34,7 +41,17 @@ class _CycleScreenState extends State<CycleScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      setState(() {}); // Rebuild when tab changes
+    });
     _loadCycleData();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   // DATA PERSISTENCE METHODS
@@ -486,56 +503,125 @@ class _CycleScreenState extends State<CycleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cycle Tracking'),
+        title: const Text('Cycle & Friends'),
         backgroundColor: AppColors.transparent,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.pink.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(25),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                color: _tabController.index == 0 ? AppColors.lightRed : AppColors.lime,
+                borderRadius: BorderRadius.circular(25),
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
+              labelColor: AppColors.white,
+              unselectedLabelColor: _tabController.index == 0 ? AppColors.coral : AppColors.lightPurple,
+              labelStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+              tabs: const [
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.favorite_rounded, size: 20),
+                      SizedBox(width: 8),
+                      Text('Cycle'),
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.people_rounded, size: 20),
+                      SizedBox(width: 8),
+                      Text('Friends'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: IconButton(
-              icon: const Icon(Icons.calendar_month_rounded),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PeriodHistoryScreen(),
-                  ),
-                );
-              },
-              tooltip: 'Period History',
+          if (_tabController.index == 0) ...[
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: IconButton(
+                icon: const Icon(Icons.calendar_month_rounded),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const PeriodHistoryScreen(),
+                    ),
+                  );
+                },
+                tooltip: 'Period History',
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: IconButton(
-              icon: const Icon(Icons.local_fire_department),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CycleCalorieSettingsScreen(),
-                  ),
-                );
-              },
-              tooltip: 'Calorie Settings',
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: IconButton(
+                icon: const Icon(Icons.local_fire_department),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CycleCalorieSettingsScreen(),
+                    ),
+                  );
+                },
+                tooltip: 'Calorie Settings',
+              ),
             ),
-          ),
+          ],
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildCurrentPhaseCard(),
-            const SizedBox(height: 16),
-            _buildCalendarCard(),
-            const SizedBox(height: 16),
-            _buildActionButtons(),
-            if (_selectedDate != null) const SizedBox(height: 16),
-            _buildStatisticsCard(),
-          ],
-        ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // Cycle tab
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCurrentPhaseCard(),
+                const SizedBox(height: 16),
+                _buildCalendarCard(),
+                const SizedBox(height: 16),
+                _buildActionButtons(),
+                if (_selectedDate != null) const SizedBox(height: 16),
+                _buildStatisticsCard(),
+              ],
+            ),
+          ),
+          // Friends tab
+          FriendsTabScreen(key: _friendsTabKey),
+        ],
       ),
+      floatingActionButton: _tabController.index == 1
+          ? FloatingActionButton(
+              onPressed: () {
+                _friendsTabKey.currentState?.addFriend();
+              },
+              child: const Icon(Icons.add_rounded),
+            )
+          : null,
     );
   }
 

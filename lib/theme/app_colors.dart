@@ -2,21 +2,21 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // Main Palette (Original)
-  static const Color red = Color(0xFFF8455C);      // #f43148
-  static const Color yellow = Color(0xFFFFC637);          // #f5b041 - More muted yellow
-  static const Color orange = Color(0xFFFF755D);          // #f98834
-  static const Color coral = Color(0xFFFF5A81);           // #fd6848
-  static const Color purple = Color(0xFFBD3AA6);          // #bd3aa6
-  static const Color pink = Color(0xFFFF48B4);            // #fb3380
-  
-  // Medium versions (keeping pure hues)
-  static const Color lightRed = Color(0xFFFF7272);        // Pure f43148 hue, medium value
-  static const Color lightYellow = Color(0xFFFFD36F);     // Pure ffd106 hue, medium value
-  static const Color lightOrange = Color(0xFFFD9987);     // Pure f98834 hue, medium value
-  static const Color lightCoral = Color(0xFFFA698B);      // Pure fd6848 hue, medium value
-  static const Color lightPurple = Color(0xFFDF82C5);     // Pure bd3aa6 hue, medium value
-  static const Color lightPink = Color(0xFFFD65C3);       // Pure fb3380 hue, medium value
-  
+  static const Color red = Color(0xFFF8455C);
+  static const Color yellow = Color(0xFFFFC637);
+  static const Color orange = Color(0xFFFF755D);
+  static const Color coral = Color(0xFFFF5A81);
+  static const Color purple = Color(0xE4CA37EC);
+  static const Color pink = Color(0xFFFF48B4);
+  static const Color lime = Color(0xDA92F451);
+
+  static const Color lightRed = Color(0xFFFF7272);
+  static const Color lightYellow = Color(0xFFFFD36F);
+  static const Color lightOrange = Color(0xFFFD9987);
+  static const Color lightCoral = Color(0xFFFA698B);
+  static const Color lightPurple = Color(0xFFDF82C5);
+  static const Color lightPink = Color(0xFFFD65C3);
+
   // Success/Error colors 
   static const Color successGreen = Color(0xFF4CAF50);    // Green for success states
   static const Color error = Color(0xFFFF3554);           // Softer red for errors (not the aggressive primary red)

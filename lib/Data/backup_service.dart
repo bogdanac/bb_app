@@ -49,6 +49,7 @@ class BackupService {
       'timestamp': DateTime.now().toIso8601String(),
       'fasting': {},
       'menstrual_cycle': {},
+      'friends': {},
       'tasks': {},
       'task_categories': {},
       'routines': {},
@@ -68,6 +69,8 @@ class BackupService {
         backupData['fasting'][key] = value;
       } else if (key.startsWith('menstrual_') || key.contains('cycle') || key.contains('period') || key.startsWith('last_period_') || key == 'average_cycle_length' || key == 'period_ranges' || key == 'intercourse_records') {
         backupData['menstrual_cycle'][key] = value;
+      } else if (key == 'circle_of_friends' || key.startsWith('friend_') || key.contains('friends')) {
+        backupData['friends'][key] = value;
       } else if (key.startsWith('task') || key.contains('todo') || key.contains('priority') || key.contains('categor') || key == 'task_categories') {
         if (key.contains('categor') || key == 'task_categories') {
           backupData['task_categories'][key] = value;
@@ -262,19 +265,19 @@ class BackupService {
       }
 
       // Validate backup contains expected categories
-      final expectedCategories = ['fasting', 'menstrual_cycle', 'tasks', 'task_categories', 'routines', 'habits', 'food_tracking', 'water_tracking', 'notifications', 'settings', 'app_preferences'];
+      final expectedCategories = ['fasting', 'menstrual_cycle', 'friends', 'tasks', 'task_categories', 'routines', 'habits', 'food_tracking', 'water_tracking', 'notifications', 'settings', 'app_preferences'];
       for (String category in expectedCategories) {
         if (!backupData.containsKey(category)) {
           return {'success': false, 'error': 'Backup file is incomplete - missing category: $category'};
         }
       }
-      
+
       final prefs = await SharedPreferences.getInstance();
       int restoredCount = 0;
       List<String> errors = [];
-      
+
       // Restore each category
-      for (String category in ['fasting', 'menstrual_cycle', 'tasks', 'task_categories', 'routines', 'habits', 'food_tracking', 'water_tracking', 'notifications', 'settings', 'app_preferences']) {
+      for (String category in ['fasting', 'menstrual_cycle', 'friends', 'tasks', 'task_categories', 'routines', 'habits', 'food_tracking', 'water_tracking', 'notifications', 'settings', 'app_preferences']) {
         if (backupData.containsKey(category)) {
           final categoryData = backupData[category] as Map<String, dynamic>;
           for (String key in categoryData.keys) {
@@ -613,8 +616,8 @@ class BackupService {
       
       int totalItems = 0;
       final categories = <String, int>{};
-      
-      for (String category in ['fasting', 'menstrual_cycle', 'tasks', 'task_categories', 'routines', 'food_tracking', 'water_tracking', 'notifications', 'settings', 'app_preferences']) {
+
+      for (String category in ['fasting', 'menstrual_cycle', 'friends', 'tasks', 'task_categories', 'routines', 'food_tracking', 'water_tracking', 'notifications', 'settings', 'app_preferences']) {
         final categoryData = Map<String, dynamic>.from(backupData[category] ?? {});
         final count = categoryData.keys.length;
         categories[category] = count;

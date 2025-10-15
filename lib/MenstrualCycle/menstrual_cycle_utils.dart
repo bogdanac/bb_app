@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'menstrual_cycle_constants.dart';
+import '../Fasting/scheduled_fastings_service.dart';
 
 class MenstrualCycleUtils {
   static bool isCurrentlyOnPeriod(DateTime? lastPeriodStart, DateTime? lastPeriodEnd) {
@@ -274,6 +275,20 @@ class MenstrualCycleUtils {
     if (lastStartStr == null) return false;
 
     final lastPeriodStart = DateTime.parse(lastStartStr);
-    return isDateInLateLutealPhase(fastDate, lastPeriodStart, averageCycleLength);
+
+    // First, check if the date is in late luteal phase
+    final isInLateLuteal = isDateInLateLutealPhase(fastDate, lastPeriodStart, averageCycleLength);
+    if (!isInLateLuteal) return false;
+
+    // Second, check if there's actually a scheduled fast for this date
+    final scheduledFastings = await ScheduledFastingsService.getScheduledFastings();
+    final hasScheduledFast = scheduledFastings.any((fasting) =>
+        fasting.isEnabled &&
+        fasting.date.year == fastDate.year &&
+        fasting.date.month == fastDate.month &&
+        fasting.date.day == fastDate.day);
+
+    // Only return true if BOTH conditions are met
+    return hasScheduledFast;
   }
 }

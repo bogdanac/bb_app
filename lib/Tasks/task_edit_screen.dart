@@ -610,29 +610,33 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                         ),
                         const SizedBox(width: 16),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Set Scheduled Day',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.greyText,
+                          child: GestureDetector(
+                            onTap: _selectScheduledDate,
+                            behavior: HitTestBehavior.opaque,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Set Scheduled Day',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.greyText,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _scheduledDate != null
-                                    ? DateFormat('EEEE, MMMM dd').format(_scheduledDate!)
-                                    : 'Choose when to do this task',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.greyText,
-                                  fontWeight: FontWeight.normal,
+                                const SizedBox(height: 2),
+                                Text(
+                                  _scheduledDate != null
+                                      ? DateFormat('EEEE, MMMM dd').format(_scheduledDate!)
+                                      : 'Choose when to do this task',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.greyText,
+                                    fontWeight: FontWeight.normal,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                         if (_scheduledDate != null)
