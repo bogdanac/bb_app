@@ -453,9 +453,13 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                     put("currentStepIndex", nextStepIndex)
                     put("completedSteps", JSONArray(completedSteps))
                     put("skippedSteps", JSONArray(skippedSteps))
-                    put("lastUpdated", Date().time)
+                    put("lastUpdated", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                        timeZone = TimeZone.getTimeZone("UTC")
+                    }.format(Date()))
+                    put("routineId", routineId)
+                    put("itemCount", items.length())
                 }
-                
+
                 prefs.edit()
                     .putString("flutter.routine_progress_${routineId}_$today", progressData.toString())
                     .putString("flutter.morning_routine_progress_$today", progressData.toString())
@@ -537,9 +541,13 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                     put("currentStepIndex", nextStepIndex)
                     put("completedSteps", JSONArray(completedSteps))
                     put("skippedSteps", JSONArray(skippedSteps))
-                    put("lastUpdated", Date().time)
+                    put("lastUpdated", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                        timeZone = TimeZone.getTimeZone("UTC")
+                    }.format(Date()))
+                    put("routineId", routineId)
+                    put("itemCount", items.length())
                 }
-                
+
                 prefs.edit()
                     .putString("flutter.routine_progress_${routineId}_$today", progressData.toString())
                     .putString("flutter.morning_routine_progress_$today", progressData.toString())

@@ -80,7 +80,7 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
 
     // Auto-end periods that exceed 7 days
     await _autoEndLongPeriods();
-    
+
     await _loadIntercourseRecords();
     if (mounted) setState(() {});
   }
@@ -302,7 +302,7 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
 
   void _calculateAverageCycleLength() {
     final cycles = <int>[];
-    
+
     // Calculate cycles between completed periods
     for (int i = 1; i < _periodRanges.length; i++) {
       final cycleLength = _periodRanges[i]['start']!.difference(_periodRanges[i-1]['start']!).inDays;
@@ -310,11 +310,12 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
         cycles.add(cycleLength);
       }
     }
-    
-    // Include cycle from last completed period to current period start (if exists)
+
+    // Include cycle from last completed period to current active period
     if (_periodRanges.isNotEmpty && _lastPeriodStart != null) {
       final lastCompletedPeriod = _periodRanges.last;
       final currentCycleLength = _lastPeriodStart!.difference(lastCompletedPeriod['start']!).inDays;
+
       if (currentCycleLength > 15 && currentCycleLength < 45) {
         cycles.add(currentCycleLength);
       }
@@ -562,13 +563,15 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
               padding: const EdgeInsets.only(right: 4),
               child: IconButton(
                 icon: const Icon(Icons.calendar_month_rounded),
-                onPressed: () {
-                  Navigator.push(
+                onPressed: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => const PeriodHistoryScreen(),
                     ),
                   );
+                  // Reload data when coming back from Period History
+                  _loadCycleData();
                 },
                 tooltip: 'Period History',
               ),

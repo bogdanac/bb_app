@@ -137,7 +137,7 @@ class Friend {
     return {
       'id': id,
       'name': name,
-      'color': color.value,
+      'color': color.toARGB32(),
       'battery': battery,
       'lastUpdated': lastUpdated.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),

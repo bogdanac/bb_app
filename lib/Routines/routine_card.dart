@@ -31,9 +31,9 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadCurrentRoutine();
-    
-    // Sync with widget on init
-    RoutineWidgetService.syncWithWidget();
+
+    // Don't sync on init - let the card read widget progress first
+    // RoutineWidgetService.syncWithWidget();
   }
 
   @override
@@ -58,9 +58,9 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       _saveProgress();
     }
 
-    // Sync with widget and reload routine when app comes back to foreground
+    // Reload routine when app comes back to foreground to pick up widget changes
     if (state == AppLifecycleState.resumed) {
-      RoutineWidgetService.syncWithWidget();
+      // Don't sync - just reload to read widget progress
       _loadCurrentRoutine();
     }
   }
@@ -77,8 +77,6 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       if (kDebugMode) {
         print('Loading routine - Found ${routines.length} routines');
         print('Available routines: ${routines.map((r) => r.title).toList()}');
-        // Force widget update for debugging
-        await RoutineWidgetService.forceRefreshWidget();
       }
 
       // Find currently active routine using unified method

@@ -295,21 +295,9 @@ class TaskService {
     try {
       final now = DateTime.now();
 
-      // Calculate the new postpone date
-      DateTime postponeDate;
-
-      if (task.scheduledDate != null) {
-        // If task already has a scheduled date, add 1 day to that date
-        postponeDate = task.scheduledDate!.add(const Duration(days: 1));
-      } else if (task.recurrence != null) {
-        // For recurring tasks, use the next occurrence from the recurrence pattern
-        final today = DateTime(now.year, now.month, now.day);
-        final nextDate = task.recurrence!.getNextDueDate(today);
-        postponeDate = nextDate ?? DateTime(now.year, now.month, now.day + 1);
-      } else {
-        // If no scheduled date and no recurrence, set to tomorrow
-        postponeDate = DateTime(now.year, now.month, now.day + 1);
-      }
+      // Calculate the new postpone date - always set to tomorrow, not relative to old scheduled date
+      final tomorrow = DateTime(now.year, now.month, now.day + 1);
+      DateTime postponeDate = tomorrow;
       
       DateTime? newReminderTime = task.reminderTime;
       
@@ -853,6 +841,10 @@ class TaskService {
     final originalTime = task.reminderTime!;
     final timeOfDay = TimeOfDay(hour: originalTime.hour, minute: originalTime.minute);
 
+    // Use recurrence's reminderTime if task's reminderTime is outdated
+    final recurrenceReminderTime = task.recurrence!.reminderTime;
+    final effectiveTimeOfDay = recurrenceReminderTime ?? timeOfDay;
+
     // Start checking from today
     DateTime checkDate = DateTime(now.year, now.month, now.day);
 
@@ -868,18 +860,24 @@ class TaskService {
           currentCheck.year,
           currentCheck.month,
           currentCheck.day,
-          timeOfDay.hour,
-          timeOfDay.minute,
+          effectiveTimeOfDay.hour,
+          effectiveTimeOfDay.minute,
         );
 
         // Only schedule if the reminder time is in the future
         if (reminderDateTime.isAfter(now)) {
+          if (kDebugMode) {
+            print('📋 Next reminder for "${task.title}": $reminderDateTime (in ${reminderDateTime.difference(now).inHours}h ${reminderDateTime.difference(now).inMinutes.remainder(60)}m)');
+          }
           return reminderDateTime;
         }
       }
     }
 
     // If no occurrence found in the next 90 days, return null
+    if (kDebugMode) {
+      print('⚠️ No future occurrence found for recurring task "${task.title}" in next 90 days');
+    }
     return null;
   }
 
@@ -1148,8 +1146,11 @@ class TaskService {
     if (recurrence.types.contains(RecurrenceType.daily)) {
       return todayDate.add(const Duration(days: 1));
     } else if (recurrence.types.contains(RecurrenceType.weekly)) {
-      // For weekly, only check next 7 days
-      for (int i = 1; i <= 7; i++) {
+      // For weekly with interval, check enough days to find the next occurrence
+      // For interval=1 (every week), check 7 days
+      // For interval=4 (every 4 weeks), check 28 days, etc.
+      final daysToCheck = 7 * recurrence.interval;
+      for (int i = 1; i <= daysToCheck; i++) {
         final checkDate = todayDate.add(Duration(days: i));
         if (recurrence.isDueOn(checkDate, taskCreatedAt: task.createdAt)) {
           return checkDate;

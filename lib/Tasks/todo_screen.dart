@@ -993,6 +993,16 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     
     if (nextDueDate != null) {
       // Update the existing task's scheduledDate instead of deadline
+      // Determine reminderTime from either task or recurrence
+      DateTime? newReminderTime;
+      if (task.reminderTime != null) {
+        newReminderTime = DateTime(nextDueDate.year, nextDueDate.month, nextDueDate.day,
+                       task.reminderTime!.hour, task.reminderTime!.minute);
+      } else if (task.recurrence!.reminderTime != null) {
+        newReminderTime = DateTime(nextDueDate.year, nextDueDate.month, nextDueDate.day,
+                       task.recurrence!.reminderTime!.hour, task.recurrence!.reminderTime!.minute);
+      }
+
       final updatedTask = Task(
         id: task.id, // Keep same ID
         title: task.title,
@@ -1000,10 +1010,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         categoryIds: List.from(task.categoryIds),
         deadline: task.deadline, // Keep original deadline unchanged
         scheduledDate: nextDueDate, // Update scheduled date to next occurrence
-        reminderTime: task.reminderTime != null
-            ? DateTime(nextDueDate.year, nextDueDate.month, nextDueDate.day,
-                       task.reminderTime!.hour, task.reminderTime!.minute)
-            : null,
+        reminderTime: newReminderTime,
         isImportant: task.isImportant,
         isPostponed: false, // Reset postponed status - it's now scheduled naturally
         recurrence: task.recurrence,

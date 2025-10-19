@@ -200,10 +200,20 @@ class NotificationService {
       final now = DateTime.now();
       var scheduledDate = reminderTime;
 
-      // Don't schedule if the time has already passed
-      if (scheduledDate.isBefore(now)) {
+      // For recurring tasks, the TaskService should have already calculated the next occurrence
+      // Only skip scheduling if the time has passed AND it's not recurring
+      if (scheduledDate.isBefore(now) && !isRecurring) {
         if (kDebugMode) {
-          print('⚠️ Task notification not scheduled - time already passed: $title at $scheduledDate');
+          print('⚠️ Non-recurring task notification not scheduled - time already passed: $title at $scheduledDate');
+        }
+        return;
+      }
+
+      // For recurring tasks with past times, this indicates a logic error - log it
+      if (scheduledDate.isBefore(now) && isRecurring) {
+        if (kDebugMode) {
+          print('⚠️ WARNING: Recurring task has past reminder time - TaskService should have calculated next occurrence: $title at $scheduledDate');
+          print('   This notification will NOT be scheduled. Check TaskService._getNextReminderTime logic.');
         }
         return;
       }

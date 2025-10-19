@@ -12,7 +12,7 @@ class PeriodHistoryScreen extends StatefulWidget {
 }
 
 class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
-  List<Map<String, DateTime>> _periodHistory = [];
+  List<Map<String, dynamic>> _periodHistory = [];
   int _averageCycleLength = 31;
 
   @override
@@ -46,11 +46,58 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
   Future<void> _savePeriodHistory() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Save period ranges
+    // Save ALL period ranges
     final rangesStr = _periodHistory.map((range) {
       return '${range['start']!.toIso8601String()}|${range['end']!.toIso8601String()}';
     }).toList();
     await prefs.setStringList('period_ranges', rangesStr);
+
+    // Recalculate average cycle length after saving
+    _recalculateAverageCycleLength();
+  }
+
+  void _recalculateAverageCycleLength() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cycles = <int>[];
+
+    // Sort by start date (oldest first) for calculation
+    final sortedHistory = List<Map<String, dynamic>>.from(_periodHistory);
+    sortedHistory.sort((a, b) => a['start']!.compareTo(b['start']!));
+
+    // Calculate cycles between consecutive periods
+    for (int i = 1; i < sortedHistory.length; i++) {
+      final cycleLength = sortedHistory[i]['start']!.difference(sortedHistory[i-1]['start']!).inDays;
+      if (cycleLength > 15 && cycleLength < 45) {
+        cycles.add(cycleLength);
+      }
+    }
+
+    // Also include cycle from last period to current active period (if exists)
+    final lastStartStr = prefs.getString('last_period_start');
+    if (sortedHistory.isNotEmpty && lastStartStr != null) {
+      final lastPeriodStart = DateTime.parse(lastStartStr);
+      final lastCompletedPeriod = sortedHistory.last;
+
+      final isDifferentPeriod = !(lastPeriodStart.year == lastCompletedPeriod['start']!.year &&
+                                   lastPeriodStart.month == lastCompletedPeriod['start']!.month &&
+                                   lastPeriodStart.day == lastCompletedPeriod['start']!.day);
+
+      if (isDifferentPeriod) {
+        final currentCycleLength = lastPeriodStart.difference(lastCompletedPeriod['start']!).inDays;
+        if (currentCycleLength > 15 && currentCycleLength < 45) {
+          cycles.add(currentCycleLength);
+        }
+      }
+    }
+
+    if (cycles.isNotEmpty) {
+      final calculatedAverage = (cycles.reduce((a, b) => a + b) / cycles.length).round();
+      _averageCycleLength = calculatedAverage > 0 ? calculatedAverage : 31;
+
+      await prefs.setInt('average_cycle_length', _averageCycleLength);
+
+      if (mounted) setState(() {});
+    }
   }
 
   void _editPeriod(int index) {
@@ -320,149 +367,40 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.all(12),
+              child: Row(
                 children: [
-                  // Header row with dates
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.water_drop_rounded, color: AppColors.pink, size: 18),
-                                const SizedBox(width: 8),
-                                Text(
-                                  DateFormat('MMM dd, yyyy').format(startDate),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'to ${DateFormat('MMM dd, yyyy').format(endDate)}',
-                              style: TextStyle(
-                                color: AppColors.white70,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
+                  Icon(Icons.water_drop_rounded, color: AppColors.pink, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 15,
+                            color: Colors.white,
+                          ),
                         ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.pink.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.pink.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
+                        const SizedBox(height: 2),
+                        Text(
                           '$duration days',
                           style: TextStyle(
-                            color: AppColors.pink,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                            color: AppColors.white70,
+                            fontSize: 13,
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-
-                  const SizedBox(height: 16),
-
-                  // Stats row
-                  Row(
-                    children: [
-                      // Duration
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.lightPink.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(Icons.timer_rounded, color: AppColors.lightPink, size: 20),
-                              const SizedBox(height: 4),
-                              Text(
-                                '$duration',
-                                style: TextStyle(
-                                  color: AppColors.lightPink,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              Text(
-                                'Period Days',
-                                style: TextStyle(
-                                  color: AppColors.white70,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 12),
-
-                      // Cycle length
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.purple.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(Icons.refresh_rounded, color: AppColors.purple, size: 20),
-                              const SizedBox(height: 4),
-                              Text(
-                                '$cycleDays',
-                                style: TextStyle(
-                                  color: AppColors.purple,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              Text(
-                                'Cycle Days',
-                                style: TextStyle(
-                                  color: AppColors.white70,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Days ago
-                  Row(
-                    children: [
-                      Icon(Icons.schedule_rounded, color: AppColors.greyText, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${DateTime.now().difference(startDate).inDays} days ago',
-                        style: TextStyle(
-                          color: AppColors.greyText,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    '$cycleDays day cycle',
+                    style: TextStyle(
+                      color: AppColors.greyText,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),

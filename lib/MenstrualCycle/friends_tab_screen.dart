@@ -115,7 +115,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
-                                  color: color.withOpacity(0.5),
+                                  color: color.withValues(alpha: 0.5),
                                   blurRadius: 8,
                                   spreadRadius: 2,
                                 ),
@@ -146,9 +146,12 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                     createdAt: DateTime.now(),
                   );
 
+                  final navigator = Navigator.of(context);
                   FriendService.addFriend(newFriend, _friends).then((_) {
                     _loadFriends();
-                    Navigator.pop(context);
+                    if (mounted) {
+                      navigator.pop();
+                    }
                   });
                 }
               },
@@ -206,7 +209,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
-                                  color: color.withOpacity(0.5),
+                                  color: color.withValues(alpha: 0.5),
                                   blurRadius: 8,
                                   spreadRadius: 2,
                                 ),
@@ -233,9 +236,12 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                     color: selectedColor,
                   );
 
+                  final navigator = Navigator.of(context);
                   FriendService.updateFriend(updatedFriend, _friends).then((_) {
                     _loadFriends();
-                    Navigator.pop(context);
+                    if (mounted) {
+                      navigator.pop();
+                    }
                   });
                 }
               },
@@ -294,9 +300,12 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                 notes: notes.isNotEmpty ? notes : null,
               );
 
+              final navigator = Navigator.of(context);
               FriendService.updateFriend(updatedFriend, _friends).then((_) {
                 _loadFriends();
-                Navigator.pop(context);
+                if (mounted) {
+                  navigator.pop();
+                }
               });
             },
             child: const Text('Save'),
@@ -306,46 +315,20 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
     );
   }
 
-  void _deleteFriend(Friend friend) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Friend'),
-        content: Text('Are you sure you want to remove ${friend.name}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              FriendService.deleteFriend(friend.id, _friends).then((_) {
-                _loadFriends();
-                Navigator.pop(context);
-              });
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _archiveFriend(Friend friend) {
     final updatedFriend = friend.copyWith(isArchived: true);
     FriendService.updateFriend(updatedFriend, _friends).then((_) {
       _loadFriends();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${friend.name} archived'),
-          backgroundColor: AppColors.purple,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${friend.name} archived'),
+            backgroundColor: AppColors.purple,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     });
   }
 
@@ -353,25 +336,29 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
     final updatedFriend = friend.copyWith(isArchived: false);
     FriendService.updateFriend(updatedFriend, _friends).then((_) {
       _loadFriends();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${friend.name} restored to active friends'),
-          backgroundColor: AppColors.successGreen,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${friend.name} restored to active friends'),
+            backgroundColor: AppColors.successGreen,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     });
   }
 
   void _rechargeBattery(Friend friend) {
     FriendService.updateFriendBattery(friend.id, 1.0, _friends).then((_) {
       _loadFriends();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${friend.name}\'s friendship battery recharged to 100%!'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${friend.name}\'s friendship battery recharged to 100%!'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     });
   }
 
@@ -414,7 +401,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                       if (states.contains(WidgetState.selected)) {
                         return _showArchived ? AppColors.purple : AppColors.successGreen;
                       }
-                      return AppColors.greyText.withOpacity(0.1);
+                      return AppColors.greyText.withValues(alpha: 0.1);
                     }),
                   ),
                 ),
@@ -439,7 +426,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
             Icon(
               _showArchived ? Icons.archive_outlined : Icons.people_outline_rounded,
               size: 80,
-              color: AppColors.greyText.withOpacity(0.5),
+              color: AppColors.greyText.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
@@ -560,7 +547,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                               child: CircularProgressIndicator(
                                 value: holdProgress,
                                 strokeWidth: 3,
-                                backgroundColor: Colors.white.withOpacity(0.3),
+                                backgroundColor: Colors.white.withValues(alpha: 0.3),
                                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                               ),
                             ),
@@ -598,7 +585,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                       if (!_showArchived) ...[
                         Icon(
                           Icons.drag_handle_rounded,
-                          color: AppColors.greyText.withOpacity(0.5),
+                          color: AppColors.greyText.withValues(alpha: 0.5),
                           size: 20,
                         ),
                         const SizedBox(width: 8),
@@ -656,7 +643,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                         child: LinearProgressIndicator(
                           value: batteryLevel,
                           minHeight: 24,
-                          backgroundColor: AppColors.greyText.withOpacity(0.2),
+                          backgroundColor: AppColors.greyText.withValues(alpha: 0.2),
                           valueColor: AlwaysStoppedAnimation<Color>(
                             friend.batteryColor,
                           ),
@@ -672,7 +659,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                               : AppColors.greyText,
                           shadows: [
                             Shadow(
-                              color: Colors.black.withOpacity(0.5),
+                              color: Colors.black.withValues(alpha: 0.5),
                               blurRadius: 2,
                             ),
                           ],
@@ -722,13 +709,15 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
           // Swiped left - delete
           FriendService.deleteFriend(friend.id, _friends).then((_) {
             _loadFriends();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('${friend.name} deleted'),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 2),
-              ),
-            );
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${friend.name} deleted'),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
           });
         } else {
           // Swiped right - archive or unarchive depending on current view

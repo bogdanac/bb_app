@@ -9,8 +9,8 @@ import 'package:bb_app/MenstrualCycle/menstrual_cycle_card.dart';
 import 'package:bb_app/WaterTracking/water_tracking_card.dart';
 import 'package:bb_app/Tasks/daily_tasks_card.dart';
 import 'package:bb_app/Routines/routine_card.dart';
-import 'package:bb_app/Routines/routine_widget_service.dart';
 import 'package:bb_app/Fasting/fasting_card.dart';
+import 'package:bb_app/Fasting/fasting_utils.dart';
 import 'package:bb_app/Habits/habit_card.dart';
 import 'package:bb_app/Habits/habit_service.dart';
 import 'package:bb_app/Notifications/centralized_notification_manager.dart';
@@ -78,8 +78,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _checkRoutineVisibility();
       await _checkHabitCardVisibility();
 
-      // Update routine widget when app opens
-      await RoutineWidgetService.updateWidget();
+      // DON'T update widget on app open - let RoutineCard read widget progress first
+      // Widget will be updated when RoutineCard saves progress
+      // await RoutineWidgetService.updateWidget();
 
       // Inițializează și programează notificările de apă
       await _initializeWaterNotifications();
@@ -302,10 +303,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _checkFastingVisibility() async {
     final now = DateTime.now();
     final prefs = await SharedPreferences.getInstance();
-    final preferredDay = prefs.getInt('preferred_fasting_day') ?? 5; // Default to Friday
-    final preferredMonthlyDay = prefs.getInt('preferred_monthly_fasting_day') ?? 25; // Default to 25th
-    final isPreferredDay = now.weekday == preferredDay;
-    final isPreferredMonthlyDay = now.day == preferredMonthlyDay;
 
     bool shouldShow = false;
 
@@ -323,11 +320,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Show the card if there's an active fast OR if there's a fast scheduled for today
     if (hasActiveFast) {
       shouldShow = true;
-    } else if (isPreferredDay || isPreferredMonthlyDay) {
-      // Check if there's a recommended fast for today
-      shouldShow = _hasRecommendedFastForToday(now, isPreferredDay, isPreferredMonthlyDay);
     } else {
-      shouldShow = false;
+      // Check if there's actually a recommended fast for today
+      final recommendedFast = await FastingUtils.getRecommendedFastType();
+      shouldShow = recommendedFast.isNotEmpty;
     }
 
     if (!_isDisposed && mounted) {
@@ -335,21 +331,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         showFastingSection = shouldShow;
       });
     }
-  }
-
-  // Check if there's actually a recommended fast for today (more strict than fasting screen)
-  bool _hasRecommendedFastForToday(DateTime now, bool isPreferredDay, bool isPreferredMonthlyDay) {
-    // If today is the preferred monthly day, always show
-    if (isPreferredMonthlyDay) {
-      return true; // Always show on preferred monthly day
-    }
-
-    // If today is the preferred day, show normal weekly fast
-    if (isPreferredDay) {
-      return true; // Show normal preferred day fast
-    }
-
-    return false;
   }
 
   // Callback for hiding fasting card for today
