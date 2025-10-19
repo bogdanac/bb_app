@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_colors.dart';
 import '../shared/date_picker_utils.dart';
+import 'cycle_calculation_utils.dart';
 
 class PeriodHistoryScreen extends StatefulWidget {
   const PeriodHistoryScreen({super.key});
@@ -14,6 +15,7 @@ class PeriodHistoryScreen extends StatefulWidget {
 class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
   List<Map<String, dynamic>> _periodHistory = [];
   int _averageCycleLength = 31;
+  DateTime? _lastPeriodStart;
 
   @override
   void initState() {
@@ -33,6 +35,10 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
         'end': DateTime.parse(parts[1]),
       };
     }).toList();
+
+    // Load current active period
+    final lastStartStr = prefs.getString('last_period_start');
+    if (lastStartStr != null) _lastPeriodStart = DateTime.parse(lastStartStr);
 
     // Load average cycle length
     _averageCycleLength = prefs.getInt('average_cycle_length') ?? 31;
@@ -58,46 +64,21 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
 
   void _recalculateAverageCycleLength() async {
     final prefs = await SharedPreferences.getInstance();
-    final cycles = <int>[];
 
     // Sort by start date (oldest first) for calculation
     final sortedHistory = List<Map<String, dynamic>>.from(_periodHistory);
     sortedHistory.sort((a, b) => a['start']!.compareTo(b['start']!));
 
-    // Calculate cycles between consecutive periods
-    for (int i = 1; i < sortedHistory.length; i++) {
-      final cycleLength = sortedHistory[i]['start']!.difference(sortedHistory[i-1]['start']!).inDays;
-      if (cycleLength > 15 && cycleLength < 45) {
-        cycles.add(cycleLength);
-      }
-    }
+    // Use the centralized calculation utility
+    final calculatedAverage = await CycleCalculationUtils.calculateAverageCycleLength(
+      periodRanges: sortedHistory,
+      currentActivePeriodStart: _lastPeriodStart,
+      defaultValue: 30,
+    );
 
-    // Also include cycle from last period to current active period (if exists)
-    final lastStartStr = prefs.getString('last_period_start');
-    if (sortedHistory.isNotEmpty && lastStartStr != null) {
-      final lastPeriodStart = DateTime.parse(lastStartStr);
-      final lastCompletedPeriod = sortedHistory.last;
-
-      final isDifferentPeriod = !(lastPeriodStart.year == lastCompletedPeriod['start']!.year &&
-                                   lastPeriodStart.month == lastCompletedPeriod['start']!.month &&
-                                   lastPeriodStart.day == lastCompletedPeriod['start']!.day);
-
-      if (isDifferentPeriod) {
-        final currentCycleLength = lastPeriodStart.difference(lastCompletedPeriod['start']!).inDays;
-        if (currentCycleLength > 15 && currentCycleLength < 45) {
-          cycles.add(currentCycleLength);
-        }
-      }
-    }
-
-    if (cycles.isNotEmpty) {
-      final calculatedAverage = (cycles.reduce((a, b) => a + b) / cycles.length).round();
-      _averageCycleLength = calculatedAverage > 0 ? calculatedAverage : 31;
-
-      await prefs.setInt('average_cycle_length', _averageCycleLength);
-
-      if (mounted) setState(() {});
-    }
+    _averageCycleLength = calculatedAverage;
+    await prefs.setInt('average_cycle_length', _averageCycleLength);
+    if (mounted) setState(() {});
   }
 
   void _editPeriod(int index) {
@@ -246,7 +227,8 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
   }
 
   int _getCycleDays(int index) {
-    if (index >= _periodHistory.length - 1) return _averageCycleLength;
+    // For the oldest period, show 30 as placeholder
+    if (index >= _periodHistory.length - 1) return 30;
 
     final currentPeriod = _periodHistory[index];
     final previousPeriod = _periodHistory[index + 1];
@@ -421,14 +403,8 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
             .map((p) => p['end']!.difference(p['start']!).inDays + 1)
             .reduce((a, b) => a + b) / totalPeriods;
 
-    final avgCycle = _periodHistory.length < 2
-        ? _averageCycleLength.toDouble()
-        : _periodHistory
-            .asMap()
-            .entries
-            .where((entry) => entry.key < _periodHistory.length - 1)
-            .map((entry) => _getCycleDays(entry.key))
-            .reduce((a, b) => a + b) / (_periodHistory.length - 1);
+    // Use the same centralized average that was calculated and stored
+    final avgCycle = _averageCycleLength.toDouble();
 
     return Container(
       margin: const EdgeInsets.all(16),

@@ -13,6 +13,7 @@ import 'period_history_screen.dart';
 import '../Tasks/task_service.dart';
 import '../Tasks/tasks_data_models.dart';
 import 'friends_tab_screen.dart';
+import 'cycle_calculation_utils.dart';
 
 class CycleScreen extends StatefulWidget {
   const CycleScreen({super.key});
@@ -81,6 +82,9 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
     // Auto-end periods that exceed 7 days
     await _autoEndLongPeriods();
 
+    // Recalculate average to ensure it's up to date with actual periods
+    _calculateAverageCycleLength();
+
     await _loadIntercourseRecords();
     if (mounted) setState(() {});
   }
@@ -112,7 +116,7 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
       });
       
       await _saveCycleData();
-      _calculateAverageCycleLength();
+      await _calculateAverageCycleLength();
     }
   }
 
@@ -259,9 +263,18 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
   }
 
   Future<void> _startPeriodOnDate(DateTime date) async {
-    // End current period if active
-    if (_isCurrentlyOnPeriod()) {
-      await _endPeriodOnDate(date);
+    // Auto-end current period if it's been more than 5 days
+    if (_isCurrentlyOnPeriod() && _lastPeriodStart != null) {
+      final daysSinceStart = DateTime.now().difference(_lastPeriodStart!).inDays;
+      if (daysSinceStart >= 5) {
+        // Auto-end on day 5
+        final autoEndDate = _lastPeriodStart!.add(const Duration(days: 4)); // Day 5 = start + 4 days
+        await _endPeriodOnDate(autoEndDate);
+      } else {
+        // End it on the day before the new period starts
+        final endDate = date.subtract(const Duration(days: 1));
+        await _endPeriodOnDate(endDate);
+      }
     }
 
     setState(() {
@@ -270,7 +283,9 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
     });
 
     await _saveCycleData();
-    _calculateAverageCycleLength();
+
+    // ALWAYS recalculate average when starting a new period
+    await _calculateAverageCycleLength();
 
     // Recalculate menstrual phase tasks with specific days
     await _recalculateMenstrualPhaseTasks();
@@ -292,43 +307,51 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
         'end': date,
       });
       _periodRanges.sort((a, b) => a['start']!.compareTo(b['start']!));
+
+      // Clear active period since it's now completed
+      _lastPeriodStart = null;
+      _lastPeriodEnd = null;
     });
 
     await _saveCycleData();
-    _calculateAverageCycleLength();
+    await _calculateAverageCycleLength();
     final dateStr = _isSameDay(date, DateTime.now()) ? 'today' : 'on ${DateFormat('MMM d').format(date)}';
     _showSnackBar('Period ended $dateStr successfully.', AppColors.successGreen);
   }
 
-  void _calculateAverageCycleLength() {
-    final cycles = <int>[];
+  Future<void> _calculateAverageCycleLength() async {
+    // Reload fresh data from SharedPreferences to match what period_history_screen sees
+    final prefs = await SharedPreferences.getInstance();
 
-    // Calculate cycles between completed periods
-    for (int i = 1; i < _periodRanges.length; i++) {
-      final cycleLength = _periodRanges[i]['start']!.difference(_periodRanges[i-1]['start']!).inDays;
-      if (cycleLength > 15 && cycleLength < 45) {
-        cycles.add(cycleLength);
-      }
-    }
+    // Load period ranges fresh from storage
+    final rangesStr = prefs.getStringList('period_ranges') ?? [];
+    final freshRanges = rangesStr.map((range) {
+      final parts = range.split('|');
+      return {
+        'start': DateTime.parse(parts[0]),
+        'end': DateTime.parse(parts[1]),
+      };
+    }).toList();
 
-    // Include cycle from last completed period to current active period
-    if (_periodRanges.isNotEmpty && _lastPeriodStart != null) {
-      final lastCompletedPeriod = _periodRanges.last;
-      final currentCycleLength = _lastPeriodStart!.difference(lastCompletedPeriod['start']!).inDays;
+    // Load active period fresh from storage
+    final lastStartStr = prefs.getString('last_period_start');
+    final freshActivePeriod = lastStartStr != null ? DateTime.parse(lastStartStr) : null;
 
-      if (currentCycleLength > 15 && currentCycleLength < 45) {
-        cycles.add(currentCycleLength);
-      }
-    }
+    // Sort oldest first
+    freshRanges.sort((a, b) => a['start']!.compareTo(b['start']!));
 
-    if (cycles.isNotEmpty) {
-      final calculatedAverage = (cycles.reduce((a, b) => a + b) / cycles.length).round();
-      setState(() {
-        _averageCycleLength = calculatedAverage > 0 ? calculatedAverage : 31;
-      });
-      _saveCycleData();
-    }
+    final calculatedAverage = await CycleCalculationUtils.calculateAverageCycleLength(
+      periodRanges: freshRanges,
+      currentActivePeriodStart: freshActivePeriod,
+      defaultValue: 30,
+    );
+
+    setState(() {
+      _averageCycleLength = calculatedAverage;
+    });
+    await prefs.setInt('average_cycle_length', _averageCycleLength);
   }
+
 
   // HELPER METHODS
   bool _isCurrentlyOnPeriod() {
@@ -571,7 +594,8 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
                     ),
                   );
                   // Reload data when coming back from Period History
-                  _loadCycleData();
+                  await _loadCycleData();
+                  await _calculateAverageCycleLength();
                 },
                 tooltip: 'Period History',
               ),
@@ -604,9 +628,9 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildCurrentPhaseCard(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 _buildCalendarCard(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 _buildActionButtons(),
                 if (_selectedDate != null) const SizedBox(height: 16),
                 _buildStatisticsCard(),

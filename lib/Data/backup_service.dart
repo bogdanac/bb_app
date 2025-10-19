@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -126,22 +125,15 @@ class BackupService {
   // Export to local file
   static Future<String?> exportToFile({bool updateLastBackupTime = true}) async {
     try {
-      // Request storage permission for Android
+      // Request storage permission for Android - ALWAYS request for external storage
       if (Platform.isAndroid) {
-        // For Android 10+ (API 29+), try scoped storage first
-        try {
-          // Try the newer scoped storage approach
-          await getApplicationDocumentsDirectory();
-          // If we can access app docs directory, we don't need external storage permissions
-        } catch (e) {
-          // Fallback to requesting external storage permissions
-          var status = await Permission.storage.request();
+        // For Android 11+ (API 30+), we need MANAGE_EXTERNAL_STORAGE
+        var status = await Permission.manageExternalStorage.request();
+        if (!status.isGranted) {
+          // Fallback to regular storage permission for older Android versions
+          status = await Permission.storage.request();
           if (!status.isGranted) {
-            // For Android 11+ try manage external storage
-            status = await Permission.manageExternalStorage.request();
-            if (!status.isGranted) {
-              throw Exception('Storage permission denied');
-            }
+            throw Exception('Storage permission denied. Backups require external storage access to survive app uninstalls.');
           }
         }
       }
@@ -174,18 +166,11 @@ class BackupService {
       
       try {
         if (Platform.isAndroid) {
-          // Use centralized backup directory
+          // Use centralized backup directory - external storage that survives uninstalls
           directory = await getBackupDirectory();
         } else {
-          // For other platforms - still require external storage
-          try {
-            directory = await getDownloadsDirectory();
-            if (directory == null) {
-              throw Exception('Cannot access external storage. Backups require Downloads directory access to survive app uninstalls.');
-            }
-          } catch (e) {
-            throw Exception('Cannot access external storage. Backups require Downloads directory access to survive app uninstalls.');
-          }
+          // For other platforms - use external storage if available
+          throw Exception('Backups are only supported on Android. External storage path required.');
         }
       } catch (e) {
         // No dangerous fallbacks - let it fail with clear error message
@@ -646,31 +631,14 @@ class BackupService {
         'all_locations': [],
         'found_files': [],
       };
-      
+
       if (Platform.isAndroid) {
         List<String> possiblePaths = [];
-        
-        // Check Downloads/BBetter_Backups (new location)
-        try {
-          final downloadsDir = await getDownloadsDirectory();
-          if (downloadsDir != null) {
-            final bbetterBackupsDir = Directory('${downloadsDir.path}/BBetter_Backups');
-            possiblePaths.add(bbetterBackupsDir.path);
-          }
-        } catch (e) {
-          // Skip if we can't access Downloads
-        }
-        
-        // Check Downloads root
-        try {
-          final downloadsDir = await getDownloadsDirectory();
-          if (downloadsDir != null) {
-            possiblePaths.add(downloadsDir.path);
-          }
-        } catch (e) {
-          // Skip if we can't access Downloads root
-        }
-        
+
+        // Use centralized backup paths - external storage only
+        possiblePaths.add(backupDirectoryPath);
+        possiblePaths.add(externalDownloadsPath);
+
         // Search for backup files in all locations
         for (String path in possiblePaths) {
           try {

@@ -77,22 +77,15 @@ class _BackupScreenState extends State<BackupScreen> {
       
       if (mounted) {
         if (filePath != null) {
-          // Extract just the directory name for user-friendly message
+          // Show full path for clarity
           final fileName = filePath.split(Platform.isWindows ? '\\' : '/').last;
-          String folderName = 'Documents';
-          if (filePath.contains('BBetter_Backups')) {
-            folderName = 'Downloads/BBetter_Backups';
-          } else if (filePath.contains('Backups')) {
-            folderName = 'App Backups';
-          } else if (filePath.contains('Download')) {
-            folderName = 'Downloads';
-          }
-          
+          final directory = filePath.substring(0, filePath.lastIndexOf(Platform.isWindows ? '\\' : '/'));
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ Backup exported to $folderName folder!\nFile: $fileName'),
+              content: Text('✅ Backup exported!\nLocation: $directory\nFile: $fileName'),
               backgroundColor: AppColors.successGreen,
-              duration: const Duration(seconds: 4),
+              duration: const Duration(seconds: 5),
             ),
           );
         } else {
@@ -160,7 +153,6 @@ class _BackupScreenState extends State<BackupScreen> {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) => _BackupFilesFullScreen(
-                locations: locations,
                 onImport: _processImport,
               ),
             ),
@@ -173,8 +165,9 @@ class _BackupScreenState extends State<BackupScreen> {
               contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
               content: ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.7,
-                  maxWidth: MediaQuery.of(context).size.width * 0.9,
+                  minWidth: MediaQuery.of(context).size.width * 0.95,
+                  maxWidth: MediaQuery.of(context).size.width * 0.95,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
                 ),
                 child: SingleChildScrollView(
                   child: Column(
@@ -209,7 +202,7 @@ class _BackupScreenState extends State<BackupScreen> {
                           ),
                         )),
                       ] else ...[
-                        // Global path label - more compact
+                        // Full storage path
                         if (locations['found_files'].isNotEmpty) ...[
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -218,15 +211,25 @@ class _BackupScreenState extends State<BackupScreen> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Icon(Icons.folder_outlined, size: 16, color: AppColors.greyText),
                                 const SizedBox(width: 6),
                                 Expanded(
-                                  child: Text(
-                                    'Storage: ${locations['found_files'].first['location'].split('/').last}/',
-                                    style: const TextStyle(fontSize: 12, color: AppColors.greyText),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Storage Location:',
+                                        style: TextStyle(fontSize: 11, color: AppColors.greyText, fontWeight: FontWeight.w500),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        locations['found_files'].first['location'],
+                                        style: const TextStyle(fontSize: 11, color: AppColors.greyText, fontFamily: 'monospace'),
+                                        softWrap: true,
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -281,21 +284,89 @@ class _BackupScreenState extends State<BackupScreen> {
                                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                                   ),
                                   const SizedBox(height: 8),
-                                  // Compact button
-                                  SizedBox(
-                                    width: double.infinity,
-                                    height: 32,
-                                    child: ElevatedButton.icon(
-                                      onPressed: () {
-                                        Navigator.of(context).pop();
-                                        _processImport(file['path']);
-                                      },
-                                      icon: const Icon(Icons.download_rounded, size: 16),
-                                      label: const Text('Import', style: TextStyle(fontSize: 13)),
-                                      style: ElevatedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  // Import and Delete buttons
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: SizedBox(
+                                          height: 32,
+                                          child: ElevatedButton.icon(
+                                            onPressed: () {
+                                              Navigator.of(context).pop();
+                                              _processImport(file['path']);
+                                            },
+                                            icon: const Icon(Icons.download_rounded, size: 16),
+                                            label: const Text('Import', style: TextStyle(fontSize: 13)),
+                                            style: ElevatedButton.styleFrom(
+                                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        height: 32,
+                                        child: IconButton(
+                                          onPressed: () async {
+                                            final confirmed = await showDialog<bool>(
+                                              context: context,
+                                              builder: (ctx) => AlertDialog(
+                                                backgroundColor: AppColors.dialogBackground,
+                                                title: const Text('Delete Backup?', style: TextStyle(color: Colors.white)),
+                                                content: Text(
+                                                  'Are you sure you want to delete this backup file?\n\n${file['name']}',
+                                                  style: const TextStyle(color: AppColors.white70),
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(ctx, false),
+                                                    child: const Text('Cancel', style: TextStyle(color: AppColors.white70)),
+                                                  ),
+                                                  ElevatedButton(
+                                                    onPressed: () => Navigator.pop(ctx, true),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: Colors.red,
+                                                      foregroundColor: Colors.white,
+                                                    ),
+                                                    child: const Text('Delete'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+
+                                            if (confirmed == true) {
+                                              try {
+                                                final backupFile = File(file['path']);
+                                                if (await backupFile.exists()) {
+                                                  await backupFile.delete();
+                                                  if (!context.mounted) return;
+                                                  // Refresh the info
+                                                  await _loadBackupInfo();
+                                                  if (!context.mounted) return;
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text('✅ Backup file deleted'),
+                                                      backgroundColor: AppColors.successGreen,
+                                                    ),
+                                                  );
+                                                }
+                                              } catch (e) {
+                                                if (!context.mounted) return;
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text('❌ Failed to delete: $e'),
+                                                    backgroundColor: Colors.red,
+                                                  ),
+                                                );
+                                              }
+                                            }
+                                          },
+                                          icon: const Icon(Icons.delete_rounded, color: Colors.red, size: 20),
+                                          tooltip: 'Delete',
+                                          padding: EdgeInsets.zero,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -379,7 +450,7 @@ class _BackupScreenState extends State<BackupScreen> {
           children: [
             Icon(Icons.warning_rounded, color: Colors.orange),
             SizedBox(width: 8),
-            Text('⚠️ Import Backup?', style: TextStyle(color: Colors.white)),
+            Text('Import Backup?', style: TextStyle(color: Colors.white)),
           ],
         ),
         content: Column(
@@ -483,8 +554,13 @@ class _BackupScreenState extends State<BackupScreen> {
     });
 
     try {
+      // Save cloud share timestamp BEFORE creating backup so it's included
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_cloud_share', DateTime.now().toIso8601String());
+      await prefs.reload();
+
       final filePath = await BackupService.exportToFile();
-      
+
       // Force immediate update of backup info after successful export
       if (filePath != null) {
         // Track the backup time in this session
@@ -493,13 +569,13 @@ class _BackupScreenState extends State<BackupScreen> {
         await Future.delayed(const Duration(milliseconds: 100));
         await _loadBackupInfo();
       }
-      
+
       if (mounted) {
         if (filePath != null) {
           // Directly share the file
           await _shareBackupFile(filePath);
 
-          // Refresh backup info after sharing to update cloud share status
+          // Refresh backup info after sharing
           await _loadBackupInfo();
           if (mounted) {
             setState(() {}); // Force UI refresh
@@ -566,9 +642,7 @@ class _BackupScreenState extends State<BackupScreen> {
         subject: 'BBetter Backup File - $dateTimeShort')
       );
 
-      // Track cloud sharing timestamp
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('last_cloud_share', DateTime.now().toIso8601String());
+      // Cloud sharing timestamp was already saved before backup creation
 
       // Verify original file still exists after sharing
       if (await originalFile.exists()) {
@@ -983,14 +1057,37 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 }
 
-class _BackupFilesFullScreen extends StatelessWidget {
-  final Map<String, dynamic> locations;
+class _BackupFilesFullScreen extends StatefulWidget {
   final Function(String) onImport;
 
   const _BackupFilesFullScreen({
-    required this.locations,
     required this.onImport,
   });
+
+  @override
+  State<_BackupFilesFullScreen> createState() => _BackupFilesFullScreenState();
+}
+
+class _BackupFilesFullScreenState extends State<_BackupFilesFullScreen> {
+  Map<String, dynamic>? locations;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBackupFiles();
+  }
+
+  Future<void> _loadBackupFiles() async {
+    setState(() {
+      isLoading = true;
+    });
+    final info = await BackupService.getBackupInfo();
+    setState(() {
+      locations = info;
+      isLoading = false;
+    });
+  }
 
   String _formatBackupDate(String isoString) {
     try {
@@ -1028,6 +1125,18 @@ class _BackupFilesFullScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading || locations == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Backup Files'),
+          backgroundColor: Colors.transparent,
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Backup Files'),
@@ -1038,7 +1147,7 @@ class _BackupFilesFullScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (locations['found_files'].isEmpty) ...[
+            if (locations!['found_files'].isEmpty) ...[
               const Text(
                 'No backup files found.',
                 style: TextStyle(fontSize: 18),
@@ -1051,9 +1160,9 @@ class _BackupFilesFullScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Expanded(
                 child: ListView.builder(
-                  itemCount: locations['all_locations'].length,
+                  itemCount: locations!['all_locations'].length,
                   itemBuilder: (context, index) {
-                    final path = locations['all_locations'][index];
+                    final path = locations!['all_locations'][index];
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Row(
@@ -1095,7 +1204,7 @@ class _BackupFilesFullScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            locations['found_files'].first['location'],
+                            locations!['found_files'].first['location'],
                             style: const TextStyle(fontSize: 13, color: AppColors.greyText),
                             softWrap: true,
                           ),
@@ -1107,15 +1216,15 @@ class _BackupFilesFullScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                '${locations['found_files'].length} backup files found:',
+                '${locations!['found_files'].length} backup files found:',
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Expanded(
                 child: ListView.builder(
-                  itemCount: locations['found_files'].length,
+                  itemCount: locations!['found_files'].length,
                   itemBuilder: (context, index) {
-                    final file = locations['found_files'][index];
+                    final file = locations!['found_files'][index];
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       elevation: 2,
@@ -1161,17 +1270,79 @@ class _BackupFilesFullScreen extends StatelessWidget {
                                 softWrap: true,
                               ),
                               const SizedBox(height: 12),
-                              // Import button
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: () {
-                                    Navigator.of(context).pop();
-                                    onImport(file['path']);
-                                  },
-                                  icon: const Icon(Icons.download_rounded),
-                                  label: const Text('Import This Backup'),
-                                ),
+                              // Import and Delete buttons
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () {
+                                        Navigator.of(context).pop();
+                                        widget.onImport(file['path']);
+                                      },
+                                      icon: const Icon(Icons.download_rounded),
+                                      label: const Text('Import'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    onPressed: () async {
+                                      final confirmed = await showDialog<bool>(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          backgroundColor: AppColors.dialogBackground,
+                                          title: const Text('Delete Backup?', style: TextStyle(color: Colors.white)),
+                                          content: Text(
+                                            'Are you sure you want to delete this backup file?\n\n${file['name']}',
+                                            style: const TextStyle(color: AppColors.white70),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(context, false),
+                                              child: const Text('Cancel', style: TextStyle(color: AppColors.white70)),
+                                            ),
+                                            ElevatedButton(
+                                              onPressed: () => Navigator.pop(context, true),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.red,
+                                                foregroundColor: Colors.white,
+                                              ),
+                                              child: const Text('Delete'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+
+                                      if (confirmed == true) {
+                                        try {
+                                          final backupFile = File(file['path']);
+                                          if (await backupFile.exists()) {
+                                            await backupFile.delete();
+                                            if (!context.mounted) return;
+                                            // Refresh the list
+                                            await _loadBackupFiles();
+                                            if (!context.mounted) return;
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('✅ Backup file deleted'),
+                                                backgroundColor: AppColors.successGreen,
+                                              ),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (!context.mounted) return;
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('❌ Failed to delete: $e'),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    },
+                                    icon: const Icon(Icons.delete_rounded, color: Colors.red),
+                                    tooltip: 'Delete backup',
+                                  ),
+                                ],
                               ),
                             ],
                           ),
