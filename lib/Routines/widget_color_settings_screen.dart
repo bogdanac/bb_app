@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'routine_widget_service.dart';
+import '../shared/snackbar_utils.dart';
 
 class WidgetColorSettingsScreen extends StatefulWidget {
   const WidgetColorSettingsScreen({super.key});
@@ -56,13 +58,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
     await RoutineWidgetService.refreshWidgetColor();
     
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Widget color updated!'),
-          backgroundColor: AppColors.successGreen,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      SnackBarUtils.showSuccess(context, 'Widget color updated!');
     }
   }
 
@@ -94,7 +90,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: _selectedColor,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppStyles.borderRadiusLarge,
                 border: Border.all(
                   color: AppColors.greyText,
                   width: 2,
@@ -160,7 +156,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: color,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppStyles.borderRadiusMedium,
                       border: Border.all(
                         color: isSelected ? AppColors.lightGreen : AppColors.greyText,
                         width: isSelected ? 3 : 1,
@@ -185,14 +181,14 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
               width: double.infinity,
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppStyles.borderRadiusLarge,
                 border: Border.all(
                   color: AppColors.greyText,
                 ),
               ),
               child: InkWell(
                 onTap: _showCustomColorPicker,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppStyles.borderRadiusLarge,
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Row(
@@ -201,7 +197,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: AppColors.orange.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppStyles.borderRadiusSmall,
                         ),
                         child: Icon(
                           Icons.palette_rounded,

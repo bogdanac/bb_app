@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'dart:async';
 import 'tasks_data_models.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'task_card_utils.dart';
 import 'task_completion_animation.dart';
+import '../shared/date_format_utils.dart';
 
 class TaskCard extends StatefulWidget {
   final Task task;
@@ -190,7 +191,7 @@ class _TaskCardState extends State<TaskCard> {
               : _isHoldingForPostpone
                   ? AppColors.yellow
                   : AppColors.yellow.withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           boxShadow: (_isHoldingForPostpone || _showPostponeConfirm) ? [
             BoxShadow(
               color: (_showPostponeConfirm ? AppColors.successGreen : AppColors.yellow).withValues(alpha: 0.6),
@@ -236,7 +237,7 @@ class _TaskCardState extends State<TaskCard> {
               : _isHoldingForDelete
                   ? AppColors.deleteRed
                   : AppColors.deleteRed.withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           boxShadow: (_isHoldingForDelete || _showDeleteConfirm) ? [
             BoxShadow(
               color: (_showDeleteConfirm ? AppColors.successGreen : AppColors.deleteRed).withValues(alpha: 0.6),
@@ -279,17 +280,17 @@ class _TaskCardState extends State<TaskCard> {
         margin: EdgeInsets.zero,
         elevation: widget.task.isImportant ? 6 : 3,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           side: widget.task.isImportant
               ? BorderSide(color: AppColors.coral.withValues(alpha: 0.3), width: 2)
               : BorderSide.none,
         ),
         child: InkWell(
           onTap: widget.onEdit,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppStyles.borderRadiusLarge,
               color: AppColors.normalCardBackground,
             ),
             child: Padding(
@@ -349,13 +350,13 @@ class _TaskCardState extends State<TaskCard> {
                                   if (widget.task.deadline != null && !widget.task.isDueToday())
                                     TaskCardUtils.buildInfoChip(
                                       Icons.schedule_rounded,
-                                      DateFormat('MMM dd').format(widget.task.deadline!),
+                                      DateFormatUtils.formatShort(widget.task.deadline!),
                                       TaskCardUtils.getDeadlineColor(widget.task.deadline!),
                                     ),
                                   if (widget.task.reminderTime != null)
                                     TaskCardUtils.buildInfoChip(
                                       Icons.notifications_rounded,
-                                      DateFormat('HH:mm').format(widget.task.reminderTime!),
+                                      DateFormatUtils.formatTime24(widget.task.reminderTime!),
                                       TaskCardUtils.getReminderColor(widget.task.reminderTime!),
                                     ),
                                   if (widget.task.recurrence != null)

@@ -1,7 +1,8 @@
 import 'package:bb_app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../shared/date_picker_utils.dart';
+import '../shared/date_format_utils.dart';
+import '../theme/app_styles.dart';
 
 // FAST EDIT DIALOG
 class FastEditDialog extends StatefulWidget {
@@ -56,20 +57,20 @@ class _FastEditDialogState extends State<FastEditDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Edit Fast Times', style: TextStyle(fontSize: 18),),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
             leading: const Icon(Icons.play_arrow_rounded, color: AppColors.successGreen,),
             title: const Text('Start Time'),
-            subtitle: Text(DateFormat('MMM dd, yyyy HH:mm').format(_startTime)),
+            subtitle: Text('${DateFormatUtils.formatLong(_startTime)}, ${DateFormatUtils.formatTime24(_startTime)}'),
             onTap: () => _selectDateTime(true),
           ),
           ListTile(
             leading: const Icon(Icons.stop_rounded, color: AppColors.lightRed),
             title: const Text('End Time'),
-            subtitle: Text(DateFormat('MMM dd, yyyy HH:mm').format(_endTime)),
+            subtitle: Text('${DateFormatUtils.formatLong(_endTime)}, ${DateFormatUtils.formatTime24(_endTime)}'),
             onTap: () => _selectDateTime(false),
           ),
         ],

@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'theme/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
+import 'shared/date_format_utils.dart';
 import 'package:bb_app/Calendar/events_card.dart';
 import 'package:bb_app/MenstrualCycle/menstrual_cycle_card.dart';
 import 'package:bb_app/WaterTracking/water_tracking_card.dart';
@@ -13,6 +13,7 @@ import 'package:bb_app/Fasting/fasting_card.dart';
 import 'package:bb_app/Fasting/fasting_utils.dart';
 import 'package:bb_app/Habits/habit_card.dart';
 import 'package:bb_app/Habits/habit_service.dart';
+import 'shared/snackbar_utils.dart';
 import 'package:bb_app/Notifications/centralized_notification_manager.dart';
 import 'package:bb_app/FoodTracking/food_tracking_card.dart';
 import 'package:bb_app/home_settings_screen.dart';
@@ -194,7 +195,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final prefs = await SharedPreferences.getInstance();
       final now = DateTime.now();
-      final today = DateFormat('yyyy-MM-dd').format(now);
+      final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(now)).split('T')[0];
 
       // Check if it's after 2:00 AM and if we need to reset water data
       final lastResetDate = prefs.getString('last_water_reset_date');
@@ -280,7 +281,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     try {
-      final today = DateFormat('yyyy-MM-dd').format(now);
+      final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(now)).split('T')[0];
 
       // If the last reset date is not today, we need to check if it's time to reset
       if (lastResetDate != today) {
@@ -336,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Callback for hiding fasting card for today
   void _onFastingHiddenForToday() async {
     final prefs = await SharedPreferences.getInstance();
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
     await prefs.setBool('fasting_hidden_$today', true);
 
     if (!_isDisposed && mounted) {
@@ -349,7 +350,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _checkRoutineVisibility() async {
     final now = DateTime.now();
     final prefs = await SharedPreferences.getInstance();
-    final today = DateFormat('yyyy-MM-dd').format(now);
+    final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(now)).split('T')[0];
 
     // Clean up old hidden and completed flags (more than 2 days old)
     final allKeys = prefs.getKeys();
@@ -435,26 +436,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       // Show feedback that refresh completed
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Data refreshed'),
-            duration: Duration(seconds: 1),
-            backgroundColor: AppColors.successGreen,
-          ),
-        );
+        SnackBarUtils.showSuccess(context, '✅ Data refreshed', duration: const Duration(seconds: 1));
       }
 
       debugPrint('Manual refresh completed successfully');
     } catch (e) {
       debugPrint('ERROR refreshing data: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Refresh failed: $e'),
-            duration: const Duration(seconds: 2),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarUtils.showError(context, '❌ Refresh failed: $e', duration: const Duration(seconds: 2));
       }
     }
   }
@@ -462,7 +451,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _onWaterAdded() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
 
       // Get customizable water amount
       final waterAmountPerTap = prefs.getInt('water_amount_per_tap') ?? 125;
@@ -496,13 +485,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
         // Show congratulations when goal is reached
         if (oldIntake < goal && newIntake >= goal && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🎉 Daily water goal achieved! Great job!'),
-              backgroundColor: AppColors.successGreen,
-              duration: Duration(seconds: 3),
-            ),
-          );
+          SnackBarUtils.showSuccess(context, '🎉 Daily water goal achieved! Great job!');
         }
 
         // Verifică și anulează notificările pe baza noului progres
@@ -518,7 +501,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!_isDisposed && mounted) {
       // Save completion status for today
       final prefs = await SharedPreferences.getInstance();
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
       await prefs.setBool('routine_completed_$today', true);
 
       setState(() {
@@ -529,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _onRoutineHiddenForToday() async {
     final prefs = await SharedPreferences.getInstance();
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
     await prefs.setBool('routine_hidden_$today', true);
 
     if (kDebugMode) {
@@ -547,7 +530,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _forceShowRoutine() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
 
       // Clear the hidden and completed flags
       await prefs.remove('routine_hidden_$today');
@@ -608,22 +591,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 icon: const Icon(Icons.backup_outlined, color: Colors.orange),
                 onPressed: () async {
                   // Show loading indicator
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Row(
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          SizedBox(width: 12),
-                          Text('Creating backup...'),
-                        ],
-                      ),
-                      duration: Duration(seconds: 30),
-                    ),
-                  );
+                  SnackBarUtils.showLoading(context, 'Creating backup...');
 
                   try {
                     // Perform quick backup
@@ -632,37 +600,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     if (!context.mounted) return;
 
                     // Hide loading and show success
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    SnackBarUtils.hide(context);
 
                     if (backupPath != null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('✅ Backup completed! Saved to: ${backupPath.split('/').last}'),
-                          backgroundColor: Colors.green,
-                          duration: const Duration(seconds: 4),
-                        ),
-                      );
+                      SnackBarUtils.showSuccess(context, '✅ Backup completed! Saved to: ${backupPath.split('/').last}', duration: const Duration(seconds: 4));
                     } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('❌ Backup failed - check storage permissions'),
-                          backgroundColor: Colors.red,
-                          duration: Duration(seconds: 4),
-                        ),
-                      );
+                      SnackBarUtils.showError(context, '❌ Backup failed - check storage permissions', duration: const Duration(seconds: 4));
                     }
                   } catch (e) {
                     if (!context.mounted) return;
 
                     // Hide loading and show error
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('❌ Backup failed: ${e.toString()}'),
-                        backgroundColor: Colors.red,
-                        duration: const Duration(seconds: 4),
-                      ),
-                    );
+                    SnackBarUtils.hide(context);
+                    SnackBarUtils.showError(context, '❌ Backup failed: ${e.toString()}', duration: const Duration(seconds: 4));
                   }
 
                   // Refresh backup status

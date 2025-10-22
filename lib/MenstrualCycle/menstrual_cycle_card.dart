@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'menstrual_cycle_utils.dart';
 
 class MenstrualCycleCard extends StatefulWidget {
@@ -83,11 +84,11 @@ class _MenstrualCycleCardState extends State<MenstrualCycleCard>
   Widget build(BuildContext context) {
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           color: AppColors.homeCardBackground, // Home card background
         ),
         child: GestureDetector(

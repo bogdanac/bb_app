@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 import 'dart:async';
 import 'dart:math';
-import '../Notifications/centralized_notification_manager.dart';
+import '../shared/date_format_utils.dart';
 import 'menstrual_cycle_utils.dart';
 import 'cycle_calorie_settings_screen.dart';
 import 'intercourse_data_model.dart';
@@ -14,6 +14,7 @@ import '../Tasks/task_service.dart';
 import '../Tasks/tasks_data_models.dart';
 import 'friends_tab_screen.dart';
 import 'cycle_calculation_utils.dart';
+import '../shared/snackbar_utils.dart';
 
 class CycleScreen extends StatefulWidget {
   const CycleScreen({super.key});
@@ -98,10 +99,10 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
     
     final now = DateTime.now();
     final daysSinceStart = now.difference(_lastPeriodStart!).inDays;
-    
-    // Auto-end period after 7 days
-    if (daysSinceStart >= 7) {
-      final autoEndDate = _lastPeriodStart!.add(const Duration(days: 6)); // Day 7 = 6 days after start
+
+    // Auto-end period after 5 days
+    if (daysSinceStart >= 5) {
+      final autoEndDate = _lastPeriodStart!.add(const Duration(days: 4)); // Day 5 = 4 days after start
       
       setState(() {
         _lastPeriodEnd = autoEndDate;
@@ -143,14 +144,14 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
       return '${range['start']!.toIso8601String()}|${range['end']!.toIso8601String()}';
     }).toList();
     await prefs.setStringList('period_ranges', rangesStr);
-    
+
     // Schedule cycle notifications whenever data is updated
-    await _scheduleCycleNotifications();
+    await CycleCalculationUtils.rescheduleCycleNotifications();
   }
 
   Future<void> _recalculateMenstrualPhaseTasks() async {
     if (_lastPeriodStart == null) {
-      _showSnackBar('No period data available to recalculate tasks', AppColors.greyText);
+      SnackBarUtils.showInfo(context, 'No period data available to recalculate tasks');
       return;
     }
 
@@ -244,10 +245,12 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
     // Save updated tasks if any were changed
     if (tasksUpdated) {
       await taskService.saveTasks(allTasks);
+      if (!mounted) return;
       final taskCount = menstrualTasks.length;
-      _showSnackBar('✅ Recalculated $taskCount menstrual phase task${taskCount == 1 ? '' : 's'}', AppColors.successGreen);
+      SnackBarUtils.showSuccess(context, '✅ Recalculated $taskCount menstrual phase task${taskCount == 1 ? '' : 's'}');
     } else {
-      _showSnackBar('No menstrual phase tasks with specific days found', AppColors.greyText);
+      if (!mounted) return;
+      SnackBarUtils.showInfo(context, 'No menstrual phase tasks with specific days found');
     }
   }
 
@@ -290,8 +293,9 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
     // Recalculate menstrual phase tasks with specific days
     await _recalculateMenstrualPhaseTasks();
 
-    final dateStr = _isSameDay(date, DateTime.now()) ? 'today' : 'on ${DateFormat('MMM d').format(date)}';
-    _showSnackBar('Period started $dateStr! End it manually when finished.', AppColors.successGreen);
+    if (!mounted) return;
+    final dateStr = _isSameDay(date, DateTime.now()) ? 'today' : 'on ${DateFormatUtils.formatShort(date)}';
+    SnackBarUtils.showSuccess(context, 'Period started $dateStr! End it manually when finished.');
   }
 
   Future<void> _endPeriodOnDate(DateTime date) async {
@@ -315,8 +319,9 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
 
     await _saveCycleData();
     await _calculateAverageCycleLength();
-    final dateStr = _isSameDay(date, DateTime.now()) ? 'today' : 'on ${DateFormat('MMM d').format(date)}';
-    _showSnackBar('Period ended $dateStr successfully.', AppColors.successGreen);
+    if (!mounted) return;
+    final dateStr = _isSameDay(date, DateTime.now()) ? 'today' : 'on ${DateFormatUtils.formatShort(date)}';
+    SnackBarUtils.showSuccess(context, 'Period ended $dateStr successfully.');
   }
 
   Future<void> _calculateAverageCycleLength() async {
@@ -467,16 +472,6 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
     return MenstrualCycleUtils.getPhaseColor(_lastPeriodStart, _lastPeriodEnd, _averageCycleLength).withValues(alpha: 0.8);
   }
 
-  void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
 
 
 
@@ -491,8 +486,9 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
     if (result is IntercourseRecord) {
       await IntercourseService.addIntercourseRecord(result);
       await _loadIntercourseRecords();
+      if (!mounted) return;
       setState(() {});
-      _showSnackBar('Intercourse recorded for ${DateFormat('MMM d').format(date)}', AppColors.pink);
+      SnackBarUtils.showCustom(context, 'Intercourse recorded for ${DateFormatUtils.formatShort(date)}', backgroundColor: AppColors.pink);
     }
   }
 
@@ -514,8 +510,9 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
     if (result is IntercourseRecord) {
       await IntercourseService.updateIntercourseRecord(result);
       await _loadIntercourseRecords();
+      if (!mounted) return;
       setState(() {});
-      _showSnackBar('Intercourse updated', AppColors.successGreen);
+      SnackBarUtils.showSuccess(context, 'Intercourse updated');
     } else if (result == 'delete') {
       await IntercourseService.deleteIntercourseRecord(record.id);
       await _loadIntercourseRecords();
@@ -655,12 +652,12 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
   Widget _buildCurrentPhaseCard() {
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           gradient: LinearGradient(
             colors: [
               _getPhaseColor().withValues(alpha: 0.3),
@@ -749,7 +746,7 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
     
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -806,7 +803,7 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
   Widget _buildCalendarCard() {
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
         child: Column(
@@ -843,7 +840,7 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
                     foregroundColor: AppColors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppStyles.borderRadiusMedium,
                     ),
                   ),
                 ),
@@ -860,7 +857,7 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
                     foregroundColor: AppColors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppStyles.borderRadiusMedium,
                     ),
                   ),
                 ),
@@ -884,7 +881,7 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
                     foregroundColor: AppColors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppStyles.borderRadiusMedium,
                     ),
                   ),
                 ),
@@ -941,7 +938,7 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
             });
           },
           child: Text(
-            DateFormat('MMMM yy').format(_calendarDate),
+            DateFormatUtils.formatMonthYear(_calendarDate),
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -1078,12 +1075,6 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
         ),
       ),
     );
-  }
-
-  Future<void> _scheduleCycleNotifications() async {
-    // Delegate to centralized notification manager
-    final notificationManager = CentralizedNotificationManager();
-    await notificationManager.forceRescheduleAll();
   }
 
   Widget _buildStatItem(String label, String value, IconData icon, Color color) {

@@ -8,6 +8,8 @@ import 'dart:async';
 import 'package:bb_app/Routines/routine_data_models.dart';
 import 'package:bb_app/Habits/habit_data_models.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
+import '../shared/snackbar_utils.dart';
 import 'routine_service.dart';
 import 'routine_progress_service.dart';
 import 'routine_widget_service.dart';
@@ -205,13 +207,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
     _saveRoutines();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Routine "${routine.title}" duplicated'),
-          backgroundColor: AppColors.successGreen,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      SnackBarUtils.showSuccess(context, 'Routine "${routine.title}" duplicated');
     }
   }
 
@@ -263,13 +259,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
     if (mounted) {
       setState(() {});
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${routine.title} set as active for today'),
-          backgroundColor: AppColors.lightGreen,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      SnackBarUtils.showSuccess(context, '${routine.title} set as active for today');
     }
   }
 
@@ -295,13 +285,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
     await RoutineWidgetService.updateWidget();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${routine.title} started'),
-          backgroundColor: AppColors.lightGreen,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      SnackBarUtils.showSuccess(context, '${routine.title} started');
     }
   }
 
@@ -656,7 +640,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
           color: (_isHoldingForRoutineDelete && _holdingRoutineId == routine.id)
               ? AppColors.deleteRed
               : AppColors.deleteRed.withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppStyles.borderRadiusMedium,
           boxShadow: (_isHoldingForRoutineDelete && _holdingRoutineId == routine.id) ? [
             BoxShadow(
               color: AppColors.deleteRed.withValues(alpha: 0.6),
@@ -696,11 +680,11 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
         margin: const EdgeInsets.only(bottom: 12),
         elevation: 2,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppStyles.borderRadiusMedium,
         ),
         child: InkWell(
           onTap: () => _editRoutine(routine),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppStyles.borderRadiusMedium,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -727,7 +711,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.yellow.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppStyles.borderRadiusMedium,
                           border: Border.all(
                             color: AppColors.yellow.withValues(alpha: 0.3),
                           ),
@@ -813,7 +797,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                         color: routine.isActiveToday() 
                             ? AppColors.orange.withValues(alpha: 0.15)
                             : AppColors.yellow.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: AppStyles.borderRadiusSmall,
                         border: Border.all(
                           color: routine.isActiveToday() 
                               ? AppColors.orange.withValues(alpha: 0.4)
@@ -857,7 +841,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                               decoration: BoxDecoration(
                                 color: AppColors.successGreen.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: AppStyles.borderRadiusSmall,
                                 border: Border.all(
                                   color: AppColors.successGreen.withValues(alpha: 0.5),
                                   width: 2,
@@ -892,7 +876,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                               backgroundColor: AppColors.successGreen,
                               foregroundColor: AppColors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: AppStyles.borderRadiusSmall,
                               ),
                             ),
                           ),
@@ -938,7 +922,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
           color: (_isHoldingForHabitDelete && _holdingHabitId == habit.id)
               ? AppColors.deleteRed
               : AppColors.deleteRed.withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppStyles.borderRadiusMedium,
           boxShadow: (_isHoldingForHabitDelete && _holdingHabitId == habit.id) ? [
             BoxShadow(
               color: AppColors.deleteRed.withValues(alpha: 0.6),
@@ -978,11 +962,11 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
         margin: const EdgeInsets.only(bottom: 12),
         elevation: 2,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppStyles.borderRadiusMedium,
         ),
         child: InkWell(
           onTap: () => _editHabit(habit),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppStyles.borderRadiusMedium,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -1031,7 +1015,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.1) : AppColors.normalCardBackground,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppStyles.borderRadiusMedium,
                           border: Border.all(
                             color: isCompletedToday ? AppColors.orange.withValues(alpha: 0.3) : AppColors.grey300,
                           ),
@@ -1062,7 +1046,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: AppColors.normalCardBackground,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: AppStyles.borderRadiusMedium,
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,

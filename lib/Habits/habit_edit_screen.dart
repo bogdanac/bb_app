@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'habit_data_models.dart';
 import 'habit_service.dart';
+import '../shared/snackbar_utils.dart';
 
 class HabitEditScreen extends StatefulWidget {
   final Habit? habit;
@@ -38,9 +40,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
 
   void _saveHabit() {
     if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a habit name')),
-      );
+      SnackBarUtils.showInfo(context, 'Please enter a habit name');
       return;
     }
 
@@ -91,7 +91,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppStyles.borderRadiusSmall,
                 border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
               ),
               child: Column(
@@ -155,13 +155,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Cycle restarted for "${widget.habit!.name}"! Starting fresh from day 1.'),
-            backgroundColor: AppColors.orange,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        SnackBarUtils.showWarning(context, 'Cycle restarted for "${widget.habit!.name}"! Starting fresh from day 1.');
       }
     }
   }
@@ -191,7 +185,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.successGreen.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppStyles.borderRadiusSmall,
                 border: Border.all(color: AppColors.successGreen.withValues(alpha: 0.3)),
               ),
               child: Column(
@@ -251,13 +245,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Started cycle ${widget.habit!.currentCycle} for "${widget.habit!.name}"! Let\'s build this habit! 🎯'),
-            backgroundColor: AppColors.successGreen,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        SnackBarUtils.showSuccess(context, 'Started cycle ${widget.habit!.currentCycle} for "${widget.habit!.name}"! Let\'s build this habit! 🎯');
       }
     }
   }
@@ -391,7 +379,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
           decoration: BoxDecoration(
             color: backgroundColor,
             border: Border.all(color: borderColor, width: 1.5),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppStyles.borderRadiusSmall,
           ),
           child: Stack(
             alignment: Alignment.center,
@@ -586,7 +574,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
                   backgroundColor: AppColors.orange,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppStyles.borderRadiusMedium,
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),

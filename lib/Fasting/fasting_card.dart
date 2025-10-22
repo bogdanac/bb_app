@@ -1,6 +1,7 @@
 // fasting_card.dart - Actualizat cu sincronizare
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
@@ -8,6 +9,7 @@ import 'fasting_notifier.dart';
 import '../Notifications/notification_service.dart';
 import 'fasting_utils.dart';
 import 'fasting_phases.dart';
+import '../shared/snackbar_utils.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
 
 class FastingCard extends StatefulWidget {
@@ -194,12 +196,7 @@ class _FastingCardState extends State<FastingCard> {
     HapticFeedback.mediumImpact();
 
     if (recommendedFast.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No fast scheduled for today'),
-          backgroundColor: AppColors.orange,
-        ),
-      );
+      SnackBarUtils.showWarning(context, 'No fast scheduled for today');
       return;
     }
 
@@ -221,12 +218,7 @@ class _FastingCardState extends State<FastingCard> {
     // Show initial notification
     _updateFastingNotification();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('🚀 $recommendedFast started!'),
-        backgroundColor: AppColors.lightGreen, // Green for success
-      ),
-    );
+    SnackBarUtils.showSuccess(context, '🚀 $recommendedFast started!');
   }
 
 
@@ -244,11 +236,11 @@ class _FastingCardState extends State<FastingCard> {
 
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 8, 8, 8), // Reduced right padding for update button
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           color: AppColors.homeCardBackground, // Home card background
         ),
         child: Column(
@@ -261,7 +253,7 @@ class _FastingCardState extends State<FastingCard> {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: AppColors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppStyles.borderRadiusSmall,
                   border: Border.all(color: AppColors.orange.withValues(alpha: 0.3)),
                 ),
                 child: Row(
@@ -316,7 +308,7 @@ class _FastingCardState extends State<FastingCard> {
               ),
               const SizedBox(height: 12),
               ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppStyles.borderRadiusSmall,
                 child: LinearProgressIndicator(
                   value: _getProgress(),
                   backgroundColor: AppColors.appBackground,
@@ -375,7 +367,7 @@ class _FastingCardState extends State<FastingCard> {
                           foregroundColor: AppColors.white54,
                           side: const BorderSide(color: AppColors.white24),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: AppStyles.borderRadiusXLarge,
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                           minimumSize: const Size(35, 35),

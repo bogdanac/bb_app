@@ -92,6 +92,19 @@
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/routine_widget_info" />
         </receiver>
+
+        <!-- Task List Widget Provider -->
+        <receiver android:name=".TaskListWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.bb.bb_app.OPEN_APP" />
+                <action android:name="com.bb.bb_app.COMPLETE_TASK" />
+                <action android:name="com.bb.bb_app.REFRESH_TASK_LIST" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/task_list_widget_info" />
+        </receiver>
         
         <!-- Notification Listener Service -->
         <service android:name=".NotificationListener"

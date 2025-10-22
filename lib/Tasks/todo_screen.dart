@@ -2,17 +2,19 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tasks_data_models.dart';
+import '../shared/date_format_utils.dart';
 import 'task_card_widget.dart';
 import 'task_categories_screen.dart';
 import 'task_edit_screen.dart';
 import 'task_service.dart';
 import 'task_card_utils.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
 import '../MenstrualCycle/menstrual_cycle_constants.dart';
+import '../shared/snackbar_utils.dart';
 
 class TodoScreen extends StatefulWidget {
   final bool showFilters;
@@ -251,7 +253,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
         ),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.3),
@@ -372,10 +374,10 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
                           width: double.infinity,
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: _hasSelected 
+                            color: _hasSelected
                                 ? AppColors.successGreen.withValues(alpha: 0.1)
                                 : AppColors.coral.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: AppStyles.borderRadiusLarge,
                             border: Border.all(
                               color: _hasSelected 
                                   ? AppColors.successGreen
@@ -437,7 +439,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(
                                     color: Colors.orange.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: AppStyles.borderRadiusSmall,
                                     border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                                   ),
                                   child: Text(
@@ -464,7 +466,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.coral.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppStyles.borderRadiusMedium,
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -506,7 +508,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(vertical: 6),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: AppStyles.borderRadiusMedium,
                                   ),
                                 ),
                               ),
@@ -535,7 +537,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(vertical: 6),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: AppStyles.borderRadiusMedium,
                                         ),
                                       ),
                                       child: Text('Try Again ($_triesUsed/$_maxTries)'),
@@ -583,7 +585,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(vertical: 12),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: AppStyles.borderRadiusMedium,
                                 ),
                               ),
                             ),
@@ -630,13 +632,13 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
             if (task.deadline != null)
               _buildInfoChip(
                 Icons.schedule_rounded,
-                'Due ${DateFormat('MMM dd').format(task.deadline!)}',
+                'Due ${DateFormatUtils.formatShort(task.deadline!)}',
                 AppColors.lightCoral,
               ),
             if (task.reminderTime != null)
               _buildInfoChip(
                 Icons.notifications_rounded,
-                DateFormat('HH:mm').format(task.reminderTime!),
+                DateFormatUtils.formatTime24(task.reminderTime!),
                 AppColors.coral,
               ),
             if (task.isImportant)
@@ -672,7 +674,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppStyles.borderRadiusSmall,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1188,13 +1190,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         print('Error postponing task: $e');
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to postpone task: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        SnackBarUtils.showError(context, 'Failed to postpone task: $e');
       }
     }
   }
@@ -1229,14 +1225,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         }
 
         if (mounted && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: backgroundColor,
-              duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          SnackBarUtils.showCustom(context, message, backgroundColor: backgroundColor);
         }
       }
     } catch (e) {
@@ -1244,14 +1233,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         print('Error recalculating recurring tasks: $e');
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚠️ Failed to recalculate tasks: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        SnackBarUtils.showError(context, '⚠️ Failed to recalculate tasks: ${e.toString()}');
       }
     } finally {
       if (mounted) {
@@ -1273,9 +1255,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
       if (availableTasks.isEmpty) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No tasks available for random selection')),
-          );
+          SnackBarUtils.showInfo(context, 'No tasks available for random selection');
         }
         return;
       }
@@ -1652,7 +1632,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                       checkmarkColor: Colors.grey,
                       side: BorderSide(color: Colors.grey.withValues(alpha: 0.5)),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppStyles.borderRadiusMedium,
                       ),
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       visualDensity: VisualDensity.compact,
@@ -1672,7 +1652,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                       checkmarkColor: category.color,
                       side: BorderSide(color: category.color.withValues(alpha: 0.5)),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppStyles.borderRadiusMedium,
                       ),
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       visualDensity: VisualDensity.compact,

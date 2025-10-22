@@ -3,6 +3,7 @@ import 'category_edit_dialog.dart';
 import 'tasks_data_models.dart';
 import 'task_service.dart';
 import '../theme/app_colors.dart';
+import '../shared/dialog_utils.dart';
 
 // TASK CATEGORIES SCREEN
 class TaskCategoriesScreen extends StatefulWidget {
@@ -67,39 +68,29 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
     );
   }
 
-  void _deleteCategory(TaskCategory category) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Category'),
-        content: Text('Are you sure you want to delete "${category.name}"? Tasks assigned to this category will remain but will no longer be categorized.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final navigator = Navigator.of(context);
-              // Remove category from all tasks before deleting category
-              await _removeCategoryFromTasks(category.id);
-              
-              setState(() {
-                _categories.remove(category);
-                // Update order for remaining categories
-                for (int i = 0; i < _categories.length; i++) {
-                  _categories[i].order = i;
-                }
-              });
-              _saveCategories();
-              navigator.pop();
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.lightCoral),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+  void _deleteCategory(TaskCategory category) async {
+    final confirmed = await DialogUtils.showConfirmation(
+      context,
+      title: 'Confirmare ștergere categorie',
+      message: 'Sigur vrei să ștergi "${category.name}"? Sarcinile din această categorie vor rămâne dar nu vor mai fi categorizate.',
+      confirmText: 'Șterge',
+      cancelText: 'Anulează',
+      isDangerous: true,
     );
+
+    if (confirmed == true) {
+      // Remove category from all tasks before deleting category
+      await _removeCategoryFromTasks(category.id);
+
+      setState(() {
+        _categories.remove(category);
+        // Update order for remaining categories
+        for (int i = 0; i < _categories.length; i++) {
+          _categories[i].order = i;
+        }
+      });
+      _saveCategories();
+    }
   }
 
   Future<void> _removeCategoryFromTasks(String categoryId) async {

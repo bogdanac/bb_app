@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../theme/app_colors.dart';
 import 'notification_listener_service.dart';
+import '../shared/snackbar_utils.dart';
 
 class MotionAlertSettingsScreen extends StatefulWidget {
   const MotionAlertSettingsScreen({super.key});
@@ -91,12 +92,7 @@ class _MotionAlertSettingsScreenState extends State<MotionAlertSettingsScreen> {
       await prefs.setString('notification_alarm_settings', json.encode(settings));
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Settings saved successfully'),
-            backgroundColor: AppColors.yellow,
-          ),
-        );
+        SnackBarUtils.showSuccess(context, 'Settings saved successfully');
       }
     } catch (e) {
       debugPrint('Error saving settings: $e');

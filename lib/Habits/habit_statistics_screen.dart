@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'habit_data_models.dart';
 
 class HabitStatisticsScreen extends StatefulWidget {
@@ -231,7 +232,7 @@ class _HabitStatisticsScreenState extends State<HabitStatisticsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: _getCompletionRateColor(completionRate).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppStyles.borderRadiusMedium,
                     border: Border.all(
                       color: _getCompletionRateColor(completionRate).withValues(alpha: 0.3),
                     ),
@@ -340,7 +341,7 @@ class _StatCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppStyles.borderRadiusMedium,
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
@@ -416,12 +417,12 @@ class _TimeRangeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: AppStyles.borderRadiusSmall,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.yellow.withValues(alpha: 0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppStyles.borderRadiusSmall,
           border: Border.all(
             color: isSelected ? AppColors.yellow.withValues(alpha: 0.3) : AppColors.greyText,
           ),

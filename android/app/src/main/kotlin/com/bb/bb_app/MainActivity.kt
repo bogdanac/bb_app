@@ -14,6 +14,7 @@ class MainActivity: FlutterActivity() {
     private val WATER_CHANNEL = "com.bb.bb_app/water_widget"
     private val TASK_CHANNEL = "com.bb.bb_app/task_widget"
     private val ROUTINE_CHANNEL = "com.bb.bb_app/routine_widget"
+    private val TASK_LIST_CHANNEL = "com.bb.bb_app/task_list_widget"
     
     companion object {
         var instance: MainActivity? = null
@@ -139,6 +140,19 @@ class MainActivity: FlutterActivity() {
                 }
                 "refreshRoutineWidget" -> {
                     refreshRoutineWidget()
+                    result.success(true)
+                }
+                else -> {
+                    result.notImplemented()
+                }
+            }
+        }
+
+        // Task List widget channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, TASK_LIST_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "updateTaskListWidget" -> {
+                    updateTaskListWidget()
                     result.success(true)
                 }
                 else -> {
@@ -313,6 +327,20 @@ class MainActivity: FlutterActivity() {
             provider.onUpdate(this, appWidgetManager, appWidgetIds)
         } catch (e: Exception) {
             android.util.Log.e("MainActivity", "Error refreshing routine widget: $e")
+        }
+    }
+
+    private fun updateTaskListWidget() {
+        try {
+            val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(this)
+            val appWidgetIds = appWidgetManager.getAppWidgetIds(
+                ComponentName(this, TaskListWidgetProvider::class.java)
+            )
+            val provider = TaskListWidgetProvider()
+            provider.onUpdate(this, appWidgetManager, appWidgetIds)
+            android.util.Log.d("MainActivity", "Updated task list widget")
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Error updating task list widget: $e")
         }
     }
 }

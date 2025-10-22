@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="utf-8"?>
+<GridLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:columnCount="2"
+    android:padding="12dp"
+    android:background="#99000000">
+
+    <!-- Task List Container (Column 1) -->
+    <LinearLayout
+        android:id="@+id/task_list_container"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_column="0"
+        android:layout_row="0"
+        android:layout_columnWeight="1"
+        android:layout_gravity="fill_horizontal"
+        android:orientation="vertical">
+
+        <!-- Task 1 -->
+        <LinearLayout
+            android:id="@+id/task_1_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/task_1_complete"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_check"
+                android:background="@android:color/transparent"
+                android:scaleType="fitCenter"
+                android:tint="#A8D5BA"
+                android:contentDescription="Complete task" />
+
+            <TextView
+                android:id="@+id/task_1_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingStart="10dp"
+                android:paddingEnd="8dp"
+                android:textSize="18sp"
+                android:textColor="#E0E0E0"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <!-- Task 2 -->
+        <LinearLayout
+            android:id="@+id/task_2_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/task_2_complete"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_check"
+                android:background="@android:color/transparent"
+                android:scaleType="fitCenter"
+                android:tint="#A8D5BA"
+                android:contentDescription="Complete task" />
+
+            <TextView
+                android:id="@+id/task_2_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingStart="10dp"
+                android:paddingEnd="8dp"
+                android:textSize="18sp"
+                android:textColor="#E0E0E0"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <!-- Task 3 -->
+        <LinearLayout
+            android:id="@+id/task_3_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="1dp"
+            android:paddingBottom="1dp"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/task_3_complete"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/ic_check"
+                android:background="@android:color/transparent"
+                android:scaleType="fitCenter"
+                android:tint="#A8D5BA"
+                android:contentDescription="Complete task" />
+
+            <TextView
+                android:id="@+id/task_3_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingStart="8dp"
+                android:paddingEnd="4dp"
+                android:textSize="17sp"
+                android:textColor="#D0D0D0"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <!-- Task 4 -->
+        <LinearLayout
+            android:id="@+id/task_4_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="1dp"
+            android:paddingBottom="1dp"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/task_4_complete"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/ic_check"
+                android:background="@android:color/transparent"
+                android:scaleType="fitCenter"
+                android:tint="#A8D5BA"
+                android:contentDescription="Complete task" />
+
+            <TextView
+                android:id="@+id/task_4_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingStart="8dp"
+                android:paddingEnd="4dp"
+                android:textSize="17sp"
+                android:textColor="#D0D0D0"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <!-- Task 5 -->
+        <LinearLayout
+            android:id="@+id/task_5_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="1dp"
+            android:paddingBottom="1dp"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/task_5_complete"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/ic_check"
+                android:background="@android:color/transparent"
+                android:scaleType="fitCenter"
+                android:tint="#A8D5BA"
+                android:contentDescription="Complete task" />
+
+            <TextView
+                android:id="@+id/task_5_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingStart="8dp"
+                android:paddingEnd="4dp"
+                android:textSize="17sp"
+                android:textColor="#D0D0D0"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <!-- More indicator -->
+        <TextView
+            android:id="@+id/more_tasks"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingTop="2dp"
+            android:textSize="14sp"
+            android:textColor="#90CAF9"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Refresh Button (Column 2, top) -->
+    <ImageButton
+        android:id="@+id/refresh_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_column="1"
+        android:layout_row="0"
+        android:layout_gravity="top|end"
+        android:src="@android:drawable/ic_popup_sync"
+        android:background="@android:color/transparent"
+        android:scaleType="fitCenter"
+        android:tint="#60A0C0"
+        android:alpha="0.6"
+        android:padding="4dp"
+        android:contentDescription="Refresh tasks" />
+
+    <!-- No tasks message -->
+    <TextView
+        android:id="@+id/no_tasks_message"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_column="0"
+        android:layout_row="1"
+        android:layout_columnSpan="2"
+        android:layout_columnWeight="1"
+        android:layout_gravity="fill_horizontal"
+        android:text="No tasks"
+        android:textSize="14sp"
+        android:textColor="#90CAF9"
+        android:gravity="center"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+        android:visibility="gone" />
+
+</GridLayout>

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'food_tracking_service.dart';
 import 'food_tracking_data_models.dart';
 import '../shared/date_picker_utils.dart';
+import '../shared/snackbar_utils.dart';
+import '../shared/dialog_utils.dart';
 
 class FoodTrackingHistoryScreen extends StatefulWidget {
   const FoodTrackingHistoryScreen({super.key});
@@ -67,23 +70,11 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   }
 
   Future<void> _deleteEntry(FoodEntry entry) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Entry'),
-        content: Text('Are you sure you want to delete this ${entry.type.name} food entry?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.deleteRed),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await DialogUtils.showDeleteConfirmation(
+      context,
+      title: 'Șterge înregistrare',
+      itemName: '${entry.type.name} food',
+      customMessage: 'Sigur vrei să ștergi această înregistrare?',
     );
 
     if (confirmed == true) {
@@ -131,13 +122,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
 
     if (mounted) {
       final dateString = _formatDate(newTimestamp);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Food entry moved to $dateString'),
-          backgroundColor: AppColors.successGreen,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      SnackBarUtils.showSuccess(context, 'Food entry moved to $dateString');
     }
   }
 
@@ -181,13 +166,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     await _loadEntries();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Food entry moved to $targetDateKey'),
-          backgroundColor: AppColors.successGreen,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      SnackBarUtils.showSuccess(context, 'Food entry moved to $targetDateKey');
     }
   }
 
@@ -201,13 +180,13 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
       delay: const Duration(milliseconds: 300),
       feedback: Material(
         elevation: 8,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppStyles.borderRadiusMedium,
         child: Container(
           width: 300,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.normalCardBackground,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppStyles.borderRadiusMedium,
             border: Border.all(color: color, width: 2),
           ),
           child: Row(
@@ -420,7 +399,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
             border: isBeingDraggedOver
                 ? Border.all(color: AppColors.successGreen, width: 2)
                 : null,
-            borderRadius: isBeingDraggedOver ? BorderRadius.circular(8) : null,
+            borderRadius: isBeingDraggedOver ? AppStyles.borderRadiusSmall : null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -476,7 +455,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: AppColors.successGreen.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppStyles.borderRadiusSmall,
                     border: Border.all(
                       color: AppColors.successGreen.withValues(alpha: 0.3),
                       style: BorderStyle.solid,
@@ -518,24 +497,15 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
           if (_entries.isNotEmpty)
             TextButton(
               onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Food Tracking Tips'),
-                    content: const Text(
-                      'Track your food intake to maintain a healthy balance:\n\n'
+                DialogUtils.showInfo(
+                  context,
+                  title: 'Food Tracking Tips',
+                  message: 'Track your food intake to maintain a healthy balance:\n\n'
                       '• Aim for 80% healthy foods\n'
                       '• Limit processed foods to 20%\n'
                       '• Counts reset monthly (configurable in settings)\n'
                       '• Swipe or tap delete to remove entries',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Got it'),
-                      ),
-                    ],
-                  ),
+                  buttonText: 'Got it',
                 );
               },
               child: const Icon(Icons.info_outline),

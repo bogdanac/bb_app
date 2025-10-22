@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'time_picker_utils.dart';
 
 class DatePickerUtils {
@@ -46,7 +47,7 @@ class DatePickerUtils {
                 ),
                 side: const BorderSide(color: Colors.white, width: 1),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppStyles.borderRadiusSmall,
                 ),
               ),
               confirmButtonStyle: TextButton.styleFrom(
@@ -58,7 +59,7 @@ class DatePickerUtils {
                   fontWeight: FontWeight.w700,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppStyles.borderRadiusSmall,
                 ),
               ),
             ),

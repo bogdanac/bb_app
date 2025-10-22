@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'intercourse_data_model.dart';
-import 'package:intl/intl.dart';
+import '../shared/date_format_utils.dart';
 
 class IntercourseEditorDialog extends StatefulWidget {
   final DateTime date;
@@ -44,7 +45,7 @@ class _IntercourseEditorDialogState extends State<IntercourseEditorDialog> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppColors.lightPink.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppStyles.borderRadiusSmall,
               border: Border.all(color: AppColors.lightPink.withValues(alpha: 0.3)),
             ),
             child: Row(
@@ -56,7 +57,7 @@ class _IntercourseEditorDialogState extends State<IntercourseEditorDialog> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  DateFormat('MMM d, y').format(widget.date),
+                  DateFormatUtils.formatLong(widget.date),
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -71,7 +72,7 @@ class _IntercourseEditorDialogState extends State<IntercourseEditorDialog> {
           // Orgasm toggle
           Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppStyles.borderRadiusMedium,
               border: Border.all(color: AppColors.grey700),
             ),
             child: SwitchListTile(
@@ -101,7 +102,7 @@ class _IntercourseEditorDialogState extends State<IntercourseEditorDialog> {
           // Protection toggle
           Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppStyles.borderRadiusMedium,
               border: Border.all(color: AppColors.grey700),
             ),
             child: SwitchListTile(

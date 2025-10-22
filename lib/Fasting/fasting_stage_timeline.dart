@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 
 class FastingStageTimeline extends StatefulWidget {
   final Duration elapsedTime;
@@ -194,7 +195,7 @@ class _FastingStageTimelineState extends State<FastingStageTimeline>
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: _stages[selectedStageIndex]['color'].withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: AppStyles.borderRadiusLarge,
                       border: Border.all(
                         color: _stages[selectedStageIndex]['color'].withOpacity(0.3),
                       ),
@@ -205,7 +206,7 @@ class _FastingStageTimelineState extends State<FastingStageTimeline>
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: _stages[selectedStageIndex]['color'],
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: AppStyles.borderRadiusSmall,
                           ),
                           child: Icon(
                             _stages[selectedStageIndex]['icon'],
@@ -247,7 +248,7 @@ class _FastingStageTimelineState extends State<FastingStageTimeline>
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppStyles.borderRadiusMedium,
                       border: Border.all(color: Colors.white24),
                     ),
                     child: Icon(
@@ -317,7 +318,7 @@ class _FastingStageTimelineState extends State<FastingStageTimeline>
                           : isCurrentStage 
                               ? stage['color'].withOpacity(0.2)
                               : Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppStyles.borderRadiusSmall,
                       border: isCurrentStage 
                           ? Border.all(color: stage['color'], width: 1.5)
                           : null,
@@ -465,7 +466,7 @@ class _FastingStageTimelineState extends State<FastingStageTimeline>
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         decoration: BoxDecoration(
           color: stage['color'].withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppStyles.borderRadiusMedium,
           border: Border.all(color: stage['color'].withOpacity(0.3)),
         ),
         child: Column(
@@ -478,7 +479,7 @@ class _FastingStageTimelineState extends State<FastingStageTimeline>
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: stage['color'],
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppStyles.borderRadiusSmall,
                   ),
                   child: Icon(
                     stage['icon'],

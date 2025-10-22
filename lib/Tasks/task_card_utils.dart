@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'tasks_data_models.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
+import '../shared/date_format_utils.dart';
 
 class TaskCardUtils {
   // Text constants for task status labels
@@ -75,7 +76,7 @@ class TaskCardUtils {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppStyles.borderRadiusSmall,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -101,7 +102,7 @@ class TaskCardUtils {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppStyles.borderRadiusSmall,
       ),
       child: Text(
         text,
@@ -258,7 +259,7 @@ class TaskCardUtils {
       return 'Tomorrow';
     } else {
       // Use format like "Nov 10" for other dates
-      return DateFormat('MMM dd').format(task.scheduledDate!);
+      return DateFormatUtils.formatShort(task.scheduledDate!);
     }
   }
 }

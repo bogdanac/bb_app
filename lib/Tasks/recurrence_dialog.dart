@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'tasks_data_models.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import '../MenstrualCycle/menstrual_cycle_constants.dart';
 import '../shared/time_picker_utils.dart';
 import '../shared/date_picker_utils.dart';
@@ -127,7 +128,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                         decoration: BoxDecoration(
                           color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: AppStyles.borderRadiusLarge,
                           border: Border.all(
                             color: AppColors.coral.withValues(alpha: 0.3),
                           ),
@@ -147,7 +148,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                 keyboardType: TextInputType.number,
                                 decoration: InputDecoration(
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: AppStyles.borderRadiusSmall,
                                   ),
                                   contentPadding:
                                       const EdgeInsets.symmetric(
@@ -171,7 +172,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                 initialValue: _displayedSelectedType,
                                 decoration: InputDecoration(
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: AppStyles.borderRadiusSmall,
                                   ),
                                   contentPadding:
                                       const EdgeInsets.symmetric(
@@ -214,7 +215,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: AppStyles.borderRadiusLarge,
                           border: Border.all(
                             color: AppColors.coral.withValues(alpha: 0.3),
                           ),
@@ -266,7 +267,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: AppStyles.borderRadiusLarge,
                           border: Border.all(
                             color: AppColors.coral.withValues(alpha: 0.3),
                           ),
@@ -286,7 +287,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                 color: !_isLastDayOfMonth
                                     ? AppColors.coral.withValues(alpha: 0.1)
                                     : Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: AppStyles.borderRadiusSmall,
                                 border: Border.all(
                                   color: !_isLastDayOfMonth
                                       ? AppColors.coral.withValues(alpha: 0.1)
@@ -370,7 +371,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                 color: _isLastDayOfMonth
                                     ? AppColors.coral.withValues(alpha: 0.3)
                                     : Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: AppStyles.borderRadiusSmall,
                                 border: Border.all(
                                   color: _isLastDayOfMonth
                                       ? AppColors.coral.withValues(alpha: 0.3)
@@ -424,7 +425,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: AppStyles.borderRadiusLarge,
                           border: Border.all(
                             color: AppColors.coral.withValues(alpha: 0.3),
                           ),
@@ -446,7 +447,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                     initialValue: _interval <= 12 ? _interval : 1,
                                     decoration: InputDecoration(
                                       border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
+                                        borderRadius: AppStyles.borderRadiusSmall,
                                       ),
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                       isDense: true,
@@ -479,7 +480,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                     keyboardType: TextInputType.number,
                                     decoration: InputDecoration(
                                       border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
+                                        borderRadius: AppStyles.borderRadiusSmall,
                                       ),
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
                                       isDense: false,
@@ -554,7 +555,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: AppStyles.borderRadiusLarge,
                           border: Border.all(
                             color: AppColors.coral.withValues(alpha: 0.3),
                           ),
@@ -571,7 +572,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: AppStyles.borderRadiusSmall,
                                   color: Colors.white.withValues(alpha: 0.05),
                                 ),
                                 child: Row(
@@ -622,7 +623,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppStyles.borderRadiusMedium,
                         border: Border.all(
                           color: AppColors.coral.withValues(alpha: 0.2),
                         ),
@@ -646,7 +647,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                       child: Container(
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: AppStyles.borderRadiusSmall,
                                           color: Colors.white.withValues(alpha: 0.05),
                                         ),
                                         child: Row(
@@ -701,7 +702,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                       child: Container(
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: AppStyles.borderRadiusSmall,
                                           color: Colors.white.withValues(alpha: 0.05),
                                         ),
                                         child: Row(
@@ -805,7 +806,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppStyles.borderRadiusMedium,
                   ),
                 ),
                 child: const Text(
@@ -874,7 +875,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.coral : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           border: Border.all(
             color: isSelected
                 ? AppColors.coral
@@ -1097,7 +1098,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.dialogBackground.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppStyles.borderRadiusLarge,
         border: Border.all(
           color: AppColors.coral.withValues(alpha: 0.3),
         ),

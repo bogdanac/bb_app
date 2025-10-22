@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'dart:math' as math;
 import 'food_tracking_service.dart';
 import 'food_tracking_data_models.dart';
@@ -145,10 +146,10 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
 
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           color: AppColors.homeCardBackground, // Home card background
         ),
         child: Column(
@@ -156,7 +157,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
             // Header row - always visible
             InkWell(
               onTap: _toggleExpanded,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppStyles.borderRadiusLarge,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 12, 0),
                 child: Row(
@@ -186,7 +187,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: AppColors.pastelGreen.withValues(alpha: 0.25), // Golden yellow
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppStyles.borderRadiusMedium,
                           border: Border.all(
                             color: AppColors.pastelGreen.withValues(alpha: 0.4),
                             width: 1,
@@ -248,7 +249,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                               backgroundColor: AppColors.pastelGreen,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: AppStyles.borderRadiusMedium,
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
@@ -264,7 +265,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                               backgroundColor: AppColors.orange,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: AppStyles.borderRadiusMedium,
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),

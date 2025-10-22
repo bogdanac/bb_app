@@ -10,6 +10,7 @@ import 'Notifications/centralized_notification_manager.dart';
 import 'Notifications/notification_listener_service.dart';
 import 'Data/backup_service.dart';
 import 'theme/app_colors.dart';
+import 'theme/app_styles.dart';
 import 'dart:io';
 import 'dart:math';
 import 'dart:async';
@@ -557,7 +558,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
                   color: isSelected 
                       ? colors[index].withValues(alpha: 0.25) // More visible when selected
                       : colors[index].withValues(alpha: 0.08), // Subtle when not selected
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: AppStyles.borderRadiusXLarge,
                   border: isSelected
                     ? Border.all(color: colors[index].withValues(alpha: 0.6), width: 1.5)
                     : Border.all(color: colors[index].withValues(alpha: 0.6), width: 0.5)

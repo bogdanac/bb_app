@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'scheduled_fastings_service.dart';
 import 'fasting_utils.dart';
 import '../shared/date_picker_utils.dart';
+import '../shared/snackbar_utils.dart';
 
 class ScheduledFastingsScreen extends StatefulWidget {
   const ScheduledFastingsScreen({super.key});
@@ -51,9 +53,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading scheduled fastings: $e')),
-        );
+        SnackBarUtils.showError(context, 'Error loading scheduled fastings: $e');
       }
     }
   }
@@ -176,22 +176,12 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
         await _loadScheduledFastings();
         
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Schedule fixed! Overlapping fasts have been resolved.'),
-              backgroundColor: AppColors.successGreen,
-            ),
-          );
+          SnackBarUtils.showSuccess(context, '✅ Schedule fixed! Overlapping fasts have been resolved.');
         }
       } catch (e) {
         setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error fixing schedule: $e'),
-              backgroundColor: AppColors.red,
-            ),
-          );
+          SnackBarUtils.showError(context, 'Error fixing schedule: $e');
         }
       }
     }
@@ -216,12 +206,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
         await _loadScheduledFastings();
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Fast rescheduled to ${updatedFasting.formattedDate}'),
-              backgroundColor: AppColors.successGreen,
-            ),
-          );
+          SnackBarUtils.showSuccess(context, 'Fast rescheduled to ${updatedFasting.formattedDate}');
         }
       }
     } catch (e) {
@@ -282,12 +267,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
       await _loadScheduledFastings();
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Fast type changed to $selectedType'),
-            backgroundColor: AppColors.successGreen,
-          ),
-        );
+        SnackBarUtils.showSuccess(context, 'Fast type changed to $selectedType');
       }
     }
   }
@@ -324,12 +304,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
       await _loadScheduledFastings();
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Fast deleted for ${fasting.formattedDate}'),
-            backgroundColor: AppColors.red,
-          ),
-        );
+        SnackBarUtils.showError(context, 'Fast deleted for ${fasting.formattedDate}');
       }
     }
   }
@@ -353,10 +328,10 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
     return Card(
       elevation: 3,
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusMedium),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppStyles.borderRadiusMedium,
           color: isPast 
               ? AppColors.greyText.withValues(alpha: 0.05)
               : isToday 
@@ -417,7 +392,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: _getFastTypeColor(fasting.fastType).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: AppStyles.borderRadiusSmall,
                         border: Border.all(
                           color: _getFastTypeColor(fasting.fastType).withValues(alpha: 0.3),
                         ),
@@ -459,7 +434,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                           color: fasting.isEnabled 
                               ? AppColors.successGreen.withValues(alpha: 0.15)
                               : AppColors.greyText.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppStyles.borderRadiusSmall,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -492,7 +467,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           color: AppColors.purple.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppStyles.borderRadiusSmall,
                         ),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
@@ -521,7 +496,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           color: AppColors.orange.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppStyles.borderRadiusSmall,
                         ),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
@@ -550,7 +525,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: AppColors.red.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppStyles.borderRadiusSmall,
                         ),
                         child: const Icon(
                           Icons.delete_outline,
@@ -649,15 +624,15 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                       Card(
                         elevation: 2,
                         margin: const EdgeInsets.only(bottom: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusMedium),
                         child: Container(
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: AppStyles.borderRadiusMedium,
                             color: AppColors.dialogCardBackground,
                           ),
                           child: InkWell(
                             onTap: _showFastingPreferencesDialog,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: AppStyles.borderRadiusMedium,
                             child: Padding(
                               padding: const EdgeInsets.all(16),
                               child: Row(
@@ -666,7 +641,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
                                       color: AppColors.orange.withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: AppStyles.borderRadiusSmall,
                                     ),
                                     child: const Icon(
                                       Icons.settings,
@@ -800,7 +775,7 @@ class _FastingPreferencesDialogState extends State<_FastingPreferencesDialog> {
                       color: isSelected
                           ? AppColors.orange
                           : AppColors.dialogCardBackground,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppStyles.borderRadiusSmall,
                       border: Border.all(
                         color: isSelected
                             ? AppColors.orange

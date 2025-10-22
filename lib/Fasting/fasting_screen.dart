@@ -8,8 +8,10 @@ import 'scheduled_fastings_screen.dart';
 import 'fasting_notifier.dart';
 import '../Notifications/notification_service.dart';
 import 'fasting_phases.dart';
+import '../shared/snackbar_utils.dart';
 import 'fasting_utils.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import '../shared/date_picker_utils.dart';
 import '../shared/time_picker_utils.dart';
 import 'fasting_stage_timeline.dart';
@@ -150,18 +152,11 @@ class _FastingScreenState extends State<FastingScreen>
       await _loadFastingData();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Scheduled fast deactivated for your wellbeing 💝'),
-            backgroundColor: AppColors.successGreen,
-          ),
-        );
+        SnackBarUtils.showSuccess(context, 'Scheduled fast deactivated for your wellbeing 💝');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deactivating fast: $e')),
-        );
+        SnackBarUtils.showError(context, 'Error deactivating fast: $e');
       }
     }
   }
@@ -511,12 +506,7 @@ class _FastingScreenState extends State<FastingScreen>
     // Show initial progress notification
     _updateFastingNotification();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('🚀 $fastType started! You got this!'),
-        backgroundColor: AppColors.lightGreen,
-      ),
-    );
+    SnackBarUtils.showSuccess(context, '🚀 $fastType started! You got this!');
   }
 
   // Start quick fast (20h or 16h)
@@ -550,12 +540,7 @@ class _FastingScreenState extends State<FastingScreen>
     // Show initial progress notification
     _updateFastingNotification();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('🚀 $fastType started!'),
-        backgroundColor: AppColors.pastelGreen,
-      ),
-    );
+    SnackBarUtils.showSuccess(context, '🚀 $fastType started!');
   }
 
   void _endFast() {
@@ -587,7 +572,7 @@ class _FastingScreenState extends State<FastingScreen>
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppColors.dialogCardBackground,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppStyles.borderRadiusMedium,
                 border: Border.all(color: AppColors.greyText.withValues(alpha: 0.3)),
               ),
               child: Column(
@@ -697,12 +682,7 @@ class _FastingScreenState extends State<FastingScreen>
 
     _saveFastingData();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Fast postponed to tomorrow at 2 PM'),
-        backgroundColor: Color(0xFFF98834),
-      ),
-    );
+    SnackBarUtils.showWarning(context, 'Fast postponed to tomorrow at 2 PM');
   }
 
   void _editCurrentFastStartTime() {
@@ -711,7 +691,7 @@ class _FastingScreenState extends State<FastingScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
         title: const Text('Edit Fast Start Time'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -771,12 +751,7 @@ class _FastingScreenState extends State<FastingScreen>
 
     // Validate that start time is not in the future
     if (newStartTime.isAfter(now)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Start time cannot be in the future'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      SnackBarUtils.showError(context, 'Start time cannot be in the future');
       return;
     }
 
@@ -797,21 +772,14 @@ class _FastingScreenState extends State<FastingScreen>
     // Check if we should trigger any milestones that were missed due to the time change
     _checkFastingMilestones(Duration.zero, _elapsedTime);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Fast start time updated to ${newTime.format(context)}',
-        ),
-        backgroundColor: AppColors.pastelGreen,
-      ),
-    );
+    SnackBarUtils.showSuccess(context, 'Fast start time updated to ${newTime.format(context)}');
   }
 
   void _showCongratulationDialog(Duration actualDuration) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
         title: const Text('🎉 Congratulations!'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -972,7 +940,7 @@ class _FastingScreenState extends State<FastingScreen>
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         border: Border.all(color: AppColors.pastelGreen),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: AppStyles.borderRadiusSmall,
                       ),
                       child: Text(
                         startTime != null
@@ -1014,7 +982,7 @@ class _FastingScreenState extends State<FastingScreen>
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         border: Border.all(color: AppColors.pastelGreen),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: AppStyles.borderRadiusSmall,
                       ),
                       child: Text(
                         endTime != null
@@ -1110,13 +1078,7 @@ class _FastingScreenState extends State<FastingScreen>
     await _loadFastingData();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              '✅ Added $fastType (${FastingUtils.formatDuration(actualDuration)}) to history'),
-          backgroundColor: AppColors.lightGreen,
-        ),
-      );
+      SnackBarUtils.showSuccess(context, '✅ Added $fastType (${FastingUtils.formatDuration(actualDuration)}) to history');
     }
   }
 
@@ -1416,7 +1378,7 @@ class _FastingScreenState extends State<FastingScreen>
                                 padding:
                                 const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: AppStyles.borderRadiusMedium,
                                 ),
                               ),
                             ),
@@ -1433,7 +1395,7 @@ class _FastingScreenState extends State<FastingScreen>
                                 padding:
                                 const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: AppStyles.borderRadiusMedium,
                                 ),
                               ),
                             ),
@@ -1462,7 +1424,7 @@ class _FastingScreenState extends State<FastingScreen>
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: AppStyles.borderRadiusMedium,
                               ),
                             ),
                           ),
@@ -1483,7 +1445,7 @@ class _FastingScreenState extends State<FastingScreen>
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: AppStyles.borderRadiusMedium,
                                 ),
                               ),
                             ),
@@ -1502,12 +1464,12 @@ class _FastingScreenState extends State<FastingScreen>
             Card(
               elevation: 8,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
+                  borderRadius: AppStyles.borderRadiusXLarge),
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: AppStyles.borderRadiusXLarge,
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -1531,7 +1493,7 @@ class _FastingScreenState extends State<FastingScreen>
                         color: _isFasting
                             ? phaseInfo['color'].withValues(alpha: 0.15)
                             : AppColors.greyText.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: AppStyles.borderRadiusLarge,
                         border: Border.all(
                           color: _isFasting
                               ? phaseInfo['color'].withValues(alpha: 0.3)
@@ -1611,7 +1573,7 @@ class _FastingScreenState extends State<FastingScreen>
                         foregroundColor: AppColors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppStyles.borderRadiusMedium,
                         ),
                       ),
                     ),
@@ -1629,7 +1591,7 @@ class _FastingScreenState extends State<FastingScreen>
                         side: const BorderSide(color: Color(0xFFF98834)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppStyles.borderRadiusMedium,
                         ),
                       ),
                     ),
@@ -1644,7 +1606,7 @@ class _FastingScreenState extends State<FastingScreen>
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
+                  borderRadius: AppStyles.borderRadiusLarge),
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(

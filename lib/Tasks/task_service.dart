@@ -7,6 +7,7 @@ import 'tasks_data_models.dart';
 import '../Notifications/notification_service.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
 import '../MenstrualCycle/menstrual_cycle_constants.dart';
+import 'task_list_widget_service.dart';
 
 class TaskService {
   static final TaskService _instance = TaskService._internal();
@@ -84,16 +85,22 @@ class TaskService {
             tasksUpdated = true;
           }
         }
+        // Fix recurring tasks scheduled in the past (not postponed) - auto-update to next occurrence
+        else if (tasks[i].recurrence != null &&
+                 tasks[i].scheduledDate != null &&
+                 tasks[i].scheduledDate!.isBefore(todayDate) &&
+                 !tasks[i].isPostponed) {
+
+          final updatedTask = await _calculateNextScheduledDate(tasks[i], prefs);
+          if (updatedTask != null) {
+            tasks[i] = updatedTask;
+            tasksUpdated = true;
+          }
+        }
         // Migration: Fix recurring tasks scheduled today with missing or outdated reminderTime
         else if (tasks[i].recurrence != null &&
                  tasks[i].scheduledDate != null &&
                  _isSameDay(tasks[i].scheduledDate!, todayDate)) {
-
-          if (kDebugMode) {
-            print('🔍 Checking recurring task: ${tasks[i].title}');
-            print('   Current reminderTime: ${tasks[i].reminderTime}');
-            print('   Recurrence reminderTime: ${tasks[i].recurrence!.reminderTime}');
-          }
 
           DateTime? correctReminderTime;
 
@@ -112,10 +119,6 @@ class TaskService {
                 tasks[i].reminderTime!.hour != correctReminderTime.hour ||
                 tasks[i].reminderTime!.minute != correctReminderTime.minute ||
                 !_isSameDay(tasks[i].reminderTime!, todayDate)) {
-
-              if (kDebugMode) {
-                print('🔧 Fixing ${tasks[i].title}: reminderTime ${tasks[i].reminderTime} -> $correctReminderTime');
-              }
 
               tasks[i] = Task(
                 id: tasks[i].id,
@@ -161,14 +164,40 @@ class TaskService {
   Future<void> saveTasks(List<Task> tasks) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final tasksJson = tasks
+
+      // Sort tasks by priority before saving so widget shows them in correct order
+      final categories = await loadCategories();
+      final sortedTasks = List<Task>.from(tasks);
+
+      // Separate completed and incomplete tasks
+      final incompleteTasks = sortedTasks.where((t) => !t.isCompleted).toList();
+      final completedTasks = sortedTasks.where((t) => t.isCompleted).toList();
+
+      // Sort incomplete tasks by priority
+      final prioritizedIncomplete = getPrioritizedTasks(incompleteTasks, categories, incompleteTasks.length);
+
+      // Sort completed tasks by completion date (newest first)
+      completedTasks.sort((a, b) {
+        if (a.completedAt == null && b.completedAt == null) return 0;
+        if (a.completedAt == null) return 1;
+        if (b.completedAt == null) return -1;
+        return b.completedAt!.compareTo(a.completedAt!);
+      });
+
+      // Combine: incomplete tasks first (prioritized), then completed tasks
+      final orderedTasks = [...prioritizedIncomplete, ...completedTasks];
+
+      final tasksJson = orderedTasks
           .map((task) => jsonEncode(task.toJson()))
           .toList();
       await prefs.setStringList('tasks', tasksJson);
 
       // Update task notifications when saving
       await _scheduleAllTaskNotifications(tasks);
-      
+
+      // Update task list widget
+      await TaskListWidgetService.updateWidget();
+
       // Notify all listeners that tasks have changed
       _notifyTasksChanged();
     } catch (e) {
@@ -299,12 +328,22 @@ class TaskService {
       final tomorrow = DateTime(now.year, now.month, now.day + 1);
       DateTime postponeDate = tomorrow;
       
-      DateTime? newReminderTime = task.reminderTime;
-      
+      DateTime? newReminderTime;
+
       // If task has a reminder time, keep the same time but move date to postpone date
       if (task.reminderTime != null) {
         newReminderTime = DateTime(postponeDate.year, postponeDate.month, postponeDate.day,
                                  task.reminderTime!.hour, task.reminderTime!.minute);
+      }
+      // For recurring tasks, use the recurrence's reminderTime if available
+      else if (task.recurrence?.reminderTime != null) {
+        newReminderTime = DateTime(
+          postponeDate.year,
+          postponeDate.month,
+          postponeDate.day,
+          task.recurrence!.reminderTime!.hour,
+          task.recurrence!.reminderTime!.minute
+        );
       }
       
       // Create updated task with scheduled date moved to postpone date
@@ -451,16 +490,6 @@ class TaskService {
     int score = 0;
     bool hasDistantReminderToday = false; // Track if task has a far-future reminder today
 
-    // SPECIAL CASE: Postponed recurring tasks get absolute lowest priority
-    if (task.recurrence != null && task.scheduledDate != null) {
-      final tomorrow = today.add(const Duration(days: 1));
-      if (task.scheduledDate!.isAfter(today) || _isSameDay(task.scheduledDate!, tomorrow)) {
-        // This is a postponed recurring task - give it minimal priority
-        // It will only get points from categories, nothing else
-        return 1; // Return immediately with minimal score
-      }
-    }
-
     // 1. HIGHEST PRIORITY: Tasks with reminder times (past or future)
     if (task.reminderTime != null) {
       final reminderDiff = task.reminderTime!.difference(now).inMinutes;
@@ -491,26 +520,30 @@ class TaskService {
       }
       // For reminders today beyond 2 hours
       else if (isReminderToday) {
-        // Reminders more than 30 minutes away should not get high priority
+        // SPECIAL CASE: Check if this is a postponed task scheduled for the future
+        // These should have the absolute lowest priority even if reminder is today
+        if (task.recurrence != null && task.scheduledDate != null && task.scheduledDate!.isAfter(today)) {
+          return 1; // Return immediately with minimal score for postponed tasks with reminders
+        }
+
+        // Reminders more than 2 hours away should not get high priority
         // They'll be sorted by other attributes (scheduled today, categories, etc.)
-        if (reminderDiff > 30) {
+        if (reminderDiff > 120) {
           hasDistantReminderToday = true; // Mark this so we don't give scheduledToday high priority
           score += 0; // No priority boost from reminder - will only appear when other tasks are done
         } else {
-          // Within 30 minutes - give high priority with gradual increase
-          score += (700 - (reminderDiff * 10)).round(); // 30min=400, 15min=550, 5min=650, 0min=700
+          // Within 2 hours - give high priority with gradual increase
+          final addedScore = (700 - (reminderDiff * 5)).round();
+          score += addedScore;
         }
       }
       // Future reminders beyond today
       else {
-        // Special handling for postponed recurring tasks - absolute lowest priority
-        final tomorrow = today.add(const Duration(days: 1));
-        if (task.recurrence != null && task.scheduledDate != null &&
-            (task.scheduledDate!.isAfter(today) || _isSameDay(task.scheduledDate!, tomorrow))) {
-          score += 0; // No priority for postponed recurring tasks - they should appear last
-        } else {
-          score += 30; // Reduced priority for future reminders - they're not urgent yet
+        // SPECIAL CASE: Postponed recurring tasks - absolute lowest priority
+        if (task.recurrence != null && task.scheduledDate != null && task.scheduledDate!.isAfter(today)) {
+          return 1; // Return immediately with minimal score for postponed recurring tasks
         }
+        score += 30; // Reduced priority for future reminders - they're not urgent yet
       }
     }
 

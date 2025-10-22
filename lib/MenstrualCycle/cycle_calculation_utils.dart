@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../Notifications/centralized_notification_manager.dart';
 
 class CycleCalculationUtils {
   /// Calculate average cycle length from period history
@@ -65,5 +66,12 @@ class CycleCalculationUtils {
     final prefs = await SharedPreferences.getInstance();
     final lastStartStr = prefs.getString('last_period_start');
     return lastStartStr != null ? DateTime.parse(lastStartStr) : null;
+  }
+
+  /// Reschedule cycle notifications (ovulation and period reminders)
+  /// Call this whenever cycle data changes (new period, edit history, etc.)
+  static Future<void> rescheduleCycleNotifications() async {
+    final notificationManager = CentralizedNotificationManager();
+    await notificationManager.forceRescheduleAll();
   }
 }

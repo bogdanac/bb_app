@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'dart:async';
 import 'tasks_data_models.dart';
+import '../shared/date_format_utils.dart';
 import 'recurrence_dialog.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import '../shared/date_picker_utils.dart';
+import '../shared/snackbar_utils.dart';
 
 class TaskEditScreen extends StatefulWidget {
   final Task? task;
@@ -201,13 +203,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         print('Error saving task: $e');
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚠️ Error saving task: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        SnackBarUtils.showError(context, '⚠️ Error saving task: ${e.toString()}');
       }
     }
   }
@@ -272,17 +268,10 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     // Show feedback
     if (mounted) {
       final skipMessage = nextScheduledDate != null
-          ? '⏭️ Task "${task.title}" skipped until ${DateFormat('MMM d').format(nextScheduledDate)}'
+          ? '⏭️ Task "${task.title}" skipped until ${DateFormatUtils.formatShort(nextScheduledDate)}'
           : '⏭️ Task "${task.title}" skipped until next appropriate phase';
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(skipMessage),
-          backgroundColor: AppColors.lightCoral,
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      SnackBarUtils.showCustom(context, skipMessage, backgroundColor: AppColors.lightCoral, duration: const Duration(seconds: 2));
     }
 
     // Save the task
@@ -496,7 +485,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                   color: _titleController.text.trim().isEmpty
                       ? AppColors.dialogBackground
                       : AppColors.lightCoral.withValues(alpha: 0.03),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   border: Border.all(
                     color: _titleController.text.trim().isEmpty
                         ? AppColors.greyText
@@ -505,7 +494,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 ),
                 child: InkWell(
                   onTap: _titleController.text.trim().isEmpty ? null : _skipTask,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     child: Row(
@@ -516,7 +505,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             color: (_titleController.text.trim().isEmpty
                                 ? AppColors.greyText
                                 : AppColors.lightCoral).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: AppStyles.borderRadiusMedium,
                           ),
                           child: Icon(
                             Icons.skip_next_rounded,
@@ -578,7 +567,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               Container(
                 decoration: BoxDecoration(
                   color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   border: Border.all(
                     color: _scheduledDate != null
                         ? AppColors.successGreen.withValues(alpha: 0.1)
@@ -587,7 +576,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 ),
                 child: InkWell(
                   onTap: _selectScheduledDate,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     child: Row(
@@ -598,7 +587,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             color: (_scheduledDate != null
                                 ? AppColors.successGreen.withValues(alpha: 0.3)
                                 : AppColors.greyText).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: AppStyles.borderRadiusMedium,
                           ),
                           child: Icon(
                             Icons.calendar_today_rounded,
@@ -627,7 +616,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                                 const SizedBox(height: 2),
                                 Text(
                                   _scheduledDate != null
-                                      ? DateFormat('EEEE, MMMM dd').format(_scheduledDate!)
+                                      ? DateFormatUtils.formatFullDate(_scheduledDate!)
                                       : 'Choose when to do this task',
                                   style: const TextStyle(
                                     fontSize: 14,
@@ -670,7 +659,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               Container(
               decoration: BoxDecoration(
                 color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppStyles.borderRadiusLarge,
                 border: Border.all(
                   color: _deadline != null 
                       ? AppColors.lightCoral.withValues(alpha: 0.1)
@@ -679,7 +668,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               ),
               child: InkWell(
                 onTap: _selectDeadline,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppStyles.borderRadiusLarge,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
@@ -690,7 +679,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                           color: (_deadline != null 
                               ? AppColors.lightCoral.withValues(alpha: 0.3)
                               : AppColors.greyText).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppStyles.borderRadiusMedium,
                         ),
                         child: Icon(
                           Icons.event_rounded,
@@ -716,7 +705,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             const SizedBox(height: 2),
                             Text(
                               _deadline != null
-                                  ? DateFormat('EEEE, MMMM dd').format(_deadline!)
+                                  ? DateFormatUtils.formatFullDate(_deadline!)
                                   : 'Optional',
                               style: const TextStyle(
                                 fontSize: 14,
@@ -755,7 +744,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               Container(
               decoration: BoxDecoration(
                 color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppStyles.borderRadiusLarge,
                 border: Border.all(
                   color: _reminderTime != null 
                       ? AppColors.lightCoral.withValues(alpha: 0.1)
@@ -764,7 +753,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               ),
               child: InkWell(
                 onTap: _selectReminderTime,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppStyles.borderRadiusLarge,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
@@ -775,7 +764,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                           color: (_reminderTime != null 
                               ? AppColors.lightCoral
                               : AppColors.greyText).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppStyles.borderRadiusMedium,
                         ),
                         child: Icon(
                           Icons.notifications_rounded,
@@ -839,7 +828,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
             Container(
               decoration: BoxDecoration(
                 color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppStyles.borderRadiusLarge,
                 border: Border.all(
                   color: _isImportant 
                       ? AppColors.coral.withValues(alpha: 0.3)
@@ -856,7 +845,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                         color: (_isImportant 
                             ? AppColors.coral
                             : AppColors.greyText).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppStyles.borderRadiusMedium,
                       ),
                       child: Icon(
                         Icons.star_rounded,
@@ -920,14 +909,14 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 labelText: 'Task Title',
                 hintText: 'What do you need to do?',
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppStyles.borderRadiusMedium,
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppStyles.borderRadiusMedium,
                   borderSide: BorderSide(color: AppColors.greyText),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppStyles.borderRadiusMedium,
                   borderSide: BorderSide(color: AppColors.lightCoral, width: 2),
                 ),
                 filled: true,
@@ -944,7 +933,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   border: Border.all(
                     color: _selectedCategoryIds.isNotEmpty 
                         ? AppColors.lightCoral.withValues(alpha: 0.1)
@@ -968,7 +957,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             selectedColor: category.color.withValues(alpha: 0.3),
                             checkmarkColor: category.color,
                             side: BorderSide(color: category.color.withValues(alpha: 0.5)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusMedium),
                             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             visualDensity: VisualDensity.compact,
                             onSelected: (selected) {
@@ -995,7 +984,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
             Container(
               decoration: BoxDecoration(
                 color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppStyles.borderRadiusLarge,
                 border: Border.all(
                   color: _recurrence != null 
                       ? AppColors.lightCoral.withValues(alpha: 0.1)
@@ -1004,7 +993,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               ),
               child: InkWell(
                 onTap: _selectRecurrence,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppStyles.borderRadiusLarge,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
@@ -1015,7 +1004,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                           color: (_recurrence != null 
                               ? AppColors.lightCoral
                               : AppColors.greyText).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppStyles.borderRadiusMedium,
                         ),
                         child: Icon(
                           Icons.repeat_rounded,
@@ -1118,7 +1107,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     final tomorrow = today.add(const Duration(days: 1));
     final yesterday = today.subtract(const Duration(days: 1));
     
-    final timeStr = DateFormat('HH:mm').format(reminderTime);
+    final timeStr = DateFormatUtils.formatTime24(reminderTime);
     
     if (reminderDate.isAtSameMomentAs(today)) {
       return 'Today at $timeStr';
@@ -1128,7 +1117,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
       return 'Yesterday at $timeStr';
     } else {
       // Show date for other days
-      final dateStr = DateFormat('MMM dd').format(reminderTime);
+      final dateStr = DateFormatUtils.formatShort(reminderTime);
       return '$dateStr at $timeStr';
     }
   }

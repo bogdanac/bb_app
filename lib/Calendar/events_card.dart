@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:device_calendar/device_calendar.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'calendar_service.dart';
 
 // CALENDAR EVENTS CARD
@@ -102,10 +103,10 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
 
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           color: AppColors.homeCardBackground, // Home card background
         ),
         child: Stack(
@@ -280,7 +281,7 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: AppColors.successGreen,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppStyles.borderRadiusSmall,
                         ),
                         child: const Text(
                           'NOW',

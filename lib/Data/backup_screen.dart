@@ -2,10 +2,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backup_service.dart';
+import '../shared/date_format_utils.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
+import '../shared/snackbar_utils.dart';
+import '../shared/dialog_utils.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
@@ -81,32 +84,15 @@ class _BackupScreenState extends State<BackupScreen> {
           final fileName = filePath.split(Platform.isWindows ? '\\' : '/').last;
           final directory = filePath.substring(0, filePath.lastIndexOf(Platform.isWindows ? '\\' : '/'));
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ Backup exported!\nLocation: $directory\nFile: $fileName'),
-              backgroundColor: AppColors.successGreen,
-              duration: const Duration(seconds: 5),
-            ),
-          );
+          SnackBarUtils.showSuccess(context, '✅ Backup exported!\nLocation: $directory\nFile: $fileName', duration: const Duration(seconds: 5));
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ Failed to export backup'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          SnackBarUtils.showError(context, '❌ Failed to export backup');
         }
       }
     } catch (e) {
       if (mounted) {
         String userFriendlyMessage = _getUserFriendlyErrorMessage(e.toString());
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(userFriendlyMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
+        SnackBarUtils.showError(context, userFriendlyMessage, duration: const Duration(seconds: 5));
       }
     } finally {
       setState(() {
@@ -129,12 +115,7 @@ class _BackupScreenState extends State<BackupScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Cloud import error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        SnackBarUtils.showError(context, '❌ Cloud import error: $e');
       }
     }
   }
@@ -146,10 +127,13 @@ class _BackupScreenState extends State<BackupScreen> {
 
     try {
       final locations = await BackupService.getBackupLocations();
-      
+
       if (mounted) {
+        // Check if found_files exists and is not null
+        final foundFiles = locations['found_files'] as List? ?? [];
+
         // Show as full screen if there are many files or on small screens
-        if (locations['found_files'].length > 3 || MediaQuery.of(context).size.height < 700) {
+        if (foundFiles.length > 3 || MediaQuery.of(context).size.height < 700) {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) => _BackupFilesFullScreen(
@@ -244,7 +228,7 @@ class _BackupScreenState extends State<BackupScreen> {
                           child: Container(
                             decoration: BoxDecoration(
                               color: AppColors.dialogCardBackground,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: AppStyles.borderRadiusSmall,
                             ),
                             child: Padding(
                               padding: const EdgeInsets.all(12),
@@ -308,30 +292,9 @@ class _BackupScreenState extends State<BackupScreen> {
                                         height: 32,
                                         child: IconButton(
                                           onPressed: () async {
-                                            final confirmed = await showDialog<bool>(
-                                              context: context,
-                                              builder: (ctx) => AlertDialog(
-                                                backgroundColor: AppColors.dialogBackground,
-                                                title: const Text('Delete Backup?', style: TextStyle(color: Colors.white)),
-                                                content: Text(
-                                                  'Are you sure you want to delete this backup file?\n\n${file['name']}',
-                                                  style: const TextStyle(color: AppColors.white70),
-                                                ),
-                                                actions: [
-                                                  TextButton(
-                                                    onPressed: () => Navigator.pop(ctx, false),
-                                                    child: const Text('Cancel', style: TextStyle(color: AppColors.white70)),
-                                                  ),
-                                                  ElevatedButton(
-                                                    onPressed: () => Navigator.pop(ctx, true),
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor: Colors.red,
-                                                      foregroundColor: Colors.white,
-                                                    ),
-                                                    child: const Text('Delete'),
-                                                  ),
-                                                ],
-                                              ),
+                                            final confirmed = await DialogUtils.showDeleteConfirmation(
+                                              context,
+                                              itemName: file['name'],
                                             );
 
                                             if (confirmed == true) {
@@ -343,21 +306,11 @@ class _BackupScreenState extends State<BackupScreen> {
                                                   // Refresh the info
                                                   await _loadBackupInfo();
                                                   if (!context.mounted) return;
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                    const SnackBar(
-                                                      content: Text('✅ Backup file deleted'),
-                                                      backgroundColor: AppColors.successGreen,
-                                                    ),
-                                                  );
+                                                  SnackBarUtils.showSuccess(context, '✅ Backup file deleted');
                                                 }
                                               } catch (e) {
                                                 if (!context.mounted) return;
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text('❌ Failed to delete: $e'),
-                                                    backgroundColor: Colors.red,
-                                                  ),
-                                                );
+                                                SnackBarUtils.showError(context, '❌ Failed to delete: $e');
                                               }
                                             }
                                           },
@@ -390,12 +343,7 @@ class _BackupScreenState extends State<BackupScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Error finding backup files: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        SnackBarUtils.showError(context, '❌ Error finding backup files: $e');
       }
     } finally {
       setState(() {
@@ -414,24 +362,24 @@ class _BackupScreenState extends State<BackupScreen> {
       if (difference < 0) {
         debugPrint('WARNING: Backup date is in the future! Date: $date, Now: $now, Difference: $difference days');
         // If date is in the future, show it as "Today" with time
-        return 'Today ${DateFormat('HH:mm').format(date)} (⚠️ Future timestamp)';
+        return 'Today ${DateFormatUtils.formatTime24(date)} (⚠️ Future timestamp)';
       }
 
       if (difference == 0) {
-        return 'Today ${DateFormat('HH:mm').format(date)}';
+        return 'Today ${DateFormatUtils.formatTime24(date)}';
       } else if (difference == 1) {
-        return 'Yesterday ${DateFormat('HH:mm').format(date)}';
+        return 'Yesterday ${DateFormatUtils.formatTime24(date)}';
       } else if (difference < 7) {
-        return '${DateFormat('MMM dd, HH:mm').format(date)} ($difference days ago)';
+        return '${DateFormatUtils.formatShort(date)}, ${DateFormatUtils.formatTime24(date)} ($difference days ago)';
       } else if (difference < 30) {
         final weeks = (difference / 7).round();
-        return '${DateFormat('MMM dd, yyyy HH:mm').format(date)} ($weeks week${weeks > 1 ? 's' : ''} ago)';
+        return '${DateFormatUtils.formatLong(date)}, ${DateFormatUtils.formatTime24(date)} ($weeks week${weeks > 1 ? 's' : ''} ago)';
       } else if (difference < 365) {
         final months = (difference / 30).round();
-        return '${DateFormat('MMM dd, yyyy HH:mm').format(date)} ($months month${months > 1 ? 's' : ''} ago)';
+        return '${DateFormatUtils.formatLong(date)}, ${DateFormatUtils.formatTime24(date)} ($months month${months > 1 ? 's' : ''} ago)';
       } else {
         final years = (difference / 365).round();
-        return '${DateFormat('MMM dd, yyyy HH:mm').format(date)} ($years year${years > 1 ? 's' : ''} ago)';
+        return '${DateFormatUtils.formatLong(date)}, ${DateFormatUtils.formatTime24(date)} ($years year${years > 1 ? 's' : ''} ago)';
       }
     } catch (e) {
       return 'Unknown date';
@@ -503,43 +451,25 @@ class _BackupScreenState extends State<BackupScreen> {
         if (importResult['success']) {
           final restoredCount = importResult['restored_count'] ?? 0;
           final errors = importResult['errors'] ?? [];
-          
+
           String message = '✅ Backup restored successfully!\n'
               'Restored $restoredCount items';
-          
+
           if (errors.isNotEmpty) {
             message += '\n${errors.length} items had issues';
           }
-          
+
           message += '\nRestart app to see changes.';
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: AppColors.successGreen,
-              duration: const Duration(seconds: 6),
-            ),
-          );
+
+          SnackBarUtils.showSuccess(context, message, duration: const Duration(seconds: 6));
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('❌ Import failed: ${importResult['error']}'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 6),
-            ),
-          );
+          SnackBarUtils.showError(context, '❌ Import failed: ${importResult['error']}', duration: const Duration(seconds: 6));
         }
       }
     } catch (e) {
       if (mounted) {
         String userFriendlyMessage = _getUserFriendlyErrorMessage(e.toString());
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(userFriendlyMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
+        SnackBarUtils.showError(context, userFriendlyMessage, duration: const Duration(seconds: 5));
       }
     } finally {
       setState(() {
@@ -581,24 +511,13 @@ class _BackupScreenState extends State<BackupScreen> {
             setState(() {}); // Force UI refresh
           }
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ Failed to create backup for sharing'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          SnackBarUtils.showError(context, '❌ Failed to create backup for sharing');
         }
       }
     } catch (e) {
       if (mounted) {
         String userFriendlyMessage = _getUserFriendlyErrorMessage(e.toString());
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(userFriendlyMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
+        SnackBarUtils.showError(context, userFriendlyMessage, duration: const Duration(seconds: 5));
       }
     } finally {
       setState(() {
@@ -613,12 +532,7 @@ class _BackupScreenState extends State<BackupScreen> {
       final originalFile = File(filePath);
       if (!await originalFile.exists()) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ Backup file not found for sharing'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          SnackBarUtils.showError(context, '❌ Backup file not found for sharing');
         }
         return;
       }
@@ -632,8 +546,8 @@ class _BackupScreenState extends State<BackupScreen> {
       await originalFile.copy(tempFile.path);
 
       final now = DateTime.now();
-      final dateTime = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
-      final dateTimeShort = DateFormat('yyyy-MM-dd HH:mm').format(now);
+      final dateTime = '${DateFormatUtils.formatLong(now)}, ${DateFormatUtils.formatTime24(now)}';
+      final dateTimeShort = '${DateFormatUtils.formatLong(now)}, ${DateFormatUtils.formatTime24(now)}';
       
       await SharePlus.instance.share(
         ShareParams(
@@ -650,12 +564,7 @@ class _BackupScreenState extends State<BackupScreen> {
       } else {
         debugPrint('WARNING: Original backup file was removed during sharing!');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Warning: Local backup file may have been moved during sharing'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+          SnackBarUtils.showWarning(context, '⚠️ Warning: Local backup file may have been moved during sharing');
         }
       }
 
@@ -672,12 +581,7 @@ class _BackupScreenState extends State<BackupScreen> {
 
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Error sharing backup: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        SnackBarUtils.showError(context, '❌ Error sharing backup: $e');
       }
     }
   }
@@ -1082,7 +986,7 @@ class _BackupFilesFullScreenState extends State<_BackupFilesFullScreen> {
     setState(() {
       isLoading = true;
     });
-    final info = await BackupService.getBackupInfo();
+    final info = await BackupService.getBackupLocations();
     setState(() {
       locations = info;
       isLoading = false;
@@ -1099,24 +1003,24 @@ class _BackupFilesFullScreenState extends State<_BackupFilesFullScreen> {
       if (difference < 0) {
         debugPrint('WARNING: Backup date is in the future! Date: $date, Now: $now, Difference: $difference days');
         // If date is in the future, show it as "Today" with time
-        return 'Today ${DateFormat('HH:mm').format(date)} (⚠️ Future timestamp)';
+        return 'Today ${DateFormatUtils.formatTime24(date)} (⚠️ Future timestamp)';
       }
 
       if (difference == 0) {
-        return 'Today ${DateFormat('HH:mm').format(date)}';
+        return 'Today ${DateFormatUtils.formatTime24(date)}';
       } else if (difference == 1) {
-        return 'Yesterday ${DateFormat('HH:mm').format(date)}';
+        return 'Yesterday ${DateFormatUtils.formatTime24(date)}';
       } else if (difference < 7) {
-        return '${DateFormat('MMM dd, HH:mm').format(date)} ($difference days ago)';
+        return '${DateFormatUtils.formatShort(date)}, ${DateFormatUtils.formatTime24(date)} ($difference days ago)';
       } else if (difference < 30) {
         final weeks = (difference / 7).round();
-        return '${DateFormat('MMM dd, yyyy HH:mm').format(date)} ($weeks week${weeks > 1 ? 's' : ''} ago)';
+        return '${DateFormatUtils.formatLong(date)}, ${DateFormatUtils.formatTime24(date)} ($weeks week${weeks > 1 ? 's' : ''} ago)';
       } else if (difference < 365) {
         final months = (difference / 30).round();
-        return '${DateFormat('MMM dd, yyyy HH:mm').format(date)} ($months month${months > 1 ? 's' : ''} ago)';
+        return '${DateFormatUtils.formatLong(date)}, ${DateFormatUtils.formatTime24(date)} ($months month${months > 1 ? 's' : ''} ago)';
       } else {
         final years = (difference / 365).round();
-        return '${DateFormat('MMM dd, yyyy HH:mm').format(date)} ($years year${years > 1 ? 's' : ''} ago)';
+        return '${DateFormatUtils.formatLong(date)}, ${DateFormatUtils.formatTime24(date)} ($years year${years > 1 ? 's' : ''} ago)';
       }
     } catch (e) {
       return 'Unknown date';
@@ -1147,7 +1051,7 @@ class _BackupFilesFullScreenState extends State<_BackupFilesFullScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (locations!['found_files'].isEmpty) ...[
+            if ((locations!['found_files'] as List? ?? []).isEmpty) ...[
               const Text(
                 'No backup files found.',
                 style: TextStyle(fontSize: 18),
@@ -1188,7 +1092,7 @@ class _BackupFilesFullScreenState extends State<_BackupFilesFullScreen> {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: AppColors.greyText.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppStyles.borderRadiusSmall,
                 ),
                 child: Row(
                   children: [
@@ -1231,7 +1135,7 @@ class _BackupFilesFullScreenState extends State<_BackupFilesFullScreen> {
                       child: Container(
                         decoration: BoxDecoration(
                           color: AppColors.dialogCardBackground,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppStyles.borderRadiusSmall,
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
@@ -1286,30 +1190,9 @@ class _BackupFilesFullScreenState extends State<_BackupFilesFullScreen> {
                                   const SizedBox(width: 8),
                                   IconButton(
                                     onPressed: () async {
-                                      final confirmed = await showDialog<bool>(
-                                        context: context,
-                                        builder: (context) => AlertDialog(
-                                          backgroundColor: AppColors.dialogBackground,
-                                          title: const Text('Delete Backup?', style: TextStyle(color: Colors.white)),
-                                          content: Text(
-                                            'Are you sure you want to delete this backup file?\n\n${file['name']}',
-                                            style: const TextStyle(color: AppColors.white70),
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () => Navigator.pop(context, false),
-                                              child: const Text('Cancel', style: TextStyle(color: AppColors.white70)),
-                                            ),
-                                            ElevatedButton(
-                                              onPressed: () => Navigator.pop(context, true),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.red,
-                                                foregroundColor: Colors.white,
-                                              ),
-                                              child: const Text('Delete'),
-                                            ),
-                                          ],
-                                        ),
+                                      final confirmed = await DialogUtils.showDeleteConfirmation(
+                                        context,
+                                        itemName: file['name'],
                                       );
 
                                       if (confirmed == true) {
@@ -1321,21 +1204,11 @@ class _BackupFilesFullScreenState extends State<_BackupFilesFullScreen> {
                                             // Refresh the list
                                             await _loadBackupFiles();
                                             if (!context.mounted) return;
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                content: Text('✅ Backup file deleted'),
-                                                backgroundColor: AppColors.successGreen,
-                                              ),
-                                            );
+                                            SnackBarUtils.showSuccess(context, '✅ Backup file deleted');
                                           }
                                         } catch (e) {
                                           if (!context.mounted) return;
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('❌ Failed to delete: $e'),
-                                              backgroundColor: Colors.red,
-                                            ),
-                                          );
+                                          SnackBarUtils.showError(context, '❌ Failed to delete: $e');
                                         }
                                       }
                                     },

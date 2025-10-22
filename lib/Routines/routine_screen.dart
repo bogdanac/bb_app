@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
+import '../shared/snackbar_utils.dart';
 class RoutineScreen extends StatefulWidget {
   final VoidCallback onCompleted;
 
@@ -44,7 +46,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
           child: Column(
             children: [
               Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
@@ -108,12 +110,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
                     onPressed: () {
                       widget.onCompleted();
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('🎉 Routine completed! Great job!'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
+                      SnackBarUtils.showSuccess(context, '🎉 Routine completed! Great job!');
                     },
                     icon: const Icon(Icons.check_rounded),
                     label: const Text('Complete Routine'),
@@ -122,7 +119,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppStyles.borderRadiusMedium,
                       ),
                     ),
                   ),

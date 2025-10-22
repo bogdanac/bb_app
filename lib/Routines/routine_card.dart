@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'package:flutter/foundation.dart';
 import 'package:bb_app/Routines/routine_data_models.dart';
 import 'routine_service.dart';
 import 'routine_widget_service.dart';
 import 'routine_progress_service.dart';
 import 'dart:async';
+import '../shared/snackbar_utils.dart';
 
 class RoutineCard extends StatefulWidget {
   final VoidCallback onCompleted;
@@ -230,12 +232,7 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     if (_currentRoutine!.items.every((item) => item.isCompleted)) {
       widget.onCompleted();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎉 Routine completed! Great job!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        SnackBarUtils.showSuccess(context, '🎉 Routine completed! Great job!');
       }
     }
 
@@ -308,11 +305,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     if (_isLoading) {
       return Card(
         elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: AppStyles.borderRadiusLarge,
             color: AppColors.homeCardBackground, // Home card background
           ),
           child: const Center(
@@ -325,11 +322,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     if (_currentRoutine == null) {
       return Card(
         elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: AppStyles.borderRadiusLarge,
             color: AppColors.homeCardBackground, // Home card background
           ),
           child: Column(
@@ -365,11 +362,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
 
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           color: AppColors.homeCardBackground, // Home card background
         ),
         child: Column(
@@ -418,7 +415,7 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppStyles.borderRadiusSmall,
                 ),
                 child: const Row(
                   children: [
@@ -439,7 +436,7 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: AppColors.yellow.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: AppStyles.borderRadiusSmall,
                         border: Border.all(
                           color: AppColors.yellow.withValues(alpha: 0.4),
                         ),
@@ -488,7 +485,7 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppStyles.borderRadiusSmall,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

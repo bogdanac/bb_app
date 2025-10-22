@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'menstrual_cycle_utils.dart';
 import 'menstrual_cycle_constants.dart';
+import '../shared/snackbar_utils.dart';
 
 class CycleCalorieSettingsScreen extends StatefulWidget {
   const CycleCalorieSettingsScreen({super.key});
@@ -70,21 +72,11 @@ class _CycleCalorieSettingsScreenState extends State<CycleCalorieSettingsScreen>
       }
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Calorie settings saved successfully!'),
-            backgroundColor: AppColors.successGreen,
-          ),
-        );
+        SnackBarUtils.showSuccess(context, 'Calorie settings saved successfully!');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving settings: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarUtils.showError(context, 'Error saving settings: $e');
       }
     }
   }
@@ -144,7 +136,7 @@ class _CycleCalorieSettingsScreenState extends State<CycleCalorieSettingsScreen>
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: AppColors.info.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppStyles.borderRadiusMedium,
                       border: Border.all(color: AppColors.info.withValues(alpha: 0.3)),
                     ),
                     child: Column(
@@ -186,11 +178,11 @@ class _CycleCalorieSettingsScreenState extends State<CycleCalorieSettingsScreen>
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusMedium),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppStyles.borderRadiusMedium,
           color: color.withValues(alpha: 0.1),
           border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
@@ -243,11 +235,11 @@ class _CycleCalorieSettingsScreenState extends State<CycleCalorieSettingsScreen>
                     color: AppColors.white60,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppStyles.borderRadiusSmall,
                     borderSide: BorderSide(color: color.withValues(alpha: 0.5)),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppStyles.borderRadiusSmall,
                     borderSide: BorderSide(color: color, width: 2),
                   ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

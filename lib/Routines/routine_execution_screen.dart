@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'routine_data_models.dart';
 import 'routine_progress_service.dart';
+import '../shared/snackbar_utils.dart';
 
 // ROUTINE EXECUTION SCREEN - UPDATED WITH SAVE FUNCTIONALITY
 class RoutineExecutionScreen extends StatefulWidget {
@@ -138,12 +140,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     widget.onCompleted();
     if (mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('🎉 ${widget.routine.title} completed! Great job!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      SnackBarUtils.showSuccess(context, '🎉 ${widget.routine.title} completed! Great job!');
     }
   }
 
@@ -193,12 +190,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
               setState(() {
                 _playMusic = !_playMusic;
               });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(_playMusic ? 'Music enabled' : 'Music disabled'),
-                  duration: const Duration(seconds: 1),
-                ),
-              );
+              SnackBarUtils.showInfo(context, _playMusic ? 'Music enabled' : 'Music disabled');
             },
           ),
           // Save progress button
@@ -225,7 +217,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
           child: Column(
             children: [
               Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
@@ -354,7 +346,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: AppStyles.borderRadiusMedium,
                           ),
                         ),
                       ),
@@ -371,7 +363,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: AppStyles.borderRadiusMedium,
                           ),
                         ),
                       ),

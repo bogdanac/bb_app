@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'notification_listener_service.dart';
 import '../theme/app_colors.dart';
+import '../shared/snackbar_utils.dart';
 
 class MotionAlertQuickSetup extends StatefulWidget {
   const MotionAlertQuickSetup({super.key});
@@ -83,12 +84,11 @@ class _MotionAlertQuickSetupState extends State<MotionAlertQuickSetup> {
       await prefs.setString('notification_alarm_settings', json.encode(settings));
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_isEnabled ? 'Motion alerts activated! 🔔' : 'Motion alerts disabled'),
-            backgroundColor: _isEnabled ? AppColors.yellow : AppColors.orange,
-          ),
-        );
+        if (_isEnabled) {
+          SnackBarUtils.showSuccess(context, 'Motion alerts activated! 🔔');
+        } else {
+          SnackBarUtils.showWarning(context, 'Motion alerts disabled');
+        }
       }
     } catch (e) {
       debugPrint('Error saving settings: $e');

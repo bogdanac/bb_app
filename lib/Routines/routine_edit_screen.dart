@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'routine_data_models.dart';
 import '../theme/app_colors.dart';
+import '../shared/snackbar_utils.dart';
 
 // ROUTINE EDIT SCREEN
 class RoutineEditScreen extends StatefulWidget {
@@ -50,16 +51,12 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
 
   void _saveRoutine() {
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a routine title')),
-      );
+      SnackBarUtils.showError(context, 'Please enter a routine title');
       return;
     }
 
     if (_items.isEmpty || _items.any((item) => item.text.trim().isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one step and fill in all text fields')),
-      );
+      SnackBarUtils.showError(context, 'Please add at least one step and fill in all text fields');
       return;
     }
 

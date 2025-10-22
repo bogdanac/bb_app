@@ -1038,92 +1038,67 @@ class NotificationService {
   // Schedule daily food tracking reminder at 8 PM
   Future<void> scheduleFoodTrackingReminder() async {
     try {
-      // Cancel any existing food tracking reminder
+      if (kDebugMode) {
+        print('🍽️ Scheduling food tracking reminder...');
+      }
+
+      // Cancel any existing food tracking reminders
       await flutterLocalNotificationsPlugin.cancel(7777);
-      
+      await flutterLocalNotificationsPlugin.cancel(7776); // Cancel old second notification if it exists
+
       // Schedule for 8 PM today (or tomorrow if it's already past 8 PM)
       final now = DateTime.now();
-      final reminderTime = DateTime(now.year, now.month, now.day, 20, 0); // 8:00 PM
-      final scheduledTime = reminderTime.isBefore(now) 
-          ? reminderTime.add(const Duration(days: 1))
-          : reminderTime;
-      
+      var reminderTime = DateTime(now.year, now.month, now.day, 20, 0); // 8:00 PM
+
+      // If the time has passed today, schedule for tomorrow
+      if (reminderTime.isBefore(now)) {
+        reminderTime = reminderTime.add(const Duration(days: 1));
+      }
+
       const androidDetails = AndroidNotificationDetails(
         'food_tracking',
         'Food Tracking Reminders',
         channelDescription: 'Daily reminders to track your food intake',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
+        importance: Importance.high,
+        priority: Priority.high,
         showWhen: true,
         playSound: true,
         enableVibration: true,
-        icon: '@drawable/ic_restaurant',
+        icon: '@mipmap/ic_launcher',
+        color: Color(0xFF4CAF50), // Green
       );
-      
-      const notificationDetails = NotificationDetails(android: androidDetails);
-      
-      // Convert to timezone-aware datetime
-      
+
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      const notificationDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      // Schedule repeating daily notification at 8 PM
       await flutterLocalNotificationsPlugin.zonedSchedule(
         7777, // Unique ID for food tracking reminders
-        '🍽️ Food Tracking Time',
-        'Don\'t forget to log what you ate today! Tap to track your meals.',
-        TimezoneUtils.forNotification(scheduledTime),
-        notificationDetails,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        payload: 'food_tracking_reminder',
-      );
-      
-      
-      // Schedule the next day's reminder
-      await _scheduleNextFoodTrackingReminder();
-      
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR scheduling food tracking reminder: $e');
-      }
-    }
-  }
-
-  // Schedule the next food tracking reminder (for tomorrow)
-  Future<void> _scheduleNextFoodTrackingReminder() async {
-    try {
-      // Schedule for tomorrow at 8 PM
-      final tomorrow = DateTime.now().add(const Duration(days: 1));
-      final reminderTime = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 20, 0);
-      
-      const androidDetails = AndroidNotificationDetails(
-        'food_tracking',
-        'Food Tracking Reminders',
-        channelDescription: 'Daily reminders to track your food intake',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
-        showWhen: true,
-        playSound: true,
-        enableVibration: true,
-        icon: '@drawable/ic_restaurant',
-      );
-      
-      const notificationDetails = NotificationDetails(android: androidDetails);
-      
-      // Convert to timezone-aware datetime
-
-      await flutterLocalNotificationsPlugin.zonedSchedule(
-        7776, // Different ID for next day's reminder
         '🍽️ Food Tracking Time',
         'Don\'t forget to log what you ate today! Tap to track your meals.',
         TimezoneUtils.forNotification(reminderTime),
         notificationDetails,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time, // CRITICAL: Repeat daily at same time
         payload: 'food_tracking_reminder',
       );
-      
-      
+
+      if (kDebugMode) {
+        print('✅ Food tracking reminder scheduled for 8:00 PM daily (next occurrence: $reminderTime)');
+      }
+
     } catch (e) {
       if (kDebugMode) {
-        print('ERROR scheduling next food tracking reminder: $e');
+        print('❌ ERROR scheduling food tracking reminder: $e');
       }
     }
   }

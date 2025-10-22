@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'friend_data_models.dart';
 import 'friend_service.dart';
+import '../shared/snackbar_utils.dart';
 
 class FriendsTabScreen extends StatefulWidget {
   const FriendsTabScreen({super.key});
@@ -321,13 +323,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
     FriendService.updateFriend(updatedFriend, _friends).then((_) {
       _loadFriends();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${friend.name} archived'),
-            backgroundColor: AppColors.purple,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        SnackBarUtils.showCustom(context, '${friend.name} archived', backgroundColor: AppColors.purple, duration: const Duration(seconds: 2));
       }
     });
   }
@@ -337,13 +333,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
     FriendService.updateFriend(updatedFriend, _friends).then((_) {
       _loadFriends();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${friend.name} restored to active friends'),
-            backgroundColor: AppColors.successGreen,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        SnackBarUtils.showSuccess(context, '${friend.name} restored to active friends', duration: const Duration(seconds: 2));
       }
     });
   }
@@ -352,12 +342,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
     FriendService.updateFriendBattery(friend.id, 1.0, _friends).then((_) {
       _loadFriends();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${friend.name}\'s friendship battery recharged to 100%!'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        SnackBarUtils.showSuccess(context, '${friend.name}\'s friendship battery recharged to 100%!', duration: const Duration(seconds: 2));
       }
     });
   }
@@ -515,7 +500,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                         color: swipeOffset < 0
                             ? Colors.red
                             : (_showArchived ? AppColors.successGreen : AppColors.purple),
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: AppStyles.borderRadiusLarge,
                       ),
                       alignment: swipeOffset < 0 ? Alignment.centerRight : Alignment.centerLeft,
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -563,7 +548,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                     margin: EdgeInsets.zero,
                     elevation: 2,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: AppStyles.borderRadiusLarge,
                     ),
                     child: InkWell(
                       onTap: () {
@@ -573,7 +558,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                         });
                         _editFriend(friend);
                       },
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: AppStyles.borderRadiusLarge,
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -639,7 +624,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                     alignment: Alignment.center,
                     children: [
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: AppStyles.borderRadiusSmall,
                         child: LinearProgressIndicator(
                           value: batteryLevel,
                           minHeight: 24,
@@ -710,13 +695,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
           FriendService.deleteFriend(friend.id, _friends).then((_) {
             _loadFriends();
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('${friend.name} deleted'),
-                  backgroundColor: Colors.red,
-                  duration: const Duration(seconds: 2),
-                ),
-              );
+              SnackBarUtils.showError(context, '${friend.name} deleted', duration: const Duration(seconds: 2));
             }
           });
         } else {

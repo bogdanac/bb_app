@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 
 class TimePickerUtils {
   /// Shows a styled time picker with consistent theming across the app
@@ -62,7 +63,7 @@ class TimePickerUtils {
                   ),
                   side: const BorderSide(color: Colors.white, width: 1),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppStyles.borderRadiusSmall,
                   ),
                 ),
                 confirmButtonStyle: TextButton.styleFrom(
@@ -74,7 +75,7 @@ class TimePickerUtils {
                     fontWeight: FontWeight.w700,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppStyles.borderRadiusSmall,
                   ),
                 ),
               ),
@@ -141,7 +142,7 @@ class TimePickerUtils {
                 ),
                 side: const BorderSide(color: Colors.white, width: 1),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppStyles.borderRadiusSmall,
                 ),
               ),
               confirmButtonStyle: TextButton.styleFrom(
@@ -153,7 +154,7 @@ class TimePickerUtils {
                   fontWeight: FontWeight.w700,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppStyles.borderRadiusSmall,
                 ),
               ),
             ),

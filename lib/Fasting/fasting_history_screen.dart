@@ -2,10 +2,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 import 'fast_edit_dialog.dart';
 import 'fasting_notifier.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
+import '../shared/date_format_utils.dart';
 
 class FastingHistoryScreen extends StatefulWidget {
   final List<Map<String, dynamic>> history;
@@ -81,7 +82,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
         return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
             title: const Text('Delete Fast'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -135,7 +136,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
           color: AppColors.deleteRed,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppStyles.borderRadiusMedium,
         ),
         child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -149,12 +150,12 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
         elevation: 3,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusMedium),
         child: GestureDetector(
           onTap: () => _editFast(index),
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppStyles.borderRadiusMedium,
               gradient: LinearGradient(
                 colors: isCompleted
                     ? [AppColors.successGreen.withValues(alpha: 0.1), AppColors.successGreen.withValues(alpha: 0.05)]
@@ -176,7 +177,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: isCompleted ? AppColors.lightGreen : AppColors.orange,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppStyles.borderRadiusMedium,
                       ),
                       child: Text(
                         '$completionPercentage%',
@@ -200,7 +201,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          'Started: ${DateFormat('MMM dd, yyyy HH:mm').format(startTime)}',
+                          'Started: ${DateFormatUtils.formatLong(startTime)}, ${DateFormatUtils.formatTime24(startTime)}',
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
@@ -213,7 +214,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          'Ended: ${DateFormat('MMM dd, yyyy HH:mm').format(endTime)}',
+                          'Ended: ${DateFormatUtils.formatLong(endTime)}, ${DateFormatUtils.formatTime24(endTime)}',
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
@@ -274,7 +275,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
                 backgroundColor: AppColors.pastelGreen,
                 foregroundColor: AppColors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusMedium),
               ),
             ),
           ],
@@ -290,7 +291,7 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
               gradient: LinearGradient(
                 colors: [AppColors.waterBlue.withValues(alpha: 0.2), AppColors.waterBlue.withValues(alpha: 0.1)],
               ),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppStyles.borderRadiusMedium,
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 
 class ConfettiParticle {
   double x;
@@ -175,7 +176,7 @@ class _TaskCompletionAnimationState extends State<TaskCompletionAnimation>
               child: Container(
                 decoration: BoxDecoration(
                   color: _colorAnimation.value,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppStyles.borderRadiusMedium,
                   boxShadow: [
                     BoxShadow(
                       color: AppColors.successGreen.withValues(alpha: 0.4),

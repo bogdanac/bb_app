@@ -3,6 +3,7 @@ import 'Notifications/motion_alert_quick_setup.dart';
 import 'Data/backup_screen.dart';
 import 'Routines/widget_color_settings_screen.dart';
 import 'theme/app_colors.dart';
+import 'theme/app_styles.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'FoodTracking/food_tracking_service.dart';
 
@@ -261,7 +262,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   border: Border.all(
                     color: AppColors.normalCardBackground,
                   ),
@@ -275,7 +276,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                       ),
                     );
                   },
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Row(
@@ -284,7 +285,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: AppColors.lightGreen.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: AppStyles.borderRadiusSmall,
                           ),
                           child: Icon(
                             Icons.palette_rounded,
@@ -331,7 +332,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   border: Border.all(
                     color: AppColors.normalCardBackground,
                   ),
@@ -353,7 +354,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 color: AppColors.waterBlue.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: AppStyles.borderRadiusSmall,
                               ),
                               child: Icon(
                                 Icons.water_drop_rounded,
@@ -416,7 +417,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 color: AppColors.waterBlue.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: AppStyles.borderRadiusSmall,
                               ),
                               child: Icon(
                                 Icons.flag_rounded,
@@ -465,14 +466,14 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   border: Border.all(
                     color: AppColors.normalCardBackground,
                   ),
                 ),
                 child: InkWell(
                   onTap: _showFoodResetFrequencyDialog,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Row(
@@ -481,7 +482,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: AppColors.pastelGreen.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: AppStyles.borderRadiusSmall,
                           ),
                           child: Icon(
                             Icons.restaurant_rounded,
@@ -528,7 +529,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   border: Border.all(
                     color: AppColors.normalCardBackground,
                   ),
@@ -542,7 +543,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                       ),
                     );
                   },
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Row(
@@ -551,7 +552,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: AppColors.successGreen.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: AppStyles.borderRadiusSmall,
                           ),
                           child: Icon(
                             Icons.backup_rounded,
@@ -598,7 +599,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   border: Border.all(
                     color: AppColors.normalCardBackground,
                   ),
@@ -612,7 +613,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                       ),
                     );
                   },
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppStyles.borderRadiusLarge,
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Row(
@@ -621,7 +622,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: AppColors.yellow.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: AppStyles.borderRadiusSmall,
                           ),
                           child: Icon(
                             Icons.security_rounded,

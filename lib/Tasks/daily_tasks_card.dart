@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import '../Tasks/task_service.dart';
 import '../Tasks/todo_screen.dart';
 import '../Tasks/task_edit_screen.dart';
@@ -37,12 +38,12 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
     return Card(
       margin: const EdgeInsets.all(4),
       elevation: 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       child: Stack(
         children: [
           Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppStyles.borderRadiusLarge,
               color: AppColors.homeCardBackground,
             ),
             child: Padding(

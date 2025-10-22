@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import '../shared/date_picker_utils.dart';
 import 'cycle_calculation_utils.dart';
+import '../shared/date_format_utils.dart';
+import '../shared/dialog_utils.dart';
 
 class PeriodHistoryScreen extends StatefulWidget {
   const PeriodHistoryScreen({super.key});
@@ -60,6 +62,9 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
 
     // Recalculate average cycle length after saving
     _recalculateAverageCycleLength();
+
+    // Reschedule cycle notifications with updated data
+    await CycleCalculationUtils.rescheduleCycleNotifications();
   }
 
   void _recalculateAverageCycleLength() async {
@@ -112,7 +117,7 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: AppColors.dialogBackground,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
           title: Row(
             children: [
               Icon(Icons.edit_rounded, color: AppColors.pink, size: 24),
@@ -133,7 +138,7 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
                   leading: Icon(Icons.play_arrow_rounded, color: AppColors.pink),
                   title: const Text('Start Date', style: TextStyle(color: Colors.white)),
                   subtitle: Text(
-                    DateFormat('MMM dd, yyyy').format(selectedStart!),
+                    DateFormatUtils.formatLong(selectedStart!),
                     style: const TextStyle(color: AppColors.white70),
                   ),
                   trailing: const Icon(Icons.calendar_today, color: AppColors.pink),
@@ -159,7 +164,7 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
                   leading: Icon(Icons.stop_rounded, color: AppColors.lightPink),
                   title: const Text('End Date', style: TextStyle(color: Colors.white)),
                   subtitle: Text(
-                    DateFormat('MMM dd, yyyy').format(selectedEnd!),
+                    DateFormatUtils.formatLong(selectedEnd!),
                     style: const TextStyle(color: AppColors.white70),
                   ),
                   trailing: const Icon(Icons.calendar_today, color: AppColors.lightPink),
@@ -184,7 +189,7 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppColors.pink.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppStyles.borderRadiusSmall,
                 ),
                 child: Row(
                   children: [
@@ -217,7 +222,7 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.pink,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusSmall),
               ),
             ),
           ],
@@ -249,66 +254,11 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
       direction: DismissDirection.endToStart,
       dismissThresholds: const {DismissDirection.endToStart: 0.8},
       confirmDismiss: (direction) async {
-        return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            backgroundColor: AppColors.dialogBackground,
-            title: Row(
-              children: [
-                Icon(Icons.warning_rounded, size: 48, color: AppColors.orange),
-                const SizedBox(width: 16),
-                const Expanded(
-                  child: Text(
-                    'Delete Period Record',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Are you sure you want to delete this period record?',
-                  style: TextStyle(color: AppColors.white70),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${DateFormat('MMM dd, yyyy').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}',
-                  style: TextStyle(
-                    color: AppColors.pink,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'This action cannot be undone.',
-                  style: TextStyle(
-                    color: AppColors.greyText,
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel', style: TextStyle(color: AppColors.greyText)),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.deleteRed,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
+        return await DialogUtils.showDeleteConfirmation(
+          context,
+          title: 'Șterge înregistrare perioadă',
+          itemName: '${DateFormatUtils.formatLong(startDate)} - ${DateFormatUtils.formatLong(endDate)}',
+          customMessage: 'Sigur vrei să ștergi această înregistrare? Această acțiune nu poate fi anulată.',
         ) ?? false;
       },
       onDismissed: (direction) {
@@ -322,7 +272,7 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
           color: AppColors.deleteRed,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppStyles.borderRadiusMedium,
         ),
         child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -336,12 +286,12 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
         elevation: 3,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusMedium),
         child: GestureDetector(
           onTap: () => _editPeriod(index),
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppStyles.borderRadiusMedium,
               gradient: LinearGradient(
                 colors: isRecent
                     ? [AppColors.pink.withValues(alpha: 0.1), AppColors.lightPink.withValues(alpha: 0.05)]
@@ -359,7 +309,7 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}',
+                          '${DateFormatUtils.formatShort(startDate)} - ${DateFormatUtils.formatLong(endDate)}',
                           style: const TextStyle(
                             fontWeight: FontWeight.w500,
                             fontSize: 15,
@@ -413,7 +363,7 @@ class _PeriodHistoryScreenState extends State<PeriodHistoryScreen> {
         gradient: LinearGradient(
           colors: [AppColors.pink.withValues(alpha: 0.2), AppColors.lightPink.withValues(alpha: 0.1)],
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppStyles.borderRadiusMedium,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,

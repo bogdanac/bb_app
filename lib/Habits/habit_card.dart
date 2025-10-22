@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'habit_data_models.dart';
 import 'habit_service.dart';
+import '../shared/snackbar_utils.dart';
 
 class HabitCard extends StatefulWidget {
   final VoidCallback onAllCompleted;
@@ -83,7 +85,7 @@ class _HabitCardState extends State<HabitCard> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.successGreen.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: AppStyles.borderRadiusSmall,
                 border: Border.all(color: AppColors.successGreen.withValues(alpha: 0.3)),
               ),
               child: Row(
@@ -125,13 +127,7 @@ class _HabitCardState extends State<HabitCard> {
 
               // Show confirmation
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('New 21-day cycle started for "${habit.name}"!'),
-                    backgroundColor: AppColors.successGreen,
-                    duration: const Duration(seconds: 3),
-                  ),
-                );
+                SnackBarUtils.showSuccess(context, 'New 21-day cycle started for "${habit.name}"!');
               }
             },
             style: ElevatedButton.styleFrom(
@@ -150,11 +146,11 @@ class _HabitCardState extends State<HabitCard> {
     if (_isLoading) {
       return Card(
         elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: AppStyles.borderRadiusLarge,
             color: AppColors.dialogCardBackground,
           ),
           child: const Center(
@@ -172,11 +168,11 @@ class _HabitCardState extends State<HabitCard> {
 
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           color: AppColors.homeCardBackground, // Home card background
         ),
         child: Column(
@@ -189,12 +185,12 @@ class _HabitCardState extends State<HabitCard> {
               padding: const EdgeInsets.only(bottom: 10),
               child: InkWell(
                   onTap: () => _toggleHabit(habit),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppStyles.borderRadiusSmall,
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: AppColors.homeCardBackground,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppStyles.borderRadiusSmall,
                       border: Border.all(
                         color: AppColors.orange.withValues(alpha: 0.3),
                       ),
@@ -218,7 +214,7 @@ class _HabitCardState extends State<HabitCard> {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: AppColors.orange.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: AppStyles.borderRadiusMedium,
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -254,7 +250,7 @@ class _HabitCardState extends State<HabitCard> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppColors.successGreen.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppStyles.borderRadiusSmall,
                 ),
                 child: const Row(
                   children: [

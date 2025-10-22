@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'routine_data_models.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import '../Notifications/centralized_notification_manager.dart';
 
 class RoutineReminderSettingsScreen extends StatefulWidget {
@@ -79,7 +80,7 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
                   margin: const EdgeInsets.only(bottom: 16),
                   elevation: 2,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppStyles.borderRadiusMedium,
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -134,7 +135,7 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
                               const Spacer(),
                               InkWell(
                                 onTap: () => _selectTime(routine),
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: AppStyles.borderRadiusSmall,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 16,
@@ -142,7 +143,7 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
                                   ),
                                   decoration: BoxDecoration(
                                     color: AppColors.orange.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: AppStyles.borderRadiusSmall,
                                     border: Border.all(
                                       color: AppColors.orange.withValues(alpha: 0.3),
                                     ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_styles.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -128,11 +129,11 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
 
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.borderRadiusLarge,
           color: AppColors.homeCardBackground, // Home card background
         ),
         child: Column(
@@ -157,7 +158,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                         height: 32,
                         width: double.infinity, // Forțează width complet
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: AppStyles.borderRadiusXLarge,
                           color: AppColors.error.withValues(alpha: 0.3),
                         ),
                         child: AnimatedBuilder(
@@ -171,7 +172,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                                 child: Container(
                                   height: 32, // Menține înălțimea
                                   decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16), // Ajustat pentru înălțimea de 32
+                                    borderRadius: AppStyles.borderRadiusLarge, // Ajustat pentru înălțimea de 32
                                     gradient: LinearGradient(
                                       colors: _progressAnimation.value > 0.9
                                           ? [AppColors.successGreen, AppColors.lightGreen] // Keep green for success
@@ -234,7 +235,7 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                       backgroundColor: AppColors.waterBlue,
                       foregroundColor: AppColors.white,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppStyles.borderRadiusMedium,
                       ),
                       minimumSize: const Size(48, 24), // Larger button
                       padding: const EdgeInsets.all(4), // More padding
