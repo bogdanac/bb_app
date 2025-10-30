@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import '../shared/date_picker_utils.dart';
 import '../shared/snackbar_utils.dart';
+import 'task_service.dart';
 
 class TaskEditScreen extends StatefulWidget {
   final Task? task;
@@ -212,70 +213,47 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   void _skipTask() async {
     if (_titleController.text.trim().isEmpty) return;
 
-    DateTime? nextScheduledDate;
-
-    // Calculate next scheduled date based on recurrence
-    if (_recurrence != null) {
-      final now = DateTime.now();
-
-      // For menstrual cycle tasks, put on hold until appropriate phase
-      if (_recurrence!.types.any((type) => [
-        RecurrenceType.menstrualPhase,
-        RecurrenceType.follicularPhase,
-        RecurrenceType.ovulationPhase,
-        RecurrenceType.earlyLutealPhase,
-        RecurrenceType.lateLutealPhase
-      ].contains(type))) {
-        // For menstrual cycle tasks, don't set a specific date - they'll appear when appropriate phase comes
-        nextScheduledDate = null;
-      } else {
-        // For regular recurring tasks, calculate next occurrence
-        if (_recurrence!.types.contains(RecurrenceType.daily)) {
-          nextScheduledDate = DateTime(now.year, now.month, now.day + 1);
-        } else if (_recurrence!.types.contains(RecurrenceType.weekly)) {
-          nextScheduledDate = DateTime(now.year, now.month, now.day + 7);
-        } else if (_recurrence!.types.contains(RecurrenceType.monthly)) {
-          nextScheduledDate = DateTime(now.year, now.month + 1, now.day);
-        } else if (_recurrence!.types.contains(RecurrenceType.yearly)) {
-          nextScheduledDate = DateTime(now.year + 1, now.month, now.day);
-        } else {
-          // For custom recurrence, skip by 1 day as default
-          nextScheduledDate = DateTime(now.year, now.month, now.day + 1);
-        }
-      }
-    } else {
-      // Non-recurring task - skip by 1 day
-      final now = DateTime.now();
-      nextScheduledDate = DateTime(now.year, now.month, now.day + 1);
-    }
-
+    // First save the task with current state
     final task = Task(
       id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
       description: '',
       categoryIds: _selectedCategoryIds,
       deadline: _deadline,
-      scheduledDate: nextScheduledDate,
+      scheduledDate: _scheduledDate,
       reminderTime: _reminderTime,
       isImportant: _isImportant,
-      isPostponed: nextScheduledDate != null, // Mark as postponed if we calculated a new date
+      isPostponed: _currentTask?.isPostponed ?? false,
       recurrence: _recurrence,
       isCompleted: false,
       completedAt: null,
       createdAt: _currentTask?.createdAt ?? DateTime.now(),
     );
 
-    // Show feedback
-    if (mounted) {
-      final skipMessage = nextScheduledDate != null
-          ? '⏭️ Task "${task.title}" skipped until ${DateFormatUtils.formatShort(nextScheduledDate)}'
-          : '⏭️ Task "${task.title}" skipped until next appropriate phase';
-
-      SnackBarUtils.showCustom(context, skipMessage, backgroundColor: AppColors.lightCoral, duration: const Duration(seconds: 2));
-    }
-
-    // Save the task
+    // Save the task first
     widget.onSave(task);
+
+    // Use the TaskService to skip to next occurrence
+    try {
+      await TaskService().skipToNextOccurrence(task);
+
+      // Show feedback
+      if (mounted) {
+        SnackBarUtils.showCustom(
+          context,
+          '⏭️ Task "${task.title}" skipped to next occurrence',
+          backgroundColor: AppColors.lightCoral,
+          duration: const Duration(seconds: 2),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        SnackBarUtils.showError(
+          context,
+          'Failed to skip task: $e',
+        );
+      }
+    }
 
     // Small delay to ensure the snackbar shows and save completes
     await Future.delayed(const Duration(milliseconds: 500));

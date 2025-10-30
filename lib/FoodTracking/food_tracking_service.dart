@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'food_tracking_data_models.dart';
+import '../Services/firebase_backup_service.dart';
 
 enum FoodTrackingResetFrequency { weekly, monthly }
 
@@ -32,6 +33,17 @@ class FoodTrackingService {
 
   static Future<void> addEntry(FoodEntry entry) async {
     final entries = await getAllEntries();
+
+    // Generate a new ID if the entry doesn't have one
+    if (entry.id.isEmpty) {
+      entry = FoodEntry(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        type: entry.type,
+        timestamp: entry.timestamp,
+        note: entry.note,
+      );
+    }
+
     entries.insert(0, entry);
     await _saveEntries(entries);
   }
@@ -46,6 +58,9 @@ class FoodTrackingService {
     final prefs = await SharedPreferences.getInstance();
     final entriesJson = entries.map((entry) => entry.toJsonString()).toList();
     await prefs.setStringList(_entriesKey, entriesJson);
+
+    // Backup to Firebase
+    FirebaseBackupService.triggerBackup();
   }
 
   static Future<List<FoodEntry>> getEntriesForWeek(DateTime weekStart) async {

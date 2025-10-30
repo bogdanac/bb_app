@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'routine_data_models.dart';
 import 'routine_widget_service.dart';
 import '../shared/timezone_utils.dart';
+import '../Services/firebase_backup_service.dart';
 
 class RoutineProgressService {
   static const String _progressPrefix = 'routine_progress_';
@@ -97,7 +98,10 @@ class RoutineProgressService {
     // Legacy: Also save as morning_routine_progress for backwards compatibility
     await prefs.setString('morning_routine_progress_$today', jsonEncode(progressData));
     await prefs.setString('morning_routine_last_date', today);
-    
+
+    // Backup to Firebase
+    FirebaseBackupService.triggerBackup();
+
     // Update widget
     await RoutineWidgetService.updateWidget();
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'Fasting/fasting_screen.dart';
 import 'MenstrualCycle/cycle_tracking_screen.dart';
 import 'Routines/routines_habits_screen.dart';
@@ -9,6 +10,7 @@ import 'home.dart';
 import 'Notifications/centralized_notification_manager.dart';
 import 'Notifications/notification_listener_service.dart';
 import 'Data/backup_service.dart';
+import 'Services/firebase_backup_service.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_styles.dart';
 import 'dart:io';
@@ -19,6 +21,27 @@ import 'package:flutter/foundation.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
+  try {
+    await Firebase.initializeApp();
+    if (kDebugMode) {
+      print('🔥 Firebase initialized successfully');
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      print('⚠️ Firebase initialization failed (app will continue without cloud backup): $e');
+    }
+  }
+
+  // Initialize Firebase Backup Service
+  try {
+    await FirebaseBackupService().initialize();
+  } catch (e) {
+    if (kDebugMode) {
+      print('⚠️ Firebase Backup Service initialization failed: $e');
+    }
+  }
 
   // Reset notification service on hot reload in debug mode
   if (kDebugMode) {
@@ -144,16 +167,18 @@ class _LauncherScreenState extends State<LauncherScreen>
 
   void _startAnimationSequence() async {
     try {
-      // Check for widget intent early to skip launcher for widget triggers
+      // Check for widget intents early to skip launcher for widget triggers
       bool hasWidgetIntent = false;
+      bool hasTaskListIntent = false;
       try {
         hasWidgetIntent = await TaskWidgetService.checkForWidgetIntent();
+        hasTaskListIntent = await TaskWidgetService.checkForTaskListIntent();
       } catch (e) {
         if (kDebugMode) print("ERROR checking widget intent: $e");
       }
-      
-      // If widget intent detected, skip launcher and go directly to main screen with task dialog
-      if (hasWidgetIntent && mounted) {
+
+      // If any widget intent detected, skip launcher and go directly to main screen
+      if ((hasWidgetIntent || hasTaskListIntent) && mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const MainScreen()),
         );
@@ -459,12 +484,19 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
   void _checkForWidgetIntent() async {
     // Small delay to ensure the widget is ready
     await Future.delayed(const Duration(milliseconds: 100));
-    
+
     if (mounted) {
       try {
         final hasWidgetIntent = await TaskWidgetService.checkForWidgetIntent();
-        if (hasWidgetIntent && mounted) {
-          // Navigate to tasks screen first, then show dialog
+        final hasTaskListIntent = await TaskWidgetService.checkForTaskListIntent();
+
+        if (hasTaskListIntent && mounted) {
+          // Task List Widget clicked - just navigate to tasks screen, no dialog
+          setState(() {
+            _selectedIndex = 3; // Tasks screen
+          });
+        } else if (hasWidgetIntent && mounted) {
+          // Add Task Widget clicked - navigate to tasks screen and show dialog
           setState(() {
             _selectedIndex = 3; // Tasks screen
           });

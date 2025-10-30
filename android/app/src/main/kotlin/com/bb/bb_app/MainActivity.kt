@@ -125,6 +125,14 @@ class MainActivity: FlutterActivity() {
                     }
                     result.success(hasWidgetIntent)
                 }
+                "checkTaskListIntent" -> {
+                    val hasTaskListIntent = intent?.getBooleanExtra("open_task_list", false) ?: false
+                    // Clear the flag after checking to prevent multiple triggers
+                    if (hasTaskListIntent) {
+                        intent?.removeExtra("open_task_list")
+                    }
+                    result.success(hasTaskListIntent)
+                }
                 else -> {
                     result.notImplemented()
                 }

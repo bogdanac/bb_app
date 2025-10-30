@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'friend_data_models.dart';
+import '../Services/firebase_backup_service.dart';
 
 class FriendService {
   static const String _friendsKey = 'circle_of_friends';
@@ -34,6 +35,9 @@ class FriendService {
         .map((friend) => jsonEncode(friend.toJson()))
         .toList();
     await prefs.setStringList(_friendsKey, friendsJson);
+
+    // Backup to Firebase
+    FirebaseBackupService.triggerBackup();
   }
 
   /// Add a new friend

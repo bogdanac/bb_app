@@ -64,19 +64,19 @@ class TaskListWidgetProvider : AppWidgetProvider() {
     }
 
     private fun openApp(context: Context) {
-        // Launch the main app
+        // Launch the main app and navigate to task list (without showing add dialog)
         val packageManager = context.packageManager
         val launchIntent = packageManager.getLaunchIntentForPackage(context.packageName)
 
         if (launchIntent != null) {
             launchIntent.apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                putExtra("widget_trigger", true)
+                putExtra("open_task_list", true)  // Changed from "widget_trigger" to "open_task_list"
             }
 
             try {
                 context.startActivity(launchIntent)
-                android.util.Log.d("TaskListWidget", "Launched app")
+                android.util.Log.d("TaskListWidget", "Launched app with open_task_list intent")
             } catch (e: Exception) {
                 android.util.Log.e("TaskListWidget", "Failed to launch app: $e")
             }
@@ -111,6 +111,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             // Set up refresh button
             val refreshIntent = Intent(context, TaskListWidgetProvider::class.java).apply {
                 action = ACTION_REFRESH
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
             }
             val refreshPendingIntent = PendingIntent.getBroadcast(
                 context,

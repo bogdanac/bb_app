@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'fasting_utils.dart';
+import '../Services/firebase_backup_service.dart';
 
 class ScheduledFastingsService {
   static const String _scheduledFastingsKey = 'scheduled_fastings';
@@ -24,6 +25,9 @@ class ScheduledFastingsService {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = jsonEncode(fastings.map((f) => f.toJson()).toList());
     await prefs.setString(_scheduledFastingsKey, jsonString);
+
+    // Backup to Firebase
+    FirebaseBackupService.triggerBackup();
   }
 
   /// Generate default schedule based on preferred day and 25th with overlap prevention

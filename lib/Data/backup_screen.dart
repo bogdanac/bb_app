@@ -9,6 +9,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import '../shared/snackbar_utils.dart';
 import '../shared/dialog_utils.dart';
+import '../Services/firebase_backup_service.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
@@ -116,6 +117,69 @@ class _BackupScreenState extends State<BackupScreen> {
     } catch (e) {
       if (mounted) {
         SnackBarUtils.showError(context, '❌ Cloud import error: $e');
+      }
+    }
+  }
+
+  Future<void> _restoreFromFirebase() async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('🔥 Restore from Firebase?'),
+        content: const Text(
+          'This will restore all your data from Firebase backup.\n\n'
+          'Current data will be replaced. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final hasBackup = await FirebaseBackupService().hasBackup();
+
+      if (!hasBackup) {
+        if (mounted) {
+          SnackBarUtils.showError(context, '❌ No Firebase backup found');
+        }
+        return;
+      }
+
+      final restored = await FirebaseBackupService().restoreAllData();
+
+      if (mounted) {
+        if (restored) {
+          SnackBarUtils.showSuccess(context, '✅ Data restored from Firebase!');
+          // Reload the screen
+          await _loadBackupInfo();
+        } else {
+          SnackBarUtils.showError(context, '❌ Failed to restore from Firebase');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        SnackBarUtils.showError(context, '❌ Firebase restore error: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -760,11 +824,14 @@ class _BackupScreenState extends State<BackupScreen> {
                               ),
                               _detailedBackupStatus!['cloud_overdue'] ?? false,
                             ),
+                            _buildFirebaseBackupStatusRow(),
                           ],
                         ),
                       ),
                     ),
                   ],
+
+                  const SizedBox(height: 8),
 
                   // Export Section
                   const Center(
@@ -812,6 +879,14 @@ class _BackupScreenState extends State<BackupScreen> {
                     child: Column(
                       children: [
                         ListTile(
+                          leading: const Icon(Icons.cloud_upload, color: Colors.orange),
+                          title: const Text('Restore from Firebase'),
+                          subtitle: const Text('Restore automatic cloud backup'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: _restoreFromFirebase,
+                        ),
+                        const Divider(height: 0),
+                        ListTile(
                           leading: const Icon(Icons.search, color: Colors.purple),
                           title: const Text('Find My Backup Files'),
                           subtitle: const Text('Locate existing backup files on device'),
@@ -830,7 +905,7 @@ class _BackupScreenState extends State<BackupScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
 
                   // Auto backup settings moved to position 6
                   Card(
@@ -907,7 +982,7 @@ class _BackupScreenState extends State<BackupScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
 
                   // Original backup info for file details moved to bottom
                   if (_backupInfo != null && !_backupInfo!.containsKey('error')) ...[
@@ -927,14 +1002,13 @@ class _BackupScreenState extends State<BackupScreen> {
                             const Divider(),
                             _buildInfoRow(Icons.timer, 'Fasting Progress', '${_backupInfo!['categories']['fasting']} records'),
                             _buildInfoRow(Icons.favorite, 'Menstrual Cycle', '${_backupInfo!['categories']['menstrual_cycle']} records'),
-                          _buildInfoRow(Icons.task_alt, 'Tasks & Categories', '${_backupInfo!['categories']['tasks'] + _backupInfo!['categories']['task_categories']} items'),
+                            _buildInfoRow(Icons.task_alt, 'Tasks & Categories', '${_backupInfo!['categories']['tasks'] + _backupInfo!['categories']['task_categories']} items'),
                             _buildInfoRow(Icons.auto_awesome, 'Routines', '${_backupInfo!['categories']['routines']} items'),
                             _buildInfoRow(Icons.water_drop, 'Water Tracking', '${_backupInfo!['categories']['water_tracking']} items'),
                             _buildInfoRow(Icons.notifications, 'Notifications', '${_backupInfo!['categories']['notifications']} items'),
                             _buildInfoRow(Icons.settings, 'Settings & Preferences', '${_backupInfo!['categories']['settings'] + _backupInfo!['categories']['app_preferences']} items'),
                             const Divider(),
                             _buildInfoRow(Icons.storage, 'Backup Size', '~${_backupInfo!['backup_size_kb']} KB'),
-                            _buildInfoRow(Icons.schedule, 'Last Backup', _formatLastBackup(_backupInfo!['last_backup_time'])),
                           ],
                         ),
                       ),
@@ -944,6 +1018,45 @@ class _BackupScreenState extends State<BackupScreen> {
               ),
             ),
     );
+  }
+
+  Widget _buildFirebaseBackupStatusRow() {
+    return FutureBuilder<String>(
+      future: _getLastFirebaseBackup(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildStatusRow(
+            Icons.cloud_upload,
+            'Last Firebase Backup',
+            'Loading...',
+            false,
+          );
+        }
+
+        final lastBackup = snapshot.data ?? 'Never';
+        return _buildStatusRow(
+          Icons.cloud_upload,
+          'Last Firebase Backup',
+          lastBackup,
+          false,
+        );
+      },
+    );
+  }
+
+  Future<String> _getLastFirebaseBackup() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastBackupStr = prefs.getString('last_firebase_backup');
+
+      if (lastBackupStr == null) {
+        return 'Never';
+      }
+
+      return _formatLastBackup(lastBackupStr);
+    } catch (e) {
+      return 'Never';
+    }
   }
 
   Widget _buildInfoRow(IconData icon, String label, String value) {

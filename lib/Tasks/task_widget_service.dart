@@ -16,6 +16,16 @@ class TaskWidgetService {
     }
   }
 
+  static Future<bool> checkForTaskListIntent() async {
+    try {
+      final bool hasTaskListIntent = await _channel.invokeMethod('checkTaskListIntent');
+      return hasTaskListIntent;
+    } catch (e) {
+      debugPrint('Error checking task list intent: $e');
+      return false;
+    }
+  }
+
   static Future<void> showQuickTaskDialog(BuildContext context) async {
     if (!context.mounted) return;
 

@@ -5,6 +5,7 @@ import 'package:bb_app/Routines/routine_data_models.dart';
 import '../Notifications/centralized_notification_manager.dart';
 import 'routine_widget_service.dart';
 import '../shared/timezone_utils.dart';
+import '../Services/firebase_backup_service.dart';
 
 class RoutineService {
   static const String _routinesKey = 'routines';
@@ -63,10 +64,13 @@ class RoutineService {
         .map((routine) => jsonEncode(routine.toJson()))
         .toList();
     await prefs.setStringList(_routinesKey, routinesJson);
-    
+
+    // Backup to Firebase
+    FirebaseBackupService.triggerBackup();
+
     // Update Android widget
     await RoutineWidgetService.updateWidget();
-    
+
     // Update notification schedules through centralized manager
     final notificationManager = CentralizedNotificationManager();
     await notificationManager.forceRescheduleAll();

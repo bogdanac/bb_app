@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'habit_data_models.dart';
+import '../Services/firebase_backup_service.dart';
 
 class HabitService {
   static const String _habitsKey = 'habits';
@@ -32,6 +33,9 @@ class HabitService {
         .map((habit) => jsonEncode(habit.toJson()))
         .toList();
     await prefs.setStringList(_habitsKey, habitsJson);
+
+    // Backup to Firebase
+    FirebaseBackupService.triggerBackup();
   }
 
   /// Get only active habits

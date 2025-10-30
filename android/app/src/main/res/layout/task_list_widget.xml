@@ -198,14 +198,14 @@
             android:visibility="gone" />
     </LinearLayout>
 
-    <!-- Refresh Button (Column 2, top) -->
+    <!-- Refresh Button (Column 2, centered vertically) -->
     <ImageButton
         android:id="@+id/refresh_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_column="1"
         android:layout_row="0"
-        android:layout_gravity="top|end"
+        android:layout_gravity="center_vertical|end"
         android:src="@android:drawable/ic_popup_sync"
         android:background="@android:color/transparent"
         android:scaleType="fitCenter"

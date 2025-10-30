@@ -172,6 +172,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
     if (_selectedCategoryFilters.isEmpty) {
       filtered = widget.tasks;
     } else {
+      // For task randomizer, use ANY logic - show tasks that have ANY of the selected categories
       filtered = widget.tasks.where((task) {
         if (task.categoryIds.isEmpty) return false;
         return task.categoryIds.any((categoryId) => _selectedCategoryFilters.contains(categoryId));
@@ -1345,12 +1346,13 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       });
     }
 
-    // Apply category filters
+    // Apply category filters - task must have ALL selected categories
     if (_selectedCategoryFilters.isNotEmpty) {
       filtered = filtered.where((task) {
         if (task.categoryIds.isEmpty) return false;
-        return task.categoryIds.any((categoryId) =>
-          _selectedCategoryFilters.contains(categoryId));
+        // Check that the task has ALL selected categories (not just any)
+        return _selectedCategoryFilters.every((selectedCategoryId) =>
+          task.categoryIds.contains(selectedCategoryId));
       }).toList();
     }
 

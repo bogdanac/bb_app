@@ -15,6 +15,7 @@ import '../Tasks/tasks_data_models.dart';
 import 'friends_tab_screen.dart';
 import 'cycle_calculation_utils.dart';
 import '../shared/snackbar_utils.dart';
+import '../Services/firebase_backup_service.dart';
 
 class CycleScreen extends StatefulWidget {
   const CycleScreen({super.key});
@@ -144,6 +145,9 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
       return '${range['start']!.toIso8601String()}|${range['end']!.toIso8601String()}';
     }).toList();
     await prefs.setStringList('period_ranges', rangesStr);
+
+    // Backup to Firebase
+    FirebaseBackupService.triggerBackup();
 
     // Schedule cycle notifications whenever data is updated
     await CycleCalculationUtils.rescheduleCycleNotifications();

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "323501498472",
+    "project_id": "b-bapp-n0ke4x",
+    "storage_bucket": "b-bapp-n0ke4x.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:323501498472:android:154d48832acd8a46559bdd",
+        "android_client_info": {
+          "package_name": "com.bb.bb_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBESRjCuTl99f6Y-fAHmzrguMThdmHhlGA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

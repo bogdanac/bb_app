@@ -84,8 +84,18 @@ class MenstrualCycleUtils {
     // Cycle day info with ovulation focus
     final daysSinceStart = now.difference(lastPeriodStart).inDays + 1;
 
-    if (daysSinceStart <= 11) {
-      return "Back in the game";
+    // Follicular phase (days 6-11) - rebirth, spring, renewal messages
+    if (daysSinceStart >= 6 && daysSinceStart <= 11) {
+      final follicularDay = daysSinceStart - 5; // Days 6-11 become 1-6 of follicular phase
+      final messages = {
+        1: "Day 1 of follicular phase - Fresh start, new energy 🌱",
+        2: "Day 2 of follicular phase - Rising like spring 🌸",
+        3: "Day 3 of follicular phase - Blossoming into your power 🌺",
+        4: "Day 4 of follicular phase - Rebirth and renewal 🦋",
+        5: "Day 5 of follicular phase - Full of vitality 🌟",
+        6: "Day 6 of follicular phase - Ready to conquer 💪"
+      };
+      return messages[follicularDay] ?? "Day $follicularDay of follicular phase";
     } else if (daysSinceStart <= 16) {
       final ovulationDay = 14;
       final daysToOvulation = ovulationDay - daysSinceStart;
