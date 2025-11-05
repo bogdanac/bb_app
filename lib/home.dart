@@ -7,8 +7,11 @@ import 'shared/date_format_utils.dart';
 import 'package:bb_app/Calendar/events_card.dart';
 import 'package:bb_app/MenstrualCycle/menstrual_cycle_card.dart';
 import 'package:bb_app/WaterTracking/water_tracking_card.dart';
+import 'package:bb_app/WaterTracking/water_settings_model.dart';
+import 'package:bb_app/WaterTracking/water_notification_service.dart';
 import 'package:bb_app/Tasks/daily_tasks_card.dart';
 import 'package:bb_app/Routines/routine_card.dart';
+import 'package:bb_app/Routines/routine_service.dart';
 import 'package:bb_app/Fasting/fasting_card.dart';
 import 'package:bb_app/Fasting/fasting_utils.dart';
 import 'package:bb_app/Habits/habit_card.dart';
@@ -118,10 +121,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _initializeWaterNotifications() async {
-    final notificationManager = CentralizedNotificationManager();
-
-    // Verifică dacă trebuie să anuleze notificări pe baza progresului curent
-    await notificationManager.checkAndCancelWaterNotifications(waterIntake);
+    // Initialize the new water notification service
+    await WaterNotificationService.initialize();
   }
 
   // Start periodic water sync timer (checks every 30 seconds)
@@ -352,30 +353,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(now)).split('T')[0];
 
-    // Clean up old hidden and completed flags (more than 2 days old)
+    // Clean up old completed flags (more than 2 days old)
     final allKeys = prefs.getKeys();
     final oldKeys = allKeys.where((key) =>
-        (key.startsWith('routine_hidden_') ||
-            key.startsWith('routine_completed_')) &&
-        !key.endsWith(today));
+        key.startsWith('routine_completed_') &&
+        !key.contains(today));
     for (final key in oldKeys) {
       await prefs.remove(key);
     }
 
-    final hiddenToday = prefs.getBool('routine_hidden_$today') ?? false;
-    final completedToday =
-        prefs.getBool('routine_completed_$today') ?? false;
+    // Check if there are any routines scheduled for today that are not completed
+    final routines = await RoutineService.loadRoutines();
+    final effectiveDate = DateTime.now();
+    final todayWeekday = effectiveDate.weekday;
+
+    final activeRoutines = routines.where((routine) =>
+      routine.activeDays.contains(todayWeekday)
+    ).toList();
+
+    bool hasUncompletedRoutine = false;
+    for (var routine in activeRoutines) {
+      final completedKey = 'routine_completed_${routine.id}_$today';
+      final isCompleted = prefs.getBool(completedKey) ?? false;
+      if (!isCompleted) {
+        hasUncompletedRoutine = true;
+        break;
+      }
+    }
 
     if (kDebugMode) {
-      print(
-          'Routine check - Hour: ${now.hour}, Hidden today: $hiddenToday, Completed today: $completedToday, Today: $today');
+      print('Routine check - Active routines: ${activeRoutines.length}, Has uncompleted: $hasUncompletedRoutine, Today: $today');
       print('Cleaned up ${oldKeys.length} old flags');
     }
 
     if (!_isDisposed && mounted) {
       setState(() {
-        // Show only if: not hidden AND not completed today (allow routines 24/7)
-        showRoutine = !hiddenToday && !completedToday;
+        showRoutine = hasUncompletedRoutine;
       });
 
       if (kDebugMode) {
@@ -453,12 +466,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final prefs = await SharedPreferences.getInstance();
       final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
 
-      // Get customizable water amount
-      final waterAmountPerTap = prefs.getInt('water_amount_per_tap') ?? 125;
+      // Load water settings
+      final settings = await WaterSettings.load();
+      final waterAmountPerTap = settings.amountPerTap;
+      final goal = settings.dailyGoal;
 
       final oldIntake = waterIntake;
       final newIntake = waterIntake + waterAmountPerTap;
-      const int goal = 1500;
 
       if (!_isDisposed && mounted) {
         setState(() {
@@ -472,6 +486,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         // Save reset date
         await prefs.setString('last_water_reset_date', today);
 
+        // Update water notifications based on new intake
+        await WaterNotificationService.checkAndUpdateNotifications(newIntake, settings);
 
         // Also sync with widget using method channel
         try {
@@ -487,10 +503,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (oldIntake < goal && newIntake >= goal && mounted) {
           SnackBarUtils.showSuccess(context, '🎉 Daily water goal achieved! Great job!');
         }
-
-        // Verifică și anulează notificările pe baza noului progres
-        final notificationManager = CentralizedNotificationManager();
-        await notificationManager.checkAndCancelWaterNotifications(newIntake);
       }
     } catch (e) {
       debugPrint('ERROR adding water: $e');
@@ -510,47 +522,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _onRoutineHiddenForToday() async {
-    final prefs = await SharedPreferences.getInstance();
-    final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
-    await prefs.setBool('routine_hidden_$today', true);
 
-    if (kDebugMode) {
-      print('Routine hidden for today: $today');
-    }
-
-    if (!_isDisposed && mounted) {
-      setState(() {
-        showRoutine = false;
-      });
-    }
-  }
-
-  // Method to force show routine for debugging
-  void _forceShowRoutine() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
-
-      // Clear the hidden and completed flags
-      await prefs.remove('routine_hidden_$today');
-      await prefs.remove('routine_completed_$today');
-
-      if (!_isDisposed && mounted) {
-        setState(() {
-          showRoutine = true;
-        });
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR in _forceShowRoutine: $e');
-      }
-    }
-
-    if (kDebugMode) {
-      print('Forced routine to show');
-    }
-  }
 
   void _openSettings() {
     Navigator.push(
@@ -619,15 +591,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   _checkBackupStatus();
                 },
                 tooltip: 'Quick Backup - Tap to backup your data now',
-              ),
-            ),
-          if (kDebugMode)
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: IconButton(
-                icon: const Icon(Icons.wb_sunny),
-                onPressed: _forceShowRoutine,
-                tooltip: 'Force Show Routine',
               ),
             ),
           Padding(
@@ -707,7 +670,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 RoutineCard(
                   key: _routineCardKey,
                   onCompleted: _onRoutineCompleted,
-                  onHiddenForToday: _onRoutineHiddenForToday,
                 ),
                 const SizedBox(height: 4), // Consistent spacing
               ],

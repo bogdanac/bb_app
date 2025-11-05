@@ -67,7 +67,7 @@ class TaskWidgetProvider : AppWidgetProvider() {
         appWidgetId: Int
     ) {
         val views = RemoteViews(context.packageName, R.layout.task_widget)
-        
+
         // Set click intent to add task
         val intent = Intent(context, TaskWidgetProvider::class.java).apply {
             action = ACTION_ADD_TASK
@@ -80,9 +80,9 @@ class TaskWidgetProvider : AppWidgetProvider() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         views.setOnClickPendingIntent(R.id.task_button, pendingIntent)
-        
+
         android.util.Log.d("TaskWidget", "Set up click listener for task widget $appWidgetId")
-        
+
         appWidgetManager.updateAppWidget(appWidgetId, views)
     }
 }

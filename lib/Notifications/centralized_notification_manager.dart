@@ -62,19 +62,16 @@ class CentralizedNotificationManager {
         return; // Don't schedule notifications if they're blocked
       }
 
-      // 1. Schedule water reminders (4 daily notifications)
-      await _scheduleWaterReminders();
-
-      // 2. Schedule routine notifications
+      // 1. Schedule routine notifications
       await _scheduleRoutineNotifications();
 
-      // 3. Schedule task notifications
+      // 2. Schedule task notifications
       await _scheduleTaskNotifications();
 
-      // 4. Schedule cycle notifications
+      // 3. Schedule cycle notifications
       await _scheduleCycleNotifications();
 
-      // 5. Schedule food tracking reminder
+      // 4. Schedule food tracking reminder
       await _scheduleFoodTrackingNotifications();
 
       if (kDebugMode) {
@@ -105,102 +102,6 @@ class CentralizedNotificationManager {
     }
 
     return notificationsEnabled;
-  }
-
-  /// Schedule water reminders using timezone utilities
-  Future<void> _scheduleWaterReminders() async {
-    try {
-      if (kDebugMode) {
-        print('💧 Scheduling water reminders...');
-        print('Current time: ${DateTime.now()}');
-      }
-
-      final now = DateTime.now();
-
-      // 9 AM reminder
-      var reminder9AM = DateTime(now.year, now.month, now.day, 9, 0);
-      if (reminder9AM.isBefore(now)) {
-        reminder9AM = reminder9AM.add(const Duration(days: 1));
-      }
-
-      await _notificationService.flutterLocalNotificationsPlugin.cancel(1);
-      await _notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
-        1,
-        '💧 Gentle Hydration Reminder',
-        'Start your day with some water! Your body will thank you 🌱',
-        TimezoneUtils.forWaterReminder(reminder9AM),
-        NotificationService.getWaterNotificationDetails('water_gentle'),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time, // Repeat daily at same time
-      );
-
-      // 10 AM reminder
-      var reminder10AM = DateTime(now.year, now.month, now.day, 10, 0);
-      if (reminder10AM.isBefore(now)) {
-        reminder10AM = reminder10AM.add(const Duration(days: 1));
-      }
-
-      await _notificationService.flutterLocalNotificationsPlugin.cancel(2);
-      await _notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
-        2,
-        '🚨 DRINK WATER NOW!',
-        'You need at least 300ml by now! Your health depends on it! 💪',
-        TimezoneUtils.forWaterReminder(reminder10AM),
-        NotificationService.getWaterNotificationDetails('water_aggressive'),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time, // Repeat daily at same time
-      );
-
-      // 2 PM reminder
-      var reminder2PM = DateTime(now.year, now.month, now.day, 14, 0);
-      if (reminder2PM.isBefore(now)) {
-        reminder2PM = reminder2PM.add(const Duration(days: 1));
-      }
-
-      await _notificationService.flutterLocalNotificationsPlugin.cancel(3);
-      await _notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
-        3,
-        '⏰ You\'re Behind on Hydration!',
-        'You should have 1L by now! Time to catch up - drink up! 🏃‍♀️💧',
-        TimezoneUtils.forWaterReminder(reminder2PM),
-        NotificationService.getWaterNotificationDetails('water_behind'),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time, // Repeat daily at same time
-      );
-
-      // 4 PM reminder
-      var reminder4PM = DateTime(now.year, now.month, now.day, 16, 0);
-      if (reminder4PM.isBefore(now)) {
-        reminder4PM = reminder4PM.add(const Duration(days: 1));
-      }
-
-      await _notificationService.flutterLocalNotificationsPlugin.cancel(4);
-      await _notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
-        4,
-        '⚡ Afternoon Hydration Check!',
-        'You should have 1.2L by now! Only 300ml left to reach your goal! 💪💧',
-        TimezoneUtils.forWaterReminder(reminder4PM),
-        NotificationService.getWaterNotificationDetails('water_behind'),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time, // Repeat daily at same time
-      );
-
-      if (kDebugMode) {
-        print('✅ Water reminders scheduled successfully:');
-        print('  - 9 AM: $reminder9AM');
-        print('  - 10 AM: $reminder10AM');
-        print('  - 2 PM: $reminder2PM');
-        print('  - 4 PM: $reminder4PM');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ Error scheduling water reminders: $e');
-      }
-    }
   }
 
   /// Schedule routine notifications using timezone utilities
@@ -429,8 +330,4 @@ class CentralizedNotificationManager {
     }
   }
 
-  /// Check if water notification should be cancelled based on intake
-  Future<void> checkAndCancelWaterNotifications(int waterIntake) async {
-    await _notificationService.checkAndCancelWaterNotifications(waterIntake);
-  }
 }

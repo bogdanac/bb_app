@@ -11,6 +11,7 @@ class FoodTrackingService {
   static const String _resetFrequencyKey = 'food_tracking_reset_frequency';
   static const String _lastResetKey = 'food_tracking_last_reset';
   static const String _periodHistoryKey = 'food_tracking_period_history';
+  static const String _targetGoalKey = 'food_tracking_target_goal';
 
   static Future<List<FoodEntry>> getAllEntries() async {
     final prefs = await SharedPreferences.getInstance();
@@ -407,5 +408,32 @@ class FoodTrackingService {
 
   static String _formatDateShort(DateTime date) {
     return '${date.day}/${date.month}';
+  }
+
+  // Target goal percentage settings
+  static Future<int> getTargetGoal() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_targetGoalKey) ?? 80; // Default to 80%
+  }
+
+  static Future<void> setTargetGoal(int percentage) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_targetGoalKey, percentage);
+    FirebaseBackupService.triggerBackup();
+  }
+
+  // Get days until reset
+  static Future<int> getDaysUntilReset() async {
+    final frequency = await getResetFrequency();
+    final now = DateTime.now();
+
+    if (frequency == FoodTrackingResetFrequency.monthly) {
+      final nextMonth = DateTime(now.year, now.month + 1, 1);
+      return nextMonth.difference(DateTime(now.year, now.month, now.day)).inDays;
+    } else {
+      // Weekly - calculate days until next Monday
+      final daysUntilReset = 7 - now.weekday;
+      return daysUntilReset == 0 ? 7 : daysUntilReset;
+    }
   }
 }

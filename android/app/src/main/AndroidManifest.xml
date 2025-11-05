@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
@@ -100,7 +102,6 @@
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.bb.bb_app.OPEN_APP" />
                 <action android:name="com.bb.bb_app.COMPLETE_TASK" />
-                <action android:name="com.bb.bb_app.REFRESH_TASK_LIST" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/task_list_widget_info" />

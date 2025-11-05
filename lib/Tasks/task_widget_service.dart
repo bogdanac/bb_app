@@ -11,7 +11,7 @@ class TaskWidgetService {
       final bool hasWidgetIntent = await _channel.invokeMethod('checkWidgetIntent');
       return hasWidgetIntent;
     } catch (e) {
-      debugPrint('Error checking widget intent: $e');
+      debugPrint('ERROR checking widget intent: $e');
       return false;
     }
   }
@@ -21,7 +21,7 @@ class TaskWidgetService {
       final bool hasTaskListIntent = await _channel.invokeMethod('checkTaskListIntent');
       return hasTaskListIntent;
     } catch (e) {
-      debugPrint('Error checking task list intent: $e');
+      debugPrint('ERROR checking task list intent: $e');
       return false;
     }
   }
@@ -41,19 +41,22 @@ class TaskWidgetService {
       MaterialPageRoute(
         builder: (context) => TaskEditScreen(
           categories: categories,
-          onSave: (task) async {
+          onSave: (task, {bool isAutoSave = false}) async {
             try {
               // Save the task properly (handle both new and existing tasks)
               final allTasks = await taskService.loadTasks();
               final existingIndex = allTasks.indexWhere((t) => t.id == task.id);
-              
+
               if (existingIndex != -1) {
                 allTasks[existingIndex] = task;
               } else {
                 allTasks.add(task);
               }
-              
-              await taskService.saveTasks(allTasks);
+
+              // Skip expensive operations during auto-save
+              await taskService.saveTasks(allTasks,
+                skipNotificationUpdate: isAutoSave,
+                skipWidgetUpdate: isAutoSave);
 
               // Close the screen
               if (context.mounted) {
@@ -62,7 +65,7 @@ class TaskWidgetService {
 
               // No snackbar needed - user will see the task in the list
             } catch (e) {
-              debugPrint('Error saving task from widget: $e');
+              debugPrint('ERROR saving task from widget: $e');
               // Don't show snackbar due to context issues after navigation
             }
           },

@@ -11,7 +11,12 @@
       "Bash(powershell:*)",
       "Bash(flutter analyze:*)",
       "Bash(find:*)",
-      "Bash(xargs sed:*)"
+      "Bash(xargs sed:*)",
+      "Bash(if [ -d \"C:\\Dev\\Projects\\bb_app\\lib\\Tasks\\utils\" ])",
+      "Bash(then echo \"exists\")",
+      "Bash(else mkdir \"C:\\Dev\\Projects\\bb_app\\lib\\Tasks\\utils\")",
+      "Bash(fi)",
+      "Bash(flutter test:*)"
     ]
   },
   "outputStyle": "default"

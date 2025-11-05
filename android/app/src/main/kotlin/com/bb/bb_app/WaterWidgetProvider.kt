@@ -7,6 +7,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.widget.RemoteViews
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -237,40 +240,45 @@ class WaterWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int
     ) {
-        val currentIntake = getCurrentWaterIntake(context)
-        val waterGoal = getWaterGoal(context)
-        val isGoalReached = currentIntake >= waterGoal
-        
-        val views = RemoteViews(context.packageName, R.layout.water_widget)
-        
-        // Update button appearance based on goal status
-        if (isGoalReached) {
-            views.setImageViewResource(R.id.water_button, R.drawable.ic_check)
-            views.setInt(R.id.water_button, "setBackgroundResource", R.drawable.water_button_background_complete)
-        } else {
-            views.setImageViewResource(R.id.water_button, R.drawable.ic_water_drop)
-            views.setInt(R.id.water_button, "setBackgroundResource", R.drawable.water_button_background)
-        }
-        
-        // Set click intent - only if goal not reached
-        if (!isGoalReached) {
-            val intent = Intent(context, WaterWidgetProvider::class.java).apply {
-                action = ACTION_ADD_WATER
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+        try {
+            val currentIntake = getCurrentWaterIntake(context)
+            val waterGoal = getWaterGoal(context)
+            val waterLevel = (currentIntake.toFloat() / waterGoal.toFloat()).coerceIn(0f, 1f)
+            val isGoalReached = currentIntake >= waterGoal
+
+            val views = RemoteViews(context.packageName, R.layout.water_widget)
+
+            // Generate body bitmap
+            val bodyBitmap = WaterBodyDrawable.createBitmap(300, 300, waterLevel)
+            views.setImageViewBitmap(R.id.water_body_image, bodyBitmap)
+
+            // Set click intent
+            if (!isGoalReached) {
+                val intent = Intent(context, WaterWidgetProvider::class.java).apply {
+                    action = ACTION_ADD_WATER
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                }
+                val pendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    appWidgetId,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(R.id.water_click_area, pendingIntent)
+            } else {
+                views.setOnClickPendingIntent(R.id.water_click_area, null)
             }
-            val pendingIntent = PendingIntent.getBroadcast(
-                context,
-                appWidgetId,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.water_button, pendingIntent)
-            android.util.Log.d("WaterWidget", "Set up click listener for widget $appWidgetId")
-        } else {
-            // Remove click listener when goal is reached
-            views.setOnClickPendingIntent(R.id.water_button, null)
+
+            appWidgetManager.updateAppWidget(appWidgetId, views)
+            android.util.Log.d("WaterWidget", "Widget updated: ${waterLevel * 100}% water")
+        } catch (e: Exception) {
+            android.util.Log.e("WaterWidget", "Error: ${e.message}", e)
+            // Fallback: create a simple colored square so widget doesn't fail completely
+            val views = RemoteViews(context.packageName, R.layout.water_widget)
+            val fallbackBitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
+            Canvas(fallbackBitmap).drawColor(Color.parseColor("#4A90E2"))
+            views.setImageViewBitmap(R.id.water_body_image, fallbackBitmap)
+            appWidgetManager.updateAppWidget(appWidgetId, views)
         }
-        
-        appWidgetManager.updateAppWidget(appWidgetId, views)
     }
 }

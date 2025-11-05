@@ -53,7 +53,7 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                 children: [
                   // Use TodoScreen for consistent task display
                   SizedBox(
-                    height: 400,
+                    height: 302,
                     child: Material(
                       color: Colors.transparent,
                       child: TodoScreen(
@@ -62,13 +62,13 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                         showAddButton: false,
                         enableRefresh: false, // Disable pull-to-refresh in daily tasks card
                         onTasksChanged: _refreshTasks, // Refresh when tasks change
-                        initialShowAllTasks: false, // Keep menstrual cycle filtering active, but disable category filters
+                        initialShowAllTasks: true, // Apply menstrual cycle filtering (flower ON)
                       ),
                     ),
                   ),
 
                   // Space for the add button
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 32),
                 ],
               ),
             ),
@@ -105,14 +105,17 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                         MaterialPageRoute(
                         builder: (context) => TaskEditScreen(
                           categories: categories,
-                          onSave: (newTask) async {
+                          onSave: (newTask, {bool isAutoSave = false}) async {
                             final taskService = TaskService();
                             final allTasks = await taskService.loadTasks();
                             allTasks.add(newTask);
-                            await taskService.saveTasks(allTasks);
+                            // Skip expensive operations during auto-save
+                            await taskService.saveTasks(allTasks,
+                              skipNotificationUpdate: isAutoSave,
+                              skipWidgetUpdate: isAutoSave);
 
-                            // Refresh the embedded TodoScreen
-                            if (mounted) {
+                            // Refresh the embedded TodoScreen only on final save
+                            if (!isAutoSave && mounted) {
                               _refreshTasks();
                             }
                           },

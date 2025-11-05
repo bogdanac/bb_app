@@ -8,15 +8,14 @@ import 'routine_widget_service.dart';
 import 'routine_progress_service.dart';
 import 'dart:async';
 import '../shared/snackbar_utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class RoutineCard extends StatefulWidget {
   final VoidCallback onCompleted;
-  final VoidCallback onHiddenForToday;
 
   const RoutineCard({
     super.key,
     required this.onCompleted,
-    required this.onHiddenForToday,
   });
 
   @override
@@ -41,10 +40,8 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // Save progress one final time when disposing
-    if (_currentRoutine != null) {
-      _saveProgress();
-    }
+    // Don't save progress here - it's already saved on lifecycle changes
+    // and saving here can overwrite widget updates when the card is recreated
     super.dispose();
   }
 
@@ -52,13 +49,8 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    // Save progress when app goes to background or when pausing
-    if ((state == AppLifecycleState.paused ||
-         state == AppLifecycleState.inactive ||
-         state == AppLifecycleState.detached) &&
-        _currentRoutine != null) {
-      _saveProgress();
-    }
+    // Don't save when going to background - progress is already saved after each action
+    // and saving here can overwrite widget updates that happen while app is backgrounded
 
     // Reload routine when app comes back to foreground to pick up widget changes
     if (state == AppLifecycleState.resumed) {
@@ -68,11 +60,13 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
   }
 
   Future<void> _loadCurrentRoutine() async {
+    if (!mounted) return; // Don't proceed if widget is disposed
+
     try {
       if (kDebugMode) {
         print('Starting _loadCurrentRoutine');
       }
-      
+
       // Load all routines
       final routines = await RoutineService.loadRoutines();
 
@@ -98,7 +92,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       if (_currentRoutine != null) {
         // Check if we have progress saved for today
         final progressData = await RoutineProgressService.loadRoutineProgress(_currentRoutine!.id);
-        
+
+        if (kDebugMode) {
+          print('🔄 RoutineSync: Loaded progress for routine ${_currentRoutine!.id}: $progressData');
+        }
+
         if (progressData != null) {
           // Load today's progress - resume from where we left off
           _currentStepIndex = progressData['currentStepIndex'] ?? 0;
@@ -130,7 +128,7 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
           }
           
           // Clear old progress
-          await RoutineService.clearRoutineProgress();
+          await RoutineProgressService.clearRoutineProgress(_currentRoutine!.id);
           
           if (kDebugMode) {
             print('Started fresh routine for ${RoutineService.getTodayString()}');
@@ -143,15 +141,21 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       }
     }
 
-    setState(() {
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _saveProgress() async {
     if (_currentRoutine == null) return;
 
     try {
+      if (kDebugMode) {
+        print('🔄 RoutineSync: Saving progress for routine ${_currentRoutine!.id}, step $_currentStepIndex');
+      }
+
       // Ensure we have valid data before saving
       if (_currentStepIndex < 0) _currentStepIndex = 0;
       if (_currentStepIndex >= _currentRoutine!.items.length) {
@@ -230,9 +234,25 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
 
     // Check if all steps are actually completed (not just skipped)
     if (_currentRoutine!.items.every((item) => item.isCompleted)) {
-      widget.onCompleted();
+      if (kDebugMode) {
+        print('All steps completed for routine: ${_currentRoutine!.id}');
+      }
+
+      // Mark current routine as completed for today
+      final prefs = await SharedPreferences.getInstance();
+      final today = RoutineService.getEffectiveDate();
+      final completedKey = 'routine_completed_${_currentRoutine!.id}_$today';
+      await prefs.setBool(completedKey, true);
+
       if (mounted) {
         SnackBarUtils.showSuccess(context, '🎉 Routine completed! Great job!');
+      }
+
+      // Try to load the next routine automatically
+      final hasNextRoutine = await _loadNextRoutine();
+      // If no next routine available, hide the card
+      if (!hasNextRoutine) {
+        widget.onCompleted();
       }
     }
 
@@ -252,13 +272,58 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       // Mark the current step as skipped (don't remove from list)
       _currentRoutine!.items[_currentStepIndex].isSkipped = true;
       _currentRoutine!.items[_currentStepIndex].isCompleted = false;
-      
+
       // Move to the next unfinished step
       _moveToNextUnfinishedStep();
     });
 
     // Save progress after skipping
     await _saveProgress();
+  }
+
+  Future<bool> _loadNextRoutine() async {
+    try {
+      if (kDebugMode) {
+        print('Loading next routine...');
+      }
+
+      // Load all routines
+      final routines = await RoutineService.loadRoutines();
+
+      // Get the next uncompleted routine
+      final nextRoutine = await RoutineService.getNextRoutine(routines, _currentRoutine?.id);
+
+      if (nextRoutine == null) {
+        if (kDebugMode) {
+          print('No more uncompleted routines scheduled for today');
+        }
+        return false;
+      }
+
+      // Set the next routine as active override
+      await RoutineService.setActiveRoutineOverride(nextRoutine.id);
+
+      // Clear the progress for the new routine
+      await RoutineProgressService.clearRoutineProgress(nextRoutine.id);
+
+      if (kDebugMode) {
+        print('Switched to next routine: ${nextRoutine.title}');
+      }
+
+      // Reload the routine card
+      await _loadCurrentRoutine();
+
+      if (mounted) {
+        SnackBarUtils.showSuccess(context, 'Next routine: ${nextRoutine.title}');
+      }
+
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading next routine: $e');
+      }
+      return false;
+    }
   }
 
   void _moveToNextUnfinishedStep() {
@@ -386,23 +451,6 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                 ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: widget.onHiddenForToday,
-                  icon: const Icon(Icons.close_rounded, size: 16, color: AppColors.greyText,),
-                  label: const Text(
-                    'Not Today',
-                    style: TextStyle(fontSize: 12, color: AppColors.greyText),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.greyText,
-                    side: BorderSide(color: AppColors.greyText, width: 1),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-                const SizedBox(width: 8),
               ],
             ),
             const SizedBox(height: 10),

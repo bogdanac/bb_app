@@ -4,6 +4,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import 'food_tracking_service.dart';
 import 'food_tracking_data_models.dart';
+import 'food_tracking_goal_history_screen.dart';
 import '../shared/date_picker_utils.dart';
 import '../shared/snackbar_utils.dart';
 import '../shared/dialog_utils.dart';
@@ -494,8 +495,20 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
         title: const Text('Food History'),
         backgroundColor: AppColors.successGreen.withValues(alpha: 0.2),
         actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const FoodTrackingGoalHistoryScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.emoji_events_rounded),
+            tooltip: 'Goal Achievement History',
+          ),
           if (_entries.isNotEmpty)
-            TextButton(
+            IconButton(
               onPressed: () {
                 DialogUtils.showInfo(
                   context,
@@ -508,7 +521,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
                   buttonText: 'Got it',
                 );
               },
-              child: const Icon(Icons.info_outline),
+              icon: const Icon(Icons.info_outline),
             ),
         ],
       ),

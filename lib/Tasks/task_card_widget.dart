@@ -334,7 +334,12 @@ class _TaskCardState extends State<TaskCard> {
                                 runSpacing: 3,
                                 children: [
                                   // Priority chip (highest priority)
-                                  if (widget.priorityReason != null && widget.priorityReason!.isNotEmpty)
+                                  // Don't show "tomorrow" priority if it's just deadline-based (deadline chip is enough)
+                                  if (widget.priorityReason != null &&
+                                      widget.priorityReason!.isNotEmpty &&
+                                      !(widget.priorityReason == 'tomorrow' &&
+                                        widget.task.scheduledDate == null &&
+                                        widget.task.deadline != null))
                                     TaskCardUtils.buildInfoChip(
                                       Icons.today_rounded,
                                       widget.priorityReason!,

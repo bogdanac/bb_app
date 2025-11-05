@@ -109,15 +109,37 @@ class RoutineProgressService {
   /// Load routine progress
   static Future<Map<String, dynamic>?> loadRoutineProgress(String routineId) async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Force reload from disk to get latest widget updates
+    await prefs.reload();
+
     final today = getEffectiveDate();  // Use effective date for consistency
-    
+
+    if (kDebugMode) {
+      print('🔄 RoutineSync: Loading progress for routine $routineId on $today');
+    }
+
     // Try routine-specific key first
     var progressJson = prefs.getString('${_progressPrefix}${routineId}_$today');
-    
+
+    if (kDebugMode) {
+      print('🔄 RoutineSync: Tried key: ${_progressPrefix}${routineId}_$today, found: ${progressJson != null}');
+    }
+
     // Fallback to legacy morning routine progress for backwards compatibility
-    progressJson ??= prefs.getString('morning_routine_progress_$today');
-    
-    if (progressJson == null) return null;
+    if (progressJson == null) {
+      progressJson = prefs.getString('morning_routine_progress_$today');
+      if (kDebugMode) {
+        print('🔄 RoutineSync: Tried legacy key: morning_routine_progress_$today, found: ${progressJson != null}');
+      }
+    }
+
+    if (progressJson == null) {
+      if (kDebugMode) {
+        print('🔄 RoutineSync: No progress found for routine $routineId on $today');
+      }
+      return null;
+    }
     
     try {
       final progressData = jsonDecode(progressJson);

@@ -24,6 +24,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
   RecurrenceType _primaryType =
       RecurrenceType.daily; // For settings like interval
   int _interval = 1;
+  int _monthOfYear = 1; // For yearly recurrence: which month (1-12)
   List<int> _selectedWeekDays = [];
   int? _dayOfMonth;
   bool _isLastDayOfMonth = false;
@@ -43,7 +44,13 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
       _primaryType = recurrence.types.isNotEmpty
           ? recurrence.types.first
           : RecurrenceType.daily;
-      _interval = recurrence.interval;
+      // For yearly recurrence, interval stores the month
+      if (recurrence.types.contains(RecurrenceType.yearly)) {
+        _monthOfYear = recurrence.interval;
+        _interval = 1; // Default to every 1 year
+      } else {
+        _interval = recurrence.interval;
+      }
       _selectedWeekDays = List.from(recurrence.weekDays);
       _dayOfMonth = recurrence.dayOfMonth;
       _isLastDayOfMonth = recurrence.isLastDayOfMonth;
@@ -122,8 +129,8 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                     const SizedBox(height: 16),
 
 
-                    // Recurrence Type Selection - only show if a daily/weekly/monthly/yearly type is selected
-                    if (_selectedTypes.isNotEmpty && !_isMenstrualPhase(_primaryType))
+                    // Recurrence Type Selection - only show if a daily/weekly/monthly type is selected (not yearly)
+                    if (_selectedTypes.isNotEmpty && !_isMenstrualPhase(_primaryType) && !_selectedTypes.contains(RecurrenceType.yearly))
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                         decoration: BoxDecoration(
@@ -169,7 +176,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: DropdownButtonFormField<RecurrenceType>(
-                                initialValue: _displayedSelectedType,
+                                value: _displayedSelectedType,
                                 decoration: InputDecoration(
                                   border: OutlineInputBorder(
                                     borderRadius: AppStyles.borderRadiusSmall,
@@ -444,7 +451,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: DropdownButtonFormField<int>(
-                                    initialValue: _interval <= 12 ? _interval : 1,
+                                    value: _monthOfYear,
                                     decoration: InputDecoration(
                                       border: OutlineInputBorder(
                                         borderRadius: AppStyles.borderRadiusSmall,
@@ -463,7 +470,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                     onChanged: (value) {
                                       if (value != null) {
                                         setState(() {
-                                          _interval = value; // For yearly, interval represents the month
+                                          _monthOfYear = value;
                                         });
                                       }
                                     },
@@ -776,7 +783,10 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                     ? () {
                         final recurrence = TaskRecurrence(
                           types: _selectedTypes,
-                          interval: _interval,
+                          // For yearly, interval stores the month; otherwise it's the repeat frequency
+                          interval: _selectedTypes.contains(RecurrenceType.yearly)
+                              ? _monthOfYear
+                              : _interval,
                           weekDays:
                               _selectedTypes.contains(RecurrenceType.weekly)
                                   ? _selectedWeekDays
@@ -856,15 +866,15 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
               if (weekdays != null) {
                 _selectedWeekDays = List.from(weekdays);
               } else {
-                // Default to weekdays when "Weekly" is selected without specific days
-                _selectedWeekDays = [
-                  1,
-                  2,
-                  3,
-                  4,
-                  5
-                ]; // Mon-Fri (most common for weekly tasks)
+                _selectedWeekDays = []; // Don't preselect any days
               }
+            } else if (type == RecurrenceType.monthly) {
+              // Set default day of month to current day if not already set
+              _dayOfMonth ??= DateTime.now().day;
+            } else if (type == RecurrenceType.yearly) {
+              // Set default day and month for yearly
+              _dayOfMonth ??= DateTime.now().day;
+              _monthOfYear = DateTime.now().month;
             }
 
             _interval = interval;
@@ -944,7 +954,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
       return _interval > 0;
     } catch (e) {
       if (kDebugMode) {
-        print('Error validating recurrence: $e');
+        print('ERROR validating recurrence: $e');
       }
       return false;
     }

@@ -9,12 +9,13 @@ import '../theme/app_styles.dart';
 import '../shared/date_picker_utils.dart';
 import '../shared/snackbar_utils.dart';
 import 'task_service.dart';
+import 'task_builder.dart';
 
 class TaskEditScreen extends StatefulWidget {
   final Task? task;
   final List<TaskCategory> categories;
   final List<String>? initialCategoryIds;
-  final Function(Task) onSave;
+  final Function(Task, {bool isAutoSave}) onSave;
 
   const TaskEditScreen({
     super.key,
@@ -92,53 +93,8 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   void dispose() {
     _saveTimer?.cancel();
     _savedTimer?.cancel();
-
-    // Save immediately if there are unsaved changes when exiting
-    if (_hasUnsavedChanges && _titleController.text.trim().isNotEmpty) {
-      _autoSaveTask();
-    }
-
     _titleController.dispose();
     super.dispose();
-  }
-
-  // Synchronous save for immediate persistence (used on back button)
-  Future<void> _saveTaskImmediately() async {
-    if (_titleController.text.trim().isEmpty) return;
-
-    try {
-      final task = Task(
-        id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-        title: _titleController.text.trim(),
-        description: '',
-        categoryIds: _selectedCategoryIds,
-        deadline: _deadline,
-        scheduledDate: _hasUserModifiedScheduledDate
-            ? _scheduledDate
-            : (_scheduledDate ?? (_currentTask == null ? _getScheduledDate() : _currentTask?.scheduledDate)),
-        reminderTime: _reminderTime,
-        isImportant: _isImportant,
-        isPostponed: _scheduledDate != null,
-        recurrence: _recurrence,
-        isCompleted: _currentTask?.isCompleted ?? false,
-        completedAt: _currentTask?.completedAt,
-        createdAt: _currentTask?.createdAt ?? DateTime.now(),
-      );
-
-      // Call the onSave callback and wait if it returns a Future
-      final result = widget.onSave(task);
-      if (result is Future) {
-        await result;
-      }
-
-      // Update current task reference after save
-      _currentTask = task;
-      _hasUnsavedChanges = false;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error saving task immediately: $e');
-      }
-    }
   }
 
   void _onFieldChanged() {
@@ -162,46 +118,47 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     if (_titleController.text.trim().isEmpty) return;
 
     try {
-      final task = Task(
-        id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      final task = TaskBuilder.buildFromEditScreen(
+        currentTaskId: _currentTask?.id,
         title: _titleController.text.trim(),
-        description: '',
         categoryIds: _selectedCategoryIds,
         deadline: _deadline,
-        scheduledDate: _hasUserModifiedScheduledDate
-            ? _scheduledDate
-            : (_scheduledDate ?? (_currentTask == null ? _getScheduledDate() : _currentTask?.scheduledDate)),
+        scheduledDate: _scheduledDate,
         reminderTime: _reminderTime,
         isImportant: _isImportant,
-        isPostponed: _scheduledDate != null, // User manually set scheduled date
+        isPostponed: _scheduledDate != null,
         recurrence: _recurrence,
-        isCompleted: _currentTask?.isCompleted ?? false,
-        completedAt: _currentTask?.completedAt,
-        createdAt: _currentTask?.createdAt ?? DateTime.now(),
+        hasUserModifiedScheduledDate: _hasUserModifiedScheduledDate,
+        currentTask: _currentTask,
+        preserveCompletionStatus: true,
       );
 
-      widget.onSave(task);
-      
+      // Pass isAutoSave flag to skip expensive operations
+      widget.onSave(task, isAutoSave: true);
+
       // Update current task reference after first save to prevent duplicates
       _currentTask = task;
-      
-      setState(() {
-        _hasUnsavedChanges = false;
-        _showSaved = true;
-      });
 
-      // Hide the "saved" indicator after 2 seconds
-      _savedTimer?.cancel();
-      _savedTimer = Timer(const Duration(seconds: 2), () {
-        if (mounted) {
-          setState(() {
-            _showSaved = false;
-          });
-        }
-      });
+      // Only update state if widget is still mounted
+      if (mounted) {
+        setState(() {
+          _hasUnsavedChanges = false;
+          _showSaved = true;
+        });
+
+        // Hide the "saved" indicator after 2 seconds
+        _savedTimer?.cancel();
+        _savedTimer = Timer(const Duration(seconds: 2), () {
+          if (mounted) {
+            setState(() {
+              _showSaved = false;
+            });
+          }
+        });
+      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error saving task: $e');
+        print('ERROR saving task: $e');
       }
       if (mounted) {
         SnackBarUtils.showError(context, '⚠️ Error saving task: ${e.toString()}');
@@ -209,182 +166,150 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     }
   }
 
+  bool _isMenstrualCycleTask(TaskRecurrence recurrence) {
+    final menstrualTypes = [
+      RecurrenceType.menstrualPhase,
+      RecurrenceType.follicularPhase,
+      RecurrenceType.ovulationPhase,
+      RecurrenceType.earlyLutealPhase,
+      RecurrenceType.lateLutealPhase,
+      RecurrenceType.menstrualStartDay,
+      RecurrenceType.ovulationPeakDay,
+    ];
 
-  void _skipTask() async {
-    if (_titleController.text.trim().isEmpty) return;
-
-    // First save the task with current state
-    final task = Task(
-      id: _currentTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      title: _titleController.text.trim(),
-      description: '',
-      categoryIds: _selectedCategoryIds,
-      deadline: _deadline,
-      scheduledDate: _scheduledDate,
-      reminderTime: _reminderTime,
-      isImportant: _isImportant,
-      isPostponed: _currentTask?.isPostponed ?? false,
-      recurrence: _recurrence,
-      isCompleted: false,
-      completedAt: null,
-      createdAt: _currentTask?.createdAt ?? DateTime.now(),
-    );
-
-    // Save the task first
-    widget.onSave(task);
-
-    // Use the TaskService to skip to next occurrence
-    try {
-      await TaskService().skipToNextOccurrence(task);
-
-      // Show feedback
-      if (mounted) {
-        SnackBarUtils.showCustom(
-          context,
-          '⏭️ Task "${task.title}" skipped to next occurrence',
-          backgroundColor: AppColors.lightCoral,
-          duration: const Duration(seconds: 2),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        SnackBarUtils.showError(
-          context,
-          'Failed to skip task: $e',
-        );
-      }
-    }
-
-    // Small delay to ensure the snackbar shows and save completes
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    // Close the dialog/screen after skipping the task
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
+    return recurrence.types.any((type) => menstrualTypes.contains(type)) ||
+           recurrence.types.any((type) => type == RecurrenceType.custom &&
+                                          (recurrence.interval <= -100 || recurrence.interval == -1));
   }
 
-  DateTime? _getScheduledDate() {
-    // If the task already has a scheduled date, keep it
-    if (_currentTask?.scheduledDate != null) {
-      return _currentTask!.scheduledDate;
+  void _skipTask() async {
+    if (_titleController.text.trim().isEmpty) {
+      return;
     }
 
-    // If we have a recurrence, calculate the next scheduled date
-    if (_recurrence != null) {
-      final today = DateTime.now();
-      final todayDate = DateTime(today.year, today.month, today.day);
+    // Capture context and navigator before any async operations
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
 
-      // Check if it's due today
-      if (_recurrence!.isDueOn(todayDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
-        return todayDate;
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      // Build the task with current state
+      final task = TaskBuilder.buildFromEditScreen(
+        currentTaskId: _currentTask?.id,
+        title: _titleController.text.trim(),
+        categoryIds: _selectedCategoryIds,
+        deadline: _deadline,
+        scheduledDate: _scheduledDate,
+        reminderTime: _reminderTime,
+        isImportant: _isImportant,
+        isPostponed: _currentTask?.isPostponed ?? false,
+        recurrence: _recurrence,
+        hasUserModifiedScheduledDate: _hasUserModifiedScheduledDate,
+        currentTask: _currentTask,
+        preserveCompletionStatus: false,
+      );
+
+      final taskService = TaskService();
+
+      // First, ensure the task exists in the list (if it's a new task being created and skipped)
+      final allTasks = await taskService.loadTasks();
+      final existingIndex = allTasks.indexWhere((t) => t.id == task.id);
+
+      if (existingIndex == -1) {
+        // New task - add it first
+        allTasks.add(task);
+        await taskService.saveTasks(allTasks);
       }
 
-      // Optimize for common recurrence types
-      if (_recurrence!.types.contains(RecurrenceType.daily)) {
-        return todayDate.add(const Duration(days: 1));
-      } else if (_recurrence!.types.contains(RecurrenceType.weekly)) {
-        // For weekly, find the next matching weekday
-        for (int i = 1; i <= 7; i++) {
-          final checkDate = todayDate.add(Duration(days: i));
-          if (_recurrence!.isDueOn(checkDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
-            return checkDate;
-          }
-        }
-      } else if (_recurrence!.types.contains(RecurrenceType.monthly)) {
-        // For monthly, calculate directly based on day of month
-        final targetDay = _recurrence!.dayOfMonth ?? todayDate.day;
-        var nextMonth = todayDate.month;
-        var nextYear = todayDate.year;
+      // Skip to next occurrence using TaskService
+      final skippedTask = await taskService.skipToNextOccurrence(task);
 
-        // Move to next month if we've passed the target day this month
-        if (todayDate.day >= targetDay) {
-          nextMonth++;
-          if (nextMonth > 12) {
-            nextMonth = 1;
-            nextYear++;
-          }
-        }
-
-        // Clamp the day to the last day of the month if necessary
-        final daysInMonth = DateTime(nextYear, nextMonth + 1, 0).day;
-        final actualDay = targetDay > daysInMonth ? daysInMonth : targetDay;
-        return DateTime(nextYear, nextMonth, actualDay);
-      } else if (_recurrence!.types.contains(RecurrenceType.yearly)) {
-        // For yearly, calculate directly
-        final targetMonth = _recurrence!.interval; // For yearly, interval represents the month
-        final targetDay = _recurrence!.dayOfMonth ?? todayDate.day;
-        var nextYear = todayDate.year;
-
-        // Move to next year if we've passed the target date this year
-        final targetDate = DateTime(nextYear, targetMonth, targetDay);
-        if (todayDate.isAfter(targetDate)) {
-          nextYear++;
-        }
-
-        return DateTime(nextYear, targetMonth, targetDay);
+      // Generate context-aware message
+      String message;
+      if (skippedTask == null) {
+        message = '⏭️ Task "${task.title}" skipped';
       } else {
-        // Fallback for custom or other recurrence types - limit search to 30 days
-        for (int i = 1; i <= 30; i++) {
-          final checkDate = todayDate.add(Duration(days: i));
-          if (_recurrence!.isDueOn(checkDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
-            return checkDate;
-          }
+        final isMenstrualTask = skippedTask.recurrence != null &&
+            _isMenstrualCycleTask(skippedTask.recurrence!);
+
+        if (isMenstrualTask) {
+          message = '⏭️ "${task.title}" postponed to next menstrual cycle';
+        } else if (skippedTask.scheduledDate != null) {
+          final nextDate = DateFormatUtils.formatShort(skippedTask.scheduledDate!);
+          message = '⏭️ "${task.title}" skipped to $nextDate';
+        } else {
+          message = '⏭️ "${task.title}" skipped to next occurrence';
         }
       }
-      
-      // For weekly recurrence, find next occurrence
-      if (_recurrence!.types.contains(RecurrenceType.weekly)) {
-        // For weekly with intervals (e.g., every 4, 8, 12 weeks), search up to interval * 7 + 7 days
-        // This ensures we find the next occurrence even for very long weekly intervals
-        final maxDays = _recurrence!.interval > 1 ? (_recurrence!.interval * 7) + 7 : 7;
-        for (int i = 1; i <= maxDays; i++) {
-          final checkDate = todayDate.add(Duration(days: i));
-          if (_recurrence!.isDueOn(checkDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
-            return checkDate;
-          }
-        }
-      }
-      
-      // For daily recurrence, calculate next occurrence
-      if (_recurrence!.types.contains(RecurrenceType.daily)) {
-        // Check up to the interval + 1 days to find the next occurrence
-        // For intervals like 2-3 days, this ensures we find the next occurrence
-        // For long intervals (like 90 days), this also works properly
-        final maxDays = _recurrence!.interval + 1;
-        for (int i = 1; i <= maxDays; i++) {
-          final checkDate = todayDate.add(Duration(days: i));
-          if (_recurrence!.isDueOn(checkDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
-            return checkDate;
-          }
-        }
-      }
-      
-      // Fallback: For any other recurrence types (menstrual phases, custom, etc.)
-      // Search up to 1 year to find the next occurrence
-      for (int i = 1; i <= 365; i++) {
-        final checkDate = todayDate.add(Duration(days: i));
-        if (_recurrence!.isDueOn(checkDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
-          return checkDate;
-        }
-      }
+
+      // Close loading dialog
+      navigator.pop();
+
+      // Close screen and return success message
+      navigator.pop(message);
+    } catch (e) {
+      // Close loading dialog
+      navigator.pop();
+
+      // Show error using captured scaffoldMessenger
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('❌ Failed to skip task: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
-    
-    return null;
   }
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false, // We'll handle pop manually
+      canPop: false,  // Intercept back button to save first
       onPopInvokedWithResult: (bool didPop, dynamic result) async {
-        // Auto-save before leaving if there are unsaved changes
-        if (!didPop && _hasUnsavedChanges && _titleController.text.trim().isNotEmpty) {
-          // Save synchronously to ensure it completes before pop
-          await _saveTaskImmediately();
-        }
-        // Now pop manually
-        if (!didPop && mounted) {
+        if (!didPop) {
+          // Save to disk before allowing navigation
+          if (_titleController.text.trim().isNotEmpty) {
+            try {
+              final task = TaskBuilder.buildFromEditScreen(
+                currentTaskId: _currentTask?.id,
+                title: _titleController.text.trim(),
+                categoryIds: _selectedCategoryIds,
+                deadline: _deadline,
+                scheduledDate: _scheduledDate,
+                reminderTime: _reminderTime,
+                isImportant: _isImportant,
+                isPostponed: _scheduledDate != null,
+                recurrence: _recurrence,
+                hasUserModifiedScheduledDate: _hasUserModifiedScheduledDate,
+                currentTask: _currentTask,
+                preserveCompletionStatus: true,
+              );
+
+              // Save to disk with isAutoSave: false
+              widget.onSave(task, isAutoSave: false);
+
+              // Wait a brief moment for save to complete
+              await Future.delayed(const Duration(milliseconds: 50));
+            } catch (e) {
+              if (kDebugMode) {
+                print('ERROR saving task on exit: $e');
+              }
+            }
+          }
+
+          // Cancel any pending timers
+          _saveTimer?.cancel();
+          _savedTimer?.cancel();
+
+          // Now allow navigation
           if (context.mounted) {
             Navigator.of(context).pop();
           }
@@ -802,13 +727,13 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
             // Only add spacing if reminder section was shown
             if (_recurrence == null) const SizedBox(height: 12),
 
-            // Important Section
+            // Priority Section
             Container(
               decoration: BoxDecoration(
                 color: AppColors.dialogBackground.withValues(alpha: 0.08),
                 borderRadius: AppStyles.borderRadiusLarge,
                 border: Border.all(
-                  color: _isImportant 
+                  color: _isImportant
                       ? AppColors.coral.withValues(alpha: 0.3)
                       : AppColors.greyText,
                 ),
@@ -820,15 +745,15 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: (_isImportant 
+                        color: (_isImportant
                             ? AppColors.coral
                             : AppColors.greyText).withValues(alpha: 0.1),
                         borderRadius: AppStyles.borderRadiusMedium,
                       ),
                       child: Icon(
                         Icons.star_rounded,
-                        color: _isImportant 
-                            ? AppColors.coral 
+                        color: _isImportant
+                            ? AppColors.coral
                             : AppColors.greyText,
                         size: 24,
                       ),
@@ -839,21 +764,21 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Important',
+                            'Priority',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w500,
-                              color: _isImportant 
+                              color: _isImportant
                                   ? AppColors.lightCoral
                                   : AppColors.greyText,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'High priority',
+                            'Mark as high priority',
                             style: TextStyle(
                               fontSize: 14,
-                              color: _isImportant 
+                              color: _isImportant
                                   ? AppColors.coral
                                   : AppColors.greyText,
                               fontWeight: _isImportant ? FontWeight.w500 : FontWeight.normal,
@@ -1111,14 +1036,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     if (recurrence != _recurrence) {
       setState(() {
         _recurrence = recurrence;
-        // If we set a recurrence and the task doesn't have a scheduled date,
-        // set it to today if the recurrence makes the task due today
-        if (recurrence != null && _currentTask?.scheduledDate == null) {
-          final today = DateTime.now();
-          final todayDate = DateTime(today.year, today.month, today.day);
-          if (recurrence.isDueOn(todayDate, taskCreatedAt: _currentTask?.createdAt ?? DateTime.now())) {
-          }
-        }
         // Clear manually set scheduled date and deadline when setting recurrence
         if (recurrence != null) {
           _scheduledDate = null;

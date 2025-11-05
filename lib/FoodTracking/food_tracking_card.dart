@@ -26,6 +26,8 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
   int _processedCount = 0;
   String _resetInfo = '';
   int _currentPhaseCalories = 0;
+  int _targetGoal = 80;
+  int _daysUntilReset = 0;
 
   @override
   void initState() {
@@ -62,10 +64,14 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
   Future<void> _loadCurrentPeriodCounts() async {
     final counts = await FoodTrackingService.getCurrentPeriodCounts();
     final resetInfo = await FoodTrackingService.getResetInfo();
+    final targetGoal = await FoodTrackingService.getTargetGoal();
+    final daysUntilReset = await FoodTrackingService.getDaysUntilReset();
     setState(() {
       _healthyCount = counts['healthy']!;
       _processedCount = counts['processed']!;
       _resetInfo = resetInfo;
+      _targetGoal = targetGoal;
+      _daysUntilReset = daysUntilReset;
     });
   }
 
@@ -134,8 +140,8 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
 
   Color _getProgressColor() {
     final healthyPercentage = _getHealthyPercentage() * 100;
-    if (healthyPercentage >= 80) return AppColors.lightGreen;
-    if (healthyPercentage >= 60) return AppColors.pastelGreen;
+    if (healthyPercentage >= _targetGoal) return AppColors.lightGreen;
+    if (healthyPercentage >= _targetGoal - 20) return AppColors.pastelGreen;
     return AppColors.red;
   }
 
@@ -286,15 +292,17 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Target: 80% healthy • $_resetInfo',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.white54,
+                    if (_daysUntilReset <= 3) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Target: $_targetGoal% healthy • $_resetInfo',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.white54,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
+                    ],
                   ],
                 ),
               ),

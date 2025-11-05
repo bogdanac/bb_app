@@ -239,7 +239,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
       }
       
     } catch (e) {
-      debugPrint('Error adding task to today: $e');
+      debugPrint('ERROR adding task to today: $e');
     }
   }
 
@@ -645,7 +645,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
             if (task.isImportant)
               _buildInfoChip(
                 Icons.star_rounded,
-                'Important',
+                'Priority',
                 AppColors.coral,
               ),
             if (task.categoryIds.isNotEmpty)
@@ -705,6 +705,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   late bool _showAllTasks; // Will be initialized in initState
   bool _isRecalculating = false;
   bool _isLoading = true;
+  bool _isUpdatingTasks = false; // Flag to prevent duplicate refreshes
   final TaskService _taskService = TaskService();
 
   @override
@@ -713,13 +714,26 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     // Initialize _showAllTasks based on widget parameter, defaulting to true (original behavior)
     _showAllTasks = widget.initialShowAllTasks ?? true;
     WidgetsBinding.instance.addObserver(this);
+
+    // Listen for task changes to update UI in real-time
+    _taskService.addTaskChangeListener(_onTasksChanged);
+
     _loadData();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _taskService.removeTaskChangeListener(_onTasksChanged);
     super.dispose();
+  }
+
+  void _onTasksChanged() {
+    // Only refresh if we're not the ones who triggered the change
+    // This prevents duplicate refreshes when we save tasks
+    if (mounted && !_isUpdatingTasks) {
+      _loadTasks().then((_) => _updateDisplayTasks());
+    }
   }
 
   @override
@@ -735,25 +749,27 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     if (widget.showFilters) {
       await _loadCategoryFilters();
     }
-    await _loadTasks();
-    _updateDisplayTasks();
+    await _loadTasks(); // This already calls _updateDisplayTasks() internally
     setState(() => _isLoading = false);
   }
 
-  void _updateDisplayTasks() async {
-    // For simple cases, use sync filtering for immediate update
+  Future<void> _updateDisplayTasks() async {
+    // Use async filtering when menstrual filtering is active (_showAllTasks = true)
+    // or when showing completed tasks (needs special sorting)
     if (_showAllTasks || _showCompleted) {
-      final filteredTasks = _getFilteredTasks();
+      // For menstrual cycle filtering or completed tasks, use async
+      final filteredTasks = await _getFilteredTasksAsync();
       _displayTasks = _taskService.getPrioritizedTasks(
         filteredTasks,
         _categories,
         100,
         includeCompleted: _showCompleted,
       );
+
       setState(() {});
     } else {
-      // For menstrual cycle filtering, use async
-      final filteredTasks = await _getFilteredTasksAsync();
+      // For simple cases (no menstrual filtering), use sync for immediate update
+      final filteredTasks = _getFilteredTasks();
       _displayTasks = _taskService.getPrioritizedTasks(
         filteredTasks,
         _categories,
@@ -804,7 +820,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
     if (mounted) {
       _tasks = cleanTasks;
-      _updateDisplayTasks();
+      await _updateDisplayTasks();
     }
   }
 
@@ -819,7 +835,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         builder: (context) => TaskEditScreen(
           categories: _categories,
           initialCategoryIds: _selectedCategoryFilters.isNotEmpty ? _selectedCategoryFilters : null,
-          onSave: (task) async {
+          onSave: (task, {bool isAutoSave = false}) async {
             // Update in-memory list immediately for instant UI update
             final existingIndex = _tasks.indexWhere((t) => t.id == task.id);
             if (existingIndex != -1) {
@@ -829,49 +845,66 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
             }
             _updateDisplayTasks(); // Immediate UI refresh
 
-            // Save to disk asynchronously
-            final allTasks = await _taskService.loadTasks();
-            final diskIndex = allTasks.indexWhere((t) => t.id == task.id);
-            if (diskIndex != -1) {
-              allTasks[diskIndex] = task;
-            } else {
-              allTasks.add(task);
+            // Only save to disk on final save (not during typing)
+            if (!isAutoSave) {
+              _isUpdatingTasks = true; // Prevent duplicate refresh from listener
+
+              await _taskService.saveTasks(_tasks,
+                skipNotificationUpdate: false,
+                skipWidgetUpdate: false);
+
+              widget.onTasksChanged?.call();
+
+              _isUpdatingTasks = false; // Re-enable listener
             }
-            await _taskService.saveTasks(allTasks);
-            widget.onTasksChanged?.call();
           },
         ),
       ),
     );
   }
 
-  void _editTask(Task task) {
-    Navigator.push(
+  void _editTask(Task task) async {
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => TaskEditScreen(
           task: task,
           categories: _categories,
-          onSave: (updatedTask) async {
+          onSave: (updatedTask, {bool isAutoSave = false}) async {
             // Update in-memory list immediately for instant UI update
             final taskIndex = _tasks.indexWhere((t) => t.id == task.id);
             if (taskIndex != -1) {
               _tasks[taskIndex] = updatedTask;
-              _updateDisplayTasks(); // Immediate UI refresh
+              await _updateDisplayTasks(); // Immediate UI refresh
             }
 
-            // Save to disk asynchronously
-            final allTasks = await _taskService.loadTasks();
-            final diskIndex = allTasks.indexWhere((t) => t.id == task.id);
-            if (diskIndex != -1) {
-              allTasks[diskIndex] = updatedTask;
-              await _taskService.saveTasks(allTasks);
+            // Only save to disk on final save (not during typing)
+            if (!isAutoSave) {
+              _isUpdatingTasks = true; // Prevent duplicate refresh from listener
+
+              await _taskService.saveTasks(_tasks,
+                skipNotificationUpdate: false,
+                skipWidgetUpdate: false);
+
               widget.onTasksChanged?.call();
+
+              _isUpdatingTasks = false; // Re-enable listener
             }
           },
         ),
       ),
     );
+
+    // Reload tasks after editor closes (in case task was skipped or modified outside onSave)
+    if (mounted) {
+      await _loadTasks(); // This already calls _updateDisplayTasks() internally
+      widget.onTasksChanged?.call(); // Notify parent (e.g., DailyTasksCard) to refresh
+    }
+
+    // Show snackbar if task was skipped
+    if (result != null && result is String && mounted && context.mounted) {
+      SnackBarUtils.showSuccess(context, result);
+    }
   }
 
   void _toggleTaskCompletion(Task task) async {
@@ -904,7 +937,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     final taskIndex = _tasks.indexWhere((t) => t.id == task.id);
     if (taskIndex != -1) {
       _tasks[taskIndex] = updatedTask;
-      _updateDisplayTasks(); // Immediate UI refresh
+      await _updateDisplayTasks(); // Immediate UI refresh
     }
 
     // Save to disk asynchronously
@@ -919,13 +952,6 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
 
   Future<void> _handleRecurringTaskCompletion(Task task) async {
-    if (kDebugMode) {
-      print('=== HANDLING RECURRING TASK COMPLETION ===');
-      print('Task: ${task.title}');
-      print('Task ID: ${task.id}');
-      print('Previous completion status: ${task.isCompleted}');
-    }
-
     try {
 
     // Special handling for menstrual phase tasks with phaseDay:
@@ -961,21 +987,15 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
       if (currentTaskIndex != -1) {
         allTasks[currentTaskIndex] = updatedTask;
-        await _taskService.saveTasks(allTasks);
 
-        // Update in-memory list immediately
-        final memoryTaskIndex = _tasks.indexWhere((t) => t.id == task.id);
-        if (memoryTaskIndex != -1) {
-          _tasks[memoryTaskIndex] = updatedTask;
-          _updateDisplayTasks();
-        }
+        // Update in-memory and force rebuild
+        _tasks = allTasks;
+        await _updateDisplayTasks();
+        setState(() {}); // Force rebuild AFTER display tasks updated
 
-        await _loadTasks();
-
-        if (kDebugMode) {
-          print('✅ Menstrual phase task completed and scheduledDate cleared');
-          print('   Will be recalculated when user updates period info');
-        }
+        // Save to disk in background
+        _taskService.saveTasks(allTasks);
+        widget.onTasksChanged?.call();
       }
       return;
     }
@@ -1028,30 +1048,16 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       
       if (currentTaskIndex != -1) {
         allTasks[currentTaskIndex] = updatedTask;
-        await _taskService.saveTasks(allTasks);
 
-        // Reschedule notification for the updated recurring task
-        await _taskService.scheduleTaskNotification(updatedTask);
+        // Update in-memory and force rebuild
+        _tasks = allTasks;
+        await _updateDisplayTasks();
+        setState(() {}); // Force rebuild AFTER display tasks updated
 
-        // Update in-memory list immediately
-        final memoryTaskIndex = _tasks.indexWhere((t) => t.id == task.id);
-        if (memoryTaskIndex != -1) {
-          _tasks[memoryTaskIndex] = updatedTask;
-          _updateDisplayTasks();
-        }
-
-        await _loadTasks();
-        
-        if (kDebugMode) {
-          print('✅ Updated recurring task to next due date: ${nextDueDate.toString()}');
-          print('   Task is now unchecked and scheduled for next occurrence');
-          print('   Original deadline preserved: ${task.deadline}');
-          print('   Reference date used: ${referenceDate.toString()}');
-          print('   Previous scheduled date: ${task.scheduledDate?.toString() ?? "none"}');
-          if (updatedTask.reminderTime != null) {
-            print('   Notification rescheduled for: ${updatedTask.reminderTime.toString()}');
-          }
-        }
+        // Save to disk and reschedule notification in background
+        _taskService.saveTasks(allTasks);
+        _taskService.scheduleTaskNotification(updatedTask);
+        widget.onTasksChanged?.call();
       }
       
     } else {
@@ -1086,7 +1092,8 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           _updateDisplayTasks();
         }
 
-        await _loadTasks();
+        // Notify parent widget
+        widget.onTasksChanged?.call();
       }
     }
     } catch (e, stackTrace) {
@@ -1130,34 +1137,34 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           await _loadTasks();
           widget.onTasksChanged?.call();
         }
-        
-        if (kDebugMode) {
-          print('✅ Fallback: Task marked as completed without recurring');
-        }
       } catch (fallbackError) {
         if (kDebugMode) {
-          print('❌ CRITICAL: Fallback completion also failed: $fallbackError');
+          print('ERROR CRITICAL: Fallback completion also failed: $fallbackError');
         }
       }
     }
   }
 
   void _deleteTask(Task task) async {
+    _isUpdatingTasks = true; // Prevent duplicate refresh from listener
+
     // Update in-memory list immediately for instant UI update
     _tasks.removeWhere((t) => t.id == task.id);
-    _updateDisplayTasks(); // Immediate UI refresh
+    await _updateDisplayTasks(); // Immediate UI refresh
 
-    // Save to disk asynchronously
-    final allTasks = await _taskService.loadTasks();
-    allTasks.removeWhere((t) => t.id == task.id);
-    await _taskService.saveTasks(allTasks);
+    // Save to disk using in-memory list
+    await _taskService.saveTasks(_tasks);
 
     // Notify parent widget that tasks have changed
     widget.onTasksChanged?.call();
+
+    _isUpdatingTasks = false; // Re-enable listener
   }
 
   Future<void> _postponeTask(Task task) async {
     try {
+      _isUpdatingTasks = true; // Prevent duplicate refresh from listener
+
       // Calculate tomorrow's date
       final tomorrow = DateTime.now().add(const Duration(days: 1));
       final postponedTask = Task(
@@ -1180,15 +1187,17 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       final taskIndex = _tasks.indexWhere((t) => t.id == task.id);
       if (taskIndex != -1) {
         _tasks[taskIndex] = postponedTask;
-        _updateDisplayTasks(); // Immediate UI refresh
+        await _updateDisplayTasks(); // Immediate UI refresh
       }
 
       // Save to disk asynchronously
       await _taskService.postponeTaskToTomorrow(task);
       widget.onTasksChanged?.call();
+
+      _isUpdatingTasks = false; // Re-enable listener
     } catch (e) {
       if (kDebugMode) {
-        print('Error postponing task: $e');
+        print('ERROR postponing task: $e');
       }
       if (mounted) {
         SnackBarUtils.showError(context, 'Failed to postpone task: $e');
@@ -1231,7 +1240,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error recalculating recurring tasks: $e');
+        print('ERROR recalculating recurring tasks: $e');
       }
       if (mounted) {
         SnackBarUtils.showError(context, '⚠️ Failed to recalculate tasks: ${e.toString()}');
@@ -1310,8 +1319,11 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           menstrualFiltered.add(task);
         }
         // For menstrual tasks, check if they're due in current phase
-        else if (await _isMenstrualTaskDueToday(task)) {
-          menstrualFiltered.add(task);
+        else {
+          final isDue = await _isMenstrualTaskDueToday(task);
+          if (isDue) {
+            menstrualFiltered.add(task);
+          }
         }
       }
       filtered = menstrualFiltered;

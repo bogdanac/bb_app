@@ -18,7 +18,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
     companion object {
         private const val ACTION_OPEN_APP = "com.bb.bb_app.OPEN_APP"
         private const val ACTION_COMPLETE_TASK = "com.bb.bb_app.COMPLETE_TASK"
-        private const val ACTION_REFRESH = "com.bb.bb_app.REFRESH_TASK_LIST"
         private const val MAX_TASKS_DISPLAY = 2
     }
 
@@ -56,10 +55,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                     refreshAllWidgets(context)
                 }
             }
-            ACTION_REFRESH -> {
-                android.util.Log.d("TaskListWidget", "Processing REFRESH action")
-                refreshAllWidgets(context)
-            }
         }
     }
 
@@ -95,6 +90,9 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         try {
             val views = RemoteViews(context.packageName, R.layout.task_list_widget)
 
+            // Apply custom background color
+            applyCustomBackgroundColor(context, views)
+
             // Set click intent to open app when clicking widget background
             val intent = Intent(context, TaskListWidgetProvider::class.java).apply {
                 action = ACTION_OPEN_APP
@@ -108,19 +106,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.task_list_container, pendingIntent)
 
-            // Set up refresh button
-            val refreshIntent = Intent(context, TaskListWidgetProvider::class.java).apply {
-                action = ACTION_REFRESH
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-            }
-            val refreshPendingIntent = PendingIntent.getBroadcast(
-                context,
-                appWidgetId + 10000, // Unique request code
-                refreshIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.refresh_button, refreshPendingIntent)
-
             // Load and display tasks
             val tasks = loadTasks(context)
             displayTasks(context, views, tasks)
@@ -131,6 +116,48 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         } catch (e: Exception) {
             android.util.Log.e("TaskListWidget", "Error in updateAppWidget for widget $appWidgetId: $e")
             e.printStackTrace()
+        }
+    }
+
+    private fun applyCustomBackgroundColor(context: Context, views: RemoteViews) {
+        try {
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val defaultColor = 0xCC000000.toInt() // Default transparent black (80% opacity)
+
+            // Try different possible keys for task list widget color
+            var customColor = defaultColor
+            val possibleKeys = listOf(
+                "flutter.widget_tasklist_color",
+                "widget_tasklist_color",
+                "flutter.widget_background_color",
+                "widget_background_color"
+            )
+
+            for (key in possibleKeys) {
+                try {
+                    val colorValue = prefs.getInt(key, -1)
+                    if (colorValue != -1) {
+                        customColor = colorValue
+                        break
+                    }
+                } catch (e: Exception) {
+                    // Try as long if int fails
+                    try {
+                        val colorValue = prefs.getLong(key, -1L)
+                        if (colorValue != -1L) {
+                            customColor = colorValue.toInt()
+                            break
+                        }
+                    } catch (e2: Exception) {
+                        // Key not found or invalid type, continue to next key
+                    }
+                }
+            }
+
+            // Set the background color of the widget root (outer container with padding)
+            views.setInt(R.id.task_list_widget_root, "setBackgroundColor", customColor)
+        } catch (e: Exception) {
+            android.util.Log.e("TaskListWidget", "Error applying custom background color: $e")
         }
     }
 
@@ -240,7 +267,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
 
             android.util.Log.d("TaskListWidget", "Loaded ${tasks.size} incomplete tasks")
 
-            // Return first 5 tasks without any sorting
+            // Return first MAX_TASKS_DISPLAY tasks (already sorted by priority in storage)
             val result = tasks.take(MAX_TASKS_DISPLAY)
             android.util.Log.d("TaskListWidget", "Returning ${result.size} tasks for display")
             return result

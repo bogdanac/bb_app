@@ -97,14 +97,9 @@ class RoutineWidgetProvider : AppWidgetProvider() {
         if (routineData != null) {
             val currentStep = getCurrentStep(context, routineData)
             val routineTitle = routineData.optString("title", "Morning Routine")
-            val totalSteps = routineData.optJSONArray("items")?.length() ?: 0
-            val currentStepIndex = getCurrentStepIndex(context) + 1
-            
+
             // Set routine title
             views.setTextViewText(R.id.routine_title, routineTitle)
-            
-            // Set progress text
-            views.setTextViewText(R.id.routine_progress, "$currentStepIndex/$totalSteps")
             
             if (currentStep != null) {
                 // Show current step
@@ -137,7 +132,6 @@ class RoutineWidgetProvider : AppWidgetProvider() {
         } else {
             // No routine available
             views.setTextViewText(R.id.routine_title, "No Routine")
-            views.setTextViewText(R.id.routine_progress, "0/0")
             views.setViewVisibility(R.id.step_container, android.view.View.GONE)
             views.setViewVisibility(R.id.completed_container, android.view.View.VISIBLE)
             views.setTextViewText(R.id.completed_text, "Tap refresh to reload routines")
@@ -157,17 +151,19 @@ class RoutineWidgetProvider : AppWidgetProvider() {
     private fun applyCustomBackgroundColor(context: Context, views: RemoteViews) {
         try {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            val defaultColor = 0xFF4CAF50.toInt() // Default vibrant green
-            
-            // Try different possible keys
+            val defaultColor = 0xCC000000.toInt() // Default transparent black (80% opacity)
+
+            // Try different possible keys (prioritize new key, fallback to old)
             var customColor = defaultColor
             val possibleKeys = listOf(
+                "flutter.widget_routine_color",
+                "widget_routine_color",
                 "flutter.widget_background_color",
                 "widget_background_color",
                 "flutter.widget_color",
                 "widget_color"
             )
-            
+
             for (key in possibleKeys) {
                 try {
                     val colorValue = prefs.getInt(key, -1)
@@ -188,7 +184,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                     }
                 }
             }
-            
+
             // Set the background color of the widget container
             views.setInt(R.id.widget_container, "setBackgroundColor", customColor)
         } catch (e: Exception) {
@@ -320,24 +316,33 @@ class RoutineWidgetProvider : AppWidgetProvider() {
             }
             
             // No override or override not found, use normal logic
-            // This mirrors the logic from Flutter's getCurrentActiveRoutine method
+            // Find first uncompleted routine scheduled for today
 
             val currentWeekday = getCurrentWeekday()
+            val today = getEffectiveDate()
 
-            // Find routines scheduled for today
+            // Find routines scheduled for today that are not completed
             for (routine in validRoutines) {
                 val activeDays = routine.optJSONArray("activeDays")
+                val routineId = routine.optString("id", "")
 
-                if (activeDays != null) {
+                if (activeDays != null && routineId.isNotEmpty()) {
                     for (i in 0 until activeDays.length()) {
                         if (activeDays.getInt(i) == currentWeekday) {
-                            return routine
+                            // Check if this routine is completed today
+                            val completedKey = "flutter.routine_completed_${routineId}_$today"
+                            val isCompleted = prefs.getBoolean(completedKey, false)
+
+                            if (!isCompleted) {
+                                return routine
+                            }
+                            break
                         }
                     }
                 }
             }
 
-            // No routine scheduled for today
+            // No uncompleted routine scheduled for today
             return null
         } catch (e: Exception) {
             e.printStackTrace()
@@ -386,40 +391,46 @@ class RoutineWidgetProvider : AppWidgetProvider() {
     }
 
     private fun completeCurrentStep(context: Context) {
+        android.util.Log.d("RoutineSync", "🔄 Widget: Complete button clicked")
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val today = getEffectiveDate()  // Use effective date (considers <2 AM as previous day)
         val routine = getCurrentRoutine(context) ?: return
-        val routineId = routine.optString("id", "") 
+        val routineId = routine.optString("id", "")
         if (routineId.isEmpty()) return
         val items = routine.optJSONArray("items") ?: return
         val currentIndex = getCurrentStepIndex(context)
-        
+        android.util.Log.d("RoutineSync", "🔄 Widget: Completing step $currentIndex for routine $routineId")
+
         if (currentIndex >= 0 && currentIndex < items.length()) {
             try {
                 // Mark current step as completed
                 val completedSteps = mutableListOf<Boolean>()
                 val skippedSteps = mutableListOf<Boolean>()
-                
-                // Load existing progress
-                val progressJson = prefs.getString("flutter.morning_routine_progress_$today", null)
+
+                // Load existing progress - try routine-specific key first
+                var progressJson = prefs.getString("flutter.routine_progress_${routineId}_$today", null)
+                // Fallback to legacy key
+                if (progressJson == null) {
+                    progressJson = prefs.getString("flutter.morning_routine_progress_$today", null)
+                }
                 if (progressJson != null) {
                     val progress = JSONObject(progressJson)
                     val completedArray = progress.optJSONArray("completedSteps")
                     val skippedArray = progress.optJSONArray("skippedSteps")
-                    
+
                     if (completedArray != null) {
                         for (i in 0 until completedArray.length()) {
                             completedSteps.add(completedArray.optBoolean(i, false))
                         }
                     }
-                    
+
                     if (skippedArray != null) {
                         for (i in 0 until skippedArray.length()) {
                             skippedSteps.add(skippedArray.optBoolean(i, false))
                         }
                     }
                 }
-                
+
                 // Ensure lists are the right size
                 while (completedSteps.size < items.length()) {
                     completedSteps.add(false)
@@ -427,7 +438,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 while (skippedSteps.size < items.length()) {
                     skippedSteps.add(false)
                 }
-                
+
                 // Mark current step as completed
                 completedSteps[currentIndex] = true
                 skippedSteps[currentIndex] = false
@@ -460,15 +471,105 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                     put("itemCount", items.length())
                 }
 
-                prefs.edit()
+                val commitResult = prefs.edit()
                     .putString("flutter.routine_progress_${routineId}_$today", progressData.toString())
                     .putString("flutter.morning_routine_progress_$today", progressData.toString())
                     .putString("flutter.morning_routine_last_date", today)
-                    .apply()
-                    
+                    .commit()
+                android.util.Log.d("RoutineSync", "🔄 Widget: Saved progress (commit=$commitResult): nextStep=$nextStepIndex, data=${progressData.toString()}")
+
+                // Check if all steps are completed
+                val allCompleted = completedSteps.all { it }
+                if (allCompleted) {
+                    // Mark this routine as completed for today
+                    prefs.edit()
+                        .putBoolean("flutter.routine_completed_${routineId}_$today", true)
+                        .commit()
+
+                    // Try to load next routine
+                    loadNextRoutine(context, routineId)
+                }
+
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    private fun loadNextRoutine(context: Context, currentRoutineId: String) {
+        try {
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val today = getEffectiveDate()
+
+            // Get all routines
+            val routinesCount = try {
+                prefs.getInt("flutter.routines_count", -1)
+            } catch (e: ClassCastException) {
+                try {
+                    prefs.getLong("flutter.routines_count", -1).toInt()
+                } catch (e2: Exception) {
+                    -1
+                }
+            }
+
+            if (routinesCount <= 0) return
+
+            val validRoutines = mutableListOf<JSONObject>()
+            for (i in 0 until routinesCount) {
+                val routineJson = prefs.getString("flutter.routine_$i", null)
+                if (routineJson != null) {
+                    try {
+                        validRoutines.add(JSONObject(routineJson))
+                    } catch (e: Exception) {
+                        // Skip invalid routine
+                    }
+                }
+            }
+
+            val currentWeekday = getCurrentWeekday()
+            val activeRoutines = validRoutines.filter { routine ->
+                val activeDays = routine.optJSONArray("activeDays")
+                if (activeDays != null) {
+                    for (i in 0 until activeDays.length()) {
+                        if (activeDays.getInt(i) == currentWeekday) {
+                            return@filter true
+                        }
+                    }
+                }
+                false
+            }
+
+            // Find current routine index
+            val currentIndex = activeRoutines.indexOfFirst { it.optString("id", "") == currentRoutineId }
+
+            // Search for next uncompleted routine
+            for (i in (currentIndex + 1) until activeRoutines.size) {
+                val routine = activeRoutines[i]
+                val routineId = routine.optString("id", "")
+                val completedKey = "flutter.routine_completed_${routineId}_$today"
+                val isCompleted = prefs.getBoolean(completedKey, false)
+
+                if (!isCompleted) {
+                    // Set this as the active routine
+                    val overrideData = JSONObject().apply {
+                        put("routineId", routineId)
+                        put("date", today)
+                    }
+                    prefs.edit()
+                        .putString("flutter.active_routine_override", overrideData.toString())
+                        .remove("flutter.morning_routine_progress_$today")
+                        .remove("flutter.routine_progress_${routineId}_$today")
+                        .commit()
+                    return
+                }
+            }
+
+            // No more uncompleted routines, clear override
+            prefs.edit()
+                .remove("flutter.active_routine_override")
+                .commit()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -552,8 +653,8 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                     .putString("flutter.routine_progress_${routineId}_$today", progressData.toString())
                     .putString("flutter.morning_routine_progress_$today", progressData.toString())
                     .putString("flutter.morning_routine_last_date", today)
-                    .apply()
-                    
+                    .commit()
+
             } catch (e: Exception) {
                 e.printStackTrace()
             }

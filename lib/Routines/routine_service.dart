@@ -163,6 +163,63 @@ class RoutineService {
     await RoutineWidgetService.updateWidget();
   }
 
+  /// Get the next routine from the list based on priority (top to bottom) and day of week
+  /// Returns the next routine that is scheduled for today and not yet completed
+  static Future<Routine?> getNextRoutine(List<Routine> routines, String? currentRoutineId) async {
+    try {
+      if (routines.isEmpty) return null;
+
+      final prefs = await SharedPreferences.getInstance();
+      final today = getEffectiveDate();
+
+      // Use effective date to determine current day
+      final effectiveDate = TimezoneUtils.getEffectiveDateTime();
+      final todayWeekday = effectiveDate.weekday; // 1=Monday, 7=Sunday
+
+      // Find routines that are scheduled for today
+      final activeRoutines = routines.where((routine) =>
+        routine.activeDays.contains(todayWeekday)
+      ).toList();
+
+      if (activeRoutines.isEmpty) return null;
+
+      // Find the index of the current routine
+      final currentIndex = currentRoutineId != null
+          ? activeRoutines.indexWhere((r) => r.id == currentRoutineId)
+          : -1;
+
+      // Search for next uncompleted routine starting after current
+      for (int i = currentIndex + 1; i < activeRoutines.length; i++) {
+        final routine = activeRoutines[i];
+        final completedKey = 'routine_completed_${routine.id}_$today';
+        final isCompleted = prefs.getBool(completedKey) ?? false;
+
+        if (!isCompleted) {
+          return routine;
+        }
+      }
+
+      // No uncompleted routine found after current, search from beginning
+      for (int i = 0; i <= currentIndex; i++) {
+        final routine = activeRoutines[i];
+        final completedKey = 'routine_completed_${routine.id}_$today';
+        final isCompleted = prefs.getBool(completedKey) ?? false;
+
+        if (!isCompleted && routine.id != currentRoutineId) {
+          return routine;
+        }
+      }
+
+      // All routines completed or only current routine available
+      return null;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error in getNextRoutine: $e');
+      }
+      return null;
+    }
+  }
+
   /// Find routine from a list of routines that is active today
   /// @deprecated Use getCurrentActiveRoutine instead for consistency
   static Future<Routine?> findRoutine(List<Routine> routines) async {
@@ -211,12 +268,4 @@ class RoutineService {
     return jsonDecode(progressJson);
   }
 
-  /// Clear routine progress for today
-  static Future<void> clearRoutineProgress() async {
-    final prefs = await SharedPreferences.getInstance();
-    final today = getEffectiveDate();  // Use effective date for consistency
-    
-    await prefs.remove('$_routineProgressPrefix$today');
-    await prefs.setString(_routineLastDateKey, today);
-  }
 }

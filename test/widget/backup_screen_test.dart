@@ -66,7 +66,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify threshold controls are present
-      expect(find.text('Overdue Warning Threshold'), findsOneWidget);
+      expect(find.text('Backup Warning Threshold'), findsOneWidget);
       expect(find.byIcon(Icons.remove), findsOneWidget);
       expect(find.byIcon(Icons.add), findsOneWidget);
       expect(find.text('7'), findsOneWidget); // Default threshold
@@ -81,16 +81,16 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Find and tap the increase button
-      final increaseButton = find.byIcon(Icons.add);
-      expect(increaseButton, findsOneWidget);
+      // Find and tap the increase button for threshold (last add button)
+      final increaseButtons = find.byIcon(Icons.add);
+      expect(increaseButtons, findsWidgets);
 
-      await tester.tap(increaseButton);
+      await tester.tap(increaseButtons.last);
       await tester.pumpAndSettle();
 
       // Threshold should increase (though we'd need to mock BackupService to test the actual change)
       // For now, just verify the button is tappable
-      expect(increaseButton, findsOneWidget);
+      expect(increaseButtons, findsWidgets);
     });
 
     testWidgets('should display auto backup toggle', (WidgetTester tester) async {
@@ -101,6 +101,13 @@ void main() {
       );
 
       await tester.pumpAndSettle();
+
+      // Scroll to make sure the auto backup toggle is visible
+      await tester.dragUntilVisible(
+        find.text('Automatic Daily Backups'),
+        find.byType(SingleChildScrollView),
+        const Offset(0, -50),
+      );
 
       // Verify auto backup toggle is present and enabled
       expect(find.text('Automatic Daily Backups'), findsOneWidget);
@@ -118,6 +125,13 @@ void main() {
       );
 
       await tester.pumpAndSettle();
+
+      // Scroll to the auto backup toggle to ensure it's visible
+      await tester.dragUntilVisible(
+        find.text('Automatic Daily Backups'),
+        find.byType(SingleChildScrollView),
+        const Offset(0, -50),
+      );
 
       // Find and tap the switch
       final switchWidget = find.byType(Switch);
@@ -144,8 +158,13 @@ void main() {
       expect(find.text('Export to File'), findsOneWidget);
       expect(find.text('Share Backup'), findsOneWidget);
 
+      // Scroll down to see the Restore section
+      await tester.drag(find.byType(SingleChildScrollView), const Offset(0, -200));
+      await tester.pumpAndSettle();
+
       // Verify import section
       expect(find.text('Restore'), findsOneWidget);
+      expect(find.text('Restore from Firebase'), findsOneWidget);
       expect(find.text('Find My Backup Files'), findsOneWidget);
       expect(find.text('Import from Cloud Storage'), findsOneWidget);
     });

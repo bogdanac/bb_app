@@ -49,7 +49,8 @@ class TaskCardUtils {
       case RecurrenceType.monthly:
         return recurrence.interval == 1 ? 'Monthly' : '${recurrence.interval}m';
       case RecurrenceType.yearly:
-        return recurrence.interval == 1 ? 'Yearly' : '${recurrence.interval}y';
+        // For yearly, interval stores the month (1-12), so always show "Yearly"
+        return 'Yearly';
       case RecurrenceType.custom:
         return 'Custom';
       // Menstrual cycle phases
@@ -121,30 +122,6 @@ class TaskCardUtils {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // Check reminder time - highest priority display
-    if (task.reminderTime != null) {
-      final reminderDiff = task.reminderTime!.difference(now).inMinutes;
-      if (reminderDiff <= 15 && reminderDiff >= -15) {
-        if (reminderDiff <= 0) {
-          return 'Reminder now';
-        } else {
-          return 'Reminder in ${reminderDiff}m';
-        }
-      } else if (reminderDiff <= 60 && reminderDiff >= -30) {
-        if (reminderDiff <= 0) {
-          return 'Reminder ${(-reminderDiff)}m ago';
-        } else {
-          return 'Reminder in ${reminderDiff}m';
-        }
-      } else if (reminderDiff <= 120 && reminderDiff >= -60) {
-        if (reminderDiff <= 0) {
-          return 'Reminder past';
-        } else {
-          return 'Reminder in ${(reminderDiff / 60).round()}h';
-        }
-      }
-    }
-
     // Check deadline today
     if (task.deadline != null &&
         DateTime(task.deadline!.year, task.deadline!.month, task.deadline!.day)
@@ -173,15 +150,41 @@ class TaskCardUtils {
       return dueTomorrow;
     }
 
-    // Check if task is scheduled for today (for recurring tasks)
-    if (task.scheduledDate != null &&
+    // Check if task is scheduled for today
+    final bool isScheduledToday = task.scheduledDate != null &&
         DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)
-            .isAtSameMomentAs(today)) {
+            .isAtSameMomentAs(today);
+
+    if (isScheduledToday) {
+      // Check for upcoming reminder (within 30 minutes only) - only for tasks scheduled today
+      DateTime? reminderDateTime = task.reminderTime;
+      if (reminderDateTime == null && task.recurrence?.reminderTime != null) {
+        // Convert TimeOfDay to DateTime for today
+        final now = DateTime.now();
+        final timeOfDay = task.recurrence!.reminderTime!;
+        reminderDateTime = DateTime(now.year, now.month, now.day, timeOfDay.hour, timeOfDay.minute);
+      }
+
+      if (reminderDateTime != null) {
+        final now = DateTime.now();
+        final diff = reminderDateTime.difference(now);
+
+        // Only show reminder priority if within 30 minutes
+        if (diff.inMinutes >= 0 && diff.inMinutes <= 30) {
+          if (diff.inMinutes == 0) {
+            return 'Reminder now';
+          }
+          return 'Reminder in ${diff.inMinutes}m';
+        }
+      }
+
       return 'Scheduled today';
     }
 
-    // Check scheduled date tomorrow (for recurring tasks)
-    if (task.scheduledDate != null && task.recurrence != null &&
+    // Check scheduled date tomorrow
+    // Only show this for recurring tasks or postponed tasks - simple scheduled tasks show chip instead
+    if (task.scheduledDate != null &&
+        (task.recurrence != null || task.isPostponed) &&
         DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)
             .isAtSameMomentAs(tomorrow)) {
       return dueTomorrow;
@@ -191,18 +194,20 @@ class TaskCardUtils {
 
   // Get priority color based on the priority reason
   static Color getPriorityColor(String reason) {
-    if (reason.contains('Reminder now') || reason.contains('Reminder in') && reason.endsWith('m')) {
+    if (reason.contains('Reminder now') || (reason.contains('Reminder in') && reason.endsWith('m'))) {
+      if (reason == 'Reminder now') {
+        return overdueColor; // Red - immediate
+      }
       final minutes = int.tryParse(reason.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
       if (minutes <= 15) {
-        return scheduledTodayColor; // Urgent - very close reminder
-      } else if (minutes <= 60) {
-        return AppColors.coral; // High priority - close reminder
+        return AppColors.coral; // Orange - very close
       }
-      return reminderColor; // Medium priority reminder
+      return AppColors.yellow; // Yellow - upcoming
     }
     
     switch (reason) {
       case dueToday:
+        return overdueColor; // Red for deadline today (urgent)
       case 'Reminder now':
         return scheduledTodayColor;
       case 'Scheduled today':
@@ -227,21 +232,22 @@ class TaskCardUtils {
   // Get scheduled date text for display
   static String? getScheduledDateText(Task task, String priorityReason) {
     if (task.scheduledDate == null) return null;
-    
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final tomorrow = today.add(const Duration(days: 1));
     final scheduledDay = DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day);
-    
+
     // Don't show scheduled date if priority reason already covers it
+    // This prevents duplicate chips (e.g., priority says "Scheduled today" AND scheduled chip says "Scheduled Today")
+    if (priorityReason.contains('Scheduled today') && scheduledDay.isAtSameMomentAs(today)) {
+      return null; // Priority already says "Scheduled today"
+    }
     if (priorityReason == dueToday && scheduledDay.isAtSameMomentAs(today)) {
       return null; // Priority already says "today"
     }
     if (priorityReason == dueTomorrow && scheduledDay.isAtSameMomentAs(tomorrow)) {
       return null; // Priority already says "tomorrow"
-    }
-    if (priorityReason.contains('today') && scheduledDay.isAtSameMomentAs(today)) {
-      return null; // Priority already mentions today
     }
     if (priorityReason.contains('tomorrow') && scheduledDay.isAtSameMomentAs(tomorrow)) {
       return null; // Priority already mentions tomorrow
