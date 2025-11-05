@@ -151,7 +151,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
     private fun applyCustomBackgroundColor(context: Context, views: RemoteViews) {
         try {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            val defaultColor = 0xCC000000.toInt() // Default transparent black (80% opacity)
+            val defaultColor = 0xB3202020.toInt() // Default transparent dark grey (70% opacity)
 
             // Try different possible keys (prioritize new key, fallback to old)
             var customColor = defaultColor

@@ -31,7 +31,7 @@
             android:text="Morning Routine"
             android:textSize="16sp"
             android:textStyle="normal"
-            android:textColor="@android:color/white"
+            android:textColor="#FFFFFF"
             android:maxLines="1"
             android:ellipsize="end" />
 
@@ -65,7 +65,7 @@
             android:layout_height="wrap_content"
             android:text="☀️ Stretch and breathe"
             android:textSize="15sp"
-            android:textColor="@android:color/white"
+            android:textColor="#FFFFFF"
             android:background="@drawable/step_background"
             android:padding="12dp"
             android:layout_marginBottom="12dp"
@@ -86,7 +86,7 @@
                 android:layout_weight="1"
                 android:text="✓ Complete"
                 android:textSize="14sp"
-                android:textColor="@android:color/white"
+                android:textColor="#FFFFFF"
                 android:background="@drawable/complete_button_background"
                 android:layout_marginEnd="8dp"
                 style="?android:attr/borderlessButtonStyle" />
@@ -98,7 +98,7 @@
                 android:layout_weight="1"
                 android:text="Skip"
                 android:textSize="14sp"
-                android:textColor="@android:color/white"
+                android:textColor="#FFFFFF"
                 android:background="@drawable/skip_button_background"
                 android:layout_marginStart="8dp"
                 style="?android:attr/borderlessButtonStyle" />
@@ -130,7 +130,7 @@
             android:layout_height="wrap_content"
             android:text="All steps completed!"
             android:textSize="14sp"
-            android:textColor="@android:color/white"
+            android:textColor="#FFFFFF"
             android:textAlignment="center" />
 
     </LinearLayout>

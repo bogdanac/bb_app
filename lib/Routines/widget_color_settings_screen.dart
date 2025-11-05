@@ -14,21 +14,20 @@ class WidgetColorSettingsScreen extends StatefulWidget {
 }
 
 class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
-  Color _routineColor = const Color(0xCC000000); // Transparent black default
-  Color _taskListColor = const Color(0xCC000000); // Transparent black default
+  Color _routineColor = const Color(0xB3202020); // Transparent dark grey default
+  Color _taskListColor = const Color(0xB3202020); // Transparent dark grey default
   bool _isLoading = true;
 
   // Predefined color options
   final List<Color> _colorOptions = [
-    const Color(0xCC000000), // Transparent Black (default) - 80% opacity
-    const Color(0xFFE13E76), // Material Pink
-    const Color(0xFFDCCD49), // Bright Yellow
-    const Color(0xFFED6F48), // Deep Orange
-    const Color(0xFF3F96DC), // Material Blue
-    const Color(0xFF9A4FA6), // Pastel Purple (increased opacity)
-    const Color(0xFF607D8B), // Blue Grey
-    const Color(0xFF009688), // Teal
-    const Color(0xFF4CAF50), // Material Green
+    const Color(0xB3202020), // Transparent Dark Grey (default) - 70% opacity
+    const Color(0xFF8CC4E8), // Soft Blue
+    const Color(0xFF6EBDBD), // Nice Teal
+    const Color(0xFFBF9FCA), // Soft Purple
+    const Color(0xFF94A8B8), // Soft Blue Grey
+    const Color(0xFF80C4BC), // Soft Mint Teal
+    const Color(0xFF9DD6C7), // Soft Mint Green
+    const Color(0xFFA8D5A1), // Soft Green
   ];
 
   @override
@@ -39,7 +38,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
 
   Future<void> _loadColors() async {
     final prefs = await SharedPreferences.getInstance();
-    final defaultColor = const Color(0xCC000000).toARGB32(); // Transparent black default for both
+    final defaultColor = const Color(0xB3202020).toARGB32(); // Transparent dark grey default for both
 
     // Get stored colors, use default if not set
     final routineColor = prefs.getInt('widget_routine_color') ?? defaultColor;
