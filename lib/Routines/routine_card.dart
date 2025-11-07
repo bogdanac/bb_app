@@ -103,17 +103,22 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
 
           // Initialize all items properly first
           for (int i = 0; i < _currentRoutine!.items.length; i++) {
-            _currentRoutine!.items[i].isSkipped = false; // Ensure isSkipped is always initialized
+            _currentRoutine!.items[i].isSkipped = false;
+            _currentRoutine!.items[i].isPostponed = false;
           }
-          
+
           // Update completion status from saved progress
           final completedSteps = List<bool>.from(progressData['completedSteps'] ?? []);
           final skippedSteps = List<bool>.from(progressData['skippedSteps'] ?? []);
+          final postponedSteps = List<bool>.from(progressData['postponedSteps'] ?? []);
           for (int i = 0; i < _currentRoutine!.items.length && i < completedSteps.length; i++) {
             _currentRoutine!.items[i].isCompleted = completedSteps[i];
           }
           for (int i = 0; i < _currentRoutine!.items.length && i < skippedSteps.length; i++) {
             _currentRoutine!.items[i].isSkipped = skippedSteps[i];
+          }
+          for (int i = 0; i < _currentRoutine!.items.length && i < postponedSteps.length; i++) {
+            _currentRoutine!.items[i].isPostponed = postponedSteps[i];
           }
           
           if (kDebugMode) {
@@ -125,6 +130,7 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
           for (var item in _currentRoutine!.items) {
             item.isCompleted = false;
             item.isSkipped = false;
+            item.isPostponed = false;
           }
           
           // Clear old progress
@@ -232,8 +238,8 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     // Save progress after each step
     await _saveProgress();
 
-    // Check if all steps are actually completed (not just skipped)
-    if (_currentRoutine!.items.every((item) => item.isCompleted)) {
+    // Check if all steps are done (completed or permanently skipped, but not postponed)
+    if (_currentRoutine!.items.every((item) => item.isCompleted || item.isSkipped)) {
       if (kDebugMode) {
         print('All steps completed for routine: ${_currentRoutine!.id}');
       }
@@ -265,19 +271,41 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     if (_currentRoutine == null || _currentStepIndex >= _currentRoutine!.items.length) return;
 
     if (kDebugMode) {
-      print('Skipping step $_currentStepIndex: ${_currentRoutine!.items[_currentStepIndex].text}');
+      print('🔄 RoutineSync: Skipping step $_currentStepIndex (permanent): ${_currentRoutine!.items[_currentStepIndex].text}');
     }
 
     setState(() {
-      // Mark the current step as skipped (don't remove from list)
+      // Mark the current step as permanently skipped - won't come back
       _currentRoutine!.items[_currentStepIndex].isSkipped = true;
+      _currentRoutine!.items[_currentStepIndex].isPostponed = false;
+      _currentRoutine!.items[_currentStepIndex].isCompleted = false;
+
+      // Move to the next unfinished step (skips postponed steps too)
+      _moveToNextUnfinishedStep();
+    });
+
+    // Save progress after skipping
+    await _saveProgress();
+  }
+
+  Future<void> _postponeCurrentStep() async {
+    if (_currentRoutine == null || _currentStepIndex >= _currentRoutine!.items.length) return;
+
+    if (kDebugMode) {
+      print('🔄 RoutineSync: Postponing step $_currentStepIndex: ${_currentRoutine!.items[_currentStepIndex].text}');
+    }
+
+    setState(() {
+      // Mark the current step as postponed - will come back later
+      _currentRoutine!.items[_currentStepIndex].isPostponed = true;
+      _currentRoutine!.items[_currentStepIndex].isSkipped = false;
       _currentRoutine!.items[_currentStepIndex].isCompleted = false;
 
       // Move to the next unfinished step
       _moveToNextUnfinishedStep();
     });
 
-    // Save progress after skipping
+    // Save progress after postponing
     await _saveProgress();
   }
 
@@ -333,33 +361,37 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
 
     // Start searching from the next index
     int startIndex = (_currentStepIndex + 1) % _currentRoutine!.items.length;
-    
-    // Find next step that is not completed and not skipped
+
+    // Priority 1: Find next step that is not completed, not skipped, and not postponed
     for (int i = 0; i < _currentRoutine!.items.length; i++) {
       int checkIndex = (startIndex + i) % _currentRoutine!.items.length;
-      if (!_currentRoutine!.items[checkIndex].isCompleted && !_currentRoutine!.items[checkIndex].isSkipped) {
+      final item = _currentRoutine!.items[checkIndex];
+      if (!item.isCompleted && !item.isSkipped && !item.isPostponed) {
         if (kDebugMode) {
-          print('Found unfinished non-skipped step at index $checkIndex: ${_currentRoutine!.items[checkIndex].text}');
+          print('Found unfinished step at index $checkIndex: ${item.text}');
         }
         _currentStepIndex = checkIndex;
         return;
       }
     }
-    
-    // If all non-skipped steps are completed, find the first skipped step
+
+    // Priority 2: If all regular steps are done, go back to postponed steps
     for (int i = 0; i < _currentRoutine!.items.length; i++) {
-      if (_currentRoutine!.items[i].isSkipped && !_currentRoutine!.items[i].isCompleted) {
+      final item = _currentRoutine!.items[i];
+      if (item.isPostponed && !item.isCompleted) {
         if (kDebugMode) {
-          print('All non-skipped steps done. Found skipped step at index $i: ${_currentRoutine!.items[i].text}');
+          print('All regular steps done. Found postponed step at index $i: ${item.text}');
         }
         _currentStepIndex = i;
         return;
       }
     }
-    
-    // No more unfinished steps found - all steps are completed
+
+    // Skipped steps are permanently skipped - never return to them
+
+    // No more unfinished steps found - all steps are completed or permanently skipped
     if (kDebugMode) {
-      print('No unfinished steps found. All steps are completed.');
+      print('No unfinished steps found. All steps are completed or skipped.');
     }
     // Keep current index if everything is completed
   }
@@ -484,9 +516,14 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: AppColors.yellow.withValues(alpha: 0.2),
-                        borderRadius: AppStyles.borderRadiusSmall,
-                        border: Border.all(
-                          color: AppColors.yellow.withValues(alpha: 0.4),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          bottomLeft: Radius.circular(8),
+                        ),
+                        border: Border(
+                          top: BorderSide(color: AppColors.yellow.withValues(alpha: 0.4)),
+                          left: BorderSide(color: AppColors.yellow.withValues(alpha: 0.4)),
+                          bottom: BorderSide(color: AppColors.yellow.withValues(alpha: 0.4)),
                         ),
                       ),
                       child: Text(
@@ -495,40 +532,71 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  // Action buttons on the right
+                  // Action buttons on the right - unified rectangular style
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        onPressed: _completeCurrentStep,
-                        icon: const Icon(Icons.check_rounded, size: 20),
-                        tooltip: 'Complete',
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(32, 32),
-                          padding: const EdgeInsets.all(4),
+                        // Skip button - left section
+                        Material(
+                          color: AppColors.greyText.withValues(alpha: 0.2),
+                          child: InkWell(
+                            onTap: _skipCurrentStep,
+                            child: Container(
+                              width: 42,
+                              height: 47,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: AppColors.greyText.withValues(alpha: 0.4), width: 1),
+                              ),
+                              child: Icon(Icons.close_rounded, size: 20, color: AppColors.greyText),
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        onPressed: _skipCurrentStep,
-                        icon: const Icon(Icons.skip_next_rounded, size: 20),
-                        tooltip: 'Skip',
-                        style: IconButton.styleFrom(
-                          backgroundColor: AppColors.greyText,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(32, 32),
-                          padding: const EdgeInsets.all(4),
+                        // Postpone button - middle section
+                        Material(
+                          color: Colors.orange.withValues(alpha: 0.2),
+                          child: InkWell(
+                            onTap: _postponeCurrentStep,
+                            child: Container(
+                              width: 42,
+                              height: 47,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(color: Colors.orange.withValues(alpha: 0.4), width: 1),
+                                  bottom: BorderSide(color: Colors.orange.withValues(alpha: 0.4), width: 1),
+                                ),
+                              ),
+                              child: Icon(Icons.schedule_rounded, size: 20, color: Colors.orange),
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                        // Complete button - right section
+                        Material(
+                          color: Colors.green.withValues(alpha: 0.2),
+                          child: InkWell(
+                            onTap: _completeCurrentStep,
+                            child: Container(
+                              width: 42,
+                              height: 47,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.green.withValues(alpha: 0.4), width: 1),
+                                borderRadius: const BorderRadius.only(
+                                  topRight: Radius.circular(8),
+                                  bottomRight: Radius.circular(8),
+                                ),
+                              ),
+                              child: Icon(Icons.check_rounded, size: 20, color: Colors.green),
+                            ),
+                          ),
+                        ),
+                      ],
                   ),
                 ],
               ),
             ] else ...[
-              // No current step available but not all completed - show skipped steps
+              // No current step available but not all completed - show postponed steps
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -542,12 +610,12 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                       children: [
                         Icon(Icons.info_outline, color: Colors.orange),
                         SizedBox(width: 8),
-                        Text('You have skipped steps remaining:'),
+                        Text('You have postponed steps remaining:'),
                       ],
                     ),
                     const SizedBox(height: 8),
                     ...(_currentRoutine!.items
-                        .where((item) => item.isSkipped)
+                        .where((item) => item.isPostponed)
                         .map((item) => Padding(
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Row(

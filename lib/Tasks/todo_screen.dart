@@ -9,6 +9,7 @@ import 'task_card_widget.dart';
 import 'task_categories_screen.dart';
 import 'task_edit_screen.dart';
 import 'task_service.dart';
+import 'task_list_widget_service.dart';
 import 'task_card_utils.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
@@ -1694,6 +1695,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
             child: RefreshIndicator(
                 onRefresh: () async {
                   await _loadData();
+                  await TaskListWidgetService.updateWidget();
                 },
                 color: AppColors.coral,
                 backgroundColor: AppColors.coral,

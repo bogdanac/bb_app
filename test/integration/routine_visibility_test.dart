@@ -202,14 +202,6 @@ void main() {
       final yesterday = '2024-01-01';
       final today = '2024-01-02';
 
-      final routines = [
-        Routine(
-          id: 'routine1',
-          title: 'Daily Routine',
-          items: [RoutineItem(id: '1', text: 'Step 1', isCompleted: false)],
-          activeDays: {1, 2, 3, 4, 5, 6, 7},
-        ),
-      ];
 
       // Mark as completed for yesterday
       await prefs.setBool('routine_completed_routine1_$yesterday', true);

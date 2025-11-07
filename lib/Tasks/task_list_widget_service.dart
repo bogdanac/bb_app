@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'task_service.dart';
+import 'task_list_widget_filter_service.dart';
 
 class TaskListWidgetService {
   static const MethodChannel _channel =
@@ -9,6 +10,10 @@ class TaskListWidgetService {
   /// Update the task list widget to reflect latest task data
   static Future<void> updateWidget() async {
     try {
+      // Update the filtered task list for widget
+      await TaskListWidgetFilterService.updateWidgetTasks();
+
+      // Trigger widget UI update
       await _channel.invokeMethod('updateTaskListWidget');
     } catch (e) {
       if (kDebugMode) {

@@ -12,6 +12,7 @@ import 'intercourse_editor_dialog.dart';
 import 'period_history_screen.dart';
 import '../Tasks/task_service.dart';
 import '../Tasks/tasks_data_models.dart';
+import '../Tasks/task_list_widget_service.dart';
 import 'friends_tab_screen.dart';
 import 'cycle_calculation_utils.dart';
 import '../shared/snackbar_utils.dart';
@@ -148,6 +149,9 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
 
     // Backup to Firebase
     FirebaseBackupService.triggerBackup();
+
+    // Update widget tasks (menstrual phase filter may have changed)
+    await TaskListWidgetService.updateWidget();
 
     // Schedule cycle notifications whenever data is updated
     await CycleCalculationUtils.rescheduleCycleNotifications();

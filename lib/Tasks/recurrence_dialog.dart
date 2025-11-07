@@ -176,7 +176,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: DropdownButtonFormField<RecurrenceType>(
-                                value: _displayedSelectedType,
+                                initialValue: _displayedSelectedType,
                                 decoration: InputDecoration(
                                   border: OutlineInputBorder(
                                     borderRadius: AppStyles.borderRadiusSmall,
@@ -451,7 +451,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: DropdownButtonFormField<int>(
-                                    value: _monthOfYear,
+                                    initialValue: _monthOfYear,
                                     decoration: InputDecoration(
                                       border: OutlineInputBorder(
                                         borderRadius: AppStyles.borderRadiusSmall,

@@ -18,6 +18,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
 
     companion object {
         const val ACTION_COMPLETE_STEP = "com.bb.bb_app.COMPLETE_STEP"
+        const val ACTION_POSTPONE_STEP = "com.bb.bb_app.POSTPONE_STEP"
         const val ACTION_SKIP_STEP = "com.bb.bb_app.SKIP_STEP"
         const val ACTION_REFRESH = "com.bb.bb_app.REFRESH_ROUTINE"
         
@@ -76,6 +77,10 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 completeCurrentStep(context)
                 refreshAllWidgets(context)
             }
+            ACTION_POSTPONE_STEP -> {
+                postponeCurrentStep(context)
+                refreshAllWidgets(context)
+            }
             ACTION_SKIP_STEP -> {
                 skipCurrentStep(context)
                 refreshAllWidgets(context)
@@ -111,16 +116,24 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 val completeIntent = Intent(context, RoutineWidgetProvider::class.java).apply {
                     action = ACTION_COMPLETE_STEP
                 }
-                views.setOnClickPendingIntent(R.id.complete_button, 
-                    PendingIntent.getBroadcast(context, 0, completeIntent, 
+                views.setOnClickPendingIntent(R.id.complete_button,
+                    PendingIntent.getBroadcast(context, 0, completeIntent,
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
-                
+
+                // Set up postpone button
+                val postponeIntent = Intent(context, RoutineWidgetProvider::class.java).apply {
+                    action = ACTION_POSTPONE_STEP
+                }
+                views.setOnClickPendingIntent(R.id.postpone_button,
+                    PendingIntent.getBroadcast(context, 1, postponeIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+
                 // Set up skip button
                 val skipIntent = Intent(context, RoutineWidgetProvider::class.java).apply {
                     action = ACTION_SKIP_STEP
                 }
-                views.setOnClickPendingIntent(R.id.skip_button, 
-                    PendingIntent.getBroadcast(context, 1, skipIntent, 
+                views.setOnClickPendingIntent(R.id.skip_button,
+                    PendingIntent.getBroadcast(context, 2, skipIntent,
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
                         
             } else {
@@ -403,9 +416,9 @@ class RoutineWidgetProvider : AppWidgetProvider() {
 
         if (currentIndex >= 0 && currentIndex < items.length()) {
             try {
-                // Mark current step as completed
                 val completedSteps = mutableListOf<Boolean>()
                 val skippedSteps = mutableListOf<Boolean>()
+                val postponedSteps = mutableListOf<Boolean>()
 
                 // Load existing progress - try routine-specific key first
                 var progressJson = prefs.getString("flutter.routine_progress_${routineId}_$today", null)
@@ -417,42 +430,46 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                     val progress = JSONObject(progressJson)
                     val completedArray = progress.optJSONArray("completedSteps")
                     val skippedArray = progress.optJSONArray("skippedSteps")
+                    val postponedArray = progress.optJSONArray("postponedSteps")
 
                     if (completedArray != null) {
                         for (i in 0 until completedArray.length()) {
                             completedSteps.add(completedArray.optBoolean(i, false))
                         }
                     }
-
                     if (skippedArray != null) {
                         for (i in 0 until skippedArray.length()) {
                             skippedSteps.add(skippedArray.optBoolean(i, false))
                         }
                     }
+                    if (postponedArray != null) {
+                        for (i in 0 until postponedArray.length()) {
+                            postponedSteps.add(postponedArray.optBoolean(i, false))
+                        }
+                    }
                 }
 
                 // Ensure lists are the right size
-                while (completedSteps.size < items.length()) {
-                    completedSteps.add(false)
-                }
-                while (skippedSteps.size < items.length()) {
-                    skippedSteps.add(false)
-                }
+                while (completedSteps.size < items.length()) completedSteps.add(false)
+                while (skippedSteps.size < items.length()) skippedSteps.add(false)
+                while (postponedSteps.size < items.length()) postponedSteps.add(false)
 
                 // Mark current step as completed
                 completedSteps[currentIndex] = true
                 skippedSteps[currentIndex] = false
+                postponedSteps[currentIndex] = false
 
-                // Find next uncompleted step
+                // Find next step that is not completed, not skipped, not postponed
                 var nextStepIndex = currentIndex + 1
-                while (nextStepIndex < items.length() && completedSteps[nextStepIndex]) {
+                while (nextStepIndex < items.length() &&
+                       (completedSteps[nextStepIndex] || skippedSteps[nextStepIndex] || postponedSteps[nextStepIndex])) {
                     nextStepIndex++
                 }
 
-                // If we've gone past all steps, check for skipped steps to show again
+                // If all regular steps done, go back to postponed steps (but never to skipped)
                 if (nextStepIndex >= items.length()) {
                     for (i in 0 until items.length()) {
-                        if (skippedSteps[i] && !completedSteps[i]) {
+                        if (postponedSteps[i] && !completedSteps[i] && !skippedSteps[i]) {
                             nextStepIndex = i
                             break
                         }
@@ -464,6 +481,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                     put("currentStepIndex", nextStepIndex)
                     put("completedSteps", JSONArray(completedSteps))
                     put("skippedSteps", JSONArray(skippedSteps))
+                    put("postponedSteps", JSONArray(postponedSteps))
                     put("lastUpdated", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
                         timeZone = TimeZone.getTimeZone("UTC")
                     }.format(Date()))
@@ -478,9 +496,9 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                     .commit()
                 android.util.Log.d("RoutineSync", "🔄 Widget: Saved progress (commit=$commitResult): nextStep=$nextStepIndex, data=${progressData.toString()}")
 
-                // Check if all steps are completed
-                val allCompleted = completedSteps.all { it }
-                if (allCompleted) {
+                // Check if all steps are done (completed or permanently skipped, but not postponed)
+                val allDone = completedSteps.indices.all { i -> completedSteps[i] || skippedSteps[i] }
+                if (allDone) {
                     // Mark this routine as completed for today
                     prefs.edit()
                         .putBoolean("flutter.routine_completed_${routineId}_$today", true)
@@ -573,21 +591,24 @@ class RoutineWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    private fun skipCurrentStep(context: Context) {
+    private fun postponeCurrentStep(context: Context) {
+        android.util.Log.d("RoutineSync", "🔄 Widget: Postpone button clicked")
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val today = getEffectiveDate()  // Use effective date (considers <2 AM as previous day)
+        val today = getEffectiveDate()
         val routine = getCurrentRoutine(context) ?: return
         val routineId = routine.optString("id", "")
         if (routineId.isEmpty()) return
         val items = routine.optJSONArray("items") ?: return
         val currentIndex = getCurrentStepIndex(context)
-        
+        android.util.Log.d("RoutineSync", "🔄 Widget: Postponing step $currentIndex for routine $routineId")
+
         if (currentIndex >= 0 && currentIndex < items.length()) {
             try {
-                // Load existing progress
                 val completedSteps = mutableListOf<Boolean>()
                 val skippedSteps = mutableListOf<Boolean>()
-                
+                val postponedSteps = mutableListOf<Boolean>()
+
+                // Load existing progress
                 var progressJson = prefs.getString("flutter.routine_progress_${routineId}_$today", null)
                 if (progressJson == null) {
                     progressJson = prefs.getString("flutter.morning_routine_progress_$today", null)
@@ -596,41 +617,46 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                     val progress = JSONObject(progressJson)
                     val completedArray = progress.optJSONArray("completedSteps")
                     val skippedArray = progress.optJSONArray("skippedSteps")
-                    
+                    val postponedArray = progress.optJSONArray("postponedSteps")
+
                     if (completedArray != null) {
                         for (i in 0 until completedArray.length()) {
                             completedSteps.add(completedArray.optBoolean(i, false))
                         }
                     }
-                    
                     if (skippedArray != null) {
                         for (i in 0 until skippedArray.length()) {
                             skippedSteps.add(skippedArray.optBoolean(i, false))
                         }
                     }
+                    if (postponedArray != null) {
+                        for (i in 0 until postponedArray.length()) {
+                            postponedSteps.add(postponedArray.optBoolean(i, false))
+                        }
+                    }
                 }
-                
-                // Ensure lists are the right size
-                while (completedSteps.size < items.length()) {
-                    completedSteps.add(false)
-                }
-                while (skippedSteps.size < items.length()) {
-                    skippedSteps.add(false)
-                }
-                
-                // Mark current step as skipped
-                skippedSteps[currentIndex] = true
 
-                // Find next uncompleted step
+                // Ensure lists are the right size
+                while (completedSteps.size < items.length()) completedSteps.add(false)
+                while (skippedSteps.size < items.length()) skippedSteps.add(false)
+                while (postponedSteps.size < items.length()) postponedSteps.add(false)
+
+                // Mark current step as postponed
+                postponedSteps[currentIndex] = true
+                skippedSteps[currentIndex] = false
+                completedSteps[currentIndex] = false
+
+                // Find next step that is not completed, not skipped, not postponed
                 var nextStepIndex = currentIndex + 1
-                while (nextStepIndex < items.length() && completedSteps[nextStepIndex]) {
+                while (nextStepIndex < items.length() &&
+                       (completedSteps[nextStepIndex] || skippedSteps[nextStepIndex] || postponedSteps[nextStepIndex])) {
                     nextStepIndex++
                 }
 
-                // If we've gone past all steps, check for skipped steps to show again
+                // If all regular steps done, go back to postponed steps
                 if (nextStepIndex >= items.length()) {
                     for (i in 0 until items.length()) {
-                        if (skippedSteps[i] && !completedSteps[i]) {
+                        if (postponedSteps[i] && !completedSteps[i]) {
                             nextStepIndex = i
                             break
                         }
@@ -642,6 +668,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                     put("currentStepIndex", nextStepIndex)
                     put("completedSteps", JSONArray(completedSteps))
                     put("skippedSteps", JSONArray(skippedSteps))
+                    put("postponedSteps", JSONArray(postponedSteps))
                     put("lastUpdated", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
                         timeZone = TimeZone.getTimeZone("UTC")
                     }.format(Date()))
@@ -649,11 +676,110 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                     put("itemCount", items.length())
                 }
 
-                prefs.edit()
+                val commitResult = prefs.edit()
                     .putString("flutter.routine_progress_${routineId}_$today", progressData.toString())
                     .putString("flutter.morning_routine_progress_$today", progressData.toString())
                     .putString("flutter.morning_routine_last_date", today)
                     .commit()
+                android.util.Log.d("RoutineSync", "🔄 Widget: Saved postpone (commit=$commitResult): nextStep=$nextStepIndex")
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun skipCurrentStep(context: Context) {
+        android.util.Log.d("RoutineSync", "🔄 Widget: Skip button clicked")
+        val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val today = getEffectiveDate()
+        val routine = getCurrentRoutine(context) ?: return
+        val routineId = routine.optString("id", "")
+        if (routineId.isEmpty()) return
+        val items = routine.optJSONArray("items") ?: return
+        val currentIndex = getCurrentStepIndex(context)
+        android.util.Log.d("RoutineSync", "🔄 Widget: Skipping step $currentIndex (permanent) for routine $routineId")
+
+        if (currentIndex >= 0 && currentIndex < items.length()) {
+            try {
+                val completedSteps = mutableListOf<Boolean>()
+                val skippedSteps = mutableListOf<Boolean>()
+                val postponedSteps = mutableListOf<Boolean>()
+
+                // Load existing progress
+                var progressJson = prefs.getString("flutter.routine_progress_${routineId}_$today", null)
+                if (progressJson == null) {
+                    progressJson = prefs.getString("flutter.morning_routine_progress_$today", null)
+                }
+                if (progressJson != null) {
+                    val progress = JSONObject(progressJson)
+                    val completedArray = progress.optJSONArray("completedSteps")
+                    val skippedArray = progress.optJSONArray("skippedSteps")
+                    val postponedArray = progress.optJSONArray("postponedSteps")
+
+                    if (completedArray != null) {
+                        for (i in 0 until completedArray.length()) {
+                            completedSteps.add(completedArray.optBoolean(i, false))
+                        }
+                    }
+                    if (skippedArray != null) {
+                        for (i in 0 until skippedArray.length()) {
+                            skippedSteps.add(skippedArray.optBoolean(i, false))
+                        }
+                    }
+                    if (postponedArray != null) {
+                        for (i in 0 until postponedArray.length()) {
+                            postponedSteps.add(postponedArray.optBoolean(i, false))
+                        }
+                    }
+                }
+
+                // Ensure lists are the right size
+                while (completedSteps.size < items.length()) completedSteps.add(false)
+                while (skippedSteps.size < items.length()) skippedSteps.add(false)
+                while (postponedSteps.size < items.length()) postponedSteps.add(false)
+
+                // Mark current step as permanently skipped
+                skippedSteps[currentIndex] = true
+                postponedSteps[currentIndex] = false
+                completedSteps[currentIndex] = false
+
+                // Find next step that is not completed, not skipped, not postponed
+                var nextStepIndex = currentIndex + 1
+                while (nextStepIndex < items.length() &&
+                       (completedSteps[nextStepIndex] || skippedSteps[nextStepIndex] || postponedSteps[nextStepIndex])) {
+                    nextStepIndex++
+                }
+
+                // If all regular steps done, go back to postponed steps (but never to skipped)
+                if (nextStepIndex >= items.length()) {
+                    for (i in 0 until items.length()) {
+                        if (postponedSteps[i] && !completedSteps[i] && !skippedSteps[i]) {
+                            nextStepIndex = i
+                            break
+                        }
+                    }
+                }
+
+                // Save progress
+                val progressData = JSONObject().apply {
+                    put("currentStepIndex", nextStepIndex)
+                    put("completedSteps", JSONArray(completedSteps))
+                    put("skippedSteps", JSONArray(skippedSteps))
+                    put("postponedSteps", JSONArray(postponedSteps))
+                    put("lastUpdated", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                        timeZone = TimeZone.getTimeZone("UTC")
+                    }.format(Date()))
+                    put("routineId", routineId)
+                    put("itemCount", items.length())
+                }
+
+                val commitResult = prefs.edit()
+                    .putString("flutter.routine_progress_${routineId}_$today", progressData.toString())
+                    .putString("flutter.morning_routine_progress_$today", progressData.toString())
+                    .putString("flutter.morning_routine_last_date", today)
+                    .commit()
+                android.util.Log.d("RoutineSync", "🔄 Widget: Saved skip (commit=$commitResult): nextStep=$nextStepIndex")
 
             } catch (e: Exception) {
                 e.printStackTrace()

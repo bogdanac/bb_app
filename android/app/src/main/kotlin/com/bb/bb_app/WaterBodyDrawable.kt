@@ -32,10 +32,22 @@ object WaterBodyDrawable {
         // Left side of body
         bodyPath.moveTo(centerX - shoulderWidth, shoulderY)
 
-        // Left shoulder -> bust -> waist -> hip
-        bodyPath.lineTo(centerX - bodyWidth * 0.36f, shoulderY + bodyHeight * 0.12f) // bust
-        bodyPath.lineTo(centerX - bodyWidth * 0.24f, shoulderY + bodyHeight * 0.28f) // waist
-        bodyPath.lineTo(centerX - bodyWidth * 0.30f, shoulderY + torsoLength) // hip
+        // Left shoulder -> bust -> waist -> hip (with curves)
+        bodyPath.cubicTo(
+            centerX - bodyWidth * 0.38f, shoulderY + bodyHeight * 0.06f,
+            centerX - bodyWidth * 0.36f, shoulderY + bodyHeight * 0.10f,
+            centerX - bodyWidth * 0.36f, shoulderY + bodyHeight * 0.12f
+        ) // bust curve
+        bodyPath.cubicTo(
+            centerX - bodyWidth * 0.36f, shoulderY + bodyHeight * 0.20f,
+            centerX - bodyWidth * 0.24f, shoulderY + bodyHeight * 0.24f,
+            centerX - bodyWidth * 0.24f, shoulderY + bodyHeight * 0.28f
+        ) // waist curve
+        bodyPath.cubicTo(
+            centerX - bodyWidth * 0.24f, shoulderY + bodyHeight * 0.35f,
+            centerX - bodyWidth * 0.30f, shoulderY + bodyHeight * 0.45f,
+            centerX - bodyWidth * 0.30f, shoulderY + torsoLength
+        ) // hip curve
 
         // Left leg
         val legGap = bodyWidth * 0.10f  // Gap between legs
@@ -46,9 +58,21 @@ object WaterBodyDrawable {
 
         // Right leg going back up
         bodyPath.lineTo(centerX + bodyWidth * 0.30f, shoulderY + torsoLength) // hip
-        bodyPath.lineTo(centerX + bodyWidth * 0.24f, shoulderY + bodyHeight * 0.28f) // waist
-        bodyPath.lineTo(centerX + bodyWidth * 0.36f, shoulderY + bodyHeight * 0.12f) // bust
-        bodyPath.lineTo(centerX + shoulderWidth, shoulderY) // shoulder
+        bodyPath.cubicTo(
+            centerX + bodyWidth * 0.30f, shoulderY + bodyHeight * 0.45f,
+            centerX + bodyWidth * 0.24f, shoulderY + bodyHeight * 0.35f,
+            centerX + bodyWidth * 0.24f, shoulderY + bodyHeight * 0.28f
+        ) // waist curve
+        bodyPath.cubicTo(
+            centerX + bodyWidth * 0.24f, shoulderY + bodyHeight * 0.24f,
+            centerX + bodyWidth * 0.36f, shoulderY + bodyHeight * 0.20f,
+            centerX + bodyWidth * 0.36f, shoulderY + bodyHeight * 0.12f
+        ) // bust curve
+        bodyPath.cubicTo(
+            centerX + bodyWidth * 0.36f, shoulderY + bodyHeight * 0.10f,
+            centerX + bodyWidth * 0.38f, shoulderY + bodyHeight * 0.06f,
+            centerX + shoulderWidth, shoulderY
+        ) // shoulder curve
 
         bodyPath.close()
 

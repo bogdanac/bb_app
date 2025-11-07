@@ -88,6 +88,7 @@ class RoutineProgressService {
       'currentStepIndex': currentStepIndex,
       'completedSteps': items.map((item) => item.isCompleted).toList(),
       'skippedSteps': items.map((item) => item.isSkipped).toList(),
+      'postponedSteps': items.map((item) => item.isPostponed).toList(),
       'lastUpdated': DateTime.now().toIso8601String(),
       'itemCount': items.length,
     };

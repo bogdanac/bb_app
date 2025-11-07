@@ -21,6 +21,27 @@ class WaterNotificationService {
 
     await _notificationsPlugin!.initialize(initSettings);
 
+    // Request Android permissions (needed for Android 13+)
+    final androidImpl = _notificationsPlugin!
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    if (androidImpl != null) {
+      await androidImpl.requestNotificationsPermission();
+      await androidImpl.requestExactAlarmsPermission();
+
+      // Create notification channel for water reminders
+      const AndroidNotificationChannel waterChannel = AndroidNotificationChannel(
+        'water_reminders',
+        'Water Reminders',
+        description: 'Reminders to drink water throughout the day',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
+      );
+
+      await androidImpl.createNotificationChannel(waterChannel);
+      developer.log('Water notification channel created');
+    }
+
     return _notificationsPlugin!;
   }
 
@@ -34,14 +55,24 @@ class WaterNotificationService {
 
       final thresholds = [20, 40, 60, 80];
 
+      developer.log('=== WATER NOTIFICATION SCHEDULING START ===');
+      developer.log('Day starts: ${settings.dayStartHour}:00, ends: ${settings.dayEndHour}:00');
+      developer.log('Daily goal: ${settings.dailyGoal}ml');
+
       for (final threshold in thresholds) {
-        if (settings.isNotificationEnabled(threshold)) {
+        final isEnabled = settings.isNotificationEnabled(threshold);
+        developer.log('$threshold% threshold enabled: $isEnabled');
+
+        if (isEnabled) {
           final scheduledTime = settings.getThresholdTime(threshold);
           final amount = settings.getThresholdAmount(threshold);
 
           // Only schedule if the time is in the future today
           final now = DateTime.now();
+          developer.log('$threshold% - Amount: ${amount}ml, Time: ${scheduledTime.hour}:${scheduledTime.minute.toString().padLeft(2, '0')}');
+
           if (scheduledTime.isAfter(now)) {
+            developer.log('Scheduling $threshold% for TODAY');
             await _scheduleNotification(
               plugin,
               _getNotificationId(threshold),
@@ -52,6 +83,7 @@ class WaterNotificationService {
           } else {
             // Schedule for tomorrow
             final tomorrow = scheduledTime.add(const Duration(days: 1));
+            developer.log('Scheduling $threshold% for TOMORROW');
             await _scheduleNotification(
               plugin,
               _getNotificationId(threshold),
@@ -64,8 +96,10 @@ class WaterNotificationService {
       }
 
       developer.log('Water notifications scheduled successfully');
+      developer.log('=== WATER NOTIFICATION SCHEDULING END ===');
     } catch (e) {
       developer.log('Error scheduling water notifications: $e');
+      developer.log('Stack trace: ${StackTrace.current}');
     }
   }
 

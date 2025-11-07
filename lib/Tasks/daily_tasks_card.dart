@@ -53,7 +53,7 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                 children: [
                   // Use TodoScreen for consistent task display
                   SizedBox(
-                    height: 302,
+                    height: 320,
                     child: Material(
                       color: Colors.transparent,
                       child: TodoScreen(

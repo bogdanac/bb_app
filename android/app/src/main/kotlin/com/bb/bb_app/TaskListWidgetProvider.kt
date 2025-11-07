@@ -173,9 +173,54 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             // Flutter's shared_preferences stores List<String> with a special encoding
             var tasksJsonStringList: List<String>? = null
 
-            // Method 1: Try reading with flutter. prefix (most common)
-            val rawValue = prefs.all["flutter.tasks"]
-            android.util.Log.d("TaskListWidget", "Method 1 (flutter.tasks raw): type=${rawValue?.javaClass?.simpleName}")
+            // PRIORITY 1: Try reading filtered widget tasks (pre-filtered with menstrual phase ON)
+            val widgetTasksRawValue = prefs.all["flutter.widget_filtered_tasks"]
+            android.util.Log.d("TaskListWidget", "Attempting to load flutter.widget_filtered_tasks: type=${widgetTasksRawValue?.javaClass?.simpleName}")
+
+            if (widgetTasksRawValue != null) {
+                when (widgetTasksRawValue) {
+                    is String -> {
+                        android.util.Log.d("TaskListWidget", "Widget tasks is String, length=${widgetTasksRawValue.length}")
+                        val LIST_IDENTIFIER = "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu"
+
+                        if (widgetTasksRawValue.startsWith(LIST_IDENTIFIER)) {
+                            try {
+                                var encodedData = widgetTasksRawValue.substring(LIST_IDENTIFIER.length)
+                                if (encodedData.startsWith("!")) {
+                                    encodedData = encodedData.substring(1)
+                                }
+                                val jsonArray = JSONArray(encodedData)
+                                tasksJsonStringList = (0 until jsonArray.length()).map { jsonArray.getString(it) }
+                                android.util.Log.d("TaskListWidget", "Successfully loaded ${tasksJsonStringList.size} filtered widget tasks")
+                            } catch (e: Exception) {
+                                android.util.Log.e("TaskListWidget", "Failed to decode widget tasks: $e")
+                            }
+                        } else {
+                            try {
+                                val jsonArray = JSONArray(widgetTasksRawValue)
+                                tasksJsonStringList = (0 until jsonArray.length()).map { jsonArray.getString(it) }
+                                android.util.Log.d("TaskListWidget", "Successfully loaded ${tasksJsonStringList.size} widget tasks from JSON")
+                            } catch (e: Exception) {
+                                android.util.Log.e("TaskListWidget", "Failed to parse widget tasks: $e")
+                            }
+                        }
+                    }
+                    is Set<*> -> {
+                        tasksJsonStringList = widgetTasksRawValue.filterIsInstance<String>()
+                        android.util.Log.d("TaskListWidget", "Loaded ${tasksJsonStringList.size} widget tasks from Set")
+                    }
+                    is List<*> -> {
+                        tasksJsonStringList = widgetTasksRawValue.filterIsInstance<String>()
+                        android.util.Log.d("TaskListWidget", "Loaded ${tasksJsonStringList.size} widget tasks from List")
+                    }
+                }
+            }
+
+            // PRIORITY 2: Fallback to main tasks list if no filtered tasks available
+            if (tasksJsonStringList == null || tasksJsonStringList.isEmpty()) {
+                android.util.Log.d("TaskListWidget", "No widget_filtered_tasks found, falling back to main tasks list")
+                val rawValue = prefs.all["flutter.tasks"]
+                android.util.Log.d("TaskListWidget", "Method 1 (flutter.tasks raw): type=${rawValue?.javaClass?.simpleName}")
 
             if (rawValue != null) {
                 when (rawValue) {
@@ -233,6 +278,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                     }
                 }
             }
+            } // End fallback to main tasks list
 
             if (tasksJsonStringList == null || tasksJsonStringList.isEmpty()) {
                 android.util.Log.w("TaskListWidget", "No tasks found in SharedPreferences")

@@ -70,13 +70,15 @@ class RoutineItem {
   final String id;
   String text;
   bool isCompleted;
-  bool isSkipped;
+  bool isSkipped;      // Permanently skipped - won't come back
+  bool isPostponed;    // Temporarily postponed - will come back later
 
   RoutineItem({
     required this.id,
     required this.text,
     required this.isCompleted,
     this.isSkipped = false,
+    this.isPostponed = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -84,6 +86,7 @@ class RoutineItem {
     'text': text,
     'isCompleted': isCompleted,
     'isSkipped': isSkipped,
+    'isPostponed': isPostponed,
   };
 
   static RoutineItem fromJson(Map<String, dynamic> json) => RoutineItem(
@@ -91,5 +94,6 @@ class RoutineItem {
     text: json['text'],
     isCompleted: json['isCompleted'],
     isSkipped: json['isSkipped'] ?? false,
+    isPostponed: json['isPostponed'] ?? false,
   );
 }

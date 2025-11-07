@@ -114,31 +114,41 @@ class TaskPriorityService {
       }
     }
 
-    // 1. HIGHEST PRIORITY: Tasks with reminder times (only within 30 minutes)
+    // 1. HIGHEST PRIORITY: Tasks with reminder times
     if (effectiveReminderTime != null) {
       final reminderDiff = effectiveReminderTime.difference(now).inMinutes;
-      _isReminderToday(effectiveReminderTime, now);
+      final isReminderToday = _isReminderToday(effectiveReminderTime, now);
       final isScheduledToday = task.scheduledDate != null && _isSameDay(task.scheduledDate!, today);
 
-      // Only prioritize reminders if task is scheduled for today AND reminder is within 30 minutes
-      if (isScheduledToday && reminderDiff >= 0 && reminderDiff <= 30) {
-        if (reminderDiff == 0) {
-          score += 1200; // Reminder now
-        } else if (reminderDiff <= 15) {
-          score += 1100; // Within 15 minutes
-        } else {
-          score += 1000; // Within 30 minutes
+      // Prioritize reminders if:
+      // 1. Task is scheduled for today, OR
+      // 2. Task has no scheduled date but reminder is today
+      final shouldPrioritizeReminder = isScheduledToday ||
+                                       (task.scheduledDate == null && isReminderToday);
+
+      // Upcoming reminders
+      if (shouldPrioritizeReminder && reminderDiff >= 0) {
+        if (reminderDiff < 30) {
+          // Less than 30 minutes - HIGH PRIORITY
+          score += 1100;
+        } else if (reminderDiff <= 120) {
+          // 30 min to 2 hours - symbolic priority
+          score += 15;
         }
+        // Beyond 2 hours: score stays at 0
       }
       // Past reminders (overdue) - still show if missed
-      else if (reminderDiff < 0 && isScheduledToday) {
-        final hoursPast = (-reminderDiff) / 60;
-        if (hoursPast <= 1) {
-          score += 1200;
-        } else if (hoursPast <= 24) {
-          score += 1000;
-        } else {
-          score += 800;
+      else if (reminderDiff < 0) {
+        // Overdue reminder (in the past) - always show these
+        if (shouldPrioritizeReminder || task.scheduledDate == null) {
+          final hoursPast = (-reminderDiff) / 60;
+          if (hoursPast <= 1) {
+            score += 1200;
+          } else if (hoursPast <= 24) {
+            score += 1000;
+          } else {
+            score += 800;
+          }
         }
       }
     }
@@ -239,16 +249,20 @@ class TaskPriorityService {
     }
 
     // 6. LOW-MEDIUM PRIORITY: Important tasks
-    if (task.isImportant) {
-      bool hasReminderMoreThanHourAway = false;
-      if (effectiveReminderTime != null) {
-        final reminderDiff = effectiveReminderTime.difference(now).inMinutes;
-        hasReminderMoreThanHourAway = reminderDiff > 60;
-      }
+    // Don't boost priority for tasks explicitly scheduled for future dates
+    final isExplicitlyScheduledFuture = task.scheduledDate != null &&
+                                         task.scheduledDate!.isAfter(today) &&
+                                         !task.isDueToday(); // Allow recurring tasks due today
 
-      if (hasReminderMoreThanHourAway) {
-        score += 0;
-      } else if (isScheduledToday) {
+    // Don't boost for tasks with reminders more than 30 minutes away
+    bool hasDistantReminder = false;
+    if (effectiveReminderTime != null) {
+      final reminderDiff = effectiveReminderTime.difference(now).inMinutes;
+      hasDistantReminder = reminderDiff >= 30;
+    }
+
+    if (task.isImportant && !isExplicitlyScheduledFuture && !hasDistantReminder) {
+      if (isScheduledToday) {
         score += 100;
       } else {
         score += 50;
@@ -256,22 +270,15 @@ class TaskPriorityService {
     }
 
     // 7. CATEGORY PRIORITY
-    if (task.categoryIds.isNotEmpty) {
+    // Don't boost priority for tasks explicitly scheduled for future dates or with distant reminders
+    if (task.categoryIds.isNotEmpty && !isExplicitlyScheduledFuture && !hasDistantReminder) {
       final categoryImportance = _getCategoryImportance(task.categoryIds, categories);
       if (categoryImportance < 999) {
         int baseScore = math.max(10, 45 - (categoryImportance * 5));
         int categoryBonus = math.min(10, (task.categoryIds.length - 1) * 2);
 
-        bool hasReminderMoreThanHourAway = false;
-        if (effectiveReminderTime != null) {
-          final reminderDiff = effectiveReminderTime.difference(now).inMinutes;
-          hasReminderMoreThanHourAway = reminderDiff > 60;
-        }
-
-        if (isScheduledToday && !hasReminderMoreThanHourAway) {
+        if (isScheduledToday) {
           baseScore = (baseScore * 1.5).round();
-        } else if (hasReminderMoreThanHourAway) {
-          baseScore = (baseScore * 0.1).round();
         }
 
         score += baseScore + categoryBonus;

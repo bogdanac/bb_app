@@ -21,6 +21,7 @@ import 'package:bb_app/Notifications/centralized_notification_manager.dart';
 import 'package:bb_app/FoodTracking/food_tracking_card.dart';
 import 'package:bb_app/home_settings_screen.dart';
 import 'package:bb_app/Data/backup_service.dart';
+import 'package:bb_app/shared/widget_update_service.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 
@@ -75,6 +76,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _initializeData() async {
     try {
+      // Check if it's a new day and update widgets on app start
+      await WidgetUpdateService.checkAndUpdateWidgetsOnNewDay();
+
       await _loadWaterIntake();
       await _loadWaterGoal();
       await _initializeWaterAmountSetting();
@@ -160,6 +164,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!_isDisposed && mounted && state == AppLifecycleState.resumed) {
+      // Check if it's a new day and update widgets
+      WidgetUpdateService.checkAndUpdateWidgetsOnNewDay();
+
       // Refresh water intake in case widget updated it
       _loadWaterIntake();
       // Refresh the menstrual cycle card when returning to the app
@@ -205,8 +212,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       int intake;
       if (shouldReset) {
-        // Reset for new day
-        intake = 0;
+        // Check if widget already has data for today before resetting
+        int widgetIntake = 0;
+        try {
+          var widgetValue = prefs.get('flutter.water_$today');
+          widgetValue ??= prefs.get('water_$today');
+          if (widgetValue != null) {
+            if (widgetValue is int) {
+              widgetIntake = widgetValue;
+            } else if (widgetValue is double) {
+              widgetIntake = widgetValue.toInt();
+            } else {
+              widgetIntake = int.tryParse(widgetValue.toString()) ?? 0;
+            }
+          }
+        } catch (e) {
+          // Ignore errors
+        }
+
+        // Use widget data if it exists, otherwise reset to 0
+        intake = widgetIntake;
         await prefs.setInt('water_$today', intake);
         await prefs.setString('last_water_reset_date', today);
 

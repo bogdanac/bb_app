@@ -78,7 +78,7 @@ void main() {
         expect(score, equals(1100));
       });
 
-      test('reminders within 1 hour get high priority', () {
+      test('reminders within 1 hour (30-120 min) get symbolic priority', () {
         final now = DateTime(2025, 10, 31, 14, 0);
         final today = DateTime(now.year, now.month, now.day);
 
@@ -90,10 +90,10 @@ void main() {
         );
 
         final score = service.calculateTaskPriorityScore(task, now, today, categories);
-        expect(score, equals(900));
+        expect(score, equals(15)); // Symbolic priority (30-120 min range)
       });
 
-      test('reminders within 2 hours get medium-high priority', () {
+      test('reminders within 2 hours get symbolic priority', () {
         final now = DateTime(2025, 10, 31, 14, 0);
         final today = DateTime(now.year, now.month, now.day);
 
@@ -105,10 +105,10 @@ void main() {
         );
 
         final score = service.calculateTaskPriorityScore(task, now, today, categories);
-        expect(score, equals(700));
+        expect(score, equals(15)); // Symbolic priority (30-120 min range)
       });
 
-      test('reminders today but beyond 2 hours have minimal priority', () {
+      test('reminders today but beyond 2 hours get no priority', () {
         final now = DateTime(2025, 10, 31, 10, 0);
         final today = DateTime(now.year, now.month, now.day);
 
@@ -123,7 +123,7 @@ void main() {
         expect(score, equals(0));
       });
 
-      test('reminders beyond today get low priority', () {
+      test('reminders beyond today get no priority', () {
         final now = DateTime(2025, 10, 31, 14, 0);
         final today = DateTime(now.year, now.month, now.day);
 
@@ -135,7 +135,7 @@ void main() {
         );
 
         final score = service.calculateTaskPriorityScore(task, now, today, categories);
-        expect(score, equals(30));
+        expect(score, equals(0)); // No priority for future days
       });
     });
 
@@ -325,7 +325,7 @@ void main() {
         expect(score, equals(1)); // Very low priority
       });
 
-      test('postponed recurring tasks with distant reminders have low priority', () {
+      test('postponed recurring tasks with distant reminders have no extra priority', () {
         final now = DateTime(2025, 10, 31, 10, 0);
         final today = DateTime(now.year, now.month, now.day);
 
@@ -346,7 +346,7 @@ void main() {
         );
 
         final score = service.calculateTaskPriorityScore(task, now, today, categories);
-        expect(score, equals(10)); // Low priority for postponed with distant reminder
+        expect(score, equals(710)); // 700 (recurring due today) + 10 (postponed with distant reminder)
       });
     });
 
@@ -381,7 +381,7 @@ void main() {
         expect(score, equals(580)); // max(550, 595 - (3 * 5))
       });
 
-      test('scheduled today with reminder soon gets combined priority', () {
+      test('scheduled today with reminder 30 min away gets limited priority', () {
         final now = DateTime(2025, 10, 31, 14, 0);
         final today = DateTime(now.year, now.month, now.day);
 
@@ -389,12 +389,12 @@ void main() {
           id: '1',
           title: 'Scheduled with Reminder',
           scheduledDate: DateTime(2025, 10, 31),
-          reminderTime: DateTime(2025, 10, 31, 14, 30), // 30 minutes away
+          reminderTime: DateTime(2025, 10, 31, 14, 30), // 30 minutes away (symbolic)
           createdAt: DateTime.now(),
         );
 
         final score = service.calculateTaskPriorityScore(task, now, today, categories);
-        expect(score, greaterThan(1000)); // Gets both reminder and scheduled points
+        expect(score, equals(615)); // 600 (scheduled today) + 15 (symbolic reminder)
       });
     });
 
@@ -752,13 +752,13 @@ void main() {
           id: '1',
           title: 'Both Deadline and Reminder',
           deadline: DateTime(2025, 11, 5), // Future
-          reminderTime: DateTime(2025, 10, 31, 14, 30), // 30 min away
+          reminderTime: DateTime(2025, 10, 31, 14, 30), // 30 min away (symbolic priority)
           createdAt: DateTime.now(),
         );
 
         final score = service.calculateTaskPriorityScore(task, now, today, categories);
-        // Gets reminder score (900 for within 1 hour)
-        expect(score, greaterThanOrEqualTo(900));
+        // Gets symbolic priority (15 for 30-120 min range)
+        expect(score, equals(15));
       });
 
       test('category with no match in categories list gets minimal category score', () {
@@ -1188,16 +1188,16 @@ void main() {
           title: 'Complex Task',
           isImportant: true,
           scheduledDate: DateTime(2025, 10, 31),
-          reminderTime: DateTime(2025, 10, 31, 14, 30), // 30 min away
+          reminderTime: DateTime(2025, 10, 31, 14, 30), // 30 min away (no priority boost)
           categoryIds: ['1'], // Work category
           createdAt: DateTime.now(),
         );
 
         final score = service.calculateTaskPriorityScore(task, now, today, categories);
 
-        // Should get points from: reminder (900), scheduled today (600),
-        // important (100), category (67 amplified)
-        expect(score, greaterThan(1500));
+        // Should get points from: reminder symbolic (15), scheduled today (600)
+        // Important and category NOT boosted due to distant reminder (>= 30 min)
+        expect(score, equals(615)); // 600 + 15
       });
 
       test('boundary condition - reminder exactly 15 minutes away', () {
@@ -1215,19 +1215,19 @@ void main() {
         expect(score, equals(1100)); // Within 15 min boundary
       });
 
-      test('boundary condition - reminder exactly 16 minutes away', () {
+      test('boundary condition - reminder exactly 30 minutes away', () {
         final now = DateTime(2025, 10, 31, 14, 0);
         final today = DateTime(now.year, now.month, now.day);
 
         final task = Task(
           id: '1',
           title: 'Just Outside Boundary',
-          reminderTime: DateTime(2025, 10, 31, 14, 16), // 16 min
+          reminderTime: DateTime(2025, 10, 31, 14, 30), // 30 min
           createdAt: DateTime.now(),
         );
 
         final score = service.calculateTaskPriorityScore(task, now, today, categories);
-        expect(score, equals(900)); // Within 1 hour
+        expect(score, equals(15)); // Symbolic priority (30-120 min range)
       });
 
       test('boundary condition - reminder exactly 60 minutes away', () {
@@ -1242,7 +1242,7 @@ void main() {
         );
 
         final score = service.calculateTaskPriorityScore(task, now, today, categories);
-        expect(score, equals(900)); // Within 1 hour boundary
+        expect(score, equals(15)); // Symbolic priority (30-120 min range)
       });
 
       test('boundary condition - reminder exactly 120 minutes away', () {
@@ -1257,7 +1257,7 @@ void main() {
         );
 
         final score = service.calculateTaskPriorityScore(task, now, today, categories);
-        expect(score, equals(700)); // Within 2 hours boundary
+        expect(score, equals(15)); // Symbolic priority (30-120 min range)
       });
 
       test('boundary condition - deadline exactly 2 days away', () {

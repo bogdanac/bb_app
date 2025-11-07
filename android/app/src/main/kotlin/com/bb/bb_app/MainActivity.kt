@@ -15,11 +15,11 @@ class MainActivity: FlutterActivity() {
     private val TASK_CHANNEL = "com.bb.bb_app/task_widget"
     private val ROUTINE_CHANNEL = "com.bb.bb_app/routine_widget"
     private val TASK_LIST_CHANNEL = "com.bb.bb_app/task_list_widget"
-    
+
     companion object {
         var instance: MainActivity? = null
     }
-    
+
     private var originalAlarmVolume: Int = -1
     private var methodChannel: MethodChannel? = null
 
@@ -107,6 +107,10 @@ class MainActivity: FlutterActivity() {
                     val date = call.argument<String>("date") ?: ""
                     val intake = getWaterFromWidget(date)
                     result.success(intake)
+                }
+                "updateWaterWidget" -> {
+                    updateWaterWidget()
+                    result.success(true)
                 }
                 else -> {
                     result.notImplemented()
@@ -349,6 +353,20 @@ class MainActivity: FlutterActivity() {
             android.util.Log.d("MainActivity", "Updated task list widget")
         } catch (e: Exception) {
             android.util.Log.e("MainActivity", "Error updating task list widget: $e")
+        }
+    }
+
+    private fun updateWaterWidget() {
+        try {
+            val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(this)
+            val appWidgetIds = appWidgetManager.getAppWidgetIds(
+                ComponentName(this, WaterWidgetProvider::class.java)
+            )
+            val provider = WaterWidgetProvider()
+            provider.onUpdate(this, appWidgetManager, appWidgetIds)
+            android.util.Log.d("MainActivity", "Updated water widget")
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Error updating water widget: $e")
         }
     }
 }

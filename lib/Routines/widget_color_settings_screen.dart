@@ -21,13 +21,14 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
   // Predefined color options
   final List<Color> _colorOptions = [
     const Color(0xB3202020), // Transparent Dark Grey (default) - 70% opacity
-    const Color(0xFF8CC4E8), // Soft Blue
-    const Color(0xFF6EBDBD), // Nice Teal
-    const Color(0xFFBF9FCA), // Soft Purple
-    const Color(0xFF94A8B8), // Soft Blue Grey
-    const Color(0xFF80C4BC), // Soft Mint Teal
-    const Color(0xFF9DD6C7), // Soft Mint Green
-    const Color(0xFFA8D5A1), // Soft Green
+    const Color(0xF9BC7993), // Muted Rose
+    const Color(0xF2B184C1), // Soft Purple
+    const Color(0xF076A8C1), // Soft Aqua
+    const Color(0xFC6F85BF), // Soft Blue
+    const Color(0xCA789CB1), // Soft Gray Blue
+    const Color(0xF9CC5B5B), // Muted Nude
+    const Color(0xF76AB19F), // Soft Mint Green
+    const Color(0xF570AE82), // Soft Green
   ];
 
   @override
