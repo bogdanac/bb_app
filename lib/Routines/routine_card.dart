@@ -538,22 +538,22 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                       children: [
                         // Skip button - left section
                         Material(
-                          color: Colors.white.withValues(alpha: 0.15),
+                          color: AppColors.greyText.withValues(alpha: 0.2),
                           child: InkWell(
                             onTap: _skipCurrentStep,
                             child: Container(
                               width: 42,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1),
+                                border: Border.all(color: AppColors.greyText.withValues(alpha: 0.4), width: 1),
                               ),
-                              child: Icon(Icons.close_rounded, size: 20, color: Colors.white.withValues(alpha: 0.85)),
+                              child: Icon(Icons.close_rounded, size: 20, color: AppColors.greyText),
                             ),
                           ),
                         ),
                         // Postpone button - middle section
                         Material(
-                          color: Colors.white.withValues(alpha: 0.15),
+                          color: Colors.orange.withValues(alpha: 0.08),
                           child: InkWell(
                             onTap: _postponeCurrentStep,
                             child: Container(
@@ -561,11 +561,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
                                 border: Border(
-                                  top: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1),
-                                  bottom: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1),
+                                  top: BorderSide(color: Colors.orange.withValues(alpha: 0.22), width: 1),
+                                  bottom: BorderSide(color: Colors.orange.withValues(alpha: 0.22), width: 1),
                                 ),
                               ),
-                              child: Icon(Icons.schedule_rounded, size: 20, color: Colors.white.withValues(alpha: 0.85)),
+                              child: Icon(Icons.schedule_rounded, size: 20, color: Colors.orange.withValues(alpha: 0.65)),
                             ),
                           ),
                         ),

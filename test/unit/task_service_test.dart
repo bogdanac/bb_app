@@ -695,7 +695,7 @@ void main() {
       });
 
       test('should handle overdue recurring tasks', () async {
-        final yesterday = DateTime.now().subtract(const Duration(days: 2));
+        final threeDaysAgo = DateTime.now().subtract(const Duration(days: 3));
         final recurrence = TaskRecurrence(
           types: [RecurrenceType.daily],
           interval: 1,
@@ -707,22 +707,22 @@ void main() {
           categoryIds: [],
           isCompleted: false,
           recurrence: recurrence,
-          scheduledDate: yesterday,
+          scheduledDate: threeDaysAgo,
           createdAt: DateTime.now().subtract(const Duration(days: 10)),
         );
 
         await taskService.saveTasks([task]);
 
-        // Load should move overdue recurring task to today or next occurrence
+        // Load should move overdue recurring task to today or next occurrence (overdue by >2 days)
         final loaded = await taskService.loadTasks();
 
         expect(loaded.length, 1);
         expect(loaded[0].scheduledDate, isNotNull);
-        // Should be today or later
+        // Should be today or later (auto-advanced after 2-day grace period)
         final today = DateTime.now();
         final loadedDate = loaded[0].scheduledDate!;
         expect(
-          loadedDate.isAfter(yesterday) ||
+          loadedDate.isAfter(threeDaysAgo) ||
           (loadedDate.year == today.year &&
            loadedDate.month == today.month &&
            loadedDate.day == today.day),

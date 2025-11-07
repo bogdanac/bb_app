@@ -114,6 +114,15 @@ class TaskPriorityService {
       }
     }
 
+    // Calculate hasDistantReminder early
+    // hasDistantReminder = reminder exists AND is > 30 minutes away
+    bool hasDistantReminder = false;
+    int reminderMinutesAway = 0;
+    if (effectiveReminderTime != null) {
+      reminderMinutesAway = effectiveReminderTime.difference(now).inMinutes;
+      hasDistantReminder = reminderMinutesAway > 30;
+    }
+
     // 1. HIGHEST PRIORITY: Tasks with reminder times
     if (effectiveReminderTime != null) {
       final reminderDiff = effectiveReminderTime.difference(now).inMinutes;
@@ -203,7 +212,10 @@ class TaskPriorityService {
       if (task.scheduledDate != null && task.scheduledDate!.isAfter(today)) {
         score += 5;
       } else if (isScheduledTodayOrFuture) {
-        if (_isMenstrualCycleTask(task.recurrence!)) {
+        // If task has distant reminder (> 30 min), deprioritize
+        if (hasDistantReminder) {
+          score += 125;
+        } else if (_isMenstrualCycleTask(task.recurrence!)) {
           final daysUntilTarget = _getDaysUntilMenstrualTarget(task.recurrence!);
           if (daysUntilTarget != null) {
             if (daysUntilTarget <= 1) {
@@ -255,15 +267,6 @@ class TaskPriorityService {
       score += math.max(550, 595 - (daysOverdue * 5));
     }
 
-    // Calculate hasDistantReminder BEFORE using it
-    // hasDistantReminder = reminder exists AND is > 30 minutes away
-    bool hasDistantReminder = false;
-    int reminderMinutesAway = 0;
-    if (effectiveReminderTime != null) {
-      reminderMinutesAway = effectiveReminderTime.difference(now).inMinutes;
-      hasDistantReminder = reminderMinutesAway > 30;
-    }
-
     final isScheduledToday = task.scheduledDate != null &&
         _isSameDay(task.scheduledDate!, today);
 
@@ -295,7 +298,7 @@ class TaskPriorityService {
       }
     }
     // 5e. UNSCHEDULED TASKS (no scheduled date)
-    else if (task.scheduledDate == null && !hasDistantReminder) {
+    else if (task.scheduledDate == null) {
       score += 400;
 
       // Add category priority for unscheduled tasks

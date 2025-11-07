@@ -62,7 +62,7 @@ void main() {
         expect(score(overdue), greaterThan(score(soon)));
       });
 
-      test('reminder 30-120 min away gets low symbolic priority', () {
+      test('reminder 30-120 min away gets symbolic priority', () {
         final laterReminder = Task(
           id: '1',
           title: 'Later',
@@ -70,11 +70,11 @@ void main() {
           createdAt: now,
         );
 
-        expect(score(laterReminder), lessThan(100));
-        expect(score(laterReminder), greaterThan(0));
+        // Unscheduled task with distant reminder gets base 400 + 15 symbolic
+        expect(score(laterReminder), equals(415));
       });
 
-      test('reminder > 120 min away gets no priority', () {
+      test('reminder > 120 min away gets unscheduled priority (no bonus)', () {
         final distantReminder = Task(
           id: '1',
           title: 'Distant',
@@ -82,7 +82,8 @@ void main() {
           createdAt: now,
         );
 
-        expect(score(distantReminder), equals(0));
+        // Unscheduled task with very distant reminder gets base 400 only
+        expect(score(distantReminder), equals(400));
       });
     });
 
@@ -127,12 +128,12 @@ void main() {
         expect(score(scheduledWithNearReminder), greaterThan(score(scheduledNoReminder) + 1000));
       });
 
-      test('scheduled today with reminder > 30 min gets flat 125 (no categories, no important)', () {
+      test('scheduled today with reminder > 30 min gets 125 + no categories/important', () {
         final scheduledWithDistantReminder = Task(
           id: '1',
           title: 'Scheduled + Distant Reminder',
           scheduledDate: today,
-          reminderTime: DateTime(2025, 11, 5, 18, 0), // 4 hours away
+          reminderTime: DateTime(2025, 11, 5, 15, 30), // 90 min away
           categoryIds: ['1'], // Should NOT get category points
           isImportant: true, // Should NOT get important points
           createdAt: now,
@@ -145,9 +146,9 @@ void main() {
           createdAt: now,
         );
 
-        // Scheduled today with distant reminder: 125
+        // Scheduled today with distant reminder (30-120min): 15 + 125 = 140
         // Tomorrow: 120
-        expect(score(scheduledWithDistantReminder), equals(125));
+        expect(score(scheduledWithDistantReminder), equals(140));
         expect(score(scheduledWithDistantReminder), greaterThan(score(tomorrow)));
       });
     });
@@ -209,7 +210,7 @@ void main() {
         expect(score(multiCat), equals(score(singleCat) + 90));
       });
 
-      test('unscheduled with distant reminder gets no priority', () {
+      test('unscheduled with distant reminder gets full unscheduled priority with categories', () {
         final unscheduledDistantReminder = Task(
           id: '1',
           title: 'Unscheduled Distant Reminder',
@@ -219,7 +220,8 @@ void main() {
           createdAt: now,
         );
 
-        expect(score(unscheduledDistantReminder), equals(0));
+        // Should get: 400 (unscheduled) + 100 (cat1) + 100 (important) = 600
+        expect(score(unscheduledDistantReminder), equals(600));
       });
     });
 
@@ -450,7 +452,34 @@ void main() {
           createdAt: now,
         );
 
+        // Recurring: 700, Scheduled today: 600
+        expect(score(recurring), equals(700));
+        expect(score(scheduledToday), equals(600));
         expect(score(recurring), greaterThan(score(scheduledToday)));
+      });
+
+      test('recurring task due today with distant reminder gets deprioritized to 125 (+ symbolic if 30-120min)', () {
+        final recurringDistant = Task(
+          id: '1',
+          title: 'Daily Task Distant Reminder',
+          recurrence: TaskRecurrence(type: RecurrenceType.daily),
+          scheduledDate: today,
+          reminderTime: DateTime(2025, 11, 5, 15, 0), // 60 min away
+          createdAt: now,
+        );
+
+        final unscheduledWithCategories = Task(
+          id: '2',
+          title: 'Unscheduled With Categories',
+          categoryIds: ['1', '2', '3'], // 100 + 90 + 80 = 270
+          createdAt: now,
+        );
+
+        // Recurring with distant reminder (30-120min): 15 + 125 = 140
+        // Unscheduled with 3 categories: 400 + 270 = 670
+        expect(score(recurringDistant), equals(140));
+        expect(score(unscheduledWithCategories), equals(670));
+        expect(score(unscheduledWithCategories), greaterThan(score(recurringDistant)));
       });
 
       test('recurring task scheduled in future gets very low priority', () {
@@ -543,7 +572,7 @@ void main() {
             id: 'scheduled_today_distant',
             title: 'Scheduled Today Distant',
             scheduledDate: today,
-            reminderTime: now.add(const Duration(hours: 4)),
+            reminderTime: now.add(const Duration(minutes: 90)), // 90 min = symbolic priority
             createdAt: now,
           ),
           Task(
@@ -558,21 +587,19 @@ void main() {
 
         // Overdue reminder > Reminder soon
         expect(scores[0], greaterThan(scores[1]));
-        // Reminder soon > Overdue deadline (should be: 1100+400 = 1500 > 880+400 = 1280)
+        // Reminder soon > Overdue deadline
         expect(scores[1], greaterThan(scores[2]));
-        // Overdue deadline > Recurring today (should be: 880+400 = 1280 > 700+600 = 1300)
-        // Actually recurring today beats overdue deadline slightly: 1300 > 1280
-        // So let's just check the proper hierarchy exists
-        expect(scores[2], greaterThan(scores[5])); // Overdue deadline > Scheduled today
-        // Recurring today > Deadline today (should be: 700+600 = 1300 > 800+400 = 1200)
-        expect(scores[4], greaterThan(scores[3]));
-        // Recurring today > Scheduled today (should be: 700+600 > 600+100+50)
-        expect(scores[4], greaterThan(scores[5]));
-        // Scheduled today > Unscheduled (should be: 600+100+100 > 400+100+50)
+        // Overdue deadline > Scheduled today
+        expect(scores[2], greaterThan(scores[5]));
+        // Deadline today > Scheduled today (800 > 600+100+100)
+        expect(scores[3], greaterThan(scores[5]));
+        // Scheduled today > Recurring today (600+100+100=800 > 700)
+        expect(scores[5], greaterThan(scores[4]));
+        // Scheduled today > Unscheduled (600+100+100 > 400+100+100)
         expect(scores[5], greaterThan(scores[6]));
-        // Unscheduled > Scheduled today distant (should be: 400+100+50 > 125)
+        // Unscheduled > Scheduled today distant (400+100+100 > 15+125)
         expect(scores[6], greaterThan(scores[7]));
-        // Scheduled today distant > Tomorrow (should be: 125 > 120)
+        // Scheduled today distant > Tomorrow (15+125=140 > 120)
         expect(scores[7], greaterThan(scores[8]));
       });
     });

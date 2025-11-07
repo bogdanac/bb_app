@@ -35,18 +35,23 @@ object WaterBodyDrawable {
 
         // Left shoulder with rounded curve
         bodyPath.cubicTo(
-            centerX - shoulderWidth * 1.1f, shoulderY + bodyHeight * 0.04f,
-            centerX - shoulderWidth, shoulderY + bodyHeight * 0.08f,
-            centerX - shoulderWidth, shoulderY + bodyHeight * 0.12f
+            centerX - shoulderWidth * 1.1f, shoulderY + torsoLength * 0.1f,
+            centerX - shoulderWidth, shoulderY + torsoLength * 0.2f,
+            centerX - shoulderWidth, shoulderY + torsoLength * 0.3f
         ) // rounded shoulder
+
+        // Waist (narrowest point in the middle of torso)
+        val waistWidth = bodyWidth * 0.18f
         bodyPath.cubicTo(
-            centerX - shoulderWidth, shoulderY + bodyHeight * 0.20f,
-            centerX - bodyWidth * 0.18f, shoulderY + bodyHeight * 0.24f,
-            centerX - bodyWidth * 0.18f, shoulderY + bodyHeight * 0.28f
-        ) // waist curve (narrower)
+            centerX - shoulderWidth * 0.95f, shoulderY + torsoLength * 0.45f,
+            centerX - waistWidth, shoulderY + torsoLength * 0.55f,
+            centerX - waistWidth, shoulderY + torsoLength * 0.65f
+        ) // curve to waist
+
+        // Hip curve (widen back out)
         bodyPath.cubicTo(
-            centerX - bodyWidth * 0.18f, shoulderY + bodyHeight * 0.35f,
-            centerX - hipWidth * 0.9f, shoulderY + bodyHeight * 0.42f,
+            centerX - waistWidth, shoulderY + torsoLength * 0.75f,
+            centerX - hipWidth * 0.9f, shoulderY + torsoLength * 0.9f,
             centerX - hipWidth, shoulderY + torsoLength
         ) // hip curve (rounder)
 
@@ -59,20 +64,25 @@ object WaterBodyDrawable {
 
         // Right leg going back up
         bodyPath.lineTo(centerX + hipWidth, shoulderY + torsoLength) // hip
+
+        // Hip curve (narrow back in)
         bodyPath.cubicTo(
-            centerX + hipWidth * 0.9f, shoulderY + bodyHeight * 0.42f,
-            centerX + bodyWidth * 0.18f, shoulderY + bodyHeight * 0.35f,
-            centerX + bodyWidth * 0.18f, shoulderY + bodyHeight * 0.28f
+            centerX + hipWidth * 0.9f, shoulderY + torsoLength * 0.9f,
+            centerX + waistWidth, shoulderY + torsoLength * 0.75f,
+            centerX + waistWidth, shoulderY + torsoLength * 0.65f
         ) // hip curve (rounder)
+
+        // Waist to shoulder
         bodyPath.cubicTo(
-            centerX + bodyWidth * 0.18f, shoulderY + bodyHeight * 0.24f,
-            centerX + shoulderWidth, shoulderY + bodyHeight * 0.20f,
-            centerX + shoulderWidth, shoulderY + bodyHeight * 0.12f
-        ) // bust curve
+            centerX + waistWidth, shoulderY + torsoLength * 0.55f,
+            centerX + shoulderWidth * 0.95f, shoulderY + torsoLength * 0.45f,
+            centerX + shoulderWidth, shoulderY + torsoLength * 0.3f
+        ) // curve to shoulder
+
         // Right shoulder with rounded curve
         bodyPath.cubicTo(
-            centerX + shoulderWidth, shoulderY + bodyHeight * 0.08f,
-            centerX + shoulderWidth * 1.1f, shoulderY + bodyHeight * 0.04f,
+            centerX + shoulderWidth, shoulderY + torsoLength * 0.2f,
+            centerX + shoulderWidth * 1.1f, shoulderY + torsoLength * 0.1f,
             centerX + shoulderWidth, shoulderY
         ) // rounded shoulder
 
@@ -87,12 +97,12 @@ object WaterBodyDrawable {
             val waterTop = height * (1f - waterLevel)
             val waterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 shader = if (waterLevel >= 1f) {
-                    // Green gradient when goal reached
+                    // Green gradient when goal reached - matching routine widget
                     LinearGradient(
                         0f, height.toFloat(),
                         0f, waterTop,
-                        Color.parseColor("#66BB6A"),
-                        Color.parseColor("#A5D6A7"),
+                        Color.parseColor("#4CAF50"),
+                        Color.parseColor("#81C784"),
                         Shader.TileMode.CLAMP
                     )
                 } else {
