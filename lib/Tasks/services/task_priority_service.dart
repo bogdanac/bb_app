@@ -194,11 +194,15 @@ class TaskPriorityService {
       }
     }
 
-    // 5. MEDIUM-HIGH PRIORITY: Recurring tasks due today
+    // 5. MEDIUM-HIGH PRIORITY: Recurring tasks due today (not overdue)
     if (task.recurrence != null && task.isDueToday()) {
+      // Check if task is scheduled today or in future (not overdue)
+      final isScheduledTodayOrFuture = task.scheduledDate == null ||
+                                        !task.scheduledDate!.isBefore(today);
+
       if (task.scheduledDate != null && task.scheduledDate!.isAfter(today)) {
         score += 5;
-      } else {
+      } else if (isScheduledTodayOrFuture) {
         if (_isMenstrualCycleTask(task.recurrence!)) {
           final daysUntilTarget = _getDaysUntilMenstrualTarget(task.recurrence!);
           if (daysUntilTarget != null) {
@@ -218,8 +222,31 @@ class TaskPriorityService {
       }
     }
 
-    // 5b. OVERDUE SCHEDULED TASKS
-    if (task.scheduledDate != null &&
+    // 5b. OVERDUE RECURRING TASKS (within grace period)
+    // High priority to ensure you don't forget about them
+    if (task.recurrence != null &&
+        task.scheduledDate != null &&
+        task.scheduledDate!.isBefore(today) &&
+        !task.isPostponed) {
+      final daysOverdue = today.difference(
+        DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)
+      ).inDays;
+
+      // Overdue by 1 day: high priority (750)
+      // Overdue by 2 days: high priority (725)
+      // Overdue by 3+ days: shouldn't happen (auto-advances after 2 days)
+      if (daysOverdue == 1) {
+        score += 750;
+      } else if (daysOverdue == 2) {
+        score += 725;
+      } else {
+        // Grace period exceeded, still high priority
+        score += 700;
+      }
+    }
+
+    // 5c. OVERDUE NON-RECURRING SCHEDULED TASKS
+    else if (task.scheduledDate != null &&
         task.scheduledDate!.isBefore(today) &&
         task.recurrence == null) {
       final daysOverdue = today.difference(
@@ -228,61 +255,86 @@ class TaskPriorityService {
       score += math.max(550, 595 - (daysOverdue * 5));
     }
 
-    // 5c. SCHEDULED TODAY
+    // Calculate hasDistantReminder BEFORE using it
+    // hasDistantReminder = reminder exists AND is > 30 minutes away
+    bool hasDistantReminder = false;
+    int reminderMinutesAway = 0;
+    if (effectiveReminderTime != null) {
+      reminderMinutesAway = effectiveReminderTime.difference(now).inMinutes;
+      hasDistantReminder = reminderMinutesAway > 30;
+    }
+
     final isScheduledToday = task.scheduledDate != null &&
         _isSameDay(task.scheduledDate!, today);
-    if (isScheduledToday) {
-      int reminderMinutesAway = 0;
-      if (effectiveReminderTime != null) {
-        reminderMinutesAway = effectiveReminderTime.difference(now).inMinutes;
-      }
 
-      if (task.isPostponed && reminderMinutesAway > 60) {
-        score += 10;
-      } else if (reminderMinutesAway > 120) {
-        score += 20;
-      } else if (reminderMinutesAway > 60) {
-        score += 50;
-      } else {
-        score += 600;
-      }
-    }
+    // Check if task is due today (for recurring tasks)
+    final isRecurringDueToday = task.recurrence != null &&
+                                 task.recurrence!.isDueOn(today, taskCreatedAt: task.createdAt);
 
-    // 6. LOW-MEDIUM PRIORITY: Important tasks
-    // Don't boost priority for tasks explicitly scheduled for future dates
     final isExplicitlyScheduledFuture = task.scheduledDate != null &&
                                          task.scheduledDate!.isAfter(today) &&
-                                         !task.isDueToday(); // Allow recurring tasks due today
+                                         !isRecurringDueToday; // Allow recurring tasks due today
 
-    // Don't boost for tasks with reminders more than 30 minutes away
-    bool hasDistantReminder = false;
-    if (effectiveReminderTime != null) {
-      final reminderDiff = effectiveReminderTime.difference(now).inMinutes;
-      hasDistantReminder = reminderDiff >= 30;
-    }
-
-    if (task.isImportant && !isExplicitlyScheduledFuture && !hasDistantReminder) {
-      if (isScheduledToday) {
-        score += 100;
+    // 5d. SCHEDULED TODAY (non-recurring only)
+    // Recurring tasks are handled in section 5
+    if (isScheduledToday && task.recurrence == null) {
+      if (hasDistantReminder) {
+        // Task scheduled today but reminder > 30 min away
+        score += 125;
       } else {
-        score += 50;
+        // Task scheduled today with no reminder OR reminder within 30 min
+        score += 600;
+
+        // Add category priority for scheduled today tasks
+        score += _calculateCategoryScore(task.categoryIds, categories);
+
+        // Add important bonus for scheduled today tasks
+        if (task.isImportant) {
+          score += 100;
+        }
       }
     }
+    // 5e. UNSCHEDULED TASKS (no scheduled date)
+    else if (task.scheduledDate == null && !hasDistantReminder) {
+      score += 400;
 
-    // 7. CATEGORY PRIORITY
-    // Don't boost priority for tasks explicitly scheduled for future dates or with distant reminders
-    if (task.categoryIds.isNotEmpty && !isExplicitlyScheduledFuture && !hasDistantReminder) {
-      final categoryImportance = _getCategoryImportance(task.categoryIds, categories);
-      if (categoryImportance < 999) {
-        int baseScore = math.max(10, 45 - (categoryImportance * 5));
-        int categoryBonus = math.min(10, (task.categoryIds.length - 1) * 2);
+      // Add category priority for unscheduled tasks
+      score += _calculateCategoryScore(task.categoryIds, categories);
 
-        if (isScheduledToday) {
-          baseScore = (baseScore * 1.5).round();
-        }
-
-        score += baseScore + categoryBonus;
+      // Add important bonus for unscheduled tasks
+      if (task.isImportant) {
+        score += 100;
       }
+    }
+    // 5f. FUTURE SCHEDULED TASKS
+    else if (isExplicitlyScheduledFuture && !hasDistantReminder) {
+      final daysUntil = task.scheduledDate!.difference(today).inDays;
+
+      // Tomorrow starts at +120, decreases by 5 each day
+      if (daysUntil == 1) {
+        score += 120;
+      } else if (daysUntil == 2) {
+        score += 115;
+      } else if (daysUntil == 3) {
+        score += 110;
+      } else if (daysUntil == 4) {
+        score += 105;
+      } else if (daysUntil == 5) {
+        score += 100;
+      } else if (daysUntil == 6) {
+        score += 95;
+      } else if (daysUntil == 7) {
+        score += 90;
+      } else if (daysUntil <= 20) {
+        // Days 8-20: decrease by 5 each day
+        score += math.max(10, 90 - ((daysUntil - 7) * 5));
+      } else {
+        // Days 21+: decrease by 1 each day until minimum of 1
+        score += math.max(1, 10 - (daysUntil - 20));
+      }
+
+      // NO categories for future scheduled tasks
+      // NO important bonus for future scheduled tasks
     }
 
     return score;
@@ -355,6 +407,38 @@ class TaskPriorityService {
       default:
         return null;
     }
+  }
+
+  /// Calculate category score by summing points for all categories
+  /// Priority 1 = 20 points, Priority 2 = 18 points, Priority 3 = 16 points, etc.
+  /// Each category's points are multiplied by 5
+  int _calculateCategoryScore(List<String> categoryIds, List<TaskCategory> categories) {
+    if (categoryIds.isEmpty) return 0;
+
+    int totalScore = 0;
+    for (final categoryId in categoryIds) {
+      final category = categories.firstWhere(
+        (cat) => cat.id == categoryId,
+        orElse: () => TaskCategory(
+          id: '',
+          name: '',
+          color: const Color(0xFF666666),
+          order: 999
+        ),
+      );
+
+      // Skip invalid categories
+      if (category.order == 999) continue;
+
+      // Calculate points: Priority 1 = 20, Priority 2 = 18, Priority 3 = 16, etc.
+      // Minimum of 2 points (when order >= 10)
+      int categoryPoints = math.max(2, 20 - (category.order * 2));
+
+      // Multiply by 5
+      totalScore += categoryPoints * 5;
+    }
+
+    return totalScore;
   }
 
   int _getCategoryImportance(List<String> categoryIds, List<TaskCategory> categories) {

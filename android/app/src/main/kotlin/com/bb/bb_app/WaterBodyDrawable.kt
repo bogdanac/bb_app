@@ -10,44 +10,45 @@ object WaterBodyDrawable {
         canvas.drawColor(Color.TRANSPARENT)
 
         val centerX = width / 2f
-        val bodyWidth = width * 0.55f
-        val bodyHeight = height * 0.75f  // Leave more margin
-        val startY = height * 0.05f
+        val bodyWidth = width * 0.45f  // Narrower overall
+        val bodyHeight = height * 0.96f  // Maximum height
+        val startY = height * 0.01f  // Start at very top
 
         // Body outline path (simple female silhouette)
         val bodyPath = Path()
 
-        // Head
-        val headRadius = bodyWidth * 0.16f
+        // Head (proportional)
+        val headRadius = bodyWidth * 0.18f
         bodyPath.addCircle(centerX, startY + headRadius, headRadius, Path.Direction.CW)
 
         // Body measurements
         val neckY = startY + headRadius * 2
-        val shoulderY = neckY + bodyHeight * 0.02f
-        val shoulderWidth = bodyWidth * 0.28f
-        val torsoLength = bodyHeight * 0.5f  // Torso takes 50% of body height
-        val legLength = bodyHeight * 0.48f   // Legs take 48% of body height
+        val shoulderY = neckY + bodyHeight * 0.015f
+        val hipWidth = bodyWidth * 0.28f  // Hip width
+        val shoulderWidth = hipWidth  // Same as hips
+        val torsoLength = bodyHeight * 0.32f  // Even shorter torso
+        val legLength = bodyHeight * 0.66f   // Even longer legs
         val footY = shoulderY + torsoLength + legLength
 
         // Left side of body
         bodyPath.moveTo(centerX - shoulderWidth, shoulderY)
 
-        // Left shoulder -> bust -> waist -> hip (with curves)
+        // Left shoulder with rounded curve
         bodyPath.cubicTo(
-            centerX - bodyWidth * 0.38f, shoulderY + bodyHeight * 0.06f,
-            centerX - bodyWidth * 0.36f, shoulderY + bodyHeight * 0.10f,
-            centerX - bodyWidth * 0.36f, shoulderY + bodyHeight * 0.12f
-        ) // bust curve
+            centerX - shoulderWidth * 1.1f, shoulderY + bodyHeight * 0.04f,
+            centerX - shoulderWidth, shoulderY + bodyHeight * 0.08f,
+            centerX - shoulderWidth, shoulderY + bodyHeight * 0.12f
+        ) // rounded shoulder
         bodyPath.cubicTo(
-            centerX - bodyWidth * 0.36f, shoulderY + bodyHeight * 0.20f,
-            centerX - bodyWidth * 0.24f, shoulderY + bodyHeight * 0.24f,
-            centerX - bodyWidth * 0.24f, shoulderY + bodyHeight * 0.28f
-        ) // waist curve
+            centerX - shoulderWidth, shoulderY + bodyHeight * 0.20f,
+            centerX - bodyWidth * 0.18f, shoulderY + bodyHeight * 0.24f,
+            centerX - bodyWidth * 0.18f, shoulderY + bodyHeight * 0.28f
+        ) // waist curve (narrower)
         bodyPath.cubicTo(
-            centerX - bodyWidth * 0.24f, shoulderY + bodyHeight * 0.35f,
-            centerX - bodyWidth * 0.30f, shoulderY + bodyHeight * 0.45f,
-            centerX - bodyWidth * 0.30f, shoulderY + torsoLength
-        ) // hip curve
+            centerX - bodyWidth * 0.18f, shoulderY + bodyHeight * 0.35f,
+            centerX - hipWidth * 0.9f, shoulderY + bodyHeight * 0.42f,
+            centerX - hipWidth, shoulderY + torsoLength
+        ) // hip curve (rounder)
 
         // Left leg
         val legGap = bodyWidth * 0.10f  // Gap between legs
@@ -57,22 +58,23 @@ object WaterBodyDrawable {
         bodyPath.lineTo(centerX + legGap, footY) // right foot
 
         // Right leg going back up
-        bodyPath.lineTo(centerX + bodyWidth * 0.30f, shoulderY + torsoLength) // hip
+        bodyPath.lineTo(centerX + hipWidth, shoulderY + torsoLength) // hip
         bodyPath.cubicTo(
-            centerX + bodyWidth * 0.30f, shoulderY + bodyHeight * 0.45f,
-            centerX + bodyWidth * 0.24f, shoulderY + bodyHeight * 0.35f,
-            centerX + bodyWidth * 0.24f, shoulderY + bodyHeight * 0.28f
-        ) // waist curve
+            centerX + hipWidth * 0.9f, shoulderY + bodyHeight * 0.42f,
+            centerX + bodyWidth * 0.18f, shoulderY + bodyHeight * 0.35f,
+            centerX + bodyWidth * 0.18f, shoulderY + bodyHeight * 0.28f
+        ) // hip curve (rounder)
         bodyPath.cubicTo(
-            centerX + bodyWidth * 0.24f, shoulderY + bodyHeight * 0.24f,
-            centerX + bodyWidth * 0.36f, shoulderY + bodyHeight * 0.20f,
-            centerX + bodyWidth * 0.36f, shoulderY + bodyHeight * 0.12f
+            centerX + bodyWidth * 0.18f, shoulderY + bodyHeight * 0.24f,
+            centerX + shoulderWidth, shoulderY + bodyHeight * 0.20f,
+            centerX + shoulderWidth, shoulderY + bodyHeight * 0.12f
         ) // bust curve
+        // Right shoulder with rounded curve
         bodyPath.cubicTo(
-            centerX + bodyWidth * 0.36f, shoulderY + bodyHeight * 0.10f,
-            centerX + bodyWidth * 0.38f, shoulderY + bodyHeight * 0.06f,
+            centerX + shoulderWidth, shoulderY + bodyHeight * 0.08f,
+            centerX + shoulderWidth * 1.1f, shoulderY + bodyHeight * 0.04f,
             centerX + shoulderWidth, shoulderY
-        ) // shoulder curve
+        ) // rounded shoulder
 
         bodyPath.close()
 

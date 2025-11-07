@@ -707,6 +707,9 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   bool _isRecalculating = false;
   bool _isLoading = true;
   bool _isUpdatingTasks = false; // Flag to prevent duplicate refreshes
+  bool _isSearching = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
   final TaskService _taskService = TaskService();
 
   @override
@@ -724,6 +727,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _searchController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _taskService.removeTaskChangeListener(_onTasksChanged);
     super.dispose();
@@ -1293,6 +1297,13 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   Future<List<Task>> _getFilteredTasksAsync() async {
     List<Task> filtered = _tasks;
 
+    // Filter by search query
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered.where((task) {
+        return task.title.toLowerCase().contains(_searchQuery.toLowerCase());
+      }).toList();
+    }
+
     if (!_showCompleted) {
       // Show incomplete tasks only
       filtered = filtered.where((task) => !task.isCompleted).toList();
@@ -1346,6 +1357,13 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   List<Task> _getFilteredTasks() {
     // Simple synchronous filtering for immediate UI updates
     List<Task> filtered = _tasks;
+
+    // Filter by search query
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered.where((task) {
+        return task.title.toLowerCase().contains(_searchQuery.toLowerCase());
+      }).toList();
+    }
 
     if (!_showCompleted) {
       filtered = filtered.where((task) => !task.isCompleted).toList();
@@ -1539,26 +1557,27 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   Widget _buildMainScaffold(List<Task> prioritizedTasks) {
     return Scaffold(
       appBar: widget.showFilters ? AppBar(
-        title: const Text('Tasks'),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: 'Search tasks...',
+                  hintStyle: TextStyle(color: Colors.white54),
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                  _updateDisplayTasks();
+                },
+              )
+            : const Text('Tasks'),
         backgroundColor: Colors.transparent,
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: IconButton(
-              icon: _isRecalculating
-                  ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.orange),
-                ),
-              )
-                  : const Icon(Icons.auto_fix_high),
-              tooltip: 'Recalculate Recurring Tasks',
-              onPressed: _isRecalculating ? null : _recalculateRecurringTasks,
-            ),
-          ),
+          // Cycle filter toggle
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: IconButton(
@@ -1575,6 +1594,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
               },
             ),
           ),
+          // Show/Hide completed toggle
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: IconButton(
@@ -1591,33 +1611,111 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
               },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: IconButton(
-              icon: const Icon(Icons.category_rounded),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TaskCategoriesScreen(
-                      categories: _categories,
-                      onCategoriesUpdated: (updatedCategories) async {
-                        setState(() {
-                          _categories = updatedCategories;
-                        });
-                        await _saveCategories();
-                      },
-                    ),
-                  ),
-                );
-              },
+          // Search icon (moved to the right)
+          if (_isSearching)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: IconButton(
+                icon: const Icon(Icons.clear),
+                tooltip: 'Clear search',
+                onPressed: () {
+                  setState(() {
+                    _isSearching = false;
+                    _searchQuery = '';
+                    _searchController.clear();
+                  });
+                  _updateDisplayTasks();
+                },
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: 'Search tasks',
+                onPressed: () {
+                  setState(() {
+                    _isSearching = true;
+                  });
+                },
+              ),
             ),
-          ),
+          // Context menu with more options
           Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: IconButton(
-              icon: const Icon(Icons.casino_rounded),
-              onPressed: _selectRandomTask,
+            padding: const EdgeInsets.only(right: 8),
+            child: PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              tooltip: 'More options',
+              onSelected: (value) {
+                switch (value) {
+                  case 'categories':
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TaskCategoriesScreen(
+                          categories: _categories,
+                          onCategoriesUpdated: (updatedCategories) async {
+                            setState(() {
+                              _categories = updatedCategories;
+                            });
+                            await _saveCategories();
+                          },
+                        ),
+                      ),
+                    );
+                    break;
+                  case 'recalculate':
+                    _recalculateRecurringTasks();
+                    break;
+                  case 'random':
+                    _selectRandomTask();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'categories',
+                  child: Row(
+                    children: const [
+                      Icon(Icons.category_rounded, size: 20, color: AppColors.waterBlue),
+                      SizedBox(width: 12),
+                      Text('Edit Categories'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'recalculate',
+                  enabled: !_isRecalculating,
+                  child: Row(
+                    children: [
+                      if (_isRecalculating)
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.orange),
+                          ),
+                        )
+                      else
+                        const Icon(Icons.auto_fix_high, size: 20, color: AppColors.orange),
+                      const SizedBox(width: 12),
+                      const Text('Recalculate Tasks'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'random',
+                  child: Row(
+                    children: const [
+                      Icon(Icons.casino_rounded, size: 20, color: AppColors.lightPink),
+                      SizedBox(width: 12),
+                      Text('Random Task'),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ],

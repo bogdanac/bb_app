@@ -85,14 +85,23 @@ class TaskService {
           tasksUpdated = true;
         }
         // Case 2b: Overdue recurring tasks
+        // IMPORTANT: Only auto-advance if overdue by MORE than 2 days (grace period)
+        // This prevents forgetting about tasks - you have 2 days to complete them
         else if (tasks[i].recurrence != null &&
                  tasks[i].scheduledDate != null &&
                  tasks[i].scheduledDate!.isBefore(todayDate) &&
                  !tasks[i].isPostponed) {
-          final updatedTask = await _recurrenceCalculator.calculateNextScheduledDate(tasks[i], prefs);
-          if (updatedTask != null) {
-            tasks[i] = updatedTask;
-            tasksUpdated = true;
+          final daysOverdue = todayDate.difference(
+            DateTime(tasks[i].scheduledDate!.year, tasks[i].scheduledDate!.month, tasks[i].scheduledDate!.day)
+          ).inDays;
+
+          // Only auto-advance if overdue by more than 2 days
+          if (daysOverdue > 2) {
+            final updatedTask = await _recurrenceCalculator.calculateNextScheduledDate(tasks[i], prefs);
+            if (updatedTask != null) {
+              tasks[i] = updatedTask;
+              tasksUpdated = true;
+            }
           }
         }
         // Case 3: Tasks scheduled today with wrong reminderTime
@@ -123,6 +132,23 @@ class TaskService {
 
       // Check for menstrual tasks that should be prioritized today
       await _updateMenstrualTaskPriorities(tasks, prefs);
+
+      // AUTO-CLEANUP: Delete completed tasks older than 30 days
+      final thirtyDaysAgo = todayDate.subtract(const Duration(days: 30));
+      final tasksBeforeCleanup = tasks.length;
+      tasks.removeWhere((task) {
+        return task.isCompleted &&
+               task.completedAt != null &&
+               task.completedAt!.isBefore(thirtyDaysAgo);
+      });
+
+      final deletedCount = tasksBeforeCleanup - tasks.length;
+      if (deletedCount > 0) {
+        if (kDebugMode) {
+          print('🗑️ Auto-deleted $deletedCount completed tasks older than 30 days');
+        }
+        tasksUpdated = true;
+      }
 
       // Save tasks if any were updated
       if (tasksUpdated) {

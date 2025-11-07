@@ -380,9 +380,95 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            // Skip Task / Set Scheduled Day Section
+            // Set Scheduled Day Section (ALWAYS VISIBLE)
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.dialogBackground.withValues(alpha: 0.08),
+                borderRadius: AppStyles.borderRadiusLarge,
+                border: Border.all(
+                  color: _scheduledDate != null
+                      ? AppColors.successGreen.withValues(alpha: 0.1)
+                      : AppColors.greyText,
+                ),
+              ),
+              child: InkWell(
+                onTap: _selectScheduledDate,
+                borderRadius: AppStyles.borderRadiusLarge,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: (_scheduledDate != null
+                              ? AppColors.successGreen.withValues(alpha: 0.3)
+                              : AppColors.greyText).withValues(alpha: 0.1),
+                          borderRadius: AppStyles.borderRadiusMedium,
+                        ),
+                        child: Icon(
+                          Icons.calendar_today_rounded,
+                          color: _scheduledDate != null
+                              ? AppColors.successGreen
+                              : AppColors.greyText,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _selectScheduledDate,
+                          behavior: HitTestBehavior.opaque,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _recurrence != null ? 'Reschedule This Occurrence' : 'Set Scheduled Day',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.greyText,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _scheduledDate != null
+                                    ? DateFormatUtils.formatFullDate(_scheduledDate!)
+                                    : _recurrence != null
+                                        ? 'Override when to do this occurrence'
+                                        : 'Choose when to do this task',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.greyText,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_scheduledDate != null)
+                        IconButton(
+                          onPressed: () {
+                            setState(() {
+                              _scheduledDate = null;
+                              _hasUserModifiedScheduledDate = true;
+                            });
+                            _onFieldChanged();
+                          },
+                          icon: const Icon(Icons.clear_rounded),
+                          color: AppColors.greyText,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Skip Task Section (ONLY FOR RECURRING TASKS)
             if (_recurrence != null) ...[
-              // Skip Task Section (for recurring tasks)
               Container(
                 decoration: BoxDecoration(
                   color: _titleController.text.trim().isEmpty
@@ -424,7 +510,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Skip Task',
+                                'Skip to Next Occurrence',
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
@@ -441,7 +527,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                                   RecurrenceType.lateLutealPhase
                                 ].contains(type))
                                     ? 'Put on hold until next appropriate phase'
-                                    : 'Postpone to next occurrence',
+                                    : 'Advance to the next scheduled recurrence',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.white24,
@@ -460,94 +546,6 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             size: 20,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ] else ...[
-              // Set Scheduled Day Section (for non-recurring tasks)
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                  borderRadius: AppStyles.borderRadiusLarge,
-                  border: Border.all(
-                    color: _scheduledDate != null
-                        ? AppColors.successGreen.withValues(alpha: 0.1)
-                        : AppColors.greyText,
-                  ),
-                ),
-                child: InkWell(
-                  onTap: _selectScheduledDate,
-                  borderRadius: AppStyles.borderRadiusLarge,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: (_scheduledDate != null
-                                ? AppColors.successGreen.withValues(alpha: 0.3)
-                                : AppColors.greyText).withValues(alpha: 0.1),
-                            borderRadius: AppStyles.borderRadiusMedium,
-                          ),
-                          child: Icon(
-                            Icons.calendar_today_rounded,
-                            color: _scheduledDate != null
-                                ? AppColors.successGreen
-                                : AppColors.greyText,
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _selectScheduledDate,
-                            behavior: HitTestBehavior.opaque,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Set Scheduled Day',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.greyText,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _scheduledDate != null
-                                      ? DateFormatUtils.formatFullDate(_scheduledDate!)
-                                      : 'Choose when to do this task',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.greyText,
-                                    fontWeight: FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (_scheduledDate != null)
-                          IconButton(
-                            onPressed: () {
-                              setState(() {
-                                _scheduledDate = null;
-                                _hasUserModifiedScheduledDate = true;
-                              });
-                              _onFieldChanged();
-                            },
-                            icon: const Icon(Icons.clear_rounded),
-                            color: AppColors.greyText,
-                          )
-                        else
-                          const Icon(
-                            Icons.chevron_right_rounded,
-                            color: AppColors.greyText,
-                          ),
                       ],
                     ),
                   ),

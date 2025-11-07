@@ -143,24 +143,52 @@ The service uses a sophisticated point-based system to prioritize tasks:
 // Scoring ranges (higher score = higher priority):
 // 1200+:   Critical overdue reminders (within 1 hour)
 // 900-1200: Overdue reminders and deadlines
-// 700-900:  Recurring tasks due today, upcoming reminders
-// 600:      Tasks scheduled for today
+// 700-900:  Recurring tasks due today, reminders < 30 min
+// 600+:     Tasks scheduled TODAY (with reminder within 30 min or no reminder)
+//           + Category points (sum of all categories)
+//           + Important bonus (+100)
 // 550-595:  Overdue scheduled tasks (decreasing by 5 points/day)
-// 50:       Important tasks
-// 10-45:    Category-based priority
-// 1:        Postponed recurring tasks (lowest)
+// 400+:     UNSCHEDULED tasks (no scheduled date)
+//           + Category points (sum of all categories)
+//           + Important bonus (+50)
+// 125:      Scheduled TODAY with distant reminder (> 30 min away)
+// 120:      Tomorrow (no categories, no important)
+// 115-1:    Future scheduled dates (decreasing priority)
+// 2:        Postponed recurring tasks (lowest)
 ```
 
+**Category Scoring (NEW):**
+Categories now use an additive system where points accumulate:
+- **Priority 1**: 20 × 5 = 100 points
+- **Priority 2**: 18 × 5 = 90 points
+- **Priority 3**: 16 × 5 = 80 points
+- **Priority 4**: 14 × 5 = 70 points
+- **Priority N**: max(2, 20 - (N × 2)) × 5 points
+- **Multiple categories**: Points are summed (e.g., Cat1 + Cat2 = 190 points)
+- **Applied only to**: Unscheduled tasks and tasks scheduled TODAY (not future dates)
+
+**Distant Reminder Rule:**
+Tasks with reminders > 30 minutes away are treated differently:
+- If scheduled TODAY with reminder > 30 min: Gets flat 125 points (no categories, no important)
+- If scheduled future or unscheduled with reminder > 30 min: Gets no scheduling bonuses
+- This prevents tasks scheduled for evening from cluttering the morning view
+
 **Priority Calculation Logic:**
-1. **Overdue/upcoming reminders** - 800-1200 points (time-based)
-2. **Overdue deadlines** - 900 points (decreasing over time)
-3. **Deadlines today** - 800 points
-4. **Recurring tasks due today** - 700 points
-5. **Scheduled today** - 600 points
-6. **Overdue scheduled tasks** - 550-595 points (decreases 5 points/day)
-7. **Important tasks** - 50 points
-8. **Category priority** - 10-45 points (based on category order)
-9. **Postponed recurring tasks** - 1 point (lowest priority)
+1. **Critical overdue reminders** - 1200+ points (< 1 hour overdue)
+2. **Overdue reminders** - 800-1000 points (1-24+ hours overdue)
+3. **Reminders < 30 min** - 1100 points
+4. **Overdue deadlines** - 900 points (decreasing by 10 points/day)
+5. **Deadlines today** - 800 points
+6. **Recurring tasks due today** - 700 points
+7. **Scheduled today** (reminder within 30 min or no reminder) - 600 + categories + important
+8. **Overdue scheduled tasks** - 550-595 points (decreases 5 points/day)
+9. **Unscheduled tasks** - 400 + categories + important
+10. **Scheduled today** (reminder > 30 min) - 125 points
+11. **Tomorrow** - 120 points
+12. **Day 2-7** - 115, 110, 105, 100, 95, 90 points
+13. **Day 8-20** - Decreases by 5 each day (85, 80, 75...)
+14. **Day 21+** - Decreases by 1 each day until minimum of 1
+15. **Postponed recurring tasks** - 2 points (lowest)
 
 **Global Change Notification System:**
 ```dart
@@ -304,16 +332,27 @@ The system uses contextual priority scoring that adapts to time of day:
 int _getContextualTomorrowPriority(DateTime now) {
   final hour = now.hour;
   if (hour < 12) return 50;   // Morning: focus on today
-  if (hour < 18) return 150;  // Afternoon: light planning  
+  if (hour < 18) return 150;  // Afternoon: light planning
   return 300;                 // Evening: prepare for tomorrow
 }
 ```
 
 **Special Rules:**
-- Postponed recurring tasks get very low priority (30 points)
-- Important tasks get consistent boost (+100 points)
-- Menstrual cycle tasks get distance-based priority
-- Categories only used as tie-breakers in final sorting
+- **Distant reminders** (> 30 min): Block most bonuses to prevent premature display
+- **Scheduled today with distant reminder**: Get flat 125 points (just above tomorrow's 120)
+- **Unscheduled tasks**: Get 400 points + categories + important bonus
+- **Future scheduled tasks**: Get decreasing date-based priority (no categories/important)
+- **Categories**: Sum all category points (Cat1=100, Cat2=90, etc.)
+- **Important flag**: +100 for scheduled today, +50 for unscheduled, +0 for future dates
+- **Postponed recurring tasks**: Get very low priority (2 points)
+- **Menstrual cycle tasks**: Get distance-based priority boost
+
+**Key Priority Hierarchy:**
+1. Urgent/Overdue (800-1200) - Time-sensitive tasks
+2. Scheduled Today (600-700) - Today's planned work
+3. Unscheduled (400-500) - Tasks needing scheduling
+4. Scheduled Today (distant reminder) (125) - Today but not urgent yet
+5. Future Dates (120 down to 1) - Strict chronological order
 
 ### Menstrual Cycle Integration
 

@@ -507,67 +507,65 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
               ),
             ] else if (currentStep != null) ...[
               // Current step with buttons on the right
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.yellow.withValues(alpha: 0.2),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(8),
-                          bottomLeft: Radius.circular(8),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(8),
+                            bottomLeft: Radius.circular(8),
+                          ),
+                          border: Border(
+                            top: BorderSide(color: AppColors.yellow.withValues(alpha: 0.4)),
+                            left: BorderSide(color: AppColors.yellow.withValues(alpha: 0.4)),
+                            bottom: BorderSide(color: AppColors.yellow.withValues(alpha: 0.4)),
+                          ),
                         ),
-                        border: Border(
-                          top: BorderSide(color: AppColors.yellow.withValues(alpha: 0.4)),
-                          left: BorderSide(color: AppColors.yellow.withValues(alpha: 0.4)),
-                          bottom: BorderSide(color: AppColors.yellow.withValues(alpha: 0.4)),
+                        child: Text(
+                          currentStep.text,
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                         ),
-                      ),
-                      child: Text(
-                        currentStep.text,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                       ),
                     ),
-                  ),
-                  // Action buttons on the right - unified rectangular style
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+                    // Action buttons on the right - unified rectangular style
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         // Skip button - left section
                         Material(
-                          color: AppColors.greyText.withValues(alpha: 0.2),
+                          color: Colors.white.withValues(alpha: 0.15),
                           child: InkWell(
                             onTap: _skipCurrentStep,
                             child: Container(
                               width: 42,
-                              height: 47,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                border: Border.all(color: AppColors.greyText.withValues(alpha: 0.4), width: 1),
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1),
                               ),
-                              child: Icon(Icons.close_rounded, size: 20, color: AppColors.greyText),
+                              child: Icon(Icons.close_rounded, size: 20, color: Colors.white.withValues(alpha: 0.85)),
                             ),
                           ),
                         ),
                         // Postpone button - middle section
                         Material(
-                          color: Colors.orange.withValues(alpha: 0.2),
+                          color: Colors.white.withValues(alpha: 0.15),
                           child: InkWell(
                             onTap: _postponeCurrentStep,
                             child: Container(
                               width: 42,
-                              height: 47,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
                                 border: Border(
-                                  top: BorderSide(color: Colors.orange.withValues(alpha: 0.4), width: 1),
-                                  bottom: BorderSide(color: Colors.orange.withValues(alpha: 0.4), width: 1),
+                                  top: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1),
+                                  bottom: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1),
                                 ),
                               ),
-                              child: Icon(Icons.schedule_rounded, size: 20, color: Colors.orange),
+                              child: Icon(Icons.schedule_rounded, size: 20, color: Colors.white.withValues(alpha: 0.85)),
                             ),
                           ),
                         ),
@@ -578,7 +576,6 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                             onTap: _completeCurrentStep,
                             child: Container(
                               width: 42,
-                              height: 47,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
                                 border: Border.all(color: Colors.green.withValues(alpha: 0.4), width: 1),
@@ -592,8 +589,9 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                           ),
                         ),
                       ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ] else ...[
               // No current step available but not all completed - show postponed steps

@@ -74,8 +74,12 @@ class TaskNotificationService {
       await _notificationService.cancelTaskNotification(task.id);
 
       // Determine recurrence type for proper notification scheduling
+      // IMPORTANT: If task is postponed, schedule as one-time notification
+      // to prevent today's notification from firing
       String? recurrenceType;
-      if (task.recurrence != null && task.recurrence!.types.isNotEmpty) {
+      bool shouldScheduleAsRecurring = task.recurrence != null && !task.isPostponed;
+
+      if (shouldScheduleAsRecurring && task.recurrence!.types.isNotEmpty) {
         final primaryType = task.recurrence!.types.first;
         switch (primaryType) {
           case RecurrenceType.daily:
@@ -97,7 +101,7 @@ class TaskNotificationService {
         task.id,
         task.title,
         scheduledDate,
-        isRecurring: task.recurrence != null,
+        isRecurring: shouldScheduleAsRecurring,
         recurrenceType: recurrenceType,
       );
     } catch (e) {

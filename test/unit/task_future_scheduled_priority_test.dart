@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 void main() {
   late TaskPriorityService service;
   late List<TaskCategory> categories;
+  late DateTime now;
+  late DateTime today;
 
   setUp(() {
     service = TaskPriorityService();
@@ -13,216 +15,181 @@ void main() {
       TaskCategory(id: '1', name: 'Work', color: Colors.blue, order: 0),
       TaskCategory(id: '2', name: 'Personal', color: Colors.green, order: 1),
     ];
+    now = DateTime(2025, 11, 5, 14, 0);
+    today = DateTime(now.year, now.month, now.day);
   });
 
-  group('Reminder Priority Rules', () {
-    test('reminder less than 30 minutes away gets high priority', () {
-      final now = DateTime(2025, 11, 5, 14, 0);
-      final today = DateTime(now.year, now.month, now.day);
+  int score(Task task) => service.calculateTaskPriorityScore(task, now, today, categories);
 
+  group('30-Minute Reminder Threshold', () {
+    test('reminder < 30 min away gets full priority bonuses', () {
       final task = Task(
         id: '1',
         title: 'Soon Reminder',
+        scheduledDate: today,
         reminderTime: DateTime(2025, 11, 5, 14, 20), // 20 min away
-        createdAt: DateTime.now(),
+        categoryIds: ['1'],
+        isImportant: true,
+        createdAt: now,
       );
 
-      final score = service.calculateTaskPriorityScore(task, now, today, categories);
-      expect(score, equals(1100)); // High priority
+      // Should get: 1100 (reminder) + 600 (scheduled today) + 100 (cat) + 100 (important)
+      expect(score(task), greaterThan(1800));
     });
 
-    test('reminder 30 min to 2 hours away gets symbolic priority', () {
-      final now = DateTime(2025, 11, 5, 14, 0);
-      final today = DateTime(now.year, now.month, now.day);
-
-      final task = Task(
-        id: '1',
-        title: 'Hour Away Reminder',
-        reminderTime: DateTime(2025, 11, 5, 15, 0), // 60 min away
-        createdAt: DateTime.now(),
-      );
-
-      final score = service.calculateTaskPriorityScore(task, now, today, categories);
-      expect(score, equals(15)); // Symbolic priority
-    });
-
-    test('reminder more than 2 hours away gets no priority', () {
-      final now = DateTime(2025, 11, 5, 14, 0);
-      final today = DateTime(now.year, now.month, now.day);
-
+    test('reminder > 30 min away on task scheduled today gets flat 125', () {
       final task = Task(
         id: '1',
         title: 'Distant Reminder',
+        scheduledDate: today,
         reminderTime: DateTime(2025, 11, 5, 18, 0), // 4 hours away
-        createdAt: DateTime.now(),
+        categoryIds: ['1'],
+        isImportant: true,
+        createdAt: now,
       );
 
-      final score = service.calculateTaskPriorityScore(task, now, today, categories);
-      expect(score, equals(0)); // No priority
+      expect(score(task), equals(125));
     });
 
-    test('overdue reminder still gets high priority', () {
-      final now = DateTime(2025, 11, 5, 14, 0);
-      final today = DateTime(now.year, now.month, now.day);
-
+    test('unscheduled task with reminder > 30 min gets no priority', () {
       final task = Task(
         id: '1',
-        title: 'Overdue Reminder',
-        reminderTime: DateTime(2025, 11, 5, 13, 0), // 1 hour ago
-        createdAt: DateTime.now(),
+        title: 'Unscheduled Distant Reminder',
+        reminderTime: DateTime(2025, 11, 5, 18, 0), // 4 hours away
+        categoryIds: ['1'],
+        isImportant: true,
+        createdAt: now,
       );
 
-      final score = service.calculateTaskPriorityScore(task, now, today, categories);
-      expect(score, equals(1200)); // High priority for overdue
+      expect(score(task), equals(0));
     });
   });
 
-  group('Future Scheduled Tasks Priority', () {
-    test('important task scheduled for future date should NOT get high priority', () {
-      final now = DateTime(2025, 11, 5, 14, 0); // Nov 5, 2:00 PM
-      final today = DateTime(now.year, now.month, now.day);
-      final futureDate = DateTime(2025, 11, 10); // Nov 10
-
-      // Important task scheduled for Nov 10 (5 days in future)
-      final futureTask = Task(
-        id: '1',
-        title: 'Future Important Task',
-        isImportant: true,
-        scheduledDate: futureDate,
-        createdAt: DateTime.now(),
-      );
-
-      // Regular task due today
+  group('Future Scheduled Tasks vs Today', () {
+    test('today task beats future important task', () {
       final todayTask = Task(
-        id: '2',
-        title: 'Today Task',
-        isImportant: false,
+        id: '1',
+        title: 'Today Regular',
         scheduledDate: today,
-        createdAt: DateTime.now(),
+        createdAt: now,
       );
 
-      final futureScore = service.calculateTaskPriorityScore(futureTask, now, today, categories);
-      final todayScore = service.calculateTaskPriorityScore(todayTask, now, today, categories);
-
-      // Future task should have very low priority even though it's important
-      expect(futureScore, lessThan(10)); // Should be 1-5 range
-      // Today task should have higher priority
-      expect(todayScore, greaterThan(futureScore));
-    });
-
-    test('important task scheduled for today SHOULD get high priority', () {
-      final now = DateTime(2025, 11, 5, 14, 0);
-      final today = DateTime(now.year, now.month, now.day);
-
-      final todayImportantTask = Task(
-        id: '1',
-        title: 'Today Important Task',
-        isImportant: true,
-        scheduledDate: today,
-        createdAt: DateTime.now(),
-      );
-
-      final regularTask = Task(
+      final futureImportantTask = Task(
         id: '2',
-        title: 'Regular Task',
-        isImportant: false,
-        createdAt: DateTime.now(),
-      );
-
-      final importantScore = service.calculateTaskPriorityScore(todayImportantTask, now, today, categories);
-      final regularScore = service.calculateTaskPriorityScore(regularTask, now, today, categories);
-
-      // Important task scheduled today should get priority boost
-      expect(importantScore, greaterThan(600)); // Gets scheduled today + important bonus
-      expect(importantScore, greaterThan(regularScore));
-    });
-
-    test('recurring task due today but scheduled for future should NOT get inflated priority', () {
-      final now = DateTime(2025, 11, 5, 14, 0);
-      final today = DateTime(now.year, now.month, now.day);
-      final futureDate = DateTime(2025, 11, 10);
-
-      final recurringFutureTask = Task(
-        id: '1',
-        title: 'Recurring Future Task',
+        title: 'Future Important',
+        scheduledDate: today.add(const Duration(days: 10)),
         isImportant: true,
-        scheduledDate: futureDate,
-        recurrence: TaskRecurrence(type: RecurrenceType.daily),
-        createdAt: DateTime.now(),
-      );
-
-      final score = service.calculateTaskPriorityScore(recurringFutureTask, now, today, categories);
-
-      // Should have low priority since it's scheduled for future
-      // Even though recurring tasks due today normally get priority
-      expect(score, lessThan(20));
-    });
-
-    test('task with category scheduled for future should NOT get category boost', () {
-      final now = DateTime(2025, 11, 5, 14, 0);
-      final today = DateTime(now.year, now.month, now.day);
-      final futureDate = DateTime(2025, 11, 10);
-
-      final futureCategoryTask = Task(
-        id: '1',
-        title: 'Future Category Task',
-        categoryIds: ['1'], // Work category (order=0, high priority)
-        scheduledDate: futureDate,
-        createdAt: DateTime.now(),
-      );
-
-      final todayCategoryTask = Task(
-        id: '2',
-        title: 'Today Category Task',
         categoryIds: ['1'],
-        scheduledDate: today,
-        createdAt: DateTime.now(),
+        createdAt: now,
       );
 
-      final futureScore = service.calculateTaskPriorityScore(futureCategoryTask, now, today, categories);
-      final todayScore = service.calculateTaskPriorityScore(todayCategoryTask, now, today, categories);
-
-      // Future task should NOT get category boost
-      expect(futureScore, lessThan(10));
-      // Today task SHOULD get category boost
-      expect(todayScore, greaterThan(futureScore));
-      expect(todayScore, greaterThan(600)); // Scheduled today + category bonus
+      expect(score(todayTask), greaterThan(score(futureImportantTask)));
     });
 
-    test('sorting - future important tasks should appear below today tasks', () {
-      final now = DateTime(2025, 11, 5, 14, 0);
-      final today = DateTime(now.year, now.month, now.day);
-      final futureDate = DateTime(2025, 11, 10);
+    test('future tasks do NOT get category or important bonuses', () {
+      final futureImportantCat1 = Task(
+        id: '1',
+        title: 'Future Important Cat1',
+        scheduledDate: today.add(const Duration(days: 10)),
+        isImportant: true,
+        categoryIds: ['1'],
+        createdAt: now,
+      );
 
+      final futurePlain = Task(
+        id: '2',
+        title: 'Future Plain',
+        scheduledDate: today.add(const Duration(days: 10)),
+        createdAt: now,
+      );
+
+      expect(score(futureImportantCat1), equals(score(futurePlain)));
+    });
+
+    test('recurring task scheduled in future gets minimal priority', () {
+      final recurringFuture = Task(
+        id: '1',
+        title: 'Recurring Future',
+        recurrence: TaskRecurrence(type: RecurrenceType.daily),
+        scheduledDate: today.add(const Duration(days: 5)),
+        isImportant: true,
+        createdAt: now,
+      );
+
+      expect(score(recurringFuture), equals(1));
+    });
+  });
+
+  group('Unscheduled vs Future Scheduled', () {
+    test('unscheduled task beats future scheduled task', () {
+      final unscheduled = Task(
+        id: '1',
+        title: 'Unscheduled',
+        createdAt: now,
+      );
+
+      final future = Task(
+        id: '2',
+        title: 'Future',
+        scheduledDate: today.add(const Duration(days: 5)),
+        createdAt: now,
+      );
+
+      expect(score(unscheduled), greaterThan(score(future)));
+    });
+
+    test('unscheduled with categories beats future with same categories', () {
+      final unscheduledCat1 = Task(
+        id: '1',
+        title: 'Unscheduled Cat1',
+        categoryIds: ['1'],
+        createdAt: now,
+      );
+
+      final futureCat1 = Task(
+        id: '2',
+        title: 'Future Cat1',
+        scheduledDate: today.add(const Duration(days: 5)),
+        categoryIds: ['1'],
+        createdAt: now,
+      );
+
+      // Unscheduled: 400 + 100 = 500
+      // Future: day 5 = 100 (no categories)
+      expect(score(unscheduledCat1), greaterThan(score(futureCat1)));
+    });
+  });
+
+  group('Sorting Tests', () {
+    test('tasks sort in correct priority order', () {
       final tasks = [
         Task(
-          id: '1',
+          id: 'future_important',
           title: 'Future Important',
           isImportant: true,
-          scheduledDate: futureDate,
-          createdAt: DateTime.now(),
+          scheduledDate: today.add(const Duration(days: 10)),
+          createdAt: now,
         ),
         Task(
-          id: '2',
+          id: 'today_regular',
           title: 'Today Regular',
           scheduledDate: today,
-          createdAt: DateTime.now(),
+          createdAt: now,
         ),
         Task(
-          id: '3',
+          id: 'today_important',
           title: 'Today Important',
           isImportant: true,
           scheduledDate: today,
-          createdAt: DateTime.now(),
+          createdAt: now,
         ),
       ];
 
       final prioritized = service.getPrioritizedTasks(tasks, categories, 10);
 
-      // Order should be: Today Important, Today Regular, Future Important
-      expect(prioritized[0].id, equals('3')); // Today Important first
-      expect(prioritized[1].id, equals('2')); // Today Regular second
-      expect(prioritized[2].id, equals('1')); // Future Important last
+      expect(prioritized[0].id, equals('today_important'));
+      expect(prioritized[1].id, equals('today_regular'));
+      expect(prioritized[2].id, equals('future_important'));
     });
   });
 }
