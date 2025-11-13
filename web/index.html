@@ -18,19 +18,36 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="My app">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Track your fasting, menstrual cycle, tasks, routines, and habits">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="bb_app">
+  <meta name="apple-mobile-web-app-title" content="BBetter">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>bb_app</title>
+  <title>BBetter - Wellness Tracker</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #232323;
+    }
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #FF48B4;
+      font-family: sans-serif;
+    }
+  </style>
 
   <script>
     // The value below is injected by flutter build, do not touch.
@@ -40,6 +57,9 @@
   <script src="flutter.js" defer></script>
 </head>
 <body>
+  <div class="loading" id="loading">
+    <p>Loading BBetter...</p>
+  </div>
   <script>
     window.addEventListener('load', function(ev) {
       // Download main.dart.js
@@ -50,6 +70,8 @@
         onEntrypointLoaded: function(engineInitializer) {
           engineInitializer.initializeEngine().then(function(appRunner) {
             appRunner.runApp();
+            // Hide loading indicator once app is running
+            document.getElementById('loading').style.display = 'none';
           });
         }
       });

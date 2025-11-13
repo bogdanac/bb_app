@@ -327,7 +327,7 @@ class _TaskCardState extends State<TaskCard> {
                               ],
                             ),
                             // All labels directly after title
-                            if (widget.task.deadline != null || widget.task.reminderTime != null || widget.task.recurrence != null || widget.task.categoryIds.isNotEmpty || widget.task.isDueToday() || (widget.priorityReason != null && widget.priorityReason!.isNotEmpty)) ...[
+                            if (widget.task.deadline != null || widget.task.reminderTime != null || widget.task.recurrence != null || widget.task.categoryIds.isNotEmpty || widget.task.isDueToday() || (widget.priorityReason != null && widget.priorityReason!.isNotEmpty) || (widget.task.scheduledDate != null && widget.task.scheduledDate!.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)))) ...[
                               const SizedBox(height: 10),
                               Wrap(
                                 spacing: 6,
@@ -344,6 +344,21 @@ class _TaskCardState extends State<TaskCard> {
                                       Icons.today_rounded,
                                       widget.priorityReason!,
                                       widget.priorityColor ?? Colors.orange,
+                                    ),
+                                  // Overdue chip (for tasks scheduled in the past)
+                                  if (widget.task.scheduledDate != null &&
+                                      widget.task.scheduledDate!.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)))
+                                    Builder(
+                                      builder: (context) {
+                                        final daysOverdue = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)
+                                            .difference(DateTime(widget.task.scheduledDate!.year, widget.task.scheduledDate!.month, widget.task.scheduledDate!.day))
+                                            .inDays;
+                                        return TaskCardUtils.buildInfoChip(
+                                          Icons.warning_rounded,
+                                          'Overdue $daysOverdue day${daysOverdue == 1 ? '' : 's'}',
+                                          Colors.deepOrange,
+                                        );
+                                      },
                                     ),
                                   // Scheduled date chip (show when different from priority)
                                   if (TaskCardUtils.getScheduledDateText(widget.task, widget.priorityReason ?? '') != null)

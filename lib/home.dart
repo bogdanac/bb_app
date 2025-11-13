@@ -242,6 +242,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           debugPrint('ERROR rescheduling notifications: $e');
         });
 
+        // Reschedule water notifications for the new day
+        WaterNotificationService.rescheduleForNewDay().catchError((e) {
+          debugPrint('ERROR rescheduling water notifications: $e');
+        });
+
       } else {
         // Load data for current day - prioritize widget data
         int appIntake = prefs.getInt('water_$today') ?? 0;
@@ -630,12 +635,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       body: RefreshIndicator(
         onRefresh: _onRefresh,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(8), // Even tighter overall padding
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(8), // Even tighter overall padding
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               // Menstrual Cycle Card
               MenstrualCycleCard(
                 key: _menstrualCycleKey,
@@ -702,7 +710,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               // Daily Tasks Section
               const DailyTasksCard(),
 
-            ],
+                ],
+              ),
+            ),
           ),
         ),
       ),

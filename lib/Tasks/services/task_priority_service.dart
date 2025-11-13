@@ -244,16 +244,25 @@ class TaskPriorityService {
         DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)
       ).inDays;
 
-      // Overdue by 1 day: high priority (750)
-      // Overdue by 2 days: high priority (725)
-      // Overdue by 3+ days: shouldn't happen (auto-advances after 2 days)
+      // Overdue tasks within 7-day grace period
+      // Priority gradually decreases as days overdue increases
       if (daysOverdue == 1) {
         score += 750;
       } else if (daysOverdue == 2) {
-        score += 725;
-      } else {
-        // Grace period exceeded, still high priority
+        score += 740;
+      } else if (daysOverdue == 3) {
+        score += 730;
+      } else if (daysOverdue == 4) {
+        score += 720;
+      } else if (daysOverdue == 5) {
+        score += 710;
+      } else if (daysOverdue == 6) {
+        score += 705;
+      } else if (daysOverdue == 7) {
         score += 700;
+      } else {
+        // Grace period exceeded (> 7 days), still visible
+        score += 695;
       }
     }
 

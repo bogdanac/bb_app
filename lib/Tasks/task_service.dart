@@ -85,25 +85,8 @@ class TaskService {
           tasksUpdated = true;
         }
         // Case 2b: Overdue recurring tasks
-        // IMPORTANT: Only auto-advance if overdue by MORE than 2 days (grace period)
-        // This prevents forgetting about tasks - you have 2 days to complete them
-        else if (tasks[i].recurrence != null &&
-                 tasks[i].scheduledDate != null &&
-                 tasks[i].scheduledDate!.isBefore(todayDate) &&
-                 !tasks[i].isPostponed) {
-          final daysOverdue = todayDate.difference(
-            DateTime(tasks[i].scheduledDate!.year, tasks[i].scheduledDate!.month, tasks[i].scheduledDate!.day)
-          ).inDays;
-
-          // Only auto-advance if overdue by more than 2 days
-          if (daysOverdue > 2) {
-            final updatedTask = await _recurrenceCalculator.calculateNextScheduledDate(tasks[i], prefs);
-            if (updatedTask != null) {
-              tasks[i] = updatedTask;
-              tasksUpdated = true;
-            }
-          }
-        }
+        // NO AUTO-ADVANCE: Tasks stay overdue indefinitely until manually completed
+        // This allows users to see and complete tasks that were missed
         // Case 3: Tasks scheduled today with wrong reminderTime
         else if (tasks[i].recurrence != null &&
                  tasks[i].scheduledDate != null &&

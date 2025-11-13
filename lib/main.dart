@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'Fasting/fasting_screen.dart';
 import 'MenstrualCycle/cycle_tracking_screen.dart';
 import 'Routines/routines_habits_screen.dart';
@@ -13,6 +14,8 @@ import 'Data/backup_service.dart';
 import 'Services/firebase_backup_service.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_styles.dart';
+import 'widgets/side_navigation.dart';
+import 'Auth/auth_wrapper.dart';
 import 'dart:io';
 import 'dart:math';
 import 'dart:async';
@@ -24,7 +27,9 @@ void main() async {
 
   // Initialize Firebase
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     if (kDebugMode) {
       print('🔥 Firebase initialized successfully');
     }
@@ -74,7 +79,8 @@ class BBetterApp extends StatelessWidget {
         );
       },
       theme: AppTheme.theme,
-      home: const LauncherScreen(), // TODO: Change back to LauncherScreen (use MainScreen() for hot reload testing)
+      // On web: skip launcher. On mobile: use launcher which will check auth
+      home: kIsWeb ? const AuthWrapper() : const LauncherScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -180,7 +186,7 @@ class _LauncherScreenState extends State<LauncherScreen>
       // If any widget intent detected, skip launcher and go directly to main screen
       if ((hasWidgetIntent || hasTaskListIntent) && mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const MainScreen()),
+          MaterialPageRoute(builder: (context) => const AuthWrapper()),
         );
         return;
       }
@@ -191,7 +197,7 @@ class _LauncherScreenState extends State<LauncherScreen>
           if (kDebugMode) {
           }
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const MainScreen()),
+            MaterialPageRoute(builder: (context) => const AuthWrapper()),
           );
         }
       });
@@ -548,6 +554,29 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width >= 1024;
+
+    if (isDesktop) {
+      // Desktop layout with side navigation
+      return Scaffold(
+        body: Row(
+          children: [
+            SideNavigation(
+              selectedIndex: _selectedIndex,
+              onItemTapped: _onItemTapped,
+            ),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: _screens[_selectedIndex],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Mobile/tablet layout with bottom navigation
     return Scaffold(
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
@@ -579,7 +608,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
             ];
 
             final isSelected = _selectedIndex == index;
-            
+
             return GestureDetector(
               onTap: () => _onItemTapped(index),
               child: Container(
@@ -587,7 +616,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
                 height: 56, // Increased from 50 to 56
                 margin: const EdgeInsets.symmetric(vertical: 7), // Increased margin slightly
                 decoration: BoxDecoration(
-                  color: isSelected 
+                  color: isSelected
                       ? colors[index].withValues(alpha: 0.25) // More visible when selected
                       : colors[index].withValues(alpha: 0.08), // Subtle when not selected
                   borderRadius: AppStyles.borderRadiusXLarge,

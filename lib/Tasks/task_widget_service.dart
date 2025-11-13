@@ -58,10 +58,8 @@ class TaskWidgetService {
                 skipNotificationUpdate: isAutoSave,
                 skipWidgetUpdate: isAutoSave);
 
-              // Close the screen
-              if (context.mounted) {
-                Navigator.of(context).pop();
-              }
+              // Note: TaskEditScreen handles its own navigation via PopScope
+              // We don't pop here to avoid double-pop issues
 
               // No snackbar needed - user will see the task in the list
             } catch (e) {

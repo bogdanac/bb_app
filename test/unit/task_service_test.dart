@@ -694,7 +694,7 @@ void main() {
         expect(loaded[0].scheduledDate, isNotNull);
       });
 
-      test('should handle overdue recurring tasks', () async {
+      test('should NOT auto-advance overdue recurring tasks', () async {
         final threeDaysAgo = DateTime.now().subtract(const Duration(days: 3));
         final recurrence = TaskRecurrence(
           types: [RecurrenceType.daily],
@@ -713,21 +713,16 @@ void main() {
 
         await taskService.saveTasks([task]);
 
-        // Load should move overdue recurring task to today or next occurrence (overdue by >2 days)
+        // Load should NOT auto-advance overdue tasks - they stay overdue until manually completed/skipped
         final loaded = await taskService.loadTasks();
 
         expect(loaded.length, 1);
         expect(loaded[0].scheduledDate, isNotNull);
-        // Should be today or later (auto-advanced after 2-day grace period)
-        final today = DateTime.now();
+        // Should remain at the original scheduled date (threeDaysAgo)
         final loadedDate = loaded[0].scheduledDate!;
-        expect(
-          loadedDate.isAfter(threeDaysAgo) ||
-          (loadedDate.year == today.year &&
-           loadedDate.month == today.month &&
-           loadedDate.day == today.day),
-          true,
-        );
+        expect(loadedDate.year, threeDaysAgo.year);
+        expect(loadedDate.month, threeDaysAgo.month);
+        expect(loadedDate.day, threeDaysAgo.day);
       });
 
       test('should fix reminder times for tasks scheduled today', () async {
@@ -767,6 +762,8 @@ void main() {
           expect(loaded[0].reminderTime!.minute, 0);
         }
       });
+
+      // Tests for auto-rescheduling removed - overdue tasks now stay overdue
     });
 
     group('Recurrence Calculations', () {

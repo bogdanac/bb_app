@@ -13,9 +13,10 @@ void main() {
     });
 
     group('Daily Recurrence', () {
-      test('every day (interval=1) - should return today when due today', () {
+      test('every day (interval=1) - should return tomorrow (never returns today)', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
+        final tomorrow = todayDate.add(const Duration(days: 1));
 
         final task = Task(
           id: '1',
@@ -29,13 +30,14 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        expect(result, todayDate);
+        expect(result, tomorrow);
       });
 
-      test('every day (interval=1) - should return today when checked', () {
+      test('every day (interval=1) - should return tomorrow when task not overdue', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
         final yesterday = todayDate.subtract(const Duration(days: 1));
+        final tomorrow = todayDate.add(const Duration(days: 1));
 
         final task = Task(
           id: '1',
@@ -49,9 +51,8 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        // For daily tasks with interval=1, if due today, returns today; else tomorrow
-        // Since task was created yesterday, today is a valid due date
-        expect(result, todayDate);
+        // Always returns future date - tomorrow
+        expect(result, tomorrow);
       });
 
       test('every 2 days (interval=2) - should calculate next occurrence correctly', () {
@@ -1124,7 +1125,59 @@ void main() {
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
         expect(result, isNotNull);
-        expect(result!.isAfter(todayDate) || result.isAtSameMomentAs(todayDate), isTrue);
+        expect(result!.isAfter(todayDate), isTrue, reason: 'Next occurrence must be in the future');
+      });
+
+      test('severely overdue daily task (16 days) - next occurrence must be in future', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final overdueDate = todayDate.subtract(const Duration(days: 16));
+        final tomorrow = todayDate.add(const Duration(days: 1));
+
+        final task = Task(
+          id: '1',
+          title: 'Overdue Daily Task',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+          ),
+          scheduledDate: overdueDate,
+          createdAt: overdueDate.subtract(const Duration(days: 30)),
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, isNotNull);
+        expect(result!.isAfter(todayDate), isTrue, reason: 'Overdue task next occurrence must be in future, not today or past');
+        // For daily task, should be tomorrow or later
+        expect(result.isAfter(todayDate) || result.isAtSameMomentAs(tomorrow), isTrue);
+      });
+
+      test('overdue weekly task (every 7 days, 16 days overdue) - next occurrence in future', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final overdueDate = todayDate.subtract(const Duration(days: 16));
+
+        final task = Task(
+          id: '1',
+          title: 'Overdue Weekly Task (every 7 days)',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.weekly],
+            interval: 1,
+            weekDays: [overdueDate.weekday], // Same weekday as the overdue date
+          ),
+          scheduledDate: overdueDate,
+          createdAt: overdueDate.subtract(const Duration(days: 30)),
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, isNotNull);
+        expect(result!.isAfter(todayDate), isTrue, reason: 'Next occurrence must be in the future');
+        // Should skip missed occurrences and return next valid future date
+        final daysDiff = result.difference(todayDate).inDays;
+        expect(daysDiff, greaterThan(0), reason: 'Must be at least 1 day in the future');
+        expect(daysDiff, lessThanOrEqualTo(7), reason: 'Weekly task should not skip more than 7 days');
       });
 
       test('task created far in the past - should calculate from today', () {

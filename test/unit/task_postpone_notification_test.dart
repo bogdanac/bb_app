@@ -1,14 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bb_app/Tasks/tasks_data_models.dart';
-import 'package:bb_app/Tasks/services/task_notification_service.dart';
-import 'package:bb_app/Notifications/notification_service.dart';
 
 void main() {
   group('Postponed Task Notification Behavior', () {
-    late TaskNotificationService notificationService;
 
     setUp(() {
-      notificationService = TaskNotificationService();
     });
 
     test('postponed daily recurring task should NOT schedule as recurring', () {

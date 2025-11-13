@@ -309,6 +309,21 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     await _saveProgress();
   }
 
+  Future<void> _skipRoutine() async {
+    // Mark current routine as completed (skipped)
+    final prefs = await SharedPreferences.getInstance();
+    final today = RoutineService.getEffectiveDate();
+    final completedKey = 'routine_completed_${_currentRoutine!.id}_$today';
+    await prefs.setBool(completedKey, true);
+
+    final hasNextRoutine = await _loadNextRoutine();
+
+    if (!hasNextRoutine) {
+      // No more routines, hide the card
+      widget.onCompleted();
+    }
+  }
+
   Future<bool> _loadNextRoutine() async {
     try {
       if (kDebugMode) {
@@ -376,13 +391,17 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     }
 
     // Priority 2: If all regular steps are done, go back to postponed steps
+    // Start from the next index to cycle through postponed steps
     for (int i = 0; i < _currentRoutine!.items.length; i++) {
-      final item = _currentRoutine!.items[i];
-      if (item.isPostponed && !item.isCompleted) {
+      int checkIndex = (startIndex + i) % _currentRoutine!.items.length;
+      final item = _currentRoutine!.items[checkIndex];
+      if (item.isPostponed && !item.isCompleted && !item.isSkipped) {
         if (kDebugMode) {
-          print('All regular steps done. Found postponed step at index $i: ${item.text}');
+          print('All regular steps done. Found postponed step at index $checkIndex: ${item.text}');
         }
-        _currentStepIndex = i;
+        _currentStepIndex = checkIndex;
+        // Clear postponed flag so it can be postponed again
+        item.isPostponed = false;
         return;
       }
     }
@@ -481,6 +500,22 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                   child: Text(
                     _currentRoutine!.title,
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+                ),
+                // Skip routine button
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _skipRoutine,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      child: Icon(
+                        Icons.skip_next_rounded,
+                        color: AppColors.greyText.withValues(alpha: 0.6),
+                        size: 22,
+                      ),
+                    ),
                   ),
                 ),
               ],

@@ -20,7 +20,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
         const val ACTION_COMPLETE_STEP = "com.bb.bb_app.COMPLETE_STEP"
         const val ACTION_POSTPONE_STEP = "com.bb.bb_app.POSTPONE_STEP"
         const val ACTION_SKIP_STEP = "com.bb.bb_app.SKIP_STEP"
-        const val ACTION_REFRESH = "com.bb.bb_app.REFRESH_ROUTINE"
+        const val ACTION_SKIP_ROUTINE = "com.bb.bb_app.SKIP_ROUTINE"
         
         private fun getTodayString(): String {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -71,7 +71,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        
+
         when (intent.action) {
             ACTION_COMPLETE_STEP -> {
                 completeCurrentStep(context)
@@ -85,7 +85,8 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 skipCurrentStep(context)
                 refreshAllWidgets(context)
             }
-            ACTION_REFRESH -> {
+            ACTION_SKIP_ROUTINE -> {
+                skipRoutine(context)
                 refreshAllWidgets(context)
             }
         }
@@ -147,15 +148,15 @@ class RoutineWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.routine_title, "No Routine")
             views.setViewVisibility(R.id.step_container, android.view.View.GONE)
             views.setViewVisibility(R.id.completed_container, android.view.View.VISIBLE)
-            views.setTextViewText(R.id.completed_text, "Tap refresh to reload routines")
+            views.setTextViewText(R.id.completed_text, "No routines scheduled for today")
         }
         
-        // Set up refresh intent for the refresh button
-        val refreshIntent = Intent(context, RoutineWidgetProvider::class.java).apply {
-            action = ACTION_REFRESH
+        // Set up skip routine button
+        val skipRoutineIntent = Intent(context, RoutineWidgetProvider::class.java).apply {
+            action = ACTION_SKIP_ROUTINE
         }
-        views.setOnClickPendingIntent(R.id.refresh_button, 
-            PendingIntent.getBroadcast(context, 2, refreshIntent, 
+        views.setOnClickPendingIntent(R.id.skip_routine_button,
+            PendingIntent.getBroadcast(context, 3, skipRoutineIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
 
         appWidgetManager.updateAppWidget(appWidgetId, views)
@@ -467,10 +468,14 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 }
 
                 // If all regular steps done, go back to postponed steps (but never to skipped)
+                // Start from the next index to cycle through postponed steps
                 if (nextStepIndex >= items.length()) {
                     for (i in 0 until items.length()) {
-                        if (postponedSteps[i] && !completedSteps[i] && !skippedSteps[i]) {
-                            nextStepIndex = i
+                        val checkIndex = (currentIndex + 1 + i) % items.length()
+                        if (postponedSteps[checkIndex] && !completedSteps[checkIndex] && !skippedSteps[checkIndex]) {
+                            nextStepIndex = checkIndex
+                            // Clear postponed flag so it can be postponed again
+                            postponedSteps[checkIndex] = false
                             break
                         }
                     }
@@ -654,10 +659,14 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 }
 
                 // If all regular steps done, go back to postponed steps
+                // Start from the next index to cycle through postponed steps
                 if (nextStepIndex >= items.length()) {
                     for (i in 0 until items.length()) {
-                        if (postponedSteps[i] && !completedSteps[i]) {
-                            nextStepIndex = i
+                        val checkIndex = (currentIndex + 1 + i) % items.length()
+                        if (postponedSteps[checkIndex] && !completedSteps[checkIndex]) {
+                            nextStepIndex = checkIndex
+                            // Clear postponed flag so it can be postponed again
+                            postponedSteps[checkIndex] = false
                             break
                         }
                     }
@@ -752,10 +761,14 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 }
 
                 // If all regular steps done, go back to postponed steps (but never to skipped)
+                // Start from the next index to cycle through postponed steps
                 if (nextStepIndex >= items.length()) {
                     for (i in 0 until items.length()) {
-                        if (postponedSteps[i] && !completedSteps[i] && !skippedSteps[i]) {
-                            nextStepIndex = i
+                        val checkIndex = (currentIndex + 1 + i) % items.length()
+                        if (postponedSteps[checkIndex] && !completedSteps[checkIndex] && !skippedSteps[checkIndex]) {
+                            nextStepIndex = checkIndex
+                            // Clear postponed flag so it can be postponed again
+                            postponedSteps[checkIndex] = false
                             break
                         }
                     }
@@ -785,6 +798,23 @@ class RoutineWidgetProvider : AppWidgetProvider() {
                 e.printStackTrace()
             }
         }
+    }
+
+    private fun skipRoutine(context: Context) {
+        android.util.Log.d("RoutineSync", "🔄 Widget: Skip routine button clicked")
+        val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val today = getEffectiveDate()
+        val routine = getCurrentRoutine(context) ?: return
+        val routineId = routine.optString("id", "")
+        if (routineId.isEmpty()) return
+
+        // Mark current routine as completed (skipped)
+        prefs.edit()
+            .putBoolean("flutter.routine_completed_${routineId}_$today", true)
+            .commit()
+
+        // Load next routine
+        loadNextRoutine(context, routineId)
     }
 
     private fun refreshAllWidgets(context: Context) {

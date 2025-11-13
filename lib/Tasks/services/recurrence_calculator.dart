@@ -121,17 +121,28 @@ class RecurrenceCalculator {
   }
 
   /// Calculate scheduled date for regular recurring tasks - OPTIMIZED
+  /// IMPORTANT: Always returns a date in the FUTURE (never today or past)
   DateTime? calculateRegularRecurringTaskDate(Task task, DateTime todayDate) {
     final recurrence = task.recurrence!;
 
-    // Check if it's due today
-    if (recurrence.isDueOn(todayDate, taskCreatedAt: task.createdAt)) {
-      return todayDate;
-    }
+    // Determine the base date to calculate from
+    // If task has scheduledDate in the past, use that as base; otherwise use today
+    final baseDate = (task.scheduledDate != null && task.scheduledDate!.isBefore(todayDate))
+        ? DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)
+        : todayDate;
 
-    // Optimize for common recurrence types
+    // Find the next occurrence AFTER today (never return today or past)
+    // For daily tasks, optimize by calculating directly
     if (recurrence.types.contains(RecurrenceType.daily)) {
-      return todayDate.add(const Duration(days: 1));
+      final interval = recurrence.interval;
+      if (task.scheduledDate == null || !task.scheduledDate!.isBefore(todayDate)) {
+        // Task is not overdue, return tomorrow (or next interval)
+        return todayDate.add(Duration(days: interval));
+      }
+      // Task is overdue - calculate how many intervals have passed and add one more
+      final daysSinceScheduled = todayDate.difference(baseDate).inDays;
+      final intervalsToSkip = (daysSinceScheduled / interval).ceil() + 1;
+      return baseDate.add(Duration(days: intervalsToSkip * interval));
     } else if (recurrence.types.contains(RecurrenceType.weekly)) {
       final daysToCheck = 7 * recurrence.interval;
       for (int i = 1; i <= daysToCheck; i++) {

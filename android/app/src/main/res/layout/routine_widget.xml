@@ -35,16 +35,15 @@
             android:maxLines="1"
             android:ellipsize="end" />
 
-
-        <!-- Small Refresh Button -->
+        <!-- Skip Routine Button -->
         <ImageButton
-            android:id="@+id/refresh_button"
+            android:id="@+id/skip_routine_button"
             android:layout_width="24dp"
             android:layout_height="24dp"
-            android:src="@android:drawable/ic_popup_sync"
+            android:src="@android:drawable/ic_media_next"
             android:background="@android:color/transparent"
             android:scaleType="fitCenter"
-            android:contentDescription="Refresh"
+            android:contentDescription="Skip Routine"
             android:padding="2dp"
             android:alpha="0.5" />
 

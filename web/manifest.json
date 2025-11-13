@@ -1,12 +1,12 @@
 {
-    "name": "bb_app",
-    "short_name": "bb_app",
+    "name": "BBetter - Wellness Tracker",
+    "short_name": "BBetter",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "My app",
-    "orientation": "portrait-primary",
+    "background_color": "#232323",
+    "theme_color": "#FF48B4",
+    "description": "Track your fasting, menstrual cycle, tasks, routines, and habits",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

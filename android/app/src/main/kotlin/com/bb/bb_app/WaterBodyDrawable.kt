@@ -11,8 +11,8 @@ object WaterBodyDrawable {
 
         val centerX = width / 2f
         val bodyWidth = width * 0.45f  // Narrower overall
-        val bodyHeight = height * 0.96f  // Maximum height
-        val startY = height * 0.01f  // Start at very top
+        val bodyHeight = height * 0.90f  // Leave more margin to prevent clipping
+        val startY = height * 0.03f  // Start with margin
 
         // Body outline path (simple female silhouette)
         val bodyPath = Path()
