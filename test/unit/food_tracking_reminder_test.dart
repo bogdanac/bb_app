@@ -39,7 +39,7 @@ void main() {
     test('reminder scheduled exactly at 8 PM should schedule for tomorrow', () {
       // GIVEN: Current time is exactly 8:00 PM
       final now = DateTime(2025, 11, 10, 20, 0); // 8:00 PM
-      final expectedReminderTime = DateTime(2025, 11, 11, 20, 0); // Tomorrow at 8:00 PM
+// Tomorrow at 8:00 PM
 
       // WHEN: We calculate the reminder time
       var reminderTime = DateTime(now.year, now.month, now.day, 20, 0);

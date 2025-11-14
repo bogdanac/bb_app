@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart';
-import '../main.dart';
 import 'security_service.dart';
 
 class AuthWrapper extends StatelessWidget {
-  const AuthWrapper({super.key});
+  final Widget? authenticatedHome;
+
+  const AuthWrapper({super.key, this.authenticatedHome});
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +24,12 @@ class AuthWrapper extends StatelessWidget {
         if (snapshot.hasData && snapshot.data != null) {
           // User is signed in, check IP and track access
           SecurityService().trackAccess();
-          return const MainScreen();
+          // Use provided home or navigate back to let InitialScreen handle it
+          return authenticatedHome ?? const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
         }
 
         // User is not signed in

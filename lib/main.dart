@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'Fasting/fasting_screen.dart';
 import 'MenstrualCycle/cycle_tracking_screen.dart';
@@ -16,6 +17,7 @@ import 'theme/app_colors.dart';
 import 'theme/app_styles.dart';
 import 'widgets/side_navigation.dart';
 import 'Auth/auth_wrapper.dart';
+import 'Auth/login_screen.dart';
 import 'dart:io';
 import 'dart:math';
 import 'dart:async';
@@ -79,9 +81,55 @@ class BBetterApp extends StatelessWidget {
         );
       },
       theme: AppTheme.theme,
-      // On web: skip launcher. On mobile: use launcher which will check auth
-      home: kIsWeb ? const AuthWrapper() : const LauncherScreen(),
+      // On web: skip launcher. On mobile: check auth first
+      home: kIsWeb ? AuthWrapper(authenticatedHome: const MainScreen()) : const InitialScreen(),
       debugShowCheckedModeBanner: false,
+    );
+  }
+}
+
+// Initial screen that checks auth and decides: launcher (if logged in) or login (if not)
+class InitialScreen extends StatelessWidget {
+  const InitialScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // Firebase is already initialized in main(), just check auth state
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (kDebugMode) {
+          print('🔍 InitialScreen - ConnectionState: ${snapshot.connectionState}');
+          print('🔍 InitialScreen - Has data: ${snapshot.hasData}');
+          print('🔍 InitialScreen - Data: ${snapshot.data}');
+          print('🔍 InitialScreen - Error: ${snapshot.error}');
+        }
+
+        // Show loading while checking auth state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        // If there's an error, show login screen as fallback
+        if (snapshot.hasError) {
+          if (kDebugMode) print('❌ Auth stream error: ${snapshot.error}, showing login');
+          return const LoginScreen();
+        }
+
+        // If logged in: show launcher screen
+        if (snapshot.hasData && snapshot.data != null) {
+          if (kDebugMode) print('✅ User logged in (${snapshot.data!.email}), showing launcher');
+          return const LauncherScreen();
+        }
+
+        // If not logged in: skip launcher, go directly to login
+        if (kDebugMode) print('❌ User not logged in, showing login screen');
+        return const LoginScreen();
+      },
     );
   }
 }
@@ -186,7 +234,7 @@ class _LauncherScreenState extends State<LauncherScreen>
       // If any widget intent detected, skip launcher and go directly to main screen
       if ((hasWidgetIntent || hasTaskListIntent) && mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const AuthWrapper()),
+          MaterialPageRoute(builder: (context) => const MainScreen()),
         );
         return;
       }
@@ -197,7 +245,7 @@ class _LauncherScreenState extends State<LauncherScreen>
           if (kDebugMode) {
           }
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const AuthWrapper()),
+            MaterialPageRoute(builder: (context) => const MainScreen()),
           );
         }
       });
