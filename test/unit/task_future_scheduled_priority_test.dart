@@ -51,7 +51,7 @@ void main() {
       expect(score(task), equals(125));
     });
 
-    test('unscheduled task with reminder > 30 min gets no priority', () {
+    test('unscheduled task with reminder > 30 min gets reduced priority', () {
       final task = Task(
         id: '1',
         title: 'Unscheduled Distant Reminder',
@@ -61,7 +61,8 @@ void main() {
         createdAt: now,
       );
 
-      expect(score(task), equals(0));
+      // Gets 120 (same as tomorrow tasks) - above far future but below normal unscheduled
+      expect(score(task), equals(120));
     });
   });
 

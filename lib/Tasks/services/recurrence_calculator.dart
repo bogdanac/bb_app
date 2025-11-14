@@ -154,11 +154,11 @@ class RecurrenceCalculator {
     } else if (recurrence.types.contains(RecurrenceType.monthly)) {
       // Handle last day of month recurrence
       if (recurrence.isLastDayOfMonth) {
-        var nextMonth = todayDate.month + 1;
+        var nextMonth = todayDate.month + recurrence.interval;
         var nextYear = todayDate.year;
 
-        if (nextMonth > 12) {
-          nextMonth = 1;
+        while (nextMonth > 12) {
+          nextMonth -= 12;
           nextYear++;
         }
 
@@ -173,9 +173,9 @@ class RecurrenceCalculator {
       var nextYear = todayDate.year;
 
       if (todayDate.day >= targetDay) {
-        nextMonth++;
-        if (nextMonth > 12) {
-          nextMonth = 1;
+        nextMonth += recurrence.interval; // Use interval for number of months
+        while (nextMonth > 12) {
+          nextMonth -= 12;
           nextYear++;
         }
       }

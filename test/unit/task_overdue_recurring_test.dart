@@ -185,33 +185,38 @@ void main() {
     });
 
     test('overdue non-recurring priority decreases over time', () {
+      // Use relative dates to ensure test works regardless of when it's run
       final overdue1Day = Task(
         id: '1',
         title: 'Overdue 1 Day',
-        scheduledDate: DateTime(2025, 11, 9),
-        createdAt: DateTime(2025, 11, 1),
+        scheduledDate: today.subtract(const Duration(days: 1)), // Yesterday
+        createdAt: today.subtract(const Duration(days: 30)),
       );
 
       final overdue2Days = Task(
         id: '2',
         title: 'Overdue 2 Days',
-        scheduledDate: DateTime(2025, 11, 8),
-        createdAt: DateTime(2025, 11, 1),
+        scheduledDate: today.subtract(const Duration(days: 2)),
+        createdAt: today.subtract(const Duration(days: 30)),
       );
 
       final overdue3Days = Task(
         id: '3',
         title: 'Overdue 3 Days',
-        scheduledDate: DateTime(2025, 11, 7),
-        createdAt: DateTime(2025, 11, 1),
+        scheduledDate: today.subtract(const Duration(days: 3)),
+        createdAt: today.subtract(const Duration(days: 30)),
       );
 
+      // Formula: max(550, 595 - (daysOverdue * 5))
       // 1 day: 595 - (1 * 5) = 590
       // 2 days: 595 - (2 * 5) = 585
       // 3 days: 595 - (3 * 5) = 580
-      expect(score(overdue1Day), equals(590));
-      expect(score(overdue2Days), equals(585));
-      expect(score(overdue3Days), equals(580));
+      expect(score(overdue1Day), equals(590),
+          reason: 'Non-recurring overdue 1 day should be 595 - (1 * 5) = 590');
+      expect(score(overdue2Days), equals(585),
+          reason: 'Non-recurring overdue 2 days should be 595 - (2 * 5) = 585');
+      expect(score(overdue3Days), equals(580),
+          reason: 'Non-recurring overdue 3 days should be 595 - (3 * 5) = 580');
       expect(score(overdue1Day), greaterThan(score(overdue2Days)));
       expect(score(overdue2Days), greaterThan(score(overdue3Days)));
     });
@@ -260,17 +265,6 @@ void main() {
 
       final prioritized = service.getPrioritizedTasks(tasks, categories, 10);
 
-      // Debug: Print scores
-      for (final task in tasks) {
-        final score = service.calculateTaskPriorityScore(task, now, today, categories);
-        print('${task.id}: score=$score, isDueToday=${task.isDueToday()}');
-      }
-
-      print('\nPrioritized order:');
-      for (int i = 0; i < prioritized.length; i++) {
-        final score = service.calculateTaskPriorityScore(prioritized[i], now, today, categories);
-        print('$i: ${prioritized[i].id} (score=$score)');
-      }
 
       // Expected order:
       // Overdue 1 Day: 750
@@ -284,16 +278,19 @@ void main() {
 
   group('Edge Cases', () {
     test('non-recurring task does not get recurring overdue priority', () {
+      // Use relative dates to ensure test works regardless of when it's run
       final nonRecurring = Task(
         id: '1',
         title: 'Non-Recurring Overdue',
-        scheduledDate: DateTime(2025, 11, 9), // Yesterday
-        createdAt: DateTime(2025, 11, 1),
+        scheduledDate: today.subtract(const Duration(days: 1)), // Yesterday
+        createdAt: today.subtract(const Duration(days: 30)),
       );
 
-      // Should get non-recurring overdue priority (590), not recurring (750)
+      // Should get non-recurring overdue priority, not recurring (750)
+      // Formula: max(550, 595 - (daysOverdue * 5))
+      // 1 day overdue: 595 - (1 * 5) = 590
       expect(score(nonRecurring), equals(590),
-          reason: 'Non-recurring tasks should use different overdue calculation');
+          reason: 'Non-recurring tasks overdue 1 day should score 590, not 750 like recurring tasks');
     });
   });
 }

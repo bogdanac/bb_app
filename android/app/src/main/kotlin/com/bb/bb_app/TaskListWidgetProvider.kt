@@ -477,9 +477,95 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                     .putString("flutter.tasks", encodedValue)
                     .apply()
                 android.util.Log.d("TaskListWidget", "Saved updated tasks with Flutter encoding")
+
+                // ALSO update the filtered widget tasks list
+                updateFilteredWidgetTasks(context, taskId)
             }
         } catch (e: Exception) {
             android.util.Log.e("TaskListWidget", "Error completing task: $e")
+            e.printStackTrace()
+        }
+    }
+
+    private fun updateFilteredWidgetTasks(context: Context, completedTaskId: String) {
+        try {
+            android.util.Log.d("TaskListWidget", "Updating filtered widget tasks after completing: $completedTaskId")
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+
+            // Load the filtered widget tasks
+            val widgetTasksRawValue = prefs.all["flutter.widget_filtered_tasks"]
+            var widgetTasksList: MutableList<String>? = null
+            val LIST_IDENTIFIER = "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu"
+
+            if (widgetTasksRawValue != null) {
+                when (widgetTasksRawValue) {
+                    is String -> {
+                        if (widgetTasksRawValue.startsWith(LIST_IDENTIFIER)) {
+                            try {
+                                var encodedData = widgetTasksRawValue.substring(LIST_IDENTIFIER.length)
+                                if (encodedData.startsWith("!")) {
+                                    encodedData = encodedData.substring(1)
+                                }
+                                val jsonArray = JSONArray(encodedData)
+                                widgetTasksList = (0 until jsonArray.length()).map { jsonArray.getString(it) }.toMutableList()
+                            } catch (e: Exception) {
+                                android.util.Log.e("TaskListWidget", "Failed to decode widget tasks: $e")
+                            }
+                        } else {
+                            try {
+                                val jsonArray = JSONArray(widgetTasksRawValue)
+                                widgetTasksList = (0 until jsonArray.length()).map { jsonArray.getString(it) }.toMutableList()
+                            } catch (e: Exception) {
+                                android.util.Log.e("TaskListWidget", "Failed to parse widget tasks: $e")
+                            }
+                        }
+                    }
+                    is Set<*> -> {
+                        widgetTasksList = widgetTasksRawValue.filterIsInstance<String>().toMutableList()
+                    }
+                    is List<*> -> {
+                        widgetTasksList = widgetTasksRawValue.filterIsInstance<String>().toMutableList()
+                    }
+                }
+            }
+
+            if (widgetTasksList == null) {
+                android.util.Log.d("TaskListWidget", "No filtered widget tasks found - will refresh on next app open")
+                return
+            }
+
+            // Remove the completed task from the filtered list
+            val updatedWidgetTasks = mutableListOf<String>()
+            var taskRemoved = false
+
+            for (taskJsonString in widgetTasksList) {
+                val taskJson = JSONObject(taskJsonString)
+                val id = taskJson.getString("id")
+
+                if (id == completedTaskId) {
+                    // Skip this task - don't add to updated list
+                    taskRemoved = true
+                    android.util.Log.d("TaskListWidget", "Removed completed task from widget list: $completedTaskId")
+                } else {
+                    // Keep this task
+                    updatedWidgetTasks.add(taskJson.toString())
+                }
+            }
+
+            if (taskRemoved) {
+                // Save updated filtered tasks back to SharedPreferences
+                val jsonArray = JSONArray(updatedWidgetTasks)
+                val encodedValue = LIST_IDENTIFIER + "!" + jsonArray.toString()
+
+                prefs.edit()
+                    .putString("flutter.widget_filtered_tasks", encodedValue)
+                    .apply()
+                android.util.Log.d("TaskListWidget", "Saved updated filtered widget tasks (${updatedWidgetTasks.size} remaining)")
+            } else {
+                android.util.Log.d("TaskListWidget", "Task not found in filtered list - may have already been removed")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("TaskListWidget", "Error updating filtered widget tasks: $e")
             e.printStackTrace()
         }
     }

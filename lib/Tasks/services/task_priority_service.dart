@@ -71,7 +71,20 @@ class TaskPriorityService {
         return aCategoryOrder.compareTo(bCategoryOrder);
       }
 
-      // 4. Creation date (newer first)
+      // 4. Scheduled date (earlier dates first)
+      // This ensures tasks with same priority are ordered chronologically
+      if (a.scheduledDate != null && b.scheduledDate != null) {
+        final dateComparison = a.scheduledDate!.compareTo(b.scheduledDate!);
+        if (dateComparison != 0) {
+          return dateComparison;
+        }
+      } else if (a.scheduledDate != null) {
+        return -1; // Tasks with scheduled dates come before unscheduled
+      } else if (b.scheduledDate != null) {
+        return 1; // Tasks with scheduled dates come before unscheduled
+      }
+
+      // 5. Creation date (newer first)
       return b.createdAt.compareTo(a.createdAt);
     });
 
@@ -308,14 +321,20 @@ class TaskPriorityService {
     }
     // 5e. UNSCHEDULED TASKS (no scheduled date)
     else if (task.scheduledDate == null) {
-      score += 400;
+      // If task has distant reminder (> 30 min away), give it lower priority
+      // But still above far-future scheduled tasks
+      if (hasDistantReminder) {
+        score += 120; // Same as tomorrow scheduled tasks
+      } else {
+        score += 400;
 
-      // Add category priority for unscheduled tasks
-      score += _calculateCategoryScore(task.categoryIds, categories);
+        // Add category priority for unscheduled tasks
+        score += _calculateCategoryScore(task.categoryIds, categories);
 
-      // Add important bonus for unscheduled tasks
-      if (task.isImportant) {
-        score += 100;
+        // Add important bonus for unscheduled tasks
+        if (task.isImportant) {
+          score += 100;
+        }
       }
     }
     // 5f. FUTURE SCHEDULED TASKS

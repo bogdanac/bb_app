@@ -62,7 +62,7 @@ void main() {
         expect(score(overdue), greaterThan(score(soon)));
       });
 
-      test('reminder 30-120 min away gets symbolic priority', () {
+      test('reminder 30-120 min away gets reduced priority plus symbolic bonus', () {
         final laterReminder = Task(
           id: '1',
           title: 'Later',
@@ -70,11 +70,11 @@ void main() {
           createdAt: now,
         );
 
-        // Unscheduled task with distant reminder gets base 400 + 15 symbolic
-        expect(score(laterReminder), equals(415));
+        // Unscheduled task with distant reminder gets 120 (reduced) + 15 (symbolic for 30-120 min)
+        expect(score(laterReminder), equals(135));
       });
 
-      test('reminder > 120 min away gets unscheduled priority (no bonus)', () {
+      test('reminder > 120 min away gets reduced priority', () {
         final distantReminder = Task(
           id: '1',
           title: 'Distant',
@@ -82,8 +82,8 @@ void main() {
           createdAt: now,
         );
 
-        // Unscheduled task with very distant reminder gets base 400 only
-        expect(score(distantReminder), equals(400));
+        // Unscheduled task with very distant reminder gets 120 (same as tomorrow)
+        expect(score(distantReminder), equals(120));
       });
     });
 
@@ -210,7 +210,7 @@ void main() {
         expect(score(multiCat), equals(score(singleCat) + 90));
       });
 
-      test('unscheduled with distant reminder gets full unscheduled priority with categories', () {
+      test('unscheduled with distant reminder gets reduced priority (no bonuses)', () {
         final unscheduledDistantReminder = Task(
           id: '1',
           title: 'Unscheduled Distant Reminder',
@@ -220,8 +220,8 @@ void main() {
           createdAt: now,
         );
 
-        // Should get: 400 (unscheduled) + 100 (cat1) + 100 (important) = 600
-        expect(score(unscheduledDistantReminder), equals(600));
+        // Should get: 120 (reduced for distant reminder, no categories/important bonus)
+        expect(score(unscheduledDistantReminder), equals(120));
       });
     });
 

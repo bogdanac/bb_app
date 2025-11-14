@@ -950,7 +950,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     final diskTaskIndex = allTasks.indexWhere((t) => t.id == task.id);
     if (diskTaskIndex != -1) {
       allTasks[diskTaskIndex] = updatedTask;
-      await _taskService.saveTasks(allTasks);
+      await _taskService.saveTasks(allTasks); // This automatically updates widget
       widget.onTasksChanged?.call();
     }
   }
@@ -998,7 +998,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         await _updateDisplayTasks();
         setState(() {}); // Force rebuild AFTER display tasks updated
 
-        // Save to disk in background
+        // Save to disk in background - this automatically updates widget
         _taskService.saveTasks(allTasks);
         widget.onTasksChanged?.call();
       }
@@ -1059,7 +1059,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         await _updateDisplayTasks();
         setState(() {}); // Force rebuild AFTER display tasks updated
 
-        // Save to disk and reschedule notification in background
+        // Save to disk and reschedule notification in background - this automatically updates widget
         _taskService.saveTasks(allTasks);
         _taskService.scheduleTaskNotification(updatedTask);
         widget.onTasksChanged?.call();
@@ -1088,7 +1088,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
       if (taskIndex != -1) {
         allTasks[taskIndex] = completedTask;
-        await _taskService.saveTasks(allTasks);
+        await _taskService.saveTasks(allTasks); // This automatically updates widget
 
         // Update in-memory list immediately
         final memoryTaskIndex = _tasks.indexWhere((t) => t.id == task.id);
@@ -1157,7 +1157,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     _tasks.removeWhere((t) => t.id == task.id);
     await _updateDisplayTasks(); // Immediate UI refresh
 
-    // Save to disk using in-memory list
+    // Save to disk using in-memory list - this automatically updates widget
     await _taskService.saveTasks(_tasks);
 
     // Notify parent widget that tasks have changed
@@ -1195,7 +1195,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         await _updateDisplayTasks(); // Immediate UI refresh
       }
 
-      // Save to disk asynchronously
+      // Save to disk asynchronously - this automatically updates widget
       await _taskService.postponeTaskToTomorrow(task);
       widget.onTasksChanged?.call();
 

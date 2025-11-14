@@ -147,9 +147,10 @@ void main() {
         expect(stopwatch.elapsedMilliseconds, lessThan(10));
       });
 
-      test('due today check - task created today is due today', () {
+      test('task created today - should return tomorrow (consistent with never returning today)', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
+        final tomorrow = todayDate.add(const Duration(days: 1));
 
         final task = Task(
           id: '1',
@@ -163,14 +164,15 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        // Should return today since it's due today
-        expect(result, todayDate);
+        // Should return tomorrow (never returns today)
+        expect(result, tomorrow);
       });
 
-      test('next occurrence calculation - returns correct date', () {
+      test('next occurrence calculation - returns tomorrow (future date)', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
         final yesterday = todayDate.subtract(const Duration(days: 1));
+        final tomorrow = todayDate.add(const Duration(days: 1));
 
         final task = Task(
           id: '1',
@@ -184,8 +186,8 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        // For daily interval=1, if due today it returns today
-        expect(result, todayDate);
+        // Always returns future date - tomorrow
+        expect(result, tomorrow);
       });
     });
 
@@ -506,6 +508,31 @@ void main() {
 
         expect(result, isNotNull);
         expect(result!.day, 5);
+      });
+
+      test('every 18 months - should calculate correctly (not next month)', () {
+        // Test case for bug fix: 18-month recurrence was being scheduled for next month
+        final testDate = DateTime(2025, 1, 15); // January 15, 2025
+
+        final task = Task(
+          id: '1',
+          title: 'Every 18 months on 10th',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.monthly],
+            interval: 18,
+            dayOfMonth: 10,
+          ),
+          createdAt: testDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, testDate);
+
+        expect(result, isNotNull);
+        expect(result!.day, 10);
+        // Should be 18 months later, not next month
+        // 18 months from January 2025 = July 2026
+        expect(result.year, 2026, reason: 'Should be 18 months later (2026), not next month');
+        expect(result.month, 7, reason: 'January + 18 months = July');
       });
 
       test('monthly recurrence - O(1) complexity verification', () {

@@ -79,7 +79,8 @@ class TaskService {
         else if (tasks[i].isPostponed &&
                  tasks[i].recurrence != null &&
                  tasks[i].scheduledDate != null &&
-                 tasks[i].scheduledDate!.isBefore(todayDate) &&
+                 (tasks[i].scheduledDate!.isBefore(todayDate) ||
+                  _isSameDay(tasks[i].scheduledDate!, todayDate)) &&
                  tasks[i].recurrence!.isDueOn(today, taskCreatedAt: tasks[i].createdAt)) {
           tasks[i] = tasks[i].copyWith(isPostponed: false);
           tasksUpdated = true;
@@ -136,6 +137,9 @@ class TaskService {
       // Save tasks if any were updated
       if (tasksUpdated) {
         await _repository.saveTasks(tasks);
+        // Reschedule notifications when tasks are auto-updated
+        // This ensures notifications are properly updated when isPostponed is cleared
+        await _notificationService.scheduleAllTaskNotifications(tasks);
       }
 
       return tasks;
