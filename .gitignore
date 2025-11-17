@@ -46,3 +46,8 @@ app.*.map.json
 .gradle_local/
 android/.gradle_cache/
 android/.gradle-wrapper/
+
+# Signing keys - NEVER commit these!
+*.jks
+*.keystore
+key.properties
