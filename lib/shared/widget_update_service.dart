@@ -10,18 +10,17 @@ class WidgetUpdateService {
 
   /// Check if it's a new day and update all widgets if needed
   /// Uses effective date logic (5 AM cutoff) to determine day boundaries
+  /// Also ensures task widget is always refreshed on app startup
   static Future<void> checkAndUpdateWidgetsOnNewDay() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final today = _getEffectiveDateString();
       final lastUpdateDate = prefs.getString('widget_last_update_date');
 
-      if (lastUpdateDate != today) {
-        if (kDebugMode) {
-          print('New day detected! Last update: $lastUpdateDate, Today: $today');
-          print('Updating all widgets...');
-        }
+      // Check if task widget data exists
+      final widgetTasksExist = prefs.containsKey('flutter.widget_filtered_tasks');
 
+      if (lastUpdateDate != today || !widgetTasksExist) {
         // Update all widgets
         await Future.wait([
           _updateTaskWidget(),
@@ -30,10 +29,9 @@ class WidgetUpdateService {
 
         // Save the new date
         await prefs.setString('widget_last_update_date', today);
-
-        if (kDebugMode) {
-          print('All widgets updated for new day');
-        }
+      } else {
+        // Not a new day, but still refresh task widget to ensure it has current phase filtering
+        await _updateTaskWidget();
       }
     } catch (e) {
       if (kDebugMode) {
@@ -60,9 +58,6 @@ class WidgetUpdateService {
   static Future<void> _updateTaskWidget() async {
     try {
       await TaskListWidgetService.updateWidget();
-      if (kDebugMode) {
-        print('Task widget updated');
-      }
     } catch (e) {
       if (kDebugMode) {
         print('ERROR updating task widget: $e');
@@ -74,9 +69,6 @@ class WidgetUpdateService {
   static Future<void> _updateWaterWidget() async {
     try {
       await _waterChannel.invokeMethod('updateWaterWidget');
-      if (kDebugMode) {
-        print('Water widget updated');
-      }
     } catch (e) {
       if (kDebugMode) {
         print('ERROR updating water widget: $e');

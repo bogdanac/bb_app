@@ -17,10 +17,6 @@ class TaskListWidgetFilterService {
   /// This applies menstrual phase filtering (as if flower icon is ON)
   static Future<void> updateWidgetTasks() async {
     try {
-      if (kDebugMode) {
-        print('TaskListWidgetFilter: Updating widget task list');
-      }
-
       final taskService = TaskService();
       final allTasks = await taskService.loadTasks();
       final categories = await taskService.loadCategories();
@@ -30,6 +26,7 @@ class TaskListWidgetFilterService {
 
       // Get prioritized incomplete tasks
       final incompleteTasks = filteredTasks.where((t) => !t.isCompleted).toList();
+
       final prioritizedTasks = taskService.getPrioritizedTasks(
         incompleteTasks,
         categories,
@@ -41,13 +38,6 @@ class TaskListWidgetFilterService {
 
       // Save to SharedPreferences for widget to read
       await _saveWidgetTasks(widgetTasks);
-
-      if (kDebugMode) {
-        print('TaskListWidgetFilter: Saved ${widgetTasks.length} tasks for widget');
-        for (var task in widgetTasks) {
-          print('  - ${task.title}');
-        }
-      }
     } catch (e) {
       if (kDebugMode) {
         print('TaskListWidgetFilter ERROR: $e');
@@ -75,10 +65,6 @@ class TaskListWidgetFilterService {
         averageCycleLength,
       );
 
-      if (kDebugMode) {
-        print('TaskListWidgetFilter: Filtering for phase: $currentPhase');
-      }
-
       // Filter tasks: include tasks matching current phase + tasks without menstrual settings
       final filtered = <Task>[];
       for (final task in tasks) {
@@ -91,10 +77,6 @@ class TaskListWidgetFilterService {
             filtered.add(task);
           }
         }
-      }
-
-      if (kDebugMode) {
-        print('TaskListWidgetFilter: Filtered ${tasks.length} -> ${filtered.length} tasks');
       }
 
       return filtered;
