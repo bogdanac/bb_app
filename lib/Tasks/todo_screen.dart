@@ -16,7 +16,6 @@ import '../theme/app_styles.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
 import '../MenstrualCycle/menstrual_cycle_constants.dart';
 import '../shared/snackbar_utils.dart';
-import 'debug_priority_helper.dart';
 
 class TodoScreen extends StatefulWidget {
   final bool showFilters;
@@ -765,14 +764,6 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     if (_showAllTasks || _showCompleted) {
       // For menstrual cycle filtering or completed tasks, use async
       final filteredTasks = await _getFilteredTasksAsync();
-
-      // DEBUG: Print priority information for incomplete tasks
-      if (kDebugMode && !_showCompleted) {
-        DebugPriorityHelper.printTaskPriorities(
-          filteredTasks.where((t) => !t.isCompleted).toList(),
-          _categories,
-        );
-      }
 
       _displayTasks = _taskService.getPrioritizedTasks(
         filteredTasks,
