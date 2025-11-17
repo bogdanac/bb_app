@@ -134,10 +134,9 @@ object WaterBodyDrawable {
         canvas.drawPath(bodyPath, outlinePaint)
 
         // Draw explicit bottom line between feet for visibility
-        val legGap = bodyWidth * 0.10f
         canvas.drawLine(
-            centerX - legGap, footY,
-            centerX + legGap, footY,
+            centerX - (bodyWidth * 0.10f), footY,
+            centerX + (bodyWidth * 0.10f), footY,
             outlinePaint
         )
 
