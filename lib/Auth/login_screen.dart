@@ -39,11 +39,26 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
       // Navigation will happen automatically via auth state listener
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     } on FirebaseAuthException catch (e) {
-      setState(() {
-        _errorMessage = _getErrorMessage(e.code);
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = _getErrorMessage(e.code);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      // Catch any other errors
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Sign in failed: ${e.toString()}';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -61,11 +76,26 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
       // Navigation will happen automatically via auth state listener
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     } on FirebaseAuthException catch (e) {
-      setState(() {
-        _errorMessage = _getErrorMessage(e.code);
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = _getErrorMessage(e.code);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      // Catch any other errors
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Account creation failed: ${e.toString()}';
+          _isLoading = false;
+        });
+      }
     }
   }
 

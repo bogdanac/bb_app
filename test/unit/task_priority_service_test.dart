@@ -482,7 +482,7 @@ void main() {
         expect(score(unscheduledWithCategories), greaterThan(score(recurringDistant)));
       });
 
-      test('recurring task scheduled in future gets very low priority', () {
+      test('recurring task scheduled in future gets same score as non-recurring', () {
         final recurringFuture = Task(
           id: '1',
           title: 'Future Recurring',
@@ -491,7 +491,8 @@ void main() {
           createdAt: now,
         );
 
-        expect(score(recurringFuture), equals(1));
+        // Day 5 = 100 points (same as non-recurring to prevent intercalation)
+        expect(score(recurringFuture), equals(100));
       });
     });
 

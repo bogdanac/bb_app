@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'tasks_data_models.dart';
 import 'task_service.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
+import '../MenstrualCycle/menstrual_cycle_constants.dart';
 
 /// Service to manage task data specifically for the Android task list widget
 /// Stores pre-filtered and prioritized tasks to keep widget logic simple
@@ -130,20 +131,21 @@ class TaskListWidgetFilterService {
   }
 
   /// Convert RecurrenceType to phase string
+  /// MUST match the phase names returned by MenstrualCycleUtils.getCyclePhase()
   static String? _getPhaseFromRecurrenceType(RecurrenceType type) {
     switch (type) {
       case RecurrenceType.menstrualPhase:
       case RecurrenceType.menstrualStartDay:
-        return 'Menstrual';
+        return MenstrualCycleConstants.menstrualPhase;
       case RecurrenceType.follicularPhase:
-        return 'Follicular';
+        return MenstrualCycleConstants.follicularPhase;
       case RecurrenceType.ovulationPhase:
       case RecurrenceType.ovulationPeakDay:
-        return 'Ovulation';
+        return MenstrualCycleConstants.ovulationPhase;
       case RecurrenceType.earlyLutealPhase:
-        return 'Early Luteal';
+        return MenstrualCycleConstants.earlyLutealPhase;
       case RecurrenceType.lateLutealPhase:
-        return 'Late Luteal';
+        return MenstrualCycleConstants.lateLutealPhase;
       default:
         return null;
     }

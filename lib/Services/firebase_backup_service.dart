@@ -2,8 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 
-/// Simple Firebase backup service - backs up entire SharedPreferences
+/// Firebase backup service with real-time sync
 class FirebaseBackupService {
   static final FirebaseBackupService _instance = FirebaseBackupService._internal();
   factory FirebaseBackupService() => _instance;
@@ -13,40 +14,183 @@ class FirebaseBackupService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   String? _userId;
   bool _syncEnabled = true;
+  bool _hasSetupListener = false;
+  StreamSubscription<DocumentSnapshot>? _firestoreListener;
+  int _lastBackupTimestamp = 0;  // Track last backup time in milliseconds
+  bool _isRestoring = false;  // Flag to prevent restore → backup loops
 
   Future<void> initialize() async {
     try {
-      // Wait for user to be authenticated (handled by AuthWrapper)
-      _userId = _auth.currentUser?.uid;
-
-      if (_userId != null) {
-        if (kDebugMode) {
-          print('🔥 Firebase Backup Service initialized for user: $_userId');
-        }
-
-        // Try to restore data from Firebase on first launch for this device
-        final prefs = await SharedPreferences.getInstance();
-        final hasRestoredKey = 'has_restored_from_firebase_$_userId';
-        final hasRestoredBefore = prefs.getBool(hasRestoredKey) ?? false;
-
-        if (!hasRestoredBefore) {
-          final restored = await restoreAllData();
-          if (restored) {
-            await prefs.setBool(hasRestoredKey, true);
-            if (kDebugMode) {
-              print('✅ Initial data restore from Firebase completed');
-            }
-          }
-        }
-      } else {
-        if (kDebugMode) {
-          print('⚠️ No authenticated user - backup service waiting for login');
-        }
+      // Set up auth state listener if not already done
+      if (!_hasSetupListener) {
+        _auth.authStateChanges().listen((User? user) {
+          _onAuthStateChanged(user);
+        });
+        _hasSetupListener = true;
       }
+
+      // Initialize for current user if logged in
+      await _onAuthStateChanged(_auth.currentUser);
     } catch (e) {
       if (kDebugMode) {
         print('⚠️ Firebase Backup Service initialization failed: $e');
       }
+    }
+  }
+
+  Future<void> _onAuthStateChanged(User? user) async {
+    try {
+      final newUserId = user?.uid;
+
+      // User logged out - cancel listener
+      if (newUserId == null) {
+        if (kDebugMode) {
+          print('🔥 Firebase Backup Service: User logged out');
+        }
+        await _firestoreListener?.cancel();
+        _firestoreListener = null;
+        _userId = null;
+        return;
+      }
+
+      // Same user, no change
+      if (newUserId == _userId) {
+        return;
+      }
+
+      // New user logged in
+      _userId = newUserId;
+
+      if (kDebugMode) {
+        print('🔥 Firebase Backup Service initialized for user: $_userId');
+      }
+
+      // Cancel old listener if exists
+      await _firestoreListener?.cancel();
+
+      // Initial restore
+      final prefs = await SharedPreferences.getInstance();
+      final allKeys = prefs.getKeys();
+      final hasLocalData = allKeys.any((key) =>
+        !key.startsWith('has_restored_from_firebase') &&
+        !key.startsWith('last_firebase_backup') &&
+        key != 'device_id' &&
+        key != 'last_user_id'
+      );
+
+      final backupExists = await this.hasBackup();
+      if (backupExists) {
+        final shouldRestore = await _shouldRestoreFromFirebase(prefs, hasLocalData);
+        if (shouldRestore) {
+          _isRestoring = true;  // Prevent triggering backup during restore
+          final restored = await restoreAllData();
+          await Future.delayed(const Duration(milliseconds: 100)); // Let services settle
+          _isRestoring = false;
+          if (restored && kDebugMode) {
+            print('✅ Initial data synced from Firebase');
+          }
+        }
+      }
+
+      // Set up real-time listener for continuous sync
+      _setupRealtimeListener();
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ Firebase Backup Service auth state change failed: $e');
+      }
+    }
+  }
+
+  void _setupRealtimeListener() {
+    if (_userId == null || !_syncEnabled) return;
+
+    if (kDebugMode) {
+      print('🔄 Setting up real-time sync listener for user: $_userId');
+    }
+
+    _firestoreListener = _firestore
+        .collection('users')
+        .doc(_userId)
+        .snapshots()
+        .listen((snapshot) async {
+      // Ignore if document doesn't exist or we're restoring
+      if (!snapshot.exists || _isRestoring) return;
+
+      try {
+        final data = snapshot.data();
+        if (data == null) return;
+
+        final lastBackup = data['lastBackup'] as Timestamp?;
+        if (lastBackup == null) return;
+
+        final remoteTimestamp = lastBackup.millisecondsSinceEpoch;
+
+        // Check if this is our own backup (compare timestamps)
+        if (remoteTimestamp <= _lastBackupTimestamp) {
+          if (kDebugMode) {
+            print('ℹ️ Skipping sync - this is our own backup');
+          }
+          return;
+        }
+
+        // Remote data is newer - restore it
+        if (kDebugMode) {
+          print('🔄 Remote data changed - syncing... (remote: $remoteTimestamp, local: $_lastBackupTimestamp)');
+        }
+
+        _isRestoring = true;  // Prevent sync loop
+        await restoreAllData();
+        await Future.delayed(const Duration(milliseconds: 100)); // Let services settle
+        _isRestoring = false;
+
+        if (kDebugMode) {
+          print('✅ Real-time sync completed');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('⚠️ Real-time sync error: $e');
+        }
+        _isRestoring = false;
+      }
+    });
+  }
+
+  Future<bool> _shouldRestoreFromFirebase(SharedPreferences prefs, bool hasLocalData) async {
+    try {
+      // If no local data, always restore
+      if (!hasLocalData) return true;
+
+      // Get Firebase backup timestamp
+      final doc = await _firestore.collection('users').doc(_userId).get();
+      if (!doc.exists) return false;
+
+      final data = doc.data();
+      final lastBackup = data?['lastBackup'] as Timestamp?;
+      if (lastBackup == null) return false;
+
+      // Get local backup timestamp
+      final localBackupStr = prefs.getString('last_firebase_backup');
+      if (localBackupStr == null) {
+        // No local timestamp, restore if Firebase has data
+        return true;
+      }
+
+      final localBackup = DateTime.parse(localBackupStr);
+      final firebaseBackup = lastBackup.toDate();
+
+      // Restore if Firebase is newer (with 5 second tolerance for clock differences)
+      final isNewer = firebaseBackup.isAfter(localBackup.add(const Duration(seconds: 5)));
+
+      if (kDebugMode) {
+        print('🔍 Sync check: Local: $localBackup, Firebase: $firebaseBackup, Newer: $isNewer');
+      }
+
+      return isNewer;
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ Error checking if should restore: $e');
+      }
+      return false;
     }
   }
 
@@ -56,9 +200,12 @@ class FirebaseBackupService {
 
   // Backup ALL SharedPreferences data
   Future<void> backupAllData() async {
-    if (!_syncEnabled || _userId == null) return;
+    if (!_syncEnabled || _userId == null || _isRestoring) return;
 
     try {
+      // Record timestamp before backup to identify our own changes
+      _lastBackupTimestamp = DateTime.now().millisecondsSinceEpoch;
+
       final prefs = await SharedPreferences.getInstance();
       final allKeys = prefs.getKeys();
       final Map<String, dynamic> allData = {};
@@ -82,7 +229,7 @@ class FirebaseBackupService {
       await prefs.setString('last_firebase_backup', DateTime.now().toIso8601String());
 
       if (kDebugMode) {
-        print('✅ Backed up ${allData.length} keys to Firebase for user $_userId');
+        print('✅ Backed up ${allData.length} keys to Firebase for user $_userId (timestamp: $_lastBackupTimestamp)');
       }
     } catch (e) {
       if (kDebugMode) {

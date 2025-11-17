@@ -10,25 +10,26 @@ object WaterBodyDrawable {
         canvas.drawColor(Color.TRANSPARENT)
 
         val centerX = width / 2f
-        val bodyWidth = width * 0.45f  // Narrower overall
-        val bodyHeight = height * 0.90f  // Leave more margin to prevent clipping
-        val startY = height * 0.03f  // Start with margin
+        val bodyWidth = width * 0.45f  // Keep narrow width
+        val bodyHeight = height * 0.96f  // Maximum height
+        val startY = height * 0.005f  // Absolute minimal top margin
 
         // Body outline path (simple female silhouette)
         val bodyPath = Path()
 
-        // Head (proportional)
+        // Head (proportional but ensure it fits with margin for outline stroke)
         val headRadius = bodyWidth * 0.18f
-        bodyPath.addCircle(centerX, startY + headRadius, headRadius, Path.Direction.CW)
+        val headCenterY = startY + headRadius + 4f  // +4f to ensure outline doesn't clip at top
+        bodyPath.addCircle(centerX, headCenterY, headRadius, Path.Direction.CW)
 
         // Body measurements
-        val neckY = startY + headRadius * 2
+        val neckY = headCenterY + headRadius
         val shoulderY = neckY + bodyHeight * 0.015f
         val hipWidth = bodyWidth * 0.28f  // Hip width
         val shoulderWidth = hipWidth  // Same as hips
         val torsoLength = bodyHeight * 0.32f  // Even shorter torso
         val legLength = bodyHeight * 0.66f   // Even longer legs
-        val footY = shoulderY + torsoLength + legLength
+        val footY = (shoulderY + torsoLength + legLength).coerceAtMost(height - 4f)  // Ensure bottom margin for stroke
 
         // Left side of body
         bodyPath.moveTo(centerX - shoulderWidth, shoulderY)
@@ -131,6 +132,14 @@ object WaterBodyDrawable {
             strokeJoin = Paint.Join.ROUND
         }
         canvas.drawPath(bodyPath, outlinePaint)
+
+        // Draw explicit bottom line between feet for visibility
+        val legGap = bodyWidth * 0.10f
+        canvas.drawLine(
+            centerX - legGap, footY,
+            centerX + legGap, footY,
+            outlinePaint
+        )
 
         return bitmap
     }

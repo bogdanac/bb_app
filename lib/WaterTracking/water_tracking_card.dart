@@ -198,12 +198,12 @@ class _WaterTrackingCardState extends State<WaterTrackingCard>
                       AnimatedBuilder(
                         animation: _progressAnimation,
                         builder: (context, child) {
-                          final int remaining = (_waterGoal - widget.waterIntake).clamp(0, _waterGoal);
+                          final bool goalReached = widget.waterIntake >= _waterGoal;
 
                           return Text(
-                            remaining > 0
-                                ? '${remaining}ml left'
-                                : '🎉 Goal reached!',
+                            goalReached
+                                ? '🎉 Goal reached!'
+                                : '${widget.waterIntake}ml',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w500,

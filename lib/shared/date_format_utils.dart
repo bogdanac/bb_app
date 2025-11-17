@@ -20,7 +20,12 @@ class DateFormatUtils {
   ];
 
   /// Format date as "27 nov" (Romanian short format)
+  /// If the date is in a different year than current year, includes year: "27 nov 2026"
   static String formatShort(DateTime date) {
+    final currentYear = DateTime.now().year;
+    if (date.year != currentYear) {
+      return '${date.day} ${_monthsShort[date.month - 1]} ${date.year}';
+    }
     return '${date.day} ${_monthsShort[date.month - 1]}';
   }
 

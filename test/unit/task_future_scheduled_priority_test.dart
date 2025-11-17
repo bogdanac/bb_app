@@ -107,7 +107,7 @@ void main() {
       expect(score(futureImportantCat1), equals(score(futurePlain)));
     });
 
-    test('recurring task scheduled in future gets minimal priority', () {
+    test('recurring task scheduled in future gets same score as non-recurring', () {
       final recurringFuture = Task(
         id: '1',
         title: 'Recurring Future',
@@ -117,7 +117,56 @@ void main() {
         createdAt: now,
       );
 
-      expect(score(recurringFuture), equals(1));
+      final nonRecurringFuture = Task(
+        id: '2',
+        title: 'Non-Recurring Future',
+        scheduledDate: today.add(const Duration(days: 5)),
+        isImportant: true,
+        createdAt: now,
+      );
+
+      // Both should have same score (100) to prevent intercalation
+      // Important flag is ignored for future tasks
+      expect(score(recurringFuture), equals(100));
+      expect(score(nonRecurringFuture), equals(100));
+      expect(score(recurringFuture), equals(score(nonRecurringFuture)));
+    });
+
+    test('tomorrow tasks should not intercalate - recurring and non-recurring get same score', () {
+      // This test prevents the intercalation bug where tasks scheduled for
+      // the same date were getting different scores based on recurrence/reminders
+
+      final recurringTomorrowNoReminder = Task(
+        id: '1',
+        title: 'Recurring Tomorrow (no reminder)',
+        recurrence: TaskRecurrence(type: RecurrenceType.monthly),
+        scheduledDate: today.add(const Duration(days: 1)),
+        createdAt: now,
+      );
+
+      final recurringTomorrowWithReminder = Task(
+        id: '2',
+        title: 'Recurring Tomorrow (with reminder)',
+        recurrence: TaskRecurrence(
+          type: RecurrenceType.daily,
+          reminderTime: const TimeOfDay(hour: 8, minute: 30),
+        ),
+        scheduledDate: today.add(const Duration(days: 1)),
+        reminderTime: DateTime(2025, 11, 6, 8, 30), // tomorrow
+        createdAt: now,
+      );
+
+      final nonRecurringTomorrow = Task(
+        id: '3',
+        title: 'Non-Recurring Tomorrow',
+        scheduledDate: today.add(const Duration(days: 1)),
+        createdAt: now,
+      );
+
+      // All should have score 120 (tomorrow = +120)
+      expect(score(recurringTomorrowNoReminder), equals(120));
+      expect(score(recurringTomorrowWithReminder), equals(120));
+      expect(score(nonRecurringTomorrow), equals(120));
     });
   });
 

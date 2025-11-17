@@ -202,29 +202,45 @@ class TaskPriorityService {
     }
 
     // 4b. RECURRING TASKS: Handle scheduled dates in the future
+    // IMPORTANT: Use same scoring as non-recurring tasks to prevent intercalation
     else if (task.recurrence != null &&
              task.scheduledDate != null &&
              task.scheduledDate!.isAfter(today)) {
       final daysUntil = task.scheduledDate!.difference(today).inDays;
 
-      if (daysUntil > 2) {
-        return 1;
-      } else if (daysUntil == 1) {
-        score += 5;
+      // Use SAME scoring as non-recurring future tasks (lines 341-369)
+      // to ensure tasks on the same day have similar scores
+      if (daysUntil == 1) {
+        score += 120;
+      } else if (daysUntil == 2) {
+        score += 115;
+      } else if (daysUntil == 3) {
+        score += 110;
+      } else if (daysUntil == 4) {
+        score += 105;
+      } else if (daysUntil == 5) {
+        score += 100;
+      } else if (daysUntil == 6) {
+        score += 95;
+      } else if (daysUntil == 7) {
+        score += 90;
+      } else if (daysUntil <= 20) {
+        score += math.max(10, 90 - ((daysUntil - 7) * 5));
       } else {
-        score += 3;
+        score += math.max(1, 10 - (daysUntil - 20));
       }
     }
 
     // 5. MEDIUM-HIGH PRIORITY: Recurring tasks due today (not overdue)
-    if (task.recurrence != null && task.isDueToday()) {
-      // Check if task is scheduled today or in future (not overdue)
-      final isScheduledTodayOrFuture = task.scheduledDate == null ||
-                                        !task.scheduledDate!.isBefore(today);
+    // IMPORTANT: Skip tasks explicitly scheduled in the future - they were handled in section 4b
+    if (task.recurrence != null &&
+        task.isDueToday() &&
+        (task.scheduledDate == null || !task.scheduledDate!.isAfter(today))) {
+      // Check if task is scheduled today (not overdue, not future)
+      final isScheduledToday = task.scheduledDate == null ||
+                                _isSameDay(task.scheduledDate!, today);
 
-      if (task.scheduledDate != null && task.scheduledDate!.isAfter(today)) {
-        score += 5;
-      } else if (isScheduledTodayOrFuture) {
+      if (isScheduledToday) {
         // If task has distant reminder (> 30 min), deprioritize
         if (hasDistantReminder) {
           score += 125;
@@ -249,33 +265,33 @@ class TaskPriorityService {
 
     // 5b. OVERDUE RECURRING TASKS (within grace period)
     // High priority to ensure you don't forget about them
+    // IMPORTANT: Include postponed tasks - they're still overdue!
     if (task.recurrence != null &&
         task.scheduledDate != null &&
-        task.scheduledDate!.isBefore(today) &&
-        !task.isPostponed) {
+        task.scheduledDate!.isBefore(today)) {
       final daysOverdue = today.difference(
         DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)
       ).inDays;
 
-      // Overdue tasks within 7-day grace period
-      // Priority gradually decreases as days overdue increases
+      // CRITICAL FIX: Overdue tasks should be HIGH priority
+      // Scoring: 1000+ range to ensure they're above most other tasks
       if (daysOverdue == 1) {
-        score += 750;
+        score += 950;
       } else if (daysOverdue == 2) {
-        score += 740;
+        score += 940;
       } else if (daysOverdue == 3) {
-        score += 730;
+        score += 930;
       } else if (daysOverdue == 4) {
-        score += 720;
+        score += 920;
       } else if (daysOverdue == 5) {
-        score += 710;
+        score += 910;
       } else if (daysOverdue == 6) {
-        score += 705;
+        score += 905;
       } else if (daysOverdue == 7) {
-        score += 700;
+        score += 900;
       } else {
-        // Grace period exceeded (> 7 days), still visible
-        score += 695;
+        // Grace period exceeded (> 7 days), still very visible
+        score += 895;
       }
     }
 
@@ -286,7 +302,9 @@ class TaskPriorityService {
       final daysOverdue = today.difference(
         DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)
       ).inDays;
-      score += math.max(550, 595 - (daysOverdue * 5));
+      // CRITICAL FIX: Non-recurring overdue tasks also need high priority
+      // Slightly lower than recurring to differentiate, but still HIGH
+      score += math.max(850, 880 - (daysOverdue * 5));
     }
 
     final isScheduledToday = task.scheduledDate != null &&
@@ -337,8 +355,8 @@ class TaskPriorityService {
         }
       }
     }
-    // 5f. FUTURE SCHEDULED TASKS
-    else if (isExplicitlyScheduledFuture && !hasDistantReminder) {
+    // 5f. FUTURE SCHEDULED TASKS (non-recurring only, recurring handled in 4b)
+    else if (isExplicitlyScheduledFuture && !hasDistantReminder && task.recurrence == null) {
       final daysUntil = task.scheduledDate!.difference(today).inDays;
 
       // Tomorrow starts at +120, decreases by 5 each day

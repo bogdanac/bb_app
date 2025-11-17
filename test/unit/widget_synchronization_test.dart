@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bb_app/Tasks/task_service.dart';
 import 'package:bb_app/Tasks/tasks_data_models.dart';
 import 'package:bb_app/Tasks/task_list_widget_filter_service.dart';
+import 'package:bb_app/MenstrualCycle/menstrual_cycle_utils.dart';
 import 'dart:convert';
 
 void main() {
@@ -273,6 +274,111 @@ void main() {
       widgetTasksJson = prefs.getStringList('flutter.widget_filtered_tasks');
       expect(widgetTasksJson, isNull,
         reason: 'Widget tasks should be completely removed after clear');
+    });
+
+    test('Widget MUST ONLY show tasks from current menstrual phase (flower icon ON)', () async {
+      // Set up menstrual cycle data - simulate being in the Follicular phase
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.now();
+      final lastPeriodStart = now.subtract(const Duration(days: 10)); // 10 days ago
+      await prefs.setString('last_period_start', lastPeriodStart.toIso8601String());
+      await prefs.setInt('average_cycle_length', 31);
+
+      // Verify we're in the expected phase
+      final currentPhase = MenstrualCycleUtils.getCyclePhase(lastPeriodStart, null, 31);
+      expect(currentPhase, 'Follicular Phase',
+        reason: 'Test setup should place us in Follicular Phase');
+
+      // Create tasks with different menstrual phase settings
+      final tasks = [
+        // Task 1: Menstrual phase task (should NOT show - wrong phase)
+        Task(
+          id: 'menstrual-task',
+          title: 'Menstrual Phase Task',
+          categoryIds: ['1'],
+          isCompleted: false,
+          createdAt: now,
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.menstrualPhase],
+            startDate: lastPeriodStart,
+          ),
+        ),
+        // Task 2: Follicular phase task (SHOULD show - matches current phase)
+        Task(
+          id: 'follicular-task',
+          title: 'Follicular Phase Task',
+          categoryIds: ['1'],
+          isCompleted: false,
+          createdAt: now,
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.follicularPhase],
+            startDate: lastPeriodStart,
+          ),
+        ),
+        // Task 3: Ovulation phase task (should NOT show - wrong phase)
+        Task(
+          id: 'ovulation-task',
+          title: 'Ovulation Phase Task',
+          categoryIds: ['1'],
+          isCompleted: false,
+          createdAt: now,
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.ovulationPhase],
+            startDate: lastPeriodStart,
+          ),
+        ),
+        // Task 4: No menstrual settings (SHOULD show - always included)
+        Task(
+          id: 'no-phase-task',
+          title: 'Task Without Phase',
+          categoryIds: ['1'],
+          isCompleted: false,
+          createdAt: now,
+        ),
+        // Task 5: Daily task with no menstrual phase (SHOULD show)
+        Task(
+          id: 'daily-task',
+          title: 'Daily Task',
+          categoryIds: ['1'],
+          isCompleted: false,
+          createdAt: now,
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            startDate: now,
+          ),
+        ),
+      ];
+
+      await taskService.saveTasks(tasks);
+      await TaskListWidgetFilterService.updateWidgetTasks();
+
+      // Verify ONLY tasks from current phase or without phase settings are shown
+      final widgetTasksJson = prefs.getStringList('flutter.widget_filtered_tasks');
+      expect(widgetTasksJson, isNotNull);
+
+      final widgetTasks = widgetTasksJson!
+          .map((json) => Task.fromJson(jsonDecode(json)))
+          .toList();
+
+      // Should include follicular phase task
+      expect(widgetTasks.any((t) => t.id == 'follicular-task'), true,
+        reason: 'Widget MUST show tasks from current menstrual phase (Follicular)');
+
+      // Should include tasks without menstrual phase settings
+      expect(widgetTasks.any((t) => t.id == 'no-phase-task'), true,
+        reason: 'Widget MUST show tasks without menstrual phase settings');
+      expect(widgetTasks.any((t) => t.id == 'daily-task'), true,
+        reason: 'Widget MUST show non-menstrual recurring tasks');
+
+      // CRITICAL: Should NOT include tasks from other phases
+      expect(widgetTasks.any((t) => t.id == 'menstrual-task'), false,
+        reason: 'Widget MUST NOT show tasks from other menstrual phases (Menstrual)');
+      expect(widgetTasks.any((t) => t.id == 'ovulation-task'), false,
+        reason: 'Widget MUST NOT show tasks from other menstrual phases (Ovulation)');
+
+      // Verify correct count (3 tasks should be shown: follicular, no-phase, daily)
+      expect(widgetTasks.length, 3,
+        reason: 'Widget should show exactly 3 tasks matching current phase filter');
     });
   });
 }

@@ -216,69 +216,11 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 }
             }
 
-            // PRIORITY 2: Fallback to main tasks list if no filtered tasks available
+            // NO FALLBACK: Widget should ONLY show pre-filtered tasks from flutter.widget_filtered_tasks
+            // This ensures menstrual phase filtering is always active (flower icon ON behavior)
             if (tasksJsonStringList == null || tasksJsonStringList.isEmpty()) {
-                android.util.Log.d("TaskListWidget", "No widget_filtered_tasks found, falling back to main tasks list")
-                val rawValue = prefs.all["flutter.tasks"]
-                android.util.Log.d("TaskListWidget", "Method 1 (flutter.tasks raw): type=${rawValue?.javaClass?.simpleName}")
-
-            if (rawValue != null) {
-                when (rawValue) {
-                    is String -> {
-                        android.util.Log.d("TaskListWidget", "Value is String, length=${rawValue.length}")
-                        android.util.Log.d("TaskListWidget", "First 100 chars: ${rawValue.take(100)}")
-
-                        // Flutter's shared_preferences uses a special encoding with Base64 prefix
-                        // "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu" = "This is the prefix for a list."
-                        val LIST_IDENTIFIER = "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu"
-
-                        if (rawValue.startsWith(LIST_IDENTIFIER)) {
-                            // Flutter's new encoded format: PREFIX + "!" + JSON
-                            android.util.Log.d("TaskListWidget", "Detected Flutter encoded list format")
-                            try {
-                                var encodedData = rawValue.substring(LIST_IDENTIFIER.length)
-                                android.util.Log.d("TaskListWidget", "Encoded data length: ${encodedData.length}")
-                                android.util.Log.d("TaskListWidget", "First 50 chars of encoded: ${encodedData.take(50)}")
-
-                                // Skip the "!" separator if present
-                                if (encodedData.startsWith("!")) {
-                                    encodedData = encodedData.substring(1)
-                                    android.util.Log.d("TaskListWidget", "Removed '!' separator, first 50 chars: ${encodedData.take(50)}")
-                                }
-
-                                // The data after the prefix and separator is the actual JSON array
-                                val jsonArray = JSONArray(encodedData)
-                                tasksJsonStringList = (0 until jsonArray.length()).map { jsonArray.getString(it) }
-                                android.util.Log.d("TaskListWidget", "Successfully parsed ${tasksJsonStringList.size} tasks from encoded format")
-                            } catch (e: Exception) {
-                                android.util.Log.e("TaskListWidget", "Failed to decode Flutter list: $e")
-                                e.printStackTrace()
-                            }
-                        } else {
-                            // Try as plain JSON array
-                            try {
-                                val jsonArray = JSONArray(rawValue)
-                                tasksJsonStringList = (0 until jsonArray.length()).map { jsonArray.getString(it) }
-                                android.util.Log.d("TaskListWidget", "Successfully parsed ${tasksJsonStringList.size} tasks from JSON string")
-                            } catch (e: Exception) {
-                                android.util.Log.e("TaskListWidget", "Failed to parse as JSON array: $e")
-                            }
-                        }
-                    }
-                    is Set<*> -> {
-                        android.util.Log.d("TaskListWidget", "Value is Set")
-                        tasksJsonStringList = rawValue.filterIsInstance<String>()
-                    }
-                    is List<*> -> {
-                        android.util.Log.d("TaskListWidget", "Value is List")
-                        tasksJsonStringList = rawValue.filterIsInstance<String>()
-                    }
-                    else -> {
-                        android.util.Log.w("TaskListWidget", "Unknown type: ${rawValue.javaClass.simpleName}")
-                    }
-                }
+                android.util.Log.d("TaskListWidget", "No widget_filtered_tasks found - showing empty list (menstrual filter active)")
             }
-            } // End fallback to main tasks list
 
             if (tasksJsonStringList == null || tasksJsonStringList.isEmpty()) {
                 android.util.Log.w("TaskListWidget", "No tasks found in SharedPreferences")
