@@ -280,6 +280,7 @@ void main() {
       // Set up menstrual cycle data - simulate being in the Follicular phase
       final prefs = await SharedPreferences.getInstance();
       final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
       final lastPeriodStart = now.subtract(const Duration(days: 10)); // 10 days ago
       await prefs.setString('last_period_start', lastPeriodStart.toIso8601String());
       await prefs.setInt('average_cycle_length', 31);
@@ -335,16 +336,57 @@ void main() {
           isCompleted: false,
           createdAt: now,
         ),
-        // Task 5: Daily task with no menstrual phase (SHOULD show)
+        // Task 5: Follicular + Daily, scheduled for today (SHOULD show - correct phase AND due today)
         Task(
-          id: 'daily-task',
-          title: 'Daily Task',
+          id: 'follicular-daily-today',
+          title: 'Follicular Daily Task Due Today',
+          categoryIds: ['1'],
+          isCompleted: false,
+          createdAt: now,
+          scheduledDate: today,
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.follicularPhase, RecurrenceType.daily],
+            startDate: now,
+          ),
+        ),
+        // Task 6: Follicular + Daily, scheduled for tomorrow (should NOT show - correct phase but NOT due today)
+        Task(
+          id: 'follicular-daily-tomorrow',
+          title: 'Follicular Daily Task Due Tomorrow',
+          categoryIds: ['1'],
+          isCompleted: false,
+          createdAt: now,
+          scheduledDate: today.add(const Duration(days: 1)),
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.follicularPhase, RecurrenceType.daily],
+            startDate: now,
+          ),
+        ),
+        // Task 7: Follicular phase with phaseDay = 6 (SHOULD show - 10 days after period = day 11 of cycle = day 6 of follicular)
+        // 10 days after period start = cycle day 11, follicular starts day 6, so day 11 = follicular day 6
+        Task(
+          id: 'follicular-phaseday-6',
+          title: 'Follicular Phase Day 6 Task',
           categoryIds: ['1'],
           isCompleted: false,
           createdAt: now,
           recurrence: TaskRecurrence(
-            types: [RecurrenceType.daily],
-            startDate: now,
+            types: [RecurrenceType.follicularPhase],
+            startDate: lastPeriodStart,
+            phaseDay: 6,
+          ),
+        ),
+        // Task 8: Follicular phase with phaseDay = 1 (should NOT show - wrong day)
+        Task(
+          id: 'follicular-phaseday-1',
+          title: 'Follicular Phase Day 1 Task',
+          categoryIds: ['1'],
+          isCompleted: false,
+          createdAt: now,
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.follicularPhase],
+            startDate: lastPeriodStart,
+            phaseDay: 1,
           ),
         ),
       ];
@@ -360,15 +402,21 @@ void main() {
           .map((json) => Task.fromJson(jsonDecode(json)))
           .toList();
 
-      // Should include follicular phase task
+      // Should include follicular phase task (ONLY menstrual phase, no regular recurrence)
       expect(widgetTasks.any((t) => t.id == 'follicular-task'), true,
         reason: 'Widget MUST show tasks from current menstrual phase (Follicular)');
 
       // Should include tasks without menstrual phase settings
       expect(widgetTasks.any((t) => t.id == 'no-phase-task'), true,
         reason: 'Widget MUST show tasks without menstrual phase settings');
-      expect(widgetTasks.any((t) => t.id == 'daily-task'), true,
-        reason: 'Widget MUST show non-menstrual recurring tasks');
+
+      // Should include follicular + daily task that is due today
+      expect(widgetTasks.any((t) => t.id == 'follicular-daily-today'), true,
+        reason: 'Widget MUST show tasks with correct phase AND due today');
+
+      // Should include follicular phaseDay task matching current day
+      expect(widgetTasks.any((t) => t.id == 'follicular-phaseday-6'), true,
+        reason: 'Widget MUST show tasks with correct phase AND matching phaseDay');
 
       // CRITICAL: Should NOT include tasks from other phases
       expect(widgetTasks.any((t) => t.id == 'menstrual-task'), false,
@@ -376,9 +424,17 @@ void main() {
       expect(widgetTasks.any((t) => t.id == 'ovulation-task'), false,
         reason: 'Widget MUST NOT show tasks from other menstrual phases (Ovulation)');
 
-      // Verify correct count (3 tasks should be shown: follicular, no-phase, daily)
-      expect(widgetTasks.length, 3,
-        reason: 'Widget should show exactly 3 tasks matching current phase filter');
+      // CRITICAL: Should NOT include follicular + daily task scheduled for tomorrow (not due today)
+      expect(widgetTasks.any((t) => t.id == 'follicular-daily-tomorrow'), false,
+        reason: 'Widget MUST NOT show tasks with correct phase but NOT due today');
+
+      // CRITICAL: Should NOT include follicular phaseDay task with wrong day
+      expect(widgetTasks.any((t) => t.id == 'follicular-phaseday-1'), false,
+        reason: 'Widget MUST NOT show tasks with correct phase but wrong phaseDay');
+
+      // Verify correct count (4 tasks should be shown)
+      expect(widgetTasks.length, 4,
+        reason: 'Widget should show exactly 4 tasks matching current phase filter');
     });
   });
 }
