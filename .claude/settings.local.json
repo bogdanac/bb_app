@@ -23,7 +23,7 @@
       "Bash(firebase deploy:*)",
       "Bash(firebase firestore:rules:get:*)",
       "Bash(export GRADLE_USER_HOME=\"C:\\Dev\\Projects\\bb_app\\android\\.gradle_cache\")",
-      "Bash(git add:*)",
+      "Bash(git add:*)"
     ]
   },
   "outputStyle": "default"
