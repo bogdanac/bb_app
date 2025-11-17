@@ -2,7 +2,6 @@
   "permissions": {
     "allow": [
       "Bash(flutter pub:*)",
-      "Bash(flutter build:*)",
       "Bash(flutter clean:*)",
       "WebSearch",
       "Bash(sed:*)",
@@ -25,9 +24,6 @@
       "Bash(firebase firestore:rules:get:*)",
       "Bash(export GRADLE_USER_HOME=\"C:\\Dev\\Projects\\bb_app\\android\\.gradle_cache\")",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nFix build: Remove unused debug_priority_helper import\n\nRemoved import and usage of debug_priority_helper.dart which was causing build failures in CI.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git push:*)",
-      "Bash(git commit:*)"
     ]
   },
   "outputStyle": "default"
