@@ -10,6 +10,7 @@ import '../shared/date_picker_utils.dart';
 import '../shared/snackbar_utils.dart';
 import 'task_service.dart';
 import 'task_builder.dart';
+import '../shared/error_logger.dart';
 
 class TaskEditScreen extends StatefulWidget {
   final Task? task;
@@ -114,7 +115,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     });
   }
 
-  void _autoSaveTask() {
+  Future<void> _autoSaveTask() async {
     if (_titleController.text.trim().isEmpty) return;
 
     try {
@@ -156,10 +157,13 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
           }
         });
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR saving task: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskEditScreen._autoSaveTask',
+        error: 'Error saving task: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'isAutoSave': true},
+      );
       if (mounted) {
         SnackBarUtils.showError(context, '⚠️ Error saving task: ${e.toString()}');
       }
@@ -298,10 +302,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
 
               // Wait a brief moment for save to complete
               await Future.delayed(const Duration(milliseconds: 50));
-            } catch (e) {
-              if (kDebugMode) {
-                print('ERROR saving task on exit: $e');
-              }
+            } catch (e, stackTrace) {
+              await ErrorLogger.logError(
+                source: 'TaskEditScreen.onPopInvokedWithResult',
+                error: 'Error saving task on exit: $e',
+                stackTrace: stackTrace.toString(),
+              );
             }
           }
 

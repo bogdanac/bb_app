@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'habit_data_models.dart';
 import '../Services/firebase_backup_service.dart';
+import '../shared/error_logger.dart';
 
 class HabitService {
   static const String _habitsKey = 'habits';
@@ -13,10 +14,12 @@ class HabitService {
     List<String> habitsJson;
     try {
       habitsJson = prefs.getStringList(_habitsKey) ?? [];
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR: Habits data type mismatch, clearing corrupted data');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'HabitService.loadHabits',
+        error: 'Habits data type mismatch, clearing corrupted data: $e',
+        stackTrace: stackTrace.toString(),
+      );
       await prefs.remove(_habitsKey);
       habitsJson = [];
     }

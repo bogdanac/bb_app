@@ -16,6 +16,7 @@ import '../theme/app_styles.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
 import '../MenstrualCycle/menstrual_cycle_constants.dart';
 import '../shared/snackbar_utils.dart';
+import '../shared/error_logger.dart';
 
 class TodoScreen extends StatefulWidget {
   final bool showFilters;
@@ -238,9 +239,13 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
         Navigator.of(context).pop();
         widget.onCancel();
       }
-      
-    } catch (e) {
-      debugPrint('ERROR adding task to today: $e');
+
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TodoScreen._addTaskToToday',
+        error: 'Error adding task to today: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -1103,11 +1108,17 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       }
     }
     } catch (e, stackTrace) {
-      if (kDebugMode) {
-        print('❌ ERROR in recurring task completion: $e');
-        print('Stack trace: $stackTrace');
-      }
-      
+      await ErrorLogger.logError(
+        source: 'TodoScreen._completeRecurringTask',
+        error: 'Error in recurring task completion: $e',
+        stackTrace: stackTrace.toString(),
+        context: {
+          'taskId': task.id,
+          'taskTitle': task.title,
+          'hasRecurrence': task.recurrence != null,
+        },
+      );
+
       // Fallback: just mark task as completed without recurring
       try {
         final completedTask = Task(
@@ -1143,10 +1154,16 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           await _loadTasks();
           widget.onTasksChanged?.call();
         }
-      } catch (fallbackError) {
-        if (kDebugMode) {
-          print('ERROR CRITICAL: Fallback completion also failed: $fallbackError');
-        }
+      } catch (fallbackError, fallbackStackTrace) {
+        await ErrorLogger.logError(
+          source: 'TodoScreen._completeRecurringTask.fallback',
+          error: 'CRITICAL: Fallback completion also failed: $fallbackError',
+          stackTrace: fallbackStackTrace.toString(),
+          context: {
+            'taskId': task.id,
+            'taskTitle': task.title,
+          },
+        );
       }
     }
   }
@@ -1201,10 +1218,16 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       widget.onTasksChanged?.call();
 
       _isUpdatingTasks = false; // Re-enable listener
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR postponing task: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TodoScreen._postponeTask',
+        error: 'Error postponing task: $e',
+        stackTrace: stackTrace.toString(),
+        context: {
+          'taskId': task.id,
+          'taskTitle': task.title,
+        },
+      );
       if (mounted) {
         SnackBarUtils.showError(context, 'Failed to postpone task: $e');
       }
@@ -1244,10 +1267,12 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           SnackBarUtils.showCustom(context, message, backgroundColor: backgroundColor);
         }
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR recalculating recurring tasks: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TodoScreen._recalculateRecurringTasks',
+        error: 'Error recalculating recurring tasks: $e',
+        stackTrace: stackTrace.toString(),
+      );
       if (mounted) {
         SnackBarUtils.showError(context, '⚠️ Failed to recalculate tasks: ${e.toString()}');
       }

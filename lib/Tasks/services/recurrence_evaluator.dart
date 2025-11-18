@@ -155,7 +155,9 @@ class RecurrenceEvaluator {
   static bool _isMenstrualPhase(DateTime date, String expectedPhase) {
     try {
       return _checkMenstrualPhaseSync(date, expectedPhase);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Note: This is a synchronous method, so we can't await ErrorLogger
+      // Log to console for now - full logging will happen in async callers
       if (kDebugMode) {
         print('ERROR checking menstrual phase: $e');
       }

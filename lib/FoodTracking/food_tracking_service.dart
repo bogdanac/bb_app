@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'food_tracking_data_models.dart';
 import '../Services/firebase_backup_service.dart';
+import '../shared/error_logger.dart';
 
 enum FoodTrackingResetFrequency { weekly, monthly }
 
@@ -18,14 +19,16 @@ class FoodTrackingService {
     List<String> entriesJson;
     try {
       entriesJson = prefs.getStringList(_entriesKey) ?? [];
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR: Food tracking data type mismatch, clearing corrupted data');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'FoodTrackingService.getAllEntries',
+        error: 'Food tracking data type mismatch, clearing corrupted data: $e',
+        stackTrace: stackTrace.toString(),
+      );
       await prefs.remove(_entriesKey);
       entriesJson = [];
     }
-    
+
     return entriesJson
         .map((json) => FoodEntry.fromJsonString(json))
         .toList()

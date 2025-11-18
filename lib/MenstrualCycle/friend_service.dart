@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'friend_data_models.dart';
 import '../Services/firebase_backup_service.dart';
+import '../shared/error_logger.dart';
 
 class FriendService {
   static const String _friendsKey = 'circle_of_friends';
@@ -20,10 +21,12 @@ class FriendService {
       return friendsJson
           .map((json) => Friend.fromJson(jsonDecode(json)))
           .toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error loading friends: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'FriendService.loadFriends',
+        error: 'Error loading friends: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return [];
     }
   }

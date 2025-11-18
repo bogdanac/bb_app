@@ -8,6 +8,7 @@ import 'routine_data_models.dart';
 import 'routine_widget_service.dart';
 import '../shared/timezone_utils.dart';
 import '../Services/firebase_backup_service.dart';
+import '../shared/error_logger.dart';
 
 class RoutineProgressService {
   static const String _progressPrefix = 'routine_progress_';
@@ -54,12 +55,14 @@ class RoutineProgressService {
       if (progressData['status'] == 'in_progress') {
         return progressData['routineId'];
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error getting in-progress routine: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RoutineProgressService.getInProgressRoutineId',
+        error: 'Error getting in-progress routine: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
-    
+
     return null;
   }
   
@@ -158,10 +161,13 @@ class RoutineProgressService {
       }
       
       return progressData;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error loading routine progress: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RoutineProgressService.loadRoutineProgress',
+        error: 'Error loading routine progress: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'routineId': routineId},
+      );
       return null;
     }
   }

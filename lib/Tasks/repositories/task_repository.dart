@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../tasks_data_models.dart';
+import '../../shared/error_logger.dart';
 
 /// Repository responsible for ONLY data persistence operations.
 /// NO business logic, NO notifications, NO widget updates.
@@ -17,10 +18,12 @@ class TaskRepository {
       List<String> tasksJson;
       try {
         tasksJson = prefs.getStringList('tasks') ?? [];
-      } catch (e) {
-        if (kDebugMode) {
-          print('ERROR: Tasks data type mismatch, clearing corrupted data');
-        }
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'TaskRepository.loadTasks',
+          error: 'Tasks data type mismatch, clearing corrupted data: $e',
+          stackTrace: stackTrace.toString(),
+        );
         await prefs.remove('tasks');
         tasksJson = [];
       }
@@ -30,10 +33,12 @@ class TaskRepository {
           .toList();
 
       return tasks;
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR loading tasks: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskRepository.loadTasks',
+        error: 'Error loading tasks: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return [];
     }
   }
@@ -46,10 +51,13 @@ class TaskRepository {
           .map((task) => jsonEncode(task.toJson()))
           .toList();
       await prefs.setStringList('tasks', tasksJson);
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR saving tasks: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskRepository.saveTasks',
+        error: 'Error saving tasks: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskCount': tasks.length},
+      );
       rethrow;
     }
   }
@@ -61,10 +69,12 @@ class TaskRepository {
       List<String> categoriesJson;
       try {
         categoriesJson = prefs.getStringList('task_categories') ?? [];
-      } catch (e) {
-        if (kDebugMode) {
-          print('ERROR: Task categories data type mismatch, clearing corrupted data');
-        }
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'TaskRepository.loadCategories',
+          error: 'Task categories data type mismatch, clearing corrupted data: $e',
+          stackTrace: stackTrace.toString(),
+        );
         await prefs.remove('task_categories');
         categoriesJson = [];
       }
@@ -76,10 +86,12 @@ class TaskRepository {
       return categoriesJson
           .map((json) => TaskCategory.fromJson(jsonDecode(json)))
           .toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR loading categories: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskRepository.loadCategories',
+        error: 'Error loading categories: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return [];
     }
   }
@@ -92,10 +104,13 @@ class TaskRepository {
           .map((category) => jsonEncode(category.toJson()))
           .toList();
       await prefs.setStringList('task_categories', categoriesJson);
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR saving categories: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskRepository.saveCategories',
+        error: 'Error saving categories: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'categoryCount': categories.length},
+      );
       rethrow;
     }
   }
@@ -111,10 +126,12 @@ class TaskRepository {
       }
 
       return TaskSettings.fromJson(jsonDecode(settingsJson));
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR loading task settings: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskRepository.loadTaskSettings',
+        error: 'Error loading task settings: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return TaskSettings();
     }
   }
@@ -124,10 +141,12 @@ class TaskRepository {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('task_settings', jsonEncode(settings.toJson()));
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR saving task settings: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskRepository.saveTaskSettings',
+        error: 'Error saving task settings: $e',
+        stackTrace: stackTrace.toString(),
+      );
       rethrow;
     }
   }
@@ -138,17 +157,21 @@ class TaskRepository {
       final prefs = await SharedPreferences.getInstance();
       try {
         return prefs.getStringList('selected_category_filters') ?? [];
-      } catch (e) {
-        if (kDebugMode) {
-          print('ERROR: Category filters data type mismatch, clearing corrupted data');
-        }
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'TaskRepository.loadSelectedCategoryFilters',
+          error: 'Category filters data type mismatch, clearing corrupted data: $e',
+          stackTrace: stackTrace.toString(),
+        );
         await prefs.remove('selected_category_filters');
         return [];
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR loading category filters: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskRepository.loadSelectedCategoryFilters',
+        error: 'Error loading category filters: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return [];
     }
   }
@@ -158,10 +181,13 @@ class TaskRepository {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('selected_category_filters', categoryIds);
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR saving category filters: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskRepository.saveSelectedCategoryFilters',
+        error: 'Error saving category filters: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'filterCount': categoryIds.length},
+      );
       rethrow;
     }
   }

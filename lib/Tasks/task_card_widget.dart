@@ -373,20 +373,38 @@ class _TaskCardState extends State<TaskCard> {
                                       DateFormatUtils.formatShort(widget.task.deadline!),
                                       TaskCardUtils.getDeadlineColor(widget.task.deadline!),
                                     ),
-                                  if (widget.task.reminderTime != null)
+                                  if (widget.task.reminderTime != null && widget.task.recurrence == null)
                                     TaskCardUtils.buildInfoChip(
                                       Icons.notifications_rounded,
                                       DateFormatUtils.formatTime24(widget.task.reminderTime!),
                                       TaskCardUtils.getReminderColor(widget.task.reminderTime!),
                                     ),
-                                  if (widget.task.recurrence != null)
-                                    TaskCardUtils.buildInfoChip(
-                                      Icons.repeat_rounded,
-                                      widget.task.recurrence!.reminderTime != null
-                                          ? '${TaskCardUtils.getShortRecurrenceText(widget.task.recurrence!)} ${widget.task.recurrence!.reminderTime!.format(context)}'
-                                          : TaskCardUtils.getShortRecurrenceText(widget.task.recurrence!),
-                                      AppColors.pink,
-                                    ),
+                                  if (widget.task.recurrence != null) ...[
+                                    // Show non-menstrual recurrence chip
+                                    if (TaskCardUtils.getNonMenstrualTypes(widget.task.recurrence!).isNotEmpty)
+                                      TaskCardUtils.buildInfoChip(
+                                        Icons.repeat_rounded,
+                                        () {
+                                          final nonMenstrualRecurrence = widget.task.recurrence!.copyWith(
+                                            types: TaskCardUtils.getNonMenstrualTypes(widget.task.recurrence!),
+                                          );
+                                          final text = TaskCardUtils.getShortRecurrenceText(nonMenstrualRecurrence);
+                                          return widget.task.recurrence!.reminderTime != null
+                                              ? '$text ${widget.task.recurrence!.reminderTime!.format(context)}'
+                                              : text;
+                                        }(),
+                                        AppColors.purple,
+                                      ),
+                                    // Show menstrual recurrence chip(s)
+                                    ...TaskCardUtils.getMenstrualTypes(widget.task.recurrence!).map((type) {
+                                      final menstrualRecurrence = widget.task.recurrence!.copyWith(types: [type]);
+                                      return TaskCardUtils.buildInfoChip(
+                                        Icons.favorite_rounded,
+                                        TaskCardUtils.getShortRecurrenceText(menstrualRecurrence),
+                                        AppColors.pink,
+                                      );
+                                    }),
+                                  ],
                                   if (widget.task.categoryIds.isNotEmpty) ...[
                                     ...widget.task.categoryIds.map((categoryId) {
                                       try {

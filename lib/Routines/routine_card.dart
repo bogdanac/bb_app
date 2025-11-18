@@ -9,6 +9,7 @@ import 'routine_progress_service.dart';
 import 'dart:async';
 import '../shared/snackbar_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../shared/error_logger.dart';
 
 class RoutineCard extends StatefulWidget {
   final VoidCallback onCompleted;
@@ -82,10 +83,12 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
         if (kDebugMode) {
           print('Selected active routine: ${_currentRoutine?.title}');
         }
-      } catch (e) {
-        if (kDebugMode) {
-          print('Error in getCurrentActiveRoutine: $e');
-        }
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'RoutineCard._loadCurrentRoutine.getCurrentActiveRoutine',
+          error: 'Error in getCurrentActiveRoutine: $e',
+          stackTrace: stackTrace.toString(),
+        );
         _currentRoutine = null;
       }
 
@@ -141,10 +144,12 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
           }
         }
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error loading routine: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RoutineCard._loadCurrentRoutine',
+        error: 'Error loading routine: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
 
     if (mounted) {
@@ -361,10 +366,12 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       }
 
       return true;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error loading next routine: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RoutineCard._loadNextRoutine',
+        error: 'Error loading next routine: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return false;
     }
   }

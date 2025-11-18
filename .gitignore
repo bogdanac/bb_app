@@ -51,3 +51,11 @@ android/.gradle-wrapper/
 *.jks
 *.keystore
 key.properties
+
+# Firebase cache
+.firebase/hosting.*.cache
+
+# Claude guide
+claude_guide.md
+img.png
+nul

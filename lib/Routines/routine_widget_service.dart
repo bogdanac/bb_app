@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'routine_service.dart';
+import '../shared/error_logger.dart';
 
 class RoutineWidgetService {
   static const MethodChannel _platform = MethodChannel('com.bb.bb_app/routine_widget');
@@ -51,8 +52,12 @@ class RoutineWidgetService {
 
       // Trigger widget update via platform channel
       await _platform.invokeMethod('updateRoutineWidget');
-    } catch (e) {
-      debugPrint('updateWidget - Error: $e');
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RoutineWidgetService.updateWidget',
+        error: 'Error updating routine widget: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -123,8 +128,12 @@ class RoutineWidgetService {
     try {
       await updateWidget();
       await _platform.invokeMethod('refreshRoutineWidget');
-    } catch (e) {
-      debugPrint('forceRefreshWidget - Error: $e');
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RoutineWidgetService.forceRefreshWidget',
+        error: 'Error force refreshing routine widget: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -133,8 +142,12 @@ class RoutineWidgetService {
     try {
       // Just trigger a widget refresh, no need to update routine data
       await _platform.invokeMethod('refreshRoutineWidget');
-    } catch (e) {
-      debugPrint('refreshWidgetColor - Error: $e');
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RoutineWidgetService.refreshWidgetColor',
+        error: 'Error refreshing widget color: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 

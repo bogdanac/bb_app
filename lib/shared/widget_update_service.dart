@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Tasks/task_list_widget_service.dart';
 import 'timezone_utils.dart';
+import 'error_logger.dart';
 
 /// Service to manage widget updates, especially on new day detection
 class WidgetUpdateService {
@@ -33,10 +34,12 @@ class WidgetUpdateService {
         // Not a new day, but still refresh task widget to ensure it has current phase filtering
         await _updateTaskWidget();
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR checking/updating widgets on new day: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'WidgetUpdateService.checkAndUpdateWidgetsOnNewDay',
+        error: 'Error checking/updating widgets on new day: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -47,10 +50,12 @@ class WidgetUpdateService {
         _updateTaskWidget(),
         _updateWaterWidget(),
       ]);
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR updating all widgets: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'WidgetUpdateService.updateAllWidgets',
+        error: 'Error updating all widgets: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -58,10 +63,12 @@ class WidgetUpdateService {
   static Future<void> _updateTaskWidget() async {
     try {
       await TaskListWidgetService.updateWidget();
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR updating task widget: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'WidgetUpdateService._updateTaskWidget',
+        error: 'Error updating task widget: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -69,10 +76,12 @@ class WidgetUpdateService {
   static Future<void> _updateWaterWidget() async {
     try {
       await _waterChannel.invokeMethod('updateWaterWidget');
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR updating water widget: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'WidgetUpdateService._updateWaterWidget',
+        error: 'Error updating water widget: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 

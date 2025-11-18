@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import '../shared/error_logger.dart';
 
 class FastingUtils {
   // Fast type constants
@@ -107,8 +108,12 @@ class FastingUtils {
       // If no scheduled fast found, return empty (no recommendation)
       debugPrint('[FastingUtils] No scheduled fast found for today');
       return '';
-    } catch (e) {
-      debugPrint('Error getting recommended fast type: $e');
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'FastingUtils.getRecommendedFastType',
+        error: 'Error getting recommended fast type: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return '';
     }
   }

@@ -1,5 +1,6 @@
 import 'package:device_calendar/device_calendar.dart';
 import 'package:flutter/foundation.dart';
+import '../shared/error_logger.dart';
 
 class CalendarService {
   static final CalendarService _instance = CalendarService._internal();
@@ -78,23 +79,36 @@ class CalendarService {
   // Get today's events from all calendars
   Future<List<Event>> getTodaysEvents() async {
     try {
-      final hasPermission = await hasCalendarPermission();
-      if (!hasPermission) {
-        if (kDebugMode) {
-          print('Calendar permission not granted');
-        }
-        return [];
-      }
-
+      // Try to retrieve calendars directly - if permission is truly missing, this will fail
+      // This is more reliable than hasPermissions() which can give false negatives
       final calendarsResult = await _deviceCalendarPlugin.retrieveCalendars();
       if (!calendarsResult.isSuccess || calendarsResult.data == null) {
-        if (kDebugMode) {
-          print('ERROR retrieve calendars');
-        }
+        await ErrorLogger.logError(
+          source: 'CalendarService.getTodaysEvents',
+          error: 'Failed to retrieve calendars',
+          context: {
+            'isSuccess': calendarsResult.isSuccess,
+            'hasData': calendarsResult.data != null,
+            'errors': calendarsResult.errors.map((e) => e.errorMessage).toList(),
+          },
+        );
         return [];
       }
 
       final calendars = calendarsResult.data!;
+
+      // Log if no calendars found
+      if (calendars.isEmpty) {
+        await ErrorLogger.logError(
+          source: 'CalendarService.getTodaysEvents',
+          error: 'No calendars found on device',
+          context: {
+            'calendarCount': 0,
+          },
+        );
+        return [];
+      }
+
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
       final endOfDay = startOfDay.add(const Duration(days: 1));
@@ -113,11 +127,29 @@ class CalendarService {
 
           if (eventsResult.isSuccess && eventsResult.data != null) {
             allEvents.addAll(eventsResult.data!);
+          } else {
+            await ErrorLogger.logError(
+              source: 'CalendarService.getTodaysEvents',
+              error: 'Failed to retrieve events from calendar',
+              context: {
+                'calendarName': calendar.name,
+                'calendarId': calendar.id,
+                'isSuccess': eventsResult.isSuccess,
+                'hasData': eventsResult.data != null,
+                'errors': eventsResult.errors.map((e) => e.errorMessage).toList(),
+              },
+            );
           }
-        } catch (e) {
-          if (kDebugMode) {
-            print('ERROR retrieving events from calendar ${calendar.name}: $e');
-          }
+        } catch (e, stackTrace) {
+          await ErrorLogger.logError(
+            source: 'CalendarService.getTodaysEvents',
+            error: 'Exception retrieving events from calendar ${calendar.name}: $e',
+            stackTrace: stackTrace.toString(),
+            context: {
+              'calendarName': calendar.name,
+              'calendarId': calendar.id,
+            },
+          );
         }
       }
 
@@ -142,16 +174,31 @@ class CalendarService {
         return a.start!.compareTo(b.start!);
       });
 
-      if (kDebugMode) {
-        print('Found ${allEvents.length} total events for today');
-        print('Filtered to ${currentAndFutureEvents.length} current/future events');
-      }
+      // Log the results for debugging
+      await ErrorLogger.logError(
+        source: 'CalendarService.getTodaysEvents',
+        error: 'Calendar fetch completed',
+        context: {
+          'calendarsChecked': calendars.length,
+          'calendarNames': calendars.map((c) => c.name).toList(),
+          'totalEventsFound': allEvents.length,
+          'afterFiltering': currentAndFutureEvents.length,
+          'startOfDay': startOfDay.toIso8601String(),
+          'endOfDay': endOfDay.toIso8601String(),
+          'currentTime': now.toIso8601String(),
+        },
+      );
 
       return currentAndFutureEvents;
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR getting today\'s events: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'CalendarService.getTodaysEvents',
+        error: 'Exception in getTodaysEvents: $e',
+        stackTrace: stackTrace.toString(),
+        context: {
+          'currentTime': DateTime.now().toIso8601String(),
+        },
+      );
       return [];
     }
   }

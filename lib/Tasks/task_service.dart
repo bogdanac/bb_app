@@ -10,6 +10,7 @@ import 'repositories/task_repository.dart';
 import 'services/task_priority_service.dart';
 import 'services/recurrence_calculator.dart';
 import 'services/task_notification_service.dart';
+import '../shared/error_logger.dart';
 
 /// Facade service that coordinates task operations.
 /// Delegates to specialized services for different concerns.
@@ -143,10 +144,12 @@ class TaskService {
       }
 
       return tasks;
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR loading tasks: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskService.loadTasks',
+        error: 'Error loading tasks: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return [];
     }
   }
@@ -180,10 +183,17 @@ class TaskService {
 
       // Notify all listeners
       _notifyTasksChanged();
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR saving tasks: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskService.saveTasks',
+        error: 'Error saving tasks: $e',
+        stackTrace: stackTrace.toString(),
+        context: {
+          'taskCount': tasks.length,
+          'skipNotificationUpdate': skipNotificationUpdate,
+          'skipWidgetUpdate': skipWidgetUpdate,
+        },
+      );
     }
   }
 
@@ -355,10 +365,13 @@ class TaskService {
       }
 
       return updatedTask;
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR skipping task to next occurrence: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskService.skipToNextOccurrence',
+        error: 'Error skipping task to next occurrence: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskId': task.id, 'taskTitle': task.title},
+      );
       rethrow;
     }
   }
@@ -403,10 +416,13 @@ class TaskService {
         allTasks[taskIndex] = updatedTask;
         await saveTasks(allTasks);
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR postponing task: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskService.postponeTaskToTomorrow',
+        error: 'Error postponing task: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskId': task.id, 'taskTitle': task.title},
+      );
       rethrow;
     }
   }
@@ -552,10 +568,12 @@ class TaskService {
       }
 
       return updatedCount;
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR recalculating recurring tasks: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskService.recalculateRecurringTasks',
+        error: 'Error recalculating recurring tasks: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return 0;
     }
   }

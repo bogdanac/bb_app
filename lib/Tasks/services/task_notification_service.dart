@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../tasks_data_models.dart';
 import '../../Notifications/notification_service.dart';
+import '../../shared/error_logger.dart';
 
 /// Service responsible for scheduling and managing task notifications.
 /// Handles ONLY notification-related operations.
@@ -34,10 +35,13 @@ class TaskNotificationService {
           await scheduleTaskNotification(task);
         }
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR scheduling task notifications: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskNotificationService.scheduleAllTaskNotifications',
+        error: 'Error scheduling task notifications: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskCount': tasks.length},
+      );
     }
   }
 
@@ -104,10 +108,17 @@ class TaskNotificationService {
         isRecurring: shouldScheduleAsRecurring,
         recurrenceType: recurrenceType,
       );
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR scheduling task notification for ${task.title}: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskNotificationService.scheduleTaskNotification',
+        error: 'Error scheduling task notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {
+          'taskId': task.id,
+          'taskTitle': task.title,
+          'hasReminderTime': task.reminderTime != null,
+        },
+      );
     }
   }
 
@@ -156,10 +167,12 @@ class TaskNotificationService {
     try {
       await ensureNotificationServiceInitialized();
       await _notificationService.cancelAllTaskNotifications();
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR canceling task notifications: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskNotificationService.cancelAllTaskNotifications',
+        error: 'Error canceling task notifications: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -168,10 +181,13 @@ class TaskNotificationService {
     try {
       await ensureNotificationServiceInitialized();
       await _notificationService.cancelTaskNotification(task.id);
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR canceling task notification: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskNotificationService.cancelTaskNotification',
+        error: 'Error canceling task notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskId': task.id, 'taskTitle': task.title},
+      );
     }
   }
 
@@ -180,10 +196,13 @@ class TaskNotificationService {
     try {
       await ensureNotificationServiceInitialized();
       await scheduleAllTaskNotifications(tasks);
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR force rescheduling notifications: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskNotificationService.forceRescheduleAllNotifications',
+        error: 'Error force rescheduling notifications: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskCount': tasks.length},
+      );
     }
   }
 }

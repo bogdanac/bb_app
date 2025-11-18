@@ -5,6 +5,7 @@ import '../theme/app_styles.dart';
 import 'routine_data_models.dart';
 import 'routine_progress_service.dart';
 import '../shared/snackbar_utils.dart';
+import '../shared/error_logger.dart';
 
 // ROUTINE EXECUTION SCREEN - UPDATED WITH SAVE FUNCTIONALITY
 class RoutineExecutionScreen extends StatefulWidget {
@@ -61,10 +62,13 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
             }
           }
         });
-      } catch (e) {
-        if (kDebugMode) {
-          print('Error loading progress: $e');
-        }
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'RoutineExecutionScreen._loadProgress',
+          error: 'Error loading progress: $e',
+          stackTrace: stackTrace.toString(),
+          context: {'routineId': widget.routine.id},
+        );
       }
     }
   }
@@ -85,10 +89,13 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
         currentStepIndex: currentStepIndex,
         items: _items,
       );
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error saving routine progress: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RoutineExecutionScreen._saveProgress',
+        error: 'Error saving routine progress: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'routineId': widget.routine.id},
+      );
     }
   }
 

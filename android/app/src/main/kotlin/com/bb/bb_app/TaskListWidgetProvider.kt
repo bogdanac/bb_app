@@ -21,6 +21,48 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         private const val MAX_TASKS_DISPLAY = 2
     }
 
+    private fun logWidgetDebug(prefs: android.content.SharedPreferences, message: String, context: Map<String, String> = emptyMap()) {
+        try {
+            val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+            val logEntry = org.json.JSONObject().apply {
+                put("source", "TaskListWidgetProvider")
+                put("message", message)
+                put("context", org.json.JSONObject(context))
+                put("timestamp", timestamp)
+            }
+
+            val existingLogs = prefs.getString("flutter.widget_debug_logs", "[]")
+            val logsArray = org.json.JSONArray(existingLogs)
+            logsArray.put(logEntry)
+
+            // Clean up logs older than 7 days
+            val sevenDaysAgo = java.util.Date(System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000))
+            val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+
+            val filteredLogs = org.json.JSONArray()
+            for (i in 0 until logsArray.length()) {
+                try {
+                    val log = logsArray.getJSONObject(i)
+                    val logTimestamp = dateFormat.parse(log.getString("timestamp"))
+                    if (logTimestamp != null && logTimestamp.after(sevenDaysAgo)) {
+                        filteredLogs.put(log)
+                    }
+                } catch (e: Exception) {
+                    filteredLogs.put(logsArray.get(i)) // Keep if can't parse
+                }
+            }
+
+            // Keep only last 500 logs as backup limit
+            while (filteredLogs.length() > 500) {
+                filteredLogs.remove(0)
+            }
+
+            prefs.edit().putString("flutter.widget_debug_logs", filteredLogs.toString()).apply()
+        } catch (e: Exception) {
+            android.util.Log.e("TaskListWidget", "Failed to log debug info: $e")
+        }
+    }
+
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -169,6 +211,11 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             // Debug: Log all keys in SharedPreferences
             val allKeys = prefs.all.keys
             android.util.Log.d("TaskListWidget", "Available keys: ${allKeys.joinToString(", ")}")
+
+            // Log to SharedPreferences for Flutter to upload to Firebase
+            logWidgetDebug(prefs, "Loading tasks", mapOf(
+                "availableKeys" to allKeys.size.toString()
+            ))
 
             // Flutter's shared_preferences stores List<String> with a special encoding
             var tasksJsonStringList: List<String>? = null

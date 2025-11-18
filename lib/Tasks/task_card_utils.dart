@@ -45,30 +45,80 @@ class TaskCardUtils {
       case RecurrenceType.daily:
         return recurrence.interval == 1 ? 'Daily' : '${recurrence.interval}d';
       case RecurrenceType.weekly:
-        return recurrence.interval == 1 ? 'Weekly' : '${recurrence.interval}w';
+        String baseText = recurrence.interval == 1 ? 'Weekly' : '${recurrence.interval}w';
+        if (recurrence.weekDays.isNotEmpty) {
+          final days = recurrence.weekDays.map((day) {
+            switch (day) {
+              case 1: return 'M';
+              case 2: return 'T';
+              case 3: return 'W';
+              case 4: return 'Th';
+              case 5: return 'F';
+              case 6: return 'Sa';
+              case 7: return 'Su';
+              default: return '';
+            }
+          }).join('/');
+          return '$baseText $days';
+        }
+        return baseText;
       case RecurrenceType.monthly:
-        return recurrence.interval == 1 ? 'Monthly' : '${recurrence.interval}m';
+        String baseText = recurrence.interval == 1 ? 'Monthly' : '${recurrence.interval}m';
+        if (recurrence.dayOfMonth != null) {
+          return '$baseText ${recurrence.dayOfMonth}${_getOrdinalSuffix(recurrence.dayOfMonth!)}';
+        }
+        return baseText;
       case RecurrenceType.yearly:
-        // For yearly, interval stores the month (1-12), so always show "Yearly"
         return 'Yearly';
       case RecurrenceType.custom:
         return 'Custom';
       // Menstrual cycle phases
       case RecurrenceType.menstrualPhase:
-        return 'Menstrual';
+        return recurrence.phaseDay != null ? 'Menstrual D${recurrence.phaseDay}' : 'Menstrual';
       case RecurrenceType.follicularPhase:
-        return 'Follicular';
+        return recurrence.phaseDay != null ? 'Follicular D${recurrence.phaseDay}' : 'Follicular';
       case RecurrenceType.ovulationPhase:
-        return 'Ovulation';
+        return recurrence.phaseDay != null ? 'Ovulation D${recurrence.phaseDay}' : 'Ovulation';
       case RecurrenceType.earlyLutealPhase:
-        return 'Early Luteal';
+        return recurrence.phaseDay != null ? 'Early Luteal D${recurrence.phaseDay}' : 'Early Luteal';
       case RecurrenceType.lateLutealPhase:
-        return 'Late Luteal';
+        return recurrence.phaseDay != null ? 'Late Luteal D${recurrence.phaseDay}' : 'Late Luteal';
       case RecurrenceType.menstrualStartDay:
-        return 'Menstrual Day 1';
+        return 'Menstrual D1';
       case RecurrenceType.ovulationPeakDay:
-        return 'Ovulation Day 14';
+        return 'Ovulation D14';
     }
+  }
+
+  static String _getOrdinalSuffix(int day) {
+    if (day >= 11 && day <= 13) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  }
+
+  // Check if a recurrence type is menstrual-related
+  static bool isMenstrualType(RecurrenceType type) {
+    return type == RecurrenceType.menstrualPhase ||
+        type == RecurrenceType.follicularPhase ||
+        type == RecurrenceType.ovulationPhase ||
+        type == RecurrenceType.earlyLutealPhase ||
+        type == RecurrenceType.lateLutealPhase ||
+        type == RecurrenceType.menstrualStartDay ||
+        type == RecurrenceType.ovulationPeakDay;
+  }
+
+  // Get non-menstrual types from a recurrence
+  static List<RecurrenceType> getNonMenstrualTypes(TaskRecurrence recurrence) {
+    return recurrence.types.where((type) => !isMenstrualType(type)).toList();
+  }
+
+  // Get menstrual types from a recurrence
+  static List<RecurrenceType> getMenstrualTypes(TaskRecurrence recurrence) {
+    return recurrence.types.where((type) => isMenstrualType(type)).toList();
   }
 
   // Common method to build info chip with icon

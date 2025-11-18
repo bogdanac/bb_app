@@ -249,6 +249,45 @@ class TaskRecurrence {
   // Backward compatibility getter
   RecurrenceType get type => _model.type;
 
+  // Copy with modified fields
+  TaskRecurrence copyWith({
+    List<RecurrenceType>? types,
+    int? interval,
+    List<int>? weekDays,
+    int? dayOfMonth,
+    bool? isLastDayOfMonth,
+    DateTime? startDate,
+    DateTime? endDate,
+    int? phaseDay,
+    int? daysAfterPeriod,
+    TimeOfDay? reminderTime,
+    bool clearDayOfMonth = false,
+    bool clearStartDate = false,
+    bool clearEndDate = false,
+    bool clearPhaseDay = false,
+    bool clearDaysAfterPeriod = false,
+    bool clearReminderTime = false,
+  }) {
+    return TaskRecurrence._fromModel(_model.copyWith(
+      types: types,
+      interval: interval,
+      weekDays: weekDays,
+      dayOfMonth: dayOfMonth,
+      isLastDayOfMonth: isLastDayOfMonth,
+      startDate: startDate,
+      endDate: endDate,
+      phaseDay: phaseDay,
+      daysAfterPeriod: daysAfterPeriod,
+      reminderTime: reminderTime,
+      clearDayOfMonth: clearDayOfMonth,
+      clearStartDate: clearStartDate,
+      clearEndDate: clearEndDate,
+      clearPhaseDay: clearPhaseDay,
+      clearDaysAfterPeriod: clearDaysAfterPeriod,
+      clearReminderTime: clearReminderTime,
+    ));
+  }
+
   // Delegate business logic to RecurrenceEvaluator
   bool isDueOn(DateTime date, {DateTime? taskCreatedAt}) {
     return RecurrenceEvaluator.isDueOn(_model, date, taskCreatedAt: taskCreatedAt);

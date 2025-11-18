@@ -17,6 +17,7 @@ import 'package:bb_app/Fasting/fasting_utils.dart';
 import 'package:bb_app/Habits/habit_card.dart';
 import 'package:bb_app/Habits/habit_service.dart';
 import 'shared/snackbar_utils.dart';
+import 'shared/error_logger.dart';
 import 'package:bb_app/Notifications/centralized_notification_manager.dart';
 import 'package:bb_app/FoodTracking/food_tracking_card.dart';
 import 'package:bb_app/home_settings_screen.dart';
@@ -76,6 +77,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _initializeData() async {
     try {
+      // Upload any widget debug logs from Android before updating
+      await ErrorLogger.uploadWidgetDebugLogs();
+
       // Check if it's a new day and update widgets on app start
       await WidgetUpdateService.checkAndUpdateWidgetsOnNewDay();
 

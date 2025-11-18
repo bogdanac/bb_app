@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'task_service.dart';
 import 'task_list_widget_filter_service.dart';
+import '../shared/error_logger.dart';
 
 class TaskListWidgetService {
   static const MethodChannel _channel =
@@ -15,10 +16,12 @@ class TaskListWidgetService {
 
       // Trigger widget UI update
       await _channel.invokeMethod('updateTaskListWidget');
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR updating task list widget: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskListWidgetService.updateWidget',
+        error: 'Error updating task list widget: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -34,10 +37,12 @@ class TaskListWidgetService {
       if (kDebugMode) {
         print('Tasks reloaded and re-sorted successfully');
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR refreshing tasks from widget: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskListWidgetService.refreshTasks',
+        error: 'Error refreshing tasks from widget: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 }

@@ -952,7 +952,9 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
       }
 
       return _interval > 0;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Note: This is a UI method, synchronous context
+      // Log to console - detailed logging happens in service layer
       if (kDebugMode) {
         print('ERROR validating recurrence: $e');
       }

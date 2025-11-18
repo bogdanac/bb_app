@@ -6,6 +6,7 @@ import '../Notifications/centralized_notification_manager.dart';
 import 'routine_widget_service.dart';
 import '../shared/timezone_utils.dart';
 import '../Services/firebase_backup_service.dart';
+import '../shared/error_logger.dart';
 
 class RoutineService {
   static const String _routinesKey = 'routines';
@@ -129,10 +130,12 @@ class RoutineService {
 
       // No routine scheduled for today
       return null;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error in getCurrentActiveRoutine: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RoutineService.getCurrentActiveRoutine',
+        error: 'Error in getCurrentActiveRoutine: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return null;
     }
   }
@@ -212,10 +215,13 @@ class RoutineService {
 
       // All routines completed or only current routine available
       return null;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error in getNextRoutine: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RoutineService.getNextRoutine',
+        error: 'Error in getNextRoutine: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'currentRoutineId': currentRoutineId},
+      );
       return null;
     }
   }

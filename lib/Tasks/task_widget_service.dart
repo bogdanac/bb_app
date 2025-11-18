@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'task_edit_screen.dart';
 import 'task_service.dart';
+import '../shared/error_logger.dart';
 
 class TaskWidgetService {
   static const MethodChannel _channel = MethodChannel('com.bb.bb_app/task_widget');
@@ -10,8 +11,12 @@ class TaskWidgetService {
     try {
       final bool hasWidgetIntent = await _channel.invokeMethod('checkWidgetIntent');
       return hasWidgetIntent;
-    } catch (e) {
-      debugPrint('ERROR checking widget intent: $e');
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskWidgetService.checkForWidgetIntent',
+        error: 'Error checking widget intent: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return false;
     }
   }
@@ -20,8 +25,12 @@ class TaskWidgetService {
     try {
       final bool hasTaskListIntent = await _channel.invokeMethod('checkTaskListIntent');
       return hasTaskListIntent;
-    } catch (e) {
-      debugPrint('ERROR checking task list intent: $e');
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TaskWidgetService.checkForTaskListIntent',
+        error: 'Error checking task list intent: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return false;
     }
   }
@@ -62,8 +71,13 @@ class TaskWidgetService {
               // We don't pop here to avoid double-pop issues
 
               // No snackbar needed - user will see the task in the list
-            } catch (e) {
-              debugPrint('ERROR saving task from widget: $e');
+            } catch (e, stackTrace) {
+              await ErrorLogger.logError(
+                source: 'TaskWidgetService.showQuickTaskDialog.onSave',
+                error: 'Error saving task from widget: $e',
+                stackTrace: stackTrace.toString(),
+                context: {'taskId': task.id, 'taskTitle': task.title},
+              );
               // Don't show snackbar due to context issues after navigation
             }
           },
