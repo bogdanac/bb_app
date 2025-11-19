@@ -266,9 +266,15 @@ class TaskPriorityService {
     // 5b. OVERDUE RECURRING TASKS (within grace period)
     // High priority to ensure you don't forget about them
     // IMPORTANT: Include postponed tasks - they're still overdue!
+    // SKIP for daily interval=1 tasks (they recur every single day)
+    // SKIP for tasks with distant reminders (> 30 min away)
+    final isDailyInterval1 = task.recurrence?.type == RecurrenceType.daily && task.recurrence?.interval == 1;
+
     if (task.recurrence != null &&
         task.scheduledDate != null &&
-        task.scheduledDate!.isBefore(today)) {
+        task.scheduledDate!.isBefore(today) &&
+        !isDailyInterval1 &&
+        !hasDistantReminder) {
       final daysOverdue = today.difference(
         DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)
       ).inDays;

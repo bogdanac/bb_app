@@ -172,6 +172,9 @@ class TaskCardUtils {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
+    // Check if task is daily recurring with interval 1 (every single day)
+    final bool isDailyInterval1 = task.recurrence?.type == RecurrenceType.daily && task.recurrence?.interval == 1;
+
     // Check deadline today
     if (task.deadline != null &&
         DateTime(task.deadline!.year, task.deadline!.month, task.deadline!.day)
@@ -179,8 +182,8 @@ class TaskCardUtils {
       return dueToday;
     }
 
-    // Check overdue deadlines
-    if (task.deadline != null && 
+    // Check overdue deadlines (skip for daily interval=1 tasks)
+    if (!isDailyInterval1 && task.deadline != null &&
         task.deadline!.isBefore(today)) {
       final daysPast = today.difference(DateTime(task.deadline!.year, task.deadline!.month, task.deadline!.day)).inDays;
       if (daysPast == 1) {
