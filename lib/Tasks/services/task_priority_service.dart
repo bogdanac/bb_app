@@ -466,7 +466,7 @@ class TaskPriorityService {
 
   /// Calculate category score by summing points for all categories
   /// Priority 1 = 20 points, Priority 2 = 18 points, Priority 3 = 16 points, etc.
-  /// Each category's points are multiplied by 5
+  /// Each category's points are multiplied by 3
   int _calculateCategoryScore(List<String> categoryIds, List<TaskCategory> categories) {
     if (categoryIds.isEmpty) return 0;
 
@@ -489,8 +489,8 @@ class TaskPriorityService {
       // Minimum of 2 points (when order >= 10)
       int categoryPoints = math.max(2, 20 - (category.order * 2));
 
-      // Multiply by 5
-      totalScore += categoryPoints * 5;
+      // Multiply by 3
+      totalScore += categoryPoints * 3;
     }
 
     return totalScore;
