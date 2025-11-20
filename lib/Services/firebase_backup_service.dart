@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+import '../shared/error_logger.dart';
 
 /// Firebase backup service with real-time sync
 class FirebaseBackupService {
@@ -31,10 +32,12 @@ class FirebaseBackupService {
 
       // Initialize for current user if logged in
       await _onAuthStateChanged(_auth.currentUser);
-    } catch (e) {
-      if (kDebugMode) {
-        print('⚠️ Firebase Backup Service initialization failed: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'FirebaseBackupService.initialize',
+        error: 'Firebase Backup Service initialization failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -44,9 +47,11 @@ class FirebaseBackupService {
 
       // User logged out - cancel listener
       if (newUserId == null) {
-        if (kDebugMode) {
-          print('🔥 Firebase Backup Service: User logged out');
-        }
+        await ErrorLogger.logError(
+          source: 'FirebaseBackupService._onAuthStateChanged',
+          error: 'Firebase Backup Service: User logged out',
+          stackTrace: '',
+        );
         await _firestoreListener?.cancel();
         _firestoreListener = null;
         _userId = null;
@@ -61,9 +66,11 @@ class FirebaseBackupService {
       // New user logged in
       _userId = newUserId;
 
-      if (kDebugMode) {
-        print('🔥 Firebase Backup Service initialized for user: $_userId');
-      }
+      await ErrorLogger.logError(
+        source: 'FirebaseBackupService._onAuthStateChanged',
+        error: 'Firebase Backup Service initialized for user: $_userId',
+        stackTrace: '',
+      );
 
       // Cancel old listener if exists
       await _firestoreListener?.cancel();
@@ -78,7 +85,7 @@ class FirebaseBackupService {
         key != 'last_user_id'
       );
 
-      final backupExists = await this.hasBackup();
+      final backupExists = await hasBackup();
       if (backupExists) {
         final shouldRestore = await _shouldRestoreFromFirebase(prefs, hasLocalData);
         if (shouldRestore) {
@@ -86,18 +93,24 @@ class FirebaseBackupService {
           final restored = await restoreAllData();
           await Future.delayed(const Duration(milliseconds: 100)); // Let services settle
           _isRestoring = false;
-          if (restored && kDebugMode) {
-            print('✅ Initial data synced from Firebase');
+          if (restored) {
+            await ErrorLogger.logError(
+              source: 'FirebaseBackupService._onAuthStateChanged',
+              error: 'Initial data synced from Firebase',
+              stackTrace: '',
+            );
           }
         }
       }
 
       // Set up real-time listener for continuous sync
       _setupRealtimeListener();
-    } catch (e) {
-      if (kDebugMode) {
-        print('⚠️ Firebase Backup Service auth state change failed: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'FirebaseBackupService._onAuthStateChanged',
+        error: 'Firebase Backup Service auth state change failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -105,7 +118,11 @@ class FirebaseBackupService {
     if (_userId == null || !_syncEnabled) return;
 
     if (kDebugMode) {
-      print('🔄 Setting up real-time sync listener for user: $_userId');
+      ErrorLogger.logError(
+        source: 'FirebaseBackupService._setupRealtimeListener',
+        error: 'Setting up real-time sync listener for user: $_userId',
+        stackTrace: '',
+      );
     }
 
     _firestoreListener = _firestore
@@ -128,14 +145,22 @@ class FirebaseBackupService {
         // Check if this is our own backup (compare timestamps)
         if (remoteTimestamp <= _lastBackupTimestamp) {
           if (kDebugMode) {
-            print('ℹ️ Skipping sync - this is our own backup');
+            ErrorLogger.logError(
+              source: 'FirebaseBackupService._setupRealtimeListener',
+              error: 'Skipping sync - this is our own backup',
+              stackTrace: '',
+            );
           }
           return;
         }
 
         // Remote data is newer - restore it
         if (kDebugMode) {
-          print('🔄 Remote data changed - syncing... (remote: $remoteTimestamp, local: $_lastBackupTimestamp)');
+          ErrorLogger.logError(
+            source: 'FirebaseBackupService._setupRealtimeListener',
+            error: 'Remote data changed - syncing... (remote: $remoteTimestamp, local: $_lastBackupTimestamp)',
+            stackTrace: '',
+          );
         }
 
         _isRestoring = true;  // Prevent sync loop
@@ -144,12 +169,18 @@ class FirebaseBackupService {
         _isRestoring = false;
 
         if (kDebugMode) {
-          print('✅ Real-time sync completed');
+          ErrorLogger.logError(
+            source: 'FirebaseBackupService._setupRealtimeListener',
+            error: 'Real-time sync completed',
+            stackTrace: '',
+          );
         }
-      } catch (e) {
-        if (kDebugMode) {
-          print('⚠️ Real-time sync error: $e');
-        }
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'FirebaseBackupService._setupRealtimeListener',
+          error: 'Real-time sync error: $e',
+          stackTrace: stackTrace.toString(),
+        );
         _isRestoring = false;
       }
     });
@@ -182,14 +213,20 @@ class FirebaseBackupService {
       final isNewer = firebaseBackup.isAfter(localBackup.add(const Duration(seconds: 5)));
 
       if (kDebugMode) {
-        print('🔍 Sync check: Local: $localBackup, Firebase: $firebaseBackup, Newer: $isNewer');
+        ErrorLogger.logError(
+          source: 'FirebaseBackupService.shouldBackup',
+          error: 'Sync check: Local: $localBackup, Firebase: $firebaseBackup, Newer: $isNewer',
+          stackTrace: '',
+        );
       }
 
       return isNewer;
-    } catch (e) {
-      if (kDebugMode) {
-        print('⚠️ Error checking if should restore: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'FirebaseBackupService._shouldRestoreFromFirebase',
+        error: 'Error checking if should restore: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return false;
     }
   }
@@ -229,12 +266,19 @@ class FirebaseBackupService {
       await prefs.setString('last_firebase_backup', DateTime.now().toIso8601String());
 
       if (kDebugMode) {
-        print('✅ Backed up ${allData.length} keys to Firebase for user $_userId (timestamp: $_lastBackupTimestamp)');
+        ErrorLogger.logError(
+          source: 'FirebaseBackupService.backupAllData',
+          error: 'Backed up ${allData.length} keys to Firebase for user $_userId (timestamp: $_lastBackupTimestamp)',
+          stackTrace: '',
+        );
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ Firebase backup failed: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'FirebaseBackupService.backupAllData',
+        error: 'Firebase backup failed: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'userId': _userId},
+      );
     }
   }
 
@@ -268,14 +312,21 @@ class FirebaseBackupService {
         }
 
         if (kDebugMode) {
-          print('✅ Restored ${data.length} keys from Firebase for user $_userId');
+          ErrorLogger.logError(
+            source: 'FirebaseBackupService.restoreAllData',
+            error: 'Restored ${data.length} keys from Firebase for user $_userId',
+            stackTrace: '',
+          );
         }
         return true;
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ Firebase restore failed: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'FirebaseBackupService.restoreAllData',
+        error: 'Firebase restore failed: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'userId': _userId},
+      );
     }
 
     return false;
@@ -299,10 +350,12 @@ class FirebaseBackupService {
 
   // Trigger backup (non-blocking) - call this after any data change
   static void triggerBackup() {
-    FirebaseBackupService().backupAllData().catchError((e) {
-      if (kDebugMode) {
-        print('⚠️ Firebase backup failed: $e');
-      }
+    FirebaseBackupService().backupAllData().catchError((e, stackTrace) async {
+      await ErrorLogger.logError(
+        source: 'FirebaseBackupService.triggerBackup',
+        error: 'Firebase backup failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
     });
   }
 }

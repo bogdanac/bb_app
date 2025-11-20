@@ -1,6 +1,6 @@
-import 'package:flutter/foundation.dart';
 import '../models/task_recurrence_model.dart';
 import '../../MenstrualCycle/menstrual_cycle_constants.dart';
+import '../../shared/error_logger.dart';
 
 /// Business logic for evaluating task recurrence patterns.
 /// Contains pure static methods for determining if a task is due and calculating next due dates.
@@ -157,10 +157,13 @@ class RecurrenceEvaluator {
       return _checkMenstrualPhaseSync(date, expectedPhase);
     } catch (e, stackTrace) {
       // Note: This is a synchronous method, so we can't await ErrorLogger
-      // Log to console for now - full logging will happen in async callers
-      if (kDebugMode) {
-        print('ERROR checking menstrual phase: $e');
-      }
+      // Use non-async logging for sync context
+      ErrorLogger.logError(
+        source: 'RecurrenceEvaluator._isMenstrualPhase',
+        error: 'Error checking menstrual phase: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'date': date.toString(), 'expectedPhase': expectedPhase},
+      );
       return false;
     }
   }

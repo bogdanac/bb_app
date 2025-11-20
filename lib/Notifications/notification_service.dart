@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import '../theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +6,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import '../Tasks/task_service.dart';
 import '../shared/timezone_utils.dart';
+import '../shared/error_logger.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -112,22 +112,25 @@ class NotificationService {
         final notificationPermission = await androidImplementation.requestNotificationsPermission();
         final exactAlarmPermission = await androidImplementation.requestExactAlarmsPermission();
 
-        if (kDebugMode) {
-          print('Notification permission: $notificationPermission');
-          print('Exact alarm permission: $exactAlarmPermission');
-        }
+        await ErrorLogger.logError(
+          source: 'NotificationService.initializeNotifications',
+          error: 'Notification permission: $notificationPermission, Exact alarm permission: $exactAlarmPermission',
+          stackTrace: '',
+        );
       }
 
       // Test immediate notification to verify setup
       //await _sendTestNotification();
-      
+
       // Cancel any legacy morning notifications that might still be scheduled
       await _cancelLegacyMorningNotifications();
-      
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR initializing notifications: $e');
-      }
+
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.initializeNotifications',
+        error: 'Error initializing notifications: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -185,10 +188,12 @@ class NotificationService {
       await prefs.remove('morning_notification_enabled');
       await prefs.remove('morning_notification_hour');
       await prefs.remove('morning_notification_minute');
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR cancelling legacy morning notifications: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService._cancelLegacyMorningNotifications',
+        error: 'Error cancelling legacy morning notifications: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -203,24 +208,29 @@ class NotificationService {
       // For recurring tasks, the TaskService should have already calculated the next occurrence
       // Only skip scheduling if the time has passed AND it's not recurring
       if (scheduledDate.isBefore(now) && !isRecurring) {
-        if (kDebugMode) {
-          print('⚠️ Non-recurring task notification not scheduled - time already passed: $title at $scheduledDate');
-        }
+        await ErrorLogger.logError(
+          source: 'NotificationService.scheduleTaskNotification',
+          error: 'Non-recurring task notification not scheduled - time already passed: $title at $scheduledDate',
+          stackTrace: '',
+        );
         return;
       }
 
       // For recurring tasks with past times, this indicates a logic error - log it
       if (scheduledDate.isBefore(now) && isRecurring) {
-        if (kDebugMode) {
-          print('⚠️ WARNING: Recurring task has past reminder time - TaskService should have calculated next occurrence: $title at $scheduledDate');
-          print('   This notification will NOT be scheduled. Check TaskService._getNextReminderTime logic.');
-        }
+        await ErrorLogger.logError(
+          source: 'NotificationService.scheduleTaskNotification',
+          error: 'WARNING: Recurring task has past reminder time - TaskService should have calculated next occurrence: $title at $scheduledDate. This notification will NOT be scheduled. Check TaskService._getNextReminderTime logic.',
+          stackTrace: '',
+        );
         return;
       }
 
-      if (kDebugMode) {
-        print('📋 Scheduling task notification: "$title" at $scheduledDate (recurring: $isRecurring, type: ${recurrenceType ?? 'none'})');
-      }
+      await ErrorLogger.logError(
+        source: 'NotificationService.scheduleTaskNotification',
+        error: 'Scheduling task notification: "$title" at $scheduledDate (recurring: $isRecurring, type: ${recurrenceType ?? 'none'})',
+        stackTrace: '',
+      );
 
       // Determine if we should set up recurring based on the task type
       // Different DateTimeComponents for different recurrence patterns
@@ -275,14 +285,19 @@ class NotificationService {
         payload: 'task_reminder_$taskId',
       );
 
-      if (kDebugMode) {
-        print('✅ Task notification scheduled successfully with ID: $notificationId');
-      }
+      await ErrorLogger.logError(
+        source: 'NotificationService.scheduleTaskNotification',
+        error: 'Task notification scheduled successfully with ID: $notificationId',
+        stackTrace: '',
+      );
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR scheduling task notification: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.scheduleTaskNotification',
+        error: 'Error scheduling task notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskId': taskId, 'title': title, 'isRecurring': isRecurring},
+      );
     }
   }
 
@@ -291,10 +306,13 @@ class NotificationService {
       final notificationId = 1000 + taskId.hashCode.abs() % 9000;
       await flutterLocalNotificationsPlugin.cancel(notificationId);
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR cancelling task notification: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.cancelTaskNotification',
+        error: 'Error cancelling task notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskId': taskId},
+      );
     }
   }
 
@@ -305,10 +323,12 @@ class NotificationService {
         await flutterLocalNotificationsPlugin.cancel(i);
       }
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR cancelling task notifications: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.cancelAllTaskNotifications',
+        error: 'Error cancelling all task notifications: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -376,9 +396,11 @@ class NotificationService {
 
   /// Schedule routine notifications for all enabled routines (centralized)
   Future<void> scheduleAllRoutineNotifications(List<dynamic> routines) async {
-    if (kDebugMode) {
-      print('Scheduling routine notifications for ${routines.length} routines...');
-    }
+    await ErrorLogger.logError(
+      source: 'NotificationService.scheduleAllRoutineNotifications',
+      error: 'Scheduling routine notifications for ${routines.length} routines...',
+      stackTrace: '',
+    );
 
     for (final routine in routines) {
       if (routine.reminderEnabled == true) {
@@ -427,11 +449,14 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.time, // Repeat daily
         payload: 'routine_reminder_$routineId',
       );
-      
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR scheduling routine notification: $e');
-      }
+
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.scheduleRoutineNotification',
+        error: 'Error scheduling routine notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'routineId': routineId, 'routineTitle': routineTitle},
+      );
     }
   }
 
@@ -439,11 +464,14 @@ class NotificationService {
     try {
       final notificationId = 2000 + routineId.hashCode.abs() % 8000;
       await flutterLocalNotificationsPlugin.cancel(notificationId);
-      
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR cancelling routine notification: $e');
-      }
+
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.cancelRoutineNotification',
+        error: 'Error cancelling routine notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'routineId': routineId},
+      );
     }
   }
 
@@ -454,10 +482,12 @@ class NotificationService {
         await flutterLocalNotificationsPlugin.cancel(i);
       }
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR cancelling routine notifications: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.cancelAllRoutineNotifications',
+        error: 'Error cancelling all routine notifications: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -480,10 +510,12 @@ class NotificationService {
 
       // Water notifications will be scheduled once during app startup
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR cleaning up duplicate notifications: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.cleanupDuplicateMorningNotifications',
+        error: 'Error cleaning up duplicate notifications: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -546,10 +578,13 @@ class NotificationService {
       // Note: Scheduled progress reminders disabled to prevent notification spam
       // The main app timer handles regular updates of the progress notification
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR showing fasting progress notification: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.showFastingProgressNotification',
+        error: 'Error showing fasting progress notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'fastType': fastType, 'currentPhase': currentPhase},
+      );
     }
   }
 
@@ -564,11 +599,13 @@ class NotificationService {
       for (int i = 1; i <= 20; i++) {
         await flutterLocalNotificationsPlugin.cancel(_fastingProgressNotificationId + i);
       }
-      
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR cancelling fasting progress notification: $e');
-      }
+
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.cancelFastingProgressNotification',
+        error: 'Error cancelling fasting progress notification: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -605,10 +642,13 @@ class NotificationService {
         payload: 'fasting_completed',
       );
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR showing fasting completed notification: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.showFastingCompletedNotification',
+        error: 'Error showing fasting completed notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'fastType': fastType},
+      );
     }
   }
 
@@ -644,10 +684,13 @@ class NotificationService {
         payload: 'fasting_started',
       );
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR showing fasting started notification: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.showFastingStartedNotification',
+        error: 'Error showing fasting started notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'fastType': fastType},
+      );
     }
   }
 
@@ -685,10 +728,13 @@ class NotificationService {
         payload: 'fasting_milestone',
       );
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR showing fasting milestone notification: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.showFastingMilestoneNotification',
+        error: 'Error showing fasting milestone notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'milestone': milestone, 'message': message},
+      );
     }
   }
 
@@ -704,9 +750,11 @@ class NotificationService {
       
       final now = DateTime.now();
       if (reminderTime.isBefore(now)) {
-        if (kDebugMode) {
-          print('Fasting reminder time has passed, not scheduling');
-        }
+        await ErrorLogger.logError(
+          source: 'NotificationService.scheduleFastingReminderNotification',
+          error: 'Fasting reminder time has passed, not scheduling',
+          stackTrace: '',
+        );
         return;
       }
 
@@ -748,10 +796,13 @@ class NotificationService {
         payload: 'fasting_reminder',
       );
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR scheduling fasting reminder notification: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.scheduleFastingReminderNotification',
+        error: 'Error scheduling fasting reminder notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'fastType': fastType, 'reminderTime': reminderTime.toString()},
+      );
     }
   }
 
@@ -759,11 +810,13 @@ class NotificationService {
     try {
       final notificationId = _fastingProgressNotificationId + 10;
       await flutterLocalNotificationsPlugin.cancel(notificationId);
-      
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR cancelling fasting reminder notification: $e');
-      }
+
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.cancelFastingReminderNotification',
+        error: 'Error cancelling fasting reminder notification: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -772,9 +825,11 @@ class NotificationService {
   // Schedule daily food tracking reminder at 8 PM
   Future<void> scheduleFoodTrackingReminder() async {
     try {
-      if (kDebugMode) {
-        print('🍽️ Scheduling food tracking reminder...');
-      }
+      await ErrorLogger.logError(
+        source: 'NotificationService.scheduleFoodTrackingReminder',
+        error: 'Scheduling food tracking reminder...',
+        stackTrace: '',
+      );
 
       // Cancel any existing food tracking reminders
       await flutterLocalNotificationsPlugin.cancel(7777);
@@ -826,14 +881,18 @@ class NotificationService {
         payload: 'food_tracking_reminder',
       );
 
-      if (kDebugMode) {
-        print('✅ Food tracking reminder scheduled for 8:00 PM daily (next occurrence: $reminderTime)');
-      }
+      await ErrorLogger.logError(
+        source: 'NotificationService.scheduleFoodTrackingReminder',
+        error: 'Food tracking reminder scheduled for 8:00 PM daily (next occurrence: $reminderTime)',
+        stackTrace: '',
+      );
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ ERROR scheduling food tracking reminder: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.scheduleFoodTrackingReminder',
+        error: 'Error scheduling food tracking reminder: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -843,10 +902,12 @@ class NotificationService {
       await flutterLocalNotificationsPlugin.cancel(7777);
       await flutterLocalNotificationsPlugin.cancel(7776);
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR cancelling food tracking reminders: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.cancelFoodTrackingReminders',
+        error: 'Error cancelling food tracking reminders: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -864,17 +925,23 @@ class NotificationService {
           // This will trigger a reschedule of all task notifications
           // which will include the next occurrence of this recurring task
           _rescheduleAllTaskNotifications();
-        } catch (e) {
-          if (kDebugMode) {
-            print('ERROR rescheduling task notifications: $e');
-          }
+        } catch (e, stackTrace) {
+          ErrorLogger.logError(
+            source: 'NotificationService._handleTaskReminderTriggered',
+            error: 'Error rescheduling task notifications: $e',
+            stackTrace: stackTrace.toString(),
+            context: {'taskId': taskId},
+          );
         }
       });
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR handling task reminder triggered: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService._handleTaskReminderTriggered',
+        error: 'Error handling task reminder triggered: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskId': taskId},
+      );
     }
   }
 
@@ -885,10 +952,12 @@ class NotificationService {
       final taskService = TaskService();
       await taskService.forceRescheduleAllNotifications();
 
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR rescheduling all task notifications: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService._rescheduleAllTaskNotifications',
+        error: 'Error rescheduling all task notifications: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
   }
 
@@ -905,10 +974,12 @@ class NotificationService {
 
       // For iOS, assume enabled if we got this far
       return true;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error checking notification permissions: $e');
-      }
+    } catch (e, stackTrace) {
+      ErrorLogger.logError(
+        source: 'NotificationService.areNotificationsEnabled',
+        error: 'Error checking notification permissions: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return false;
     }
   }

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'food_tracking_data_models.dart';
@@ -176,13 +175,15 @@ class FoodTrackingService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_entriesKey);
 
-    if (kDebugMode) {
-      final healthy = currentCounts['healthy'] ?? 0;
-      final processed = currentCounts['processed'] ?? 0;
-      final total = healthy + processed;
-      final percentage = total > 0 ? (healthy / total * 100).round() : 0;
-      print('🍎 Food tracking reset: $percentage% healthy saved to history, data cleared');
-    }
+    final healthy = currentCounts['healthy'] ?? 0;
+    final processed = currentCounts['processed'] ?? 0;
+    final total = healthy + processed;
+    final percentage = total > 0 ? (healthy / total * 100).round() : 0;
+    await ErrorLogger.logError(
+      source: 'FoodTrackingService.resetCounts',
+      error: 'Food tracking reset: $percentage% healthy saved to history, data cleared',
+      stackTrace: '',
+    );
   }
 
   static Future<void> _savePeriodToHistory(FoodTrackingResetFrequency frequency, Map<String, int> counts) async {

@@ -1,7 +1,6 @@
 // ignore_for_file: unnecessary_brace_in_string_interps
 
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'routine_data_models.dart';
@@ -119,29 +118,37 @@ class RoutineProgressService {
 
     final today = getEffectiveDate();  // Use effective date for consistency
 
-    if (kDebugMode) {
-      print('🔄 RoutineSync: Loading progress for routine $routineId on $today');
-    }
+    await ErrorLogger.logError(
+      source: 'RoutineProgressService.loadProgress',
+      error: 'RoutineSync: Loading progress for routine $routineId on $today',
+      stackTrace: '',
+    );
 
     // Try routine-specific key first
     var progressJson = prefs.getString('${_progressPrefix}${routineId}_$today');
 
-    if (kDebugMode) {
-      print('🔄 RoutineSync: Tried key: ${_progressPrefix}${routineId}_$today, found: ${progressJson != null}');
-    }
+    await ErrorLogger.logError(
+      source: 'RoutineProgressService.loadProgress',
+      error: 'RoutineSync: Tried key: ${_progressPrefix}${routineId}_$today, found: ${progressJson != null}',
+      stackTrace: '',
+    );
 
     // Fallback to legacy morning routine progress for backwards compatibility
     if (progressJson == null) {
       progressJson = prefs.getString('morning_routine_progress_$today');
-      if (kDebugMode) {
-        print('🔄 RoutineSync: Tried legacy key: morning_routine_progress_$today, found: ${progressJson != null}');
-      }
+      await ErrorLogger.logError(
+        source: 'RoutineProgressService.loadProgress',
+        error: 'RoutineSync: Tried legacy key: morning_routine_progress_$today, found: ${progressJson != null}',
+        stackTrace: '',
+      );
     }
 
     if (progressJson == null) {
-      if (kDebugMode) {
-        print('🔄 RoutineSync: No progress found for routine $routineId on $today');
-      }
+      await ErrorLogger.logError(
+        source: 'RoutineProgressService.loadProgress',
+        error: 'RoutineSync: No progress found for routine $routineId on $today',
+        stackTrace: '',
+      );
       return null;
     }
     

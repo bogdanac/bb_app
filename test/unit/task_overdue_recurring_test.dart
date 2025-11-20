@@ -20,7 +20,13 @@ void main() {
     today = DateTime(now.year, now.month, now.day);
   });
 
-  int score(Task task) => service.calculateTaskPriorityScore(task, now, today, categories);
+  int score(Task task) => service.calculateTaskPriorityScore(
+    task,
+    now,
+    today,
+    categories,
+    currentMenstrualPhase: null,
+  );
 
   group('Overdue Recurring Tasks - Grace Period', () {
     test('recurring task overdue by 1 day gets high priority (750)', () {

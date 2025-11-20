@@ -19,7 +19,13 @@ void main() {
     today = DateTime(now.year, now.month, now.day);
   });
 
-  int score(Task task) => service.calculateTaskPriorityScore(task, now, today, categories);
+  int score(Task task) => service.calculateTaskPriorityScore(
+    task,
+    now,
+    today,
+    categories,
+    currentMenstrualPhase: null,
+  );
 
   group('30-Minute Reminder Threshold', () {
     test('reminder < 30 min away gets full priority bonuses', () {

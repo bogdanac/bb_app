@@ -267,6 +267,13 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             // This ensures menstrual phase filtering is always active (flower icon ON behavior)
             if (tasksJsonStringList == null || tasksJsonStringList.isEmpty()) {
                 android.util.Log.d("TaskListWidget", "No widget_filtered_tasks found - showing empty list (menstrual filter active)")
+
+                // WIDGET_DEBUG: Log to SharedPreferences for Flutter to upload to Firebase
+                logWidgetDebug(prefs, "WIDGET_DEBUG: No tasks to display", mapOf(
+                    "keyExists" to (widgetTasksRawValue != null).toString(),
+                    "isEmpty" to (tasksJsonStringList?.isEmpty()?.toString() ?: "null"),
+                    "totalKeys" to allKeys.size.toString()
+                ))
             }
 
             if (tasksJsonStringList == null || tasksJsonStringList.isEmpty()) {

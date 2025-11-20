@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
-import 'package:flutter/foundation.dart';
 import 'package:bb_app/Routines/routine_data_models.dart';
 import 'routine_service.dart';
 import 'routine_widget_service.dart';
@@ -64,25 +63,30 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     if (!mounted) return; // Don't proceed if widget is disposed
 
     try {
-      if (kDebugMode) {
-        print('Starting _loadCurrentRoutine');
-      }
+      await ErrorLogger.logError(
+        source: 'RoutineCard._loadCurrentRoutine',
+        error: 'Starting _loadCurrentRoutine',
+        stackTrace: '',
+      );
 
       // Load all routines
       final routines = await RoutineService.loadRoutines();
 
-      if (kDebugMode) {
-        print('Loading routine - Found ${routines.length} routines');
-        print('Available routines: ${routines.map((r) => r.title).toList()}');
-      }
+      await ErrorLogger.logError(
+        source: 'RoutineCard._loadCurrentRoutine',
+        error: 'Loading routine - Found ${routines.length} routines, Available routines: ${routines.map((r) => r.title).toList()}',
+        stackTrace: '',
+      );
 
       // Find currently active routine using unified method
       try {
         _currentRoutine = await RoutineService.getCurrentActiveRoutine(routines);
 
-        if (kDebugMode) {
-          print('Selected active routine: ${_currentRoutine?.title}');
-        }
+        await ErrorLogger.logError(
+          source: 'RoutineCard._loadCurrentRoutine',
+          error: 'Selected active routine: ${_currentRoutine?.title}',
+          stackTrace: '',
+        );
       } catch (e, stackTrace) {
         await ErrorLogger.logError(
           source: 'RoutineCard._loadCurrentRoutine.getCurrentActiveRoutine',
@@ -96,9 +100,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
         // Check if we have progress saved for today
         final progressData = await RoutineProgressService.loadRoutineProgress(_currentRoutine!.id);
 
-        if (kDebugMode) {
-          print('🔄 RoutineSync: Loaded progress for routine ${_currentRoutine!.id}: $progressData');
-        }
+        await ErrorLogger.logError(
+          source: 'RoutineCard._loadCurrentRoutine',
+          error: 'RoutineSync: Loaded progress for routine ${_currentRoutine!.id}: $progressData',
+          stackTrace: '',
+        );
 
         if (progressData != null) {
           // Load today's progress - resume from where we left off
@@ -123,10 +129,12 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
           for (int i = 0; i < _currentRoutine!.items.length && i < postponedSteps.length; i++) {
             _currentRoutine!.items[i].isPostponed = postponedSteps[i];
           }
-          
-          if (kDebugMode) {
-            print('Resumed routine from step $_currentStepIndex');
-          }
+
+          await ErrorLogger.logError(
+            source: 'RoutineCard._loadCurrentRoutine',
+            error: 'Resumed routine from step $_currentStepIndex',
+            stackTrace: '',
+          );
         } else {
           // Reset for new day or first time today
           _currentStepIndex = 0;
@@ -138,10 +146,12 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
           
           // Clear old progress
           await RoutineProgressService.clearRoutineProgress(_currentRoutine!.id);
-          
-          if (kDebugMode) {
-            print('Started fresh routine for ${RoutineService.getTodayString()}');
-          }
+
+          await ErrorLogger.logError(
+            source: 'RoutineCard._loadCurrentRoutine',
+            error: 'Started fresh routine for ${RoutineService.getTodayString()}',
+            stackTrace: '',
+          );
         }
       }
     } catch (e, stackTrace) {
@@ -163,9 +173,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     if (_currentRoutine == null) return;
 
     try {
-      if (kDebugMode) {
-        print('🔄 RoutineSync: Saving progress for routine ${_currentRoutine!.id}, step $_currentStepIndex');
-      }
+      await ErrorLogger.logError(
+        source: 'RoutineCard._saveProgress',
+        error: 'RoutineSync: Saving progress for routine ${_currentRoutine!.id}, step $_currentStepIndex',
+        stackTrace: '',
+      );
 
       // Ensure we have valid data before saving
       if (_currentStepIndex < 0) _currentStepIndex = 0;
@@ -197,27 +209,34 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
   }
 
   Future<void> _completeCurrentStep() async {
-    if (kDebugMode) {
-      print('=== COMPLETE BUTTON PRESSED ===');
-    }
+    await ErrorLogger.logError(
+      source: 'RoutineCard._completeCurrentStep',
+      error: 'COMPLETE BUTTON PRESSED',
+      stackTrace: '',
+    );
 
     if (_currentRoutine == null || _currentStepIndex >= _currentRoutine!.items.length) {
-      if (kDebugMode) {
-        print('Cannot complete step: currentRoutine=${_currentRoutine != null}, currentStepIndex=$_currentStepIndex, length=${_currentRoutine?.items.length}');
-      }
+      await ErrorLogger.logError(
+        source: 'RoutineCard._completeCurrentStep',
+        error: 'Cannot complete step: currentRoutine=${_currentRoutine != null}, currentStepIndex=$_currentStepIndex, length=${_currentRoutine?.items.length}',
+        stackTrace: '',
+      );
       return;
     }
 
-    if (kDebugMode) {
-      print('Before completing: $_currentStepIndex: ${_currentRoutine!.items[_currentStepIndex].text}');
-      print('Step status - isCompleted: ${_currentRoutine!.items[_currentStepIndex].isCompleted}, isSkipped: ${_currentRoutine!.items[_currentStepIndex].isSkipped}');
-    }
+    await ErrorLogger.logError(
+      source: 'RoutineCard._completeCurrentStep',
+      error: 'Before completing: $_currentStepIndex: ${_currentRoutine!.items[_currentStepIndex].text}, Step status - isCompleted: ${_currentRoutine!.items[_currentStepIndex].isCompleted}, isSkipped: ${_currentRoutine!.items[_currentStepIndex].isSkipped}',
+      stackTrace: '',
+    );
 
     // If step is already completed, just move to next step
     if (_currentRoutine!.items[_currentStepIndex].isCompleted) {
-      if (kDebugMode) {
-        print('Step is already completed, just moving to next step');
-      }
+      await ErrorLogger.logError(
+        source: 'RoutineCard._completeCurrentStep',
+        error: 'Step is already completed, just moving to next step',
+        stackTrace: '',
+      );
       setState(() {
         _moveToNextUnfinishedStep();
       });
@@ -227,27 +246,25 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     setState(() {
       _currentRoutine!.items[_currentStepIndex].isCompleted = true;
       _currentRoutine!.items[_currentStepIndex].isSkipped = false; // Unmark as skipped if it was
-
-      if (kDebugMode) {
-        print('After marking completed: $_currentStepIndex: ${_currentRoutine!.items[_currentStepIndex].text}');
-        print('Step status - isCompleted: ${_currentRoutine!.items[_currentStepIndex].isCompleted}, isSkipped: ${_currentRoutine!.items[_currentStepIndex].isSkipped}');
-      }
-
       _moveToNextUnfinishedStep();
-
-      if (kDebugMode) {
-        print('After moveToNextUnfinishedStep: new currentStepIndex = $_currentStepIndex');
-      }
     });
+
+    await ErrorLogger.logError(
+      source: 'RoutineCard._completeCurrentStep',
+      error: 'After marking completed and moveToNextUnfinishedStep: new currentStepIndex = $_currentStepIndex',
+      stackTrace: '',
+    );
 
     // Save progress after each step
     await _saveProgress();
 
     // Check if all steps are done (completed or permanently skipped, but not postponed)
     if (_currentRoutine!.items.every((item) => item.isCompleted || item.isSkipped)) {
-      if (kDebugMode) {
-        print('All steps completed for routine: ${_currentRoutine!.id}');
-      }
+      await ErrorLogger.logError(
+        source: 'RoutineCard._completeCurrentStep',
+        error: 'All steps completed for routine: ${_currentRoutine!.id}',
+        stackTrace: '',
+      );
 
       // Mark current routine as completed for today
       final prefs = await SharedPreferences.getInstance();
@@ -267,17 +284,21 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       }
     }
 
-    if (kDebugMode) {
-      print('=== COMPLETE BUTTON FINISHED ===');
-    }
+    await ErrorLogger.logError(
+      source: 'RoutineCard._completeCurrentStep',
+      error: 'COMPLETE BUTTON FINISHED',
+      stackTrace: '',
+    );
   }
 
   Future<void> _skipCurrentStep() async {
     if (_currentRoutine == null || _currentStepIndex >= _currentRoutine!.items.length) return;
 
-    if (kDebugMode) {
-      print('🔄 RoutineSync: Skipping step $_currentStepIndex (permanent): ${_currentRoutine!.items[_currentStepIndex].text}');
-    }
+    await ErrorLogger.logError(
+      source: 'RoutineCard._skipCurrentStep',
+      error: 'RoutineSync: Skipping step $_currentStepIndex (permanent): ${_currentRoutine!.items[_currentStepIndex].text}',
+      stackTrace: '',
+    );
 
     setState(() {
       // Mark the current step as permanently skipped - won't come back
@@ -296,9 +317,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
   Future<void> _postponeCurrentStep() async {
     if (_currentRoutine == null || _currentStepIndex >= _currentRoutine!.items.length) return;
 
-    if (kDebugMode) {
-      print('🔄 RoutineSync: Postponing step $_currentStepIndex: ${_currentRoutine!.items[_currentStepIndex].text}');
-    }
+    await ErrorLogger.logError(
+      source: 'RoutineCard._postponeCurrentStep',
+      error: 'RoutineSync: Postponing step $_currentStepIndex: ${_currentRoutine!.items[_currentStepIndex].text}',
+      stackTrace: '',
+    );
 
     setState(() {
       // Mark the current step as postponed - will come back later
@@ -331,9 +354,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
 
   Future<bool> _loadNextRoutine() async {
     try {
-      if (kDebugMode) {
-        print('Loading next routine...');
-      }
+      await ErrorLogger.logError(
+        source: 'RoutineCard._loadNextRoutine',
+        error: 'Loading next routine...',
+        stackTrace: '',
+      );
 
       // Load all routines
       final routines = await RoutineService.loadRoutines();
@@ -342,9 +367,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       final nextRoutine = await RoutineService.getNextRoutine(routines, _currentRoutine?.id);
 
       if (nextRoutine == null) {
-        if (kDebugMode) {
-          print('No more uncompleted routines scheduled for today');
-        }
+        await ErrorLogger.logError(
+          source: 'RoutineCard._loadNextRoutine',
+          error: 'No more uncompleted routines scheduled for today',
+          stackTrace: '',
+        );
         return false;
       }
 
@@ -354,9 +381,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       // Clear the progress for the new routine
       await RoutineProgressService.clearRoutineProgress(nextRoutine.id);
 
-      if (kDebugMode) {
-        print('Switched to next routine: ${nextRoutine.title}');
-      }
+      await ErrorLogger.logError(
+        source: 'RoutineCard._loadNextRoutine',
+        error: 'Switched to next routine: ${nextRoutine.title}',
+        stackTrace: '',
+      );
 
       // Reload the routine card
       await _loadCurrentRoutine();
@@ -377,9 +406,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
   }
 
   void _moveToNextUnfinishedStep() {
-    if (kDebugMode) {
-      print('Moving to next unfinished step. Current index: $_currentStepIndex');
-    }
+    ErrorLogger.logError(
+      source: 'RoutineCard._moveToNextUnfinishedStep',
+      error: 'Moving to next unfinished step. Current index: $_currentStepIndex',
+      stackTrace: '',
+    );
 
     // Start searching from the next index
     int startIndex = (_currentStepIndex + 1) % _currentRoutine!.items.length;
@@ -389,9 +420,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       int checkIndex = (startIndex + i) % _currentRoutine!.items.length;
       final item = _currentRoutine!.items[checkIndex];
       if (!item.isCompleted && !item.isSkipped && !item.isPostponed) {
-        if (kDebugMode) {
-          print('Found unfinished step at index $checkIndex: ${item.text}');
-        }
+        ErrorLogger.logError(
+          source: 'RoutineCard._moveToNextUnfinishedStep',
+          error: 'Found unfinished step at index $checkIndex: ${item.text}',
+          stackTrace: '',
+        );
         _currentStepIndex = checkIndex;
         return;
       }
@@ -403,9 +436,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       int checkIndex = (startIndex + i) % _currentRoutine!.items.length;
       final item = _currentRoutine!.items[checkIndex];
       if (item.isPostponed && !item.isCompleted && !item.isSkipped) {
-        if (kDebugMode) {
-          print('All regular steps done. Found postponed step at index $checkIndex: ${item.text}');
-        }
+        ErrorLogger.logError(
+          source: 'RoutineCard._moveToNextUnfinishedStep',
+          error: 'All regular steps done. Found postponed step at index $checkIndex: ${item.text}',
+          stackTrace: '',
+        );
         _currentStepIndex = checkIndex;
         // Clear postponed flag so it can be postponed again
         item.isPostponed = false;
@@ -416,9 +451,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     // Skipped steps are permanently skipped - never return to them
 
     // No more unfinished steps found - all steps are completed or permanently skipped
-    if (kDebugMode) {
-      print('No unfinished steps found. All steps are completed or skipped.');
-    }
+    ErrorLogger.logError(
+      source: 'RoutineCard._moveToNextUnfinishedStep',
+      error: 'No unfinished steps found. All steps are completed or skipped.',
+      stackTrace: '',
+    );
     // Keep current index if everything is completed
   }
 

@@ -232,7 +232,7 @@ void main() {
         final categories = await taskService.loadCategories();
 
         // Get prioritized list
-        final prioritized = taskService.getPrioritizedTasks(tasks, categories, 10);
+        final prioritized = await taskService.getPrioritizedTasks(tasks, categories, 10);
 
         // Verify order: overdue > deadline today > important > low
         expect(prioritized[0].id, 'overdue');
@@ -276,7 +276,7 @@ void main() {
         await taskService.saveTasks(tasks);
         final categories = await taskService.loadCategories();
 
-        final prioritized = taskService.getPrioritizedTasks(tasks, categories, 10);
+        final prioritized = await taskService.getPrioritizedTasks(tasks, categories, 10);
 
         // Reminder soon should be at top (or near top)
         final reminderIndex = prioritized.indexWhere((t) => t.id == 'reminder-soon');
@@ -308,7 +308,7 @@ void main() {
         await taskService.saveTasks(updatedTasks);
 
         // Re-prioritize
-        final reprioritized = taskService.getPrioritizedTasks(updatedTasks, categories, 10);
+        final reprioritized = await taskService.getPrioritizedTasks(updatedTasks, categories, 10);
 
         // task2 should now be higher priority
         final task2Index = reprioritized.indexWhere((t) => t.id == 'task2');
@@ -594,7 +594,7 @@ void main() {
 
         // Measure prioritization performance
         final stopwatch = Stopwatch()..start();
-        final prioritized = taskService.getPrioritizedTasks(tasks, categories, 50);
+        final prioritized = await taskService.getPrioritizedTasks(tasks, categories, 50);
         stopwatch.stop();
 
         expect(prioritized.length, 50);
@@ -840,7 +840,7 @@ void main() {
         expect(loaded, isEmpty);
 
         // Prioritize empty list
-        final prioritized = taskService.getPrioritizedTasks([], [], 10);
+        final prioritized = await taskService.getPrioritizedTasks([], [], 10);
         expect(prioritized, isEmpty);
       });
 
@@ -1034,7 +1034,7 @@ void main() {
         expect(workTasks.length, 2);
 
         // Prioritize
-        final prioritized = taskService.getPrioritizedTasks(weeklyTasks, categories, 10);
+        final prioritized = await taskService.getPrioritizedTasks(weeklyTasks, categories, 10);
 
         // Important tasks should be higher
         expect(prioritized[0].isImportant || prioritized[1].isImportant, true);
@@ -1188,7 +1188,7 @@ void main() {
 
         // Get prioritized list
         final categories = await taskService.loadCategories();
-        final prioritized = taskService.getPrioritizedTasks(allTasks, categories, 10);
+        final prioritized = await taskService.getPrioritizedTasks(allTasks, categories, 10);
 
         // Today's tasks should be prioritized over tomorrow's
         final todayTasksInPriority = prioritized.where((t) =>
@@ -1715,7 +1715,7 @@ void main() {
         final categories = await newTaskService.loadCategories();
 
         // Get prioritized list (like the UI would display)
-        final prioritized = newTaskService.getPrioritizedTasks(loadedTasks, categories, 10);
+        final prioritized = await newTaskService.getPrioritizedTasks(loadedTasks, categories, 10);
 
         // Verify prioritization is correct after refresh
         expect(prioritized.length, 3);

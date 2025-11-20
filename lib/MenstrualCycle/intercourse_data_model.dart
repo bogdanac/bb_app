@@ -1,6 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import '../shared/error_logger.dart';
 
 class IntercourseRecord {
   final String id;
@@ -44,11 +44,13 @@ class IntercourseService {
     List<String> recordsJson;
     try {
       recordsJson = prefs.getStringList(_storageKey) ?? [];
-    } catch (e) {
+    } catch (e, stackTrace) {
       // If getStringList fails, try to get as String and clear corrupted data
-      if (kDebugMode) {
-        print('Warning: Intercourse data type mismatch, clearing corrupted data');
-      }
+      await ErrorLogger.logError(
+        source: 'IntercourseService.loadIntercourseRecords',
+        error: 'Intercourse data type mismatch, clearing corrupted data: $e',
+        stackTrace: stackTrace.toString(),
+      );
       await prefs.remove(_storageKey);
       recordsJson = [];
     }

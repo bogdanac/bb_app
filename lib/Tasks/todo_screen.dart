@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tasks_data_models.dart';
 import '../shared/date_format_utils.dart';
@@ -770,7 +769,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       // For menstrual cycle filtering or completed tasks, use async
       final filteredTasks = await _getFilteredTasksAsync();
 
-      _displayTasks = _taskService.getPrioritizedTasks(
+      _displayTasks = await _taskService.getPrioritizedTasks(
         filteredTasks,
         _categories,
         100,
@@ -781,7 +780,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     } else {
       // For simple cases (no menstrual filtering), use sync for immediate update
       final filteredTasks = _getFilteredTasks();
-      _displayTasks = _taskService.getPrioritizedTasks(
+      _displayTasks = await _taskService.getPrioritizedTasks(
         filteredTasks,
         _categories,
         100,

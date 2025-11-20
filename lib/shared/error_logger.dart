@@ -50,9 +50,8 @@ class ErrorLogger {
       }
     } catch (e) {
       // Fail silently - don't let logging errors break the app
-      if (kDebugMode) {
-        print('Failed to log error to Firebase: $e');
-      }
+      // ignore: avoid_print
+      print('ErrorLogger: Failed to log error to Firebase: $e');
     }
   }
 
@@ -90,9 +89,8 @@ class ErrorLogger {
         await prefs.setStringList(_localLogsKey, existingLogs);
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Failed to log error locally: $e');
-      }
+      // ignore: avoid_print
+      print('ErrorLogger: Failed to log error locally: $e');
     }
   }
 
@@ -103,9 +101,8 @@ class ErrorLogger {
       final logs = prefs.getStringList(_localLogsKey) ?? [];
       return logs.map((log) => jsonDecode(log) as Map<String, dynamic>).toList();
     } catch (e) {
-      if (kDebugMode) {
-        print('Failed to get local logs: $e');
-      }
+      // ignore: avoid_print
+      print('ErrorLogger: Failed to get local logs: $e');
       return [];
     }
   }
@@ -116,9 +113,8 @@ class ErrorLogger {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_localLogsKey);
     } catch (e) {
-      if (kDebugMode) {
-        print('Failed to clear local logs: $e');
-      }
+      // ignore: avoid_print
+      print('ErrorLogger: Failed to clear local logs: $e');
     }
   }
 
@@ -153,9 +149,8 @@ class ErrorLogger {
       }
     } catch (e) {
       // Fail silently - might fail if index doesn't exist yet
-      if (kDebugMode) {
-        print('Failed to clean up old logs from $collection: $e');
-      }
+      // ignore: avoid_print
+      print('ErrorLogger: Failed to clean up old logs from $collection: $e');
     }
   }
 
@@ -203,18 +198,16 @@ class ErrorLogger {
         unawaited(_cleanupOldLogs(user.uid, 'widget_debug_logs'));
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Failed to upload widget debug logs: $e');
-      }
+      // ignore: avoid_print
+      print('ErrorLogger: Failed to upload widget debug logs: $e');
     } finally {
       // Always clear logs after attempt (even if upload failed)
       // This prevents accumulating logs that can't be uploaded
       try {
         await prefs.remove('flutter.widget_debug_logs');
       } catch (e) {
-        if (kDebugMode) {
-          print('Failed to clear widget debug logs: $e');
-        }
+        // ignore: avoid_print
+        print('ErrorLogger: Failed to clear widget debug logs: $e');
       }
     }
   }

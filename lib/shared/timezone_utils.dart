@@ -1,5 +1,5 @@
 import 'package:timezone/timezone.dart' as tz;
-import 'package:flutter/foundation.dart';
+import 'error_logger.dart';
 
 /// Shared timezone utilities to handle timezone conversions consistently across the app.
 ///
@@ -18,11 +18,13 @@ class TimezoneUtils {
     tz.TZDateTime scheduledDate;
     try {
       scheduledDate = tz.TZDateTime.from(dateTime, tz.local);
-    } catch (e) {
-      if (kDebugMode) {
-        final context = debugContext ?? 'unknown';
-        print('$context timezone error, using UTC fallback: $e');
-      }
+    } catch (e, stackTrace) {
+      ErrorLogger.logError(
+        source: 'TimezoneUtils.createTZDateTime',
+        error: 'Timezone conversion error, using UTC fallback: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'debugContext': debugContext ?? 'unknown', 'dateTime': dateTime.toString()},
+      );
       scheduledDate = tz.TZDateTime.from(dateTime.toUtc(), tz.UTC);
     }
     return scheduledDate;
@@ -42,11 +44,13 @@ class TimezoneUtils {
   static tz.Location getLocation({String? debugContext}) {
     try {
       return tz.local;
-    } catch (e) {
-      if (kDebugMode) {
-        final context = debugContext ?? 'unknown';
-        print('$context timezone location error, using UTC: $e');
-      }
+    } catch (e, stackTrace) {
+      ErrorLogger.logError(
+        source: 'TimezoneUtils.getLocation',
+        error: 'Timezone location error, using UTC: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'debugContext': debugContext ?? 'unknown'},
+      );
       return tz.UTC;
     }
   }

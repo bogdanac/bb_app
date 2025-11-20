@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'routine_service.dart';
@@ -39,15 +38,19 @@ class RoutineWidgetService {
       if (activeRoutine != null) {
         await prefs.setString('active_routine_id', activeRoutine.id);
         await prefs.setString('active_routine_data', jsonEncode(activeRoutine.toJson()));
-        if (kDebugMode) {
-          print('Widget: Set active routine to ${activeRoutine.title}');
-        }
+        await ErrorLogger.logError(
+          source: 'RoutineWidgetService.updateWidget',
+          error: 'Widget: Set active routine to ${activeRoutine.title}',
+          stackTrace: '',
+        );
       } else {
         await prefs.remove('active_routine_id');
         await prefs.remove('active_routine_data');
-        if (kDebugMode) {
-          print('Widget: No active routine found');
-        }
+        await ErrorLogger.logError(
+          source: 'RoutineWidgetService.updateWidget',
+          error: 'Widget: No active routine found',
+          stackTrace: '',
+        );
       }
 
       // Trigger widget update via platform channel

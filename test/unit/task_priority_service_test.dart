@@ -21,7 +21,13 @@ void main() {
       today = DateTime(now.year, now.month, now.day);
     });
 
-    int score(Task task) => service.calculateTaskPriorityScore(task, now, today, categories);
+    int score(Task task) => service.calculateTaskPriorityScore(
+      task,
+      now,
+      today,
+      categories,
+      currentMenstrualPhase: null,
+    );
 
     group('Reminder Priority Rules', () {
       test('reminder < 30 min beats everything except overdue', () {
@@ -36,7 +42,7 @@ void main() {
           id: '2',
           title: 'Scheduled Today',
           scheduledDate: today,
-          categoryIds: ['1'], // Cat1 = 100 points
+          categoryIds: ['1'], // Cat1 = 60 points
           isImportant: true,
           createdAt: now,
         );
@@ -111,7 +117,7 @@ void main() {
           title: 'Scheduled + Near Reminder',
           scheduledDate: today,
           reminderTime: DateTime(2025, 11, 5, 14, 20), // 20 min away
-          categoryIds: ['1'], // Cat1 = 100 points
+          categoryIds: ['1'], // Cat1 = 60 points
           isImportant: true,
           createdAt: now,
         );
@@ -175,7 +181,7 @@ void main() {
         final unscheduledWithCat1 = Task(
           id: '1',
           title: 'Unscheduled Cat1',
-          categoryIds: ['1'], // Cat1 = 100 points
+          categoryIds: ['1'], // Cat1 = 60 points
           createdAt: now,
         );
 
@@ -194,20 +200,20 @@ void main() {
         final multiCat = Task(
           id: '1',
           title: 'Multi Cat',
-          categoryIds: ['1', '2'], // Cat1=100, Cat2=90 = 190
+          categoryIds: ['1', '2'], // Cat1=60, Cat2=54 = 114
           createdAt: now,
         );
 
         final singleCat = Task(
           id: '2',
           title: 'Single Cat',
-          categoryIds: ['1'], // Cat1=100
+          categoryIds: ['1'], // Cat1=60
           createdAt: now,
         );
 
-        // Multi: 400 + 190 = 590
-        // Single: 400 + 100 = 500
-        expect(score(multiCat), equals(score(singleCat) + 90));
+        // Multi: 400 + 114 = 514
+        // Single: 400 + 60 = 460
+        expect(score(multiCat), equals(score(singleCat) + 54));
       });
 
       test('unscheduled with distant reminder gets reduced priority (no bonuses)', () {
@@ -335,7 +341,7 @@ void main() {
     });
 
     group('Category Scoring', () {
-      test('category priority 1 = 100 points', () {
+      test('category priority 1 = 60 points', () {
         final cat1 = Task(
           id: '1',
           title: 'Cat1',
@@ -349,12 +355,12 @@ void main() {
           createdAt: now,
         );
 
-        // Cat1: 400 + 100 = 500
+        // Cat1: 400 + 60 = 460
         // No cat: 400
-        expect(score(cat1), equals(score(noCat) + 100));
+        expect(score(cat1), equals(score(noCat) + 60));
       });
 
-      test('category priority 2 = 90 points', () {
+      test('category priority 2 = 54 points', () {
         final cat2 = Task(
           id: '1',
           title: 'Cat2',
@@ -368,12 +374,12 @@ void main() {
           createdAt: now,
         );
 
-        // Cat2: 400 + 90 = 490
+        // Cat2: 400 + 54 = 454
         // No cat: 400
-        expect(score(cat2), equals(score(noCat) + 90));
+        expect(score(cat2), equals(score(noCat) + 54));
       });
 
-      test('category priority 3 = 80 points', () {
+      test('category priority 3 = 48 points', () {
         final cat3 = Task(
           id: '1',
           title: 'Cat3',
@@ -387,9 +393,9 @@ void main() {
           createdAt: now,
         );
 
-        // Cat3: 400 + 80 = 480
+        // Cat3: 400 + 48 = 448
         // No cat: 400
-        expect(score(cat3), equals(score(noCat) + 80));
+        expect(score(cat3), equals(score(noCat) + 48));
       });
     });
 
@@ -471,14 +477,14 @@ void main() {
         final unscheduledWithCategories = Task(
           id: '2',
           title: 'Unscheduled With Categories',
-          categoryIds: ['1', '2', '3'], // 100 + 90 + 80 = 270
+          categoryIds: ['1', '2', '3'], // 60 + 54 + 48 = 162
           createdAt: now,
         );
 
         // Recurring with distant reminder (30-120min): 15 + 125 = 140
-        // Unscheduled with 3 categories: 400 + 270 = 670
+        // Unscheduled with 3 categories: 400 + 162 = 562
         expect(score(recurringDistant), equals(140));
-        expect(score(unscheduledWithCategories), equals(670));
+        expect(score(unscheduledWithCategories), equals(562));
         expect(score(unscheduledWithCategories), greaterThan(score(recurringDistant)));
       });
 

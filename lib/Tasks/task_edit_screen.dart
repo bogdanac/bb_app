@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'tasks_data_models.dart';
@@ -471,10 +470,9 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               ),
             ),
 
-            const SizedBox(height: 12),
-
             // Skip Task Section (ONLY FOR RECURRING TASKS)
             if (_recurrence != null) ...[
+              const SizedBox(height: 12),
               Container(
                 decoration: BoxDecoration(
                   color: _titleController.text.trim().isEmpty
@@ -557,12 +555,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
             ],
 
-            const SizedBox(height: 12),
-
             // Deadline Section (only for non-recurring tasks)
-            if (_recurrence == null)
+            if (_recurrence == null) ...[
+              const SizedBox(height: 12),
               Container(
               decoration: BoxDecoration(
                 color: AppColors.dialogBackground.withValues(alpha: 0.08),
@@ -642,9 +640,8 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 ),
               ),
             ),
-
-            // Only add spacing if deadline section was shown
-            if (_recurrence == null) const SizedBox(height: 12),
+              const SizedBox(height: 12),
+            ],
 
             // Reminder Time Section (only for non-recurring tasks)
             if (_recurrence == null)

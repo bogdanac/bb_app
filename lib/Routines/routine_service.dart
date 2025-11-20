@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bb_app/Routines/routine_data_models.dart';
 import '../Notifications/centralized_notification_manager.dart';
@@ -30,9 +29,11 @@ class RoutineService {
     try {
       routinesJson = prefs.getStringList(_routinesKey) ?? [];
     } catch (e) {
-      if (kDebugMode) {
-        print('Warning: Routines data type mismatch, clearing corrupted data');
-      }
+      await ErrorLogger.logError(
+        source: 'RoutineService.getRoutines',
+        error: 'Warning: Routines data type mismatch, clearing corrupted data: $e',
+        stackTrace: '',
+      );
       await prefs.remove(_routinesKey);
       routinesJson = [];
     }

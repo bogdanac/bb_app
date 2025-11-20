@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'tasks_data_models.dart';
 import '../theme/app_colors.dart';
@@ -6,6 +5,7 @@ import '../theme/app_styles.dart';
 import '../MenstrualCycle/menstrual_cycle_constants.dart';
 import '../shared/time_picker_utils.dart';
 import '../shared/date_picker_utils.dart';
+import '../shared/error_logger.dart';
 
 class RecurrenceDialog extends StatefulWidget {
   final TaskRecurrence? initialRecurrence;
@@ -954,10 +954,16 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
       return _interval > 0;
     } catch (e, stackTrace) {
       // Note: This is a UI method, synchronous context
-      // Log to console - detailed logging happens in service layer
-      if (kDebugMode) {
-        print('ERROR validating recurrence: $e');
-      }
+      ErrorLogger.logError(
+        source: 'RecurrenceDialog._isValidRecurrence',
+        error: 'Error validating recurrence: $e',
+        stackTrace: stackTrace.toString(),
+        context: {
+          'selectedTypes': _selectedTypes.map((t) => t.toString()).toList(),
+          'interval': _interval,
+          'selectedWeekDays': _selectedWeekDays,
+        },
+      );
       return false;
     }
   }

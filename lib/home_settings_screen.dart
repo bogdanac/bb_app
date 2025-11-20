@@ -4,6 +4,7 @@ import 'Data/backup_screen.dart';
 import 'Routines/widget_color_settings_screen.dart';
 import 'WaterTracking/water_settings_screen.dart';
 import 'FoodTracking/food_tracking_settings_screen.dart';
+import 'shared/error_logs_screen.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_styles.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -337,6 +338,76 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                           ),
                         ),
                         Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.greyText,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Error Logs Section
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  border: Border.all(
+                    color: AppColors.normalCardBackground,
+                  ),
+                ),
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ErrorLogsScreen(),
+                      ),
+                    );
+                  },
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.error.withValues(alpha: 0.1),
+                            borderRadius: AppStyles.borderRadiusSmall,
+                          ),
+                          child: const Icon(
+                            Icons.bug_report_rounded,
+                            color: AppColors.error,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Error Logs',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'View app error logs for debugging',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.greyText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
                           Icons.chevron_right_rounded,
                           color: AppColors.greyText,
                         ),

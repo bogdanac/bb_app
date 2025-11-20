@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../shared/error_logger.dart';
 
 class SecurityService {
   static final SecurityService _instance = SecurityService._internal();
@@ -45,13 +46,18 @@ class SecurityService {
         await _createNewIPNotification(user.uid, currentIP, ipData);
       }
 
-      if (kDebugMode) {
-        print('🔒 Access tracked: IP=$currentIP, New=${isNewIP ? "YES" : "NO"}');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('⚠️ Security tracking failed: $e');
-      }
+      await ErrorLogger.logError(
+        source: 'SecurityService.trackAccess',
+        error: 'Access tracked: IP=$currentIP, New=${isNewIP ? "YES" : "NO"}',
+        stackTrace: '',
+      );
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'SecurityService.trackAccess',
+        error: 'Security tracking failed: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'userId': user.uid},
+      );
     }
   }
 
@@ -73,10 +79,12 @@ class SecurityService {
           'longitude': data['longitude'],
         };
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('⚠️ IP lookup failed: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'SecurityService._getCurrentIP',
+        error: 'IP lookup failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
     }
 
     return {'ip': 'Unknown', 'location': 'Unknown'};
@@ -102,13 +110,18 @@ class SecurityService {
         'message': 'New login from ${ipData['location'] ?? "Unknown location"} (IP: $ip)',
       });
 
-      if (kDebugMode) {
-        print('🔔 New IP notification created: $ip');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('⚠️ Failed to create notification: $e');
-      }
+      await ErrorLogger.logError(
+        source: 'SecurityService._createNewIPNotification',
+        error: 'New IP notification created: $ip',
+        stackTrace: '',
+      );
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'SecurityService._createNewIPNotification',
+        error: 'Failed to create notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'userId': userId, 'ip': ip},
+      );
     }
   }
 
@@ -135,10 +148,13 @@ class SecurityService {
           'userAgent': data['userAgent'],
         };
       }).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('⚠️ Failed to get access logs: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'SecurityService.getAccessLogs',
+        error: 'Failed to get access logs: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'userId': user.uid},
+      );
       return [];
     }
   }
@@ -184,10 +200,13 @@ class SecurityService {
           .collection('security_notifications')
           .doc(notificationId)
           .update({'read': true});
-    } catch (e) {
-      if (kDebugMode) {
-        print('⚠️ Failed to mark notification as read: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'SecurityService.markNotificationAsRead',
+        error: 'Failed to mark notification as read: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'userId': user.uid, 'notificationId': notificationId},
+      );
     }
   }
 
@@ -207,13 +226,18 @@ class SecurityService {
         'ip': ip,
       });
 
-      if (kDebugMode) {
-        print('🚫 IP blocked: $ip');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('⚠️ Failed to block IP: $e');
-      }
+      await ErrorLogger.logError(
+        source: 'SecurityService.revokeIPAccess',
+        error: 'IP blocked: $ip',
+        stackTrace: '',
+      );
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'SecurityService.revokeIPAccess',
+        error: 'Failed to block IP: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'userId': user.uid, 'ip': ip},
+      );
     }
   }
 
@@ -236,7 +260,13 @@ class SecurityService {
           .get();
 
       return doc.exists;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'SecurityService.isCurrentIPBlocked',
+        error: 'Error checking if IP is blocked: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'userId': user.uid},
+      );
       return false;
     }
   }

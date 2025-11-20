@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tasks_data_models.dart';
@@ -129,9 +128,6 @@ class TaskService {
 
       final deletedCount = tasksBeforeCleanup - tasks.length;
       if (deletedCount > 0) {
-        if (kDebugMode) {
-          print('🗑️ Auto-deleted $deletedCount completed tasks older than 30 days');
-        }
         tasksUpdated = true;
       }
 
@@ -163,7 +159,7 @@ class TaskService {
     try {
       // Sort tasks before saving - OPTIMIZED: Only sort, don't reload categories
       final categories = await _repository.loadCategories();
-      final sortedTasks = _sortTasksForStorage(tasks, categories);
+      final sortedTasks = await _sortTasksForStorage(tasks, categories);
 
       // Save to repository
       await _repository.saveTasks(sortedTasks);
@@ -198,16 +194,33 @@ class TaskService {
   }
 
   /// Sort tasks for storage: incomplete tasks by priority, then completed by date
-  List<Task> _sortTasksForStorage(List<Task> tasks, List<TaskCategory> categories) {
+  Future<List<Task>> _sortTasksForStorage(List<Task> tasks, List<TaskCategory> categories) async {
     // Separate completed and incomplete tasks
     final incompleteTasks = tasks.where((t) => !t.isCompleted).toList();
     final completedTasks = tasks.where((t) => t.isCompleted).toList();
+
+    // Get current menstrual phase
+    final prefs = await SharedPreferences.getInstance();
+    final lastStartStr = prefs.getString('last_period_start');
+    final lastEndStr = prefs.getString('last_period_end');
+    final averageCycleLength = prefs.getInt('average_cycle_length') ?? 28;
+    String? currentPhase;
+    if (lastStartStr != null) {
+      final lastPeriodStart = DateTime.parse(lastStartStr);
+      final lastPeriodEnd = lastEndStr != null ? DateTime.parse(lastEndStr) : null;
+      currentPhase = MenstrualCycleUtils.getCyclePhase(
+        lastPeriodStart,
+        lastPeriodEnd,
+        averageCycleLength,
+      );
+    }
 
     // Sort incomplete tasks by priority
     final prioritizedIncomplete = _priorityService.getPrioritizedTasks(
       incompleteTasks,
       categories,
       incompleteTasks.length,
+      currentMenstrualPhase: currentPhase,
     );
 
     // Sort completed tasks by completion date (newest first)
@@ -262,17 +275,34 @@ class TaskService {
   }
 
   // Delegate to priority service
-  List<Task> getPrioritizedTasks(
+  Future<List<Task>> getPrioritizedTasks(
     List<Task> tasks,
     List<TaskCategory> categories,
     int maxTasks, {
     bool includeCompleted = false,
-  }) {
+  }) async {
+    // Get current menstrual phase
+    final prefs = await SharedPreferences.getInstance();
+    final lastStartStr = prefs.getString('last_period_start');
+    final lastEndStr = prefs.getString('last_period_end');
+    final averageCycleLength = prefs.getInt('average_cycle_length') ?? 28;
+    String? currentPhase;
+    if (lastStartStr != null) {
+      final lastPeriodStart = DateTime.parse(lastStartStr);
+      final lastPeriodEnd = lastEndStr != null ? DateTime.parse(lastEndStr) : null;
+      currentPhase = MenstrualCycleUtils.getCyclePhase(
+        lastPeriodStart,
+        lastPeriodEnd,
+        averageCycleLength,
+      );
+    }
+
     return _priorityService.getPrioritizedTasks(
       tasks,
       categories,
       maxTasks,
       includeCompleted: includeCompleted,
+      currentMenstrualPhase: currentPhase,
     );
   }
 

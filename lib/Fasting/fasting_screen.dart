@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
@@ -17,6 +16,7 @@ import '../shared/time_picker_utils.dart';
 import 'fasting_stage_timeline.dart';
 import 'scheduled_fastings_service.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
+import '../shared/error_logger.dart';
 
 class FastingScreen extends StatefulWidget {
   const FastingScreen({super.key});
@@ -89,10 +89,12 @@ class _FastingScreenState extends State<FastingScreen>
     List<String> historyStr;
     try {
       historyStr = prefs.getStringList('fasting_history') ?? [];
-    } catch (e) {
-      if (kDebugMode) {
-        print('Warning: Fasting history data type mismatch, clearing corrupted data');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'FastingScreen._loadFastingData',
+        error: 'Fasting history data type mismatch, clearing corrupted data: $e',
+        stackTrace: stackTrace.toString(),
+      );
       await prefs.remove('fasting_history');
       historyStr = [];
     }
@@ -131,7 +133,12 @@ class _FastingScreenState extends State<FastingScreen>
       // Check if today's fast conflicts with late luteal phase
       _hasLateLutealWarning = await MenstrualCycleUtils.isFastingConflictWithLateLuteal(today);
 
-    } catch (e) {
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'FastingScreen._checkLateLutealConflicts',
+        error: 'Error checking late luteal conflicts: $e',
+        stackTrace: stackTrace.toString(),
+      );
       _hasLateLutealWarning = false;
     }
   }
@@ -154,7 +161,13 @@ class _FastingScreenState extends State<FastingScreen>
       if (mounted) {
         SnackBarUtils.showSuccess(context, 'Scheduled fast deactivated for your wellbeing 💝');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'FastingScreen._deactivateScheduledFast',
+        error: 'Error deactivating fast: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'date': date.toString()},
+      );
       if (mounted) {
         SnackBarUtils.showError(context, 'Error deactivating fast: $e');
       }
@@ -1064,10 +1077,12 @@ class _FastingScreenState extends State<FastingScreen>
     List<String> historyStrings;
     try {
       historyStrings = prefs.getStringList('fasting_history') ?? [];
-    } catch (e) {
-      if (kDebugMode) {
-        print('Warning: Fasting history data type mismatch, clearing corrupted data');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'FastingScreen._addManualFastToHistory',
+        error: 'Fasting history data type mismatch, clearing corrupted data: $e',
+        stackTrace: stackTrace.toString(),
+      );
       await prefs.remove('fasting_history');
       historyStrings = [];
     }

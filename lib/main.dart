@@ -18,6 +18,7 @@ import 'theme/app_styles.dart';
 import 'widgets/side_navigation.dart';
 import 'Auth/auth_wrapper.dart';
 import 'Auth/login_screen.dart';
+import 'shared/error_logger.dart';
 import 'dart:io';
 import 'dart:math';
 import 'dart:async';
@@ -32,22 +33,28 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    if (kDebugMode) {
-      print('🔥 Firebase initialized successfully');
-    }
-  } catch (e) {
-    if (kDebugMode) {
-      print('⚠️ Firebase initialization failed (app will continue without cloud backup): $e');
-    }
+    await ErrorLogger.logError(
+      source: 'main.initializeFirebase',
+      error: 'Firebase initialized successfully',
+      stackTrace: '',
+    );
+  } catch (e, stackTrace) {
+    await ErrorLogger.logError(
+      source: 'main.initializeFirebase',
+      error: 'Firebase initialization failed (app will continue without cloud backup): $e',
+      stackTrace: stackTrace.toString(),
+    );
   }
 
   // Initialize Firebase Backup Service
   try {
     await FirebaseBackupService().initialize();
-  } catch (e) {
-    if (kDebugMode) {
-      print('⚠️ Firebase Backup Service initialization failed: $e');
-    }
+  } catch (e, stackTrace) {
+    await ErrorLogger.logError(
+      source: 'main.initializeFirebaseBackupService',
+      error: 'Firebase Backup Service initialization failed: $e',
+      stackTrace: stackTrace.toString(),
+    );
   }
 
   // Reset notification service on hot reload in debug mode
@@ -98,12 +105,11 @@ class InitialScreen extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        if (kDebugMode) {
-          print('🔍 InitialScreen - ConnectionState: ${snapshot.connectionState}');
-          print('🔍 InitialScreen - Has data: ${snapshot.hasData}');
-          print('🔍 InitialScreen - Data: ${snapshot.data}');
-          print('🔍 InitialScreen - Error: ${snapshot.error}');
-        }
+        ErrorLogger.logError(
+          source: 'MyApp.build',
+          error: 'InitialScreen - ConnectionState: ${snapshot.connectionState}, Has data: ${snapshot.hasData}, Data: ${snapshot.data}, Error: ${snapshot.error}',
+          stackTrace: '',
+        );
 
         // Show loading while checking auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -116,18 +122,30 @@ class InitialScreen extends StatelessWidget {
 
         // If there's an error, show login screen as fallback
         if (snapshot.hasError) {
-          if (kDebugMode) print('❌ Auth stream error: ${snapshot.error}, showing login');
+          ErrorLogger.logError(
+            source: 'MyApp.build',
+            error: 'Auth stream error: ${snapshot.error}',
+            context: {'action': 'showing login screen'},
+          );
           return const LoginScreen();
         }
 
         // If logged in: show launcher screen
         if (snapshot.hasData && snapshot.data != null) {
-          if (kDebugMode) print('✅ User logged in (${snapshot.data!.email}), showing launcher');
+          ErrorLogger.logError(
+            source: 'MyApp.build',
+            error: 'User logged in (${snapshot.data!.email}), showing launcher',
+            stackTrace: '',
+          );
           return const LauncherScreen();
         }
 
         // If not logged in: skip launcher, go directly to login
-        if (kDebugMode) print('❌ User not logged in, showing login screen');
+        ErrorLogger.logError(
+          source: 'MyApp.build',
+          error: 'User not logged in, showing login screen',
+          stackTrace: '',
+        );
         return const LoginScreen();
       },
     );
@@ -227,8 +245,12 @@ class _LauncherScreenState extends State<LauncherScreen>
       try {
         hasWidgetIntent = await TaskWidgetService.checkForWidgetIntent();
         hasTaskListIntent = await TaskWidgetService.checkForTaskListIntent();
-      } catch (e) {
-        if (kDebugMode) print("ERROR checking widget intent: $e");
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'LauncherScreen.checkWidgetIntent',
+          error: 'Error checking widget intent: $e',
+          stackTrace: stackTrace.toString(),
+        );
       }
 
       // If any widget intent detected, skip launcher and go directly to main screen
@@ -265,10 +287,12 @@ class _LauncherScreenState extends State<LauncherScreen>
       await Future.delayed(const Duration(milliseconds: 1200));
       if (mounted) {
         // Wrap entire initialization in a timeout
-        await _initializeApp().timeout(Duration(seconds: 10)).catchError((error) {
-          if (kDebugMode) {
-            print("App initialization ERROR: $error");
-          }
+        await _initializeApp().timeout(Duration(seconds: 10)).catchError((error, stackTrace) async {
+          await ErrorLogger.logError(
+            source: 'LauncherScreen.initializeApp',
+            error: 'App initialization error: $error',
+            stackTrace: stackTrace.toString(),
+          );
         });
       }
 
@@ -303,8 +327,12 @@ class _LauncherScreenState extends State<LauncherScreen>
         // Cancel emergency timer if we can't navigate (shouldn't happen)
         _emergencyTimer?.cancel();
       }
-    } catch (e) {
-      if (kDebugMode) print("ERROR in animation sequence: $e");
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'LauncherScreen.startAnimationSequence',
+        error: 'Error in animation sequence: $e',
+        stackTrace: stackTrace.toString(),
+      );
       // Fallback to main screen
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -321,10 +349,12 @@ class _LauncherScreenState extends State<LauncherScreen>
         final notificationManager = CentralizedNotificationManager();
         await notificationManager.initialize();
         await notificationManager.scheduleAllNotifications();
-      })().timeout(Duration(seconds: 15)).catchError((error) {
-        if (kDebugMode) {
-          print("Centralized notification initialization ERROR: $error");
-        }
+      })().timeout(Duration(seconds: 15)).catchError((error, stackTrace) async {
+        await ErrorLogger.logError(
+          source: 'LauncherScreen.initializeCentralizedNotificationManager',
+          error: 'Centralized notification initialization error: $error',
+          stackTrace: stackTrace.toString(),
+        );
       });
       
       // Initialize notification listener service for motion alerts with debug protection and timeout
@@ -332,18 +362,21 @@ class _LauncherScreenState extends State<LauncherScreen>
         await NotificationListenerService.initialize().timeout(Duration(seconds: 5));
         if (kDebugMode) {
         }
-      } catch (error) {
-        if (kDebugMode) {
-          print("❌ WARNING: NotificationListenerService failed to initialize: $error");
-          print("Motion alerts may not work, but app will continue normally");
-        }
+      } catch (error, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'LauncherScreen.initializeNotificationListenerService',
+          error: 'WARNING: NotificationListenerService failed to initialize (motion alerts may not work): $error',
+          stackTrace: stackTrace.toString(),
+        );
       }
 
       // Check for auto backup on startup (non-blocking)
-      BackupService.checkStartupAutoBackup().timeout(Duration(seconds: 10)).catchError((error) {
-        if (kDebugMode) {
-          print("Startup auto backup check ERROR: $error");
-        }
+      BackupService.checkStartupAutoBackup().timeout(Duration(seconds: 10)).catchError((error, stackTrace) async {
+        await ErrorLogger.logError(
+          source: 'LauncherScreen.checkStartupAutoBackup',
+          error: 'Startup auto backup check error: $error',
+          stackTrace: stackTrace.toString(),
+        );
       });
 
       // Food tracking reminders are now handled by the centralized notification manager
@@ -351,17 +384,27 @@ class _LauncherScreenState extends State<LauncherScreen>
       // Request notification permissions (non-blocking with timeout)
       if (Platform.isAndroid) {
         Permission.notification.request().timeout(Duration(seconds: 5)).then((status) {
-          if (!status.isGranted && kDebugMode) {
-            if (kDebugMode) {
-              print("Notifications permission denied");
-            }
+          if (!status.isGranted) {
+            ErrorLogger.logError(
+              source: 'LauncherScreen.initState',
+              error: 'Notifications permission denied',
+              stackTrace: '',
+            );
           }
-        }).catchError((error) {
-          if (kDebugMode) print("ERROR requesting notification permission or timed out: $error");
+        }).catchError((error, stackTrace) async {
+          await ErrorLogger.logError(
+            source: 'LauncherScreen.requestNotificationPermission',
+            error: 'Error requesting notification permission or timed out: $error',
+            stackTrace: stackTrace.toString(),
+          );
         });
       }
-    } catch (e) {
-      if (kDebugMode) print("ERROR initializing app: $e");
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'LauncherScreen.initializeApp',
+        error: 'Error initializing app: $e',
+        stackTrace: stackTrace.toString(),
+      );
       // Continue regardless of initialization errors
     }
   }
@@ -560,8 +603,12 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
             await TaskWidgetService.showQuickTaskDialog(context);
           }
         }
-      } catch (e) {
-        debugPrint('ERROR handling widget intent: $e');
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'MainScreen.checkForWidgetIntent',
+          error: 'Error handling widget intent: $e',
+          stackTrace: stackTrace.toString(),
+        );
       }
     }
   }

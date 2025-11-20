@@ -243,7 +243,7 @@ void main() {
           Task(id: '2', title: 'Important', categoryIds: [], isCompleted: false, isImportant: true, createdAt: DateTime.now()),
         ];
 
-        final prioritized = taskService.getPrioritizedTasks(tasks, [], 10);
+        final prioritized = await taskService.getPrioritizedTasks(tasks, [], 10);
 
         expect(prioritized[0].isImportant, true);
         expect(prioritized[1].isImportant, false);
@@ -273,7 +273,7 @@ void main() {
           ),
         ];
 
-        final prioritized = taskService.getPrioritizedTasks(tasks, [], 10);
+        final prioritized = await taskService.getPrioritizedTasks(tasks, [], 10);
 
         // Verify prioritization logic - overdue tasks should score higher
         // The exact order depends on the priority scoring algorithm
@@ -523,7 +523,7 @@ void main() {
         ];
 
         // getPrioritizedTasks should delegate to TaskPriorityService
-        final prioritized = taskService.getPrioritizedTasks(tasks, [], 10);
+        final prioritized = await taskService.getPrioritizedTasks(tasks, [], 10);
 
         // Should prioritize overdue and important tasks first
         expect(prioritized.length, 3);

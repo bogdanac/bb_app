@@ -1,5 +1,4 @@
 import 'package:bb_app/MenstrualCycle/cycle_tracking_screen.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'theme/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -151,9 +150,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         });
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('ERROR checking backup status: $e');
-      }
       // Don't show warning icon for technical errors - only for actual overdue backups
       // User can still access backup screen via settings if needed
       if (mounted && !_isDisposed) {
@@ -210,7 +206,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(now)).split('T')[0];
 
       // Check if it's after 2:00 AM and if we need to reset water data
-      final lastResetDate = prefs.getString('last_water_reset_date');
+      // Check both keys since widget uses flutter. prefix
+      final lastResetDate = prefs.getString('flutter.last_water_reset_date') ??
+                            prefs.getString('last_water_reset_date');
       final shouldReset = _shouldResetWaterToday(now, lastResetDate);
 
 
@@ -230,13 +228,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               widgetIntake = int.tryParse(widgetValue.toString()) ?? 0;
             }
           }
-        } catch (e) {
-          // Ignore errors
+        } catch (e, stackTrace) {
+          await ErrorLogger.logError(
+            source: 'HomeScreen._loadWaterIntake.shouldReset',
+            error: 'Error reading widget water data during reset: $e',
+            stackTrace: stackTrace.toString(),
+          );
         }
 
         // Use widget data if it exists, otherwise reset to 0
         intake = widgetIntake;
         await prefs.setInt('water_$today', intake);
+        // Save to both keys to stay in sync with widget
+        await prefs.setString('flutter.last_water_reset_date', today);
         await prefs.setString('last_water_reset_date', today);
 
         // Reprogramează notificările pentru ziua nouă (non-blocking)
@@ -264,8 +268,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               widgetIntakeFromChannel is int) {
             widgetIntake = widgetIntakeFromChannel;
           }
-        } catch (e) {
-          // Method channel failed, continue to SharedPreferences approach
+        } catch (e, stackTrace) {
+          await ErrorLogger.logError(
+            source: 'HomeScreen._loadWaterIntake.getWaterFromWidget',
+            error: 'Method channel failed to get water from widget: $e',
+            stackTrace: stackTrace.toString(),
+          );
         }
 
         // If method channel didn't work, try SharedPreferences with different approaches
@@ -290,7 +298,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
         // Use the higher value (widget has priority since user might be using it)
         intake = widgetIntake > appIntake ? widgetIntake : appIntake;
-
 
         // Only sync if there's a significant difference to avoid constant writing
         if ((widgetIntake - appIntake).abs() > 0) {
@@ -415,19 +422,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
 
-    if (kDebugMode) {
-      print('Routine check - Active routines: ${activeRoutines.length}, Has uncompleted: $hasUncompletedRoutine, Today: $today');
-      print('Cleaned up ${oldKeys.length} old flags');
-    }
-
     if (!_isDisposed && mounted) {
       setState(() {
         showRoutine = hasUncompletedRoutine;
       });
-
-      if (kDebugMode) {
-        print('Routine visibility: $showRoutine');
-      }
     }
   }
 
@@ -512,25 +510,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         setState(() {
           waterIntake = newIntake;
         });
-        // Save water data in both formats that widget checks
+        // Save water data for app use
         await prefs.setInt('water_$today', newIntake);
-
-        // Use the same underlying storage mechanism
-        await prefs.setInt('water_$today', newIntake); // For app use
-        // Save reset date
+        // Save reset date to both keys to stay in sync with widget
+        await prefs.setString('flutter.last_water_reset_date', today);
         await prefs.setString('last_water_reset_date', today);
 
         // Update water notifications based on new intake
         await WaterNotificationService.checkAndUpdateNotifications(newIntake, settings);
 
-        // Also sync with widget using method channel
+        // Sync with widget using method channel and update widget display
         try {
           await platform.invokeMethod('syncWaterData', {
             'intake': newIntake,
             'date': today,
           });
-        } catch (e) {
-          // Widget sync failed, but continue with app functionality
+          // Update the water widget to reflect the new value
+          await platform.invokeMethod('updateWaterWidget');
+        } catch (e, stackTrace) {
+          await ErrorLogger.logError(
+            source: 'HomeScreen._onWaterAdded.syncWidget',
+            error: 'Failed to sync water data with widget: $e',
+            stackTrace: stackTrace.toString(),
+          );
         }
 
         // Show congratulations when goal is reached

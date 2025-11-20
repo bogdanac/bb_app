@@ -1,5 +1,4 @@
 import 'package:device_calendar/device_calendar.dart';
-import 'package:flutter/foundation.dart';
 import '../shared/error_logger.dart';
 
 class CalendarService {
@@ -12,27 +11,28 @@ class CalendarService {
   // Check if calendar permission is granted
   Future<bool> hasCalendarPermission() async {
     try {
-      if (kDebugMode) {
-        print('Checking calendar permissions...');
-      }
-      
+      await ErrorLogger.logError(
+        source: 'CalendarService.hasCalendarPermission',
+        error: 'Checking calendar permissions...',
+        stackTrace: '',
+      );
+
       final permissionsGranted = await _deviceCalendarPlugin.hasPermissions();
       final hasPermission = permissionsGranted.isSuccess && (permissionsGranted.data ?? false);
-      
-      if (kDebugMode) {
-        print('Calendar permission check result: $hasPermission');
-        print('Permissions result: ${permissionsGranted.data}');
-        print('Is success: ${permissionsGranted.isSuccess}');
-        if (permissionsGranted.errors.isNotEmpty) {
-          print('Permission errors: ${permissionsGranted.errors}');
-        }
-      }
-      
+
+      await ErrorLogger.logError(
+        source: 'CalendarService.hasCalendarPermission',
+        error: 'Calendar permission check result: $hasPermission, Permissions result: ${permissionsGranted.data}, Is success: ${permissionsGranted.isSuccess}${permissionsGranted.errors.isNotEmpty ? ", Permission errors: ${permissionsGranted.errors}" : ""}',
+        stackTrace: '',
+      );
+
       return hasPermission;
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR checking calendar permission: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'CalendarService.hasCalendarPermission',
+        error: 'Error checking calendar permission: $e',
+        stackTrace: stackTrace.toString(),
+      );
       return false;
     }
   }
@@ -40,21 +40,20 @@ class CalendarService {
   // Request calendar permission
   Future<bool> requestCalendarPermission() async {
     try {
-      if (kDebugMode) {
-        print('Requesting calendar permission...');
-      }
-      
+      await ErrorLogger.logError(
+        source: 'CalendarService.requestCalendarPermission',
+        error: 'Requesting calendar permission...',
+        stackTrace: '',
+      );
+
       final permissionsGranted = await _deviceCalendarPlugin.requestPermissions();
       final success = permissionsGranted.isSuccess && (permissionsGranted.data ?? false);
-      
-      if (kDebugMode) {
-        print('Permission request result: $success');
-        print('Request data: ${permissionsGranted.data}');
-        print('Is success: ${permissionsGranted.isSuccess}');
-        if (permissionsGranted.errors.isNotEmpty) {
-          print('Request errors: ${permissionsGranted.errors}');
-        }
-      }
+
+      await ErrorLogger.logError(
+        source: 'CalendarService.requestCalendarPermission',
+        error: 'Permission request result: $success, Request data: ${permissionsGranted.data}, Is success: ${permissionsGranted.isSuccess}${permissionsGranted.errors.isNotEmpty ? ", Request errors: ${permissionsGranted.errors}" : ""}',
+        stackTrace: '',
+      );
       
       // If permission was denied, throw a user-friendly exception
       if (!success) {
@@ -66,12 +65,14 @@ class CalendarService {
         }
         throw Exception('ERROR get calendar permission. Please try again or enable it manually in Settings.');
       }
-      
+
       return success;
-    } catch (e) {
-      if (kDebugMode) {
-        print('ERROR requesting calendar permission: $e');
-      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'CalendarService.requestCalendarPermission',
+        error: 'Error requesting calendar permission: $e',
+        stackTrace: stackTrace.toString(),
+      );
       rethrow; // Let the UI handle the specific error message
     }
   }

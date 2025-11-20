@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../tasks_data_models.dart';
+import '../../MenstrualCycle/menstrual_cycle_constants.dart';
 
 /// Service responsible for calculating task priority scores and sorting tasks.
 /// Pure logic - NO side effects, NO async operations (except for menstrual utils).
@@ -11,6 +12,7 @@ class TaskPriorityService {
     List<TaskCategory> categories,
     int maxTasks, {
     bool includeCompleted = false,
+    String? currentMenstrualPhase,
   }) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -23,7 +25,13 @@ class TaskPriorityService {
     // Pre-calculate priority scores for all tasks
     final taskScores = <Task, int>{};
     for (final task in availableTasks) {
-      taskScores[task] = calculateTaskPriorityScore(task, now, today, categories);
+      taskScores[task] = calculateTaskPriorityScore(
+        task,
+        now,
+        today,
+        categories,
+        currentMenstrualPhase: currentMenstrualPhase,
+      );
     }
 
     // Sort by priority with enhanced logic
@@ -97,8 +105,9 @@ class TaskPriorityService {
     Task task,
     DateTime now,
     DateTime today,
-    List<TaskCategory> categories,
-  ) {
+    List<TaskCategory> categories, {
+    String? currentMenstrualPhase,
+  }) {
     int score = 0;
 
     // SPECIAL CASE: Skipped/postponed tasks without scheduledDate
@@ -241,24 +250,40 @@ class TaskPriorityService {
                                 _isSameDay(task.scheduledDate!, today);
 
       if (isScheduledToday) {
-        // If task has distant reminder (> 30 min), deprioritize
-        if (hasDistantReminder) {
-          score += 125;
-        } else if (_isMenstrualCycleTask(task.recurrence!)) {
-          final daysUntilTarget = _getDaysUntilMenstrualTarget(task.recurrence!);
-          if (daysUntilTarget != null) {
-            if (daysUntilTarget <= 1) {
-              score += 700;
-            } else if (daysUntilTarget <= 3) {
-              score += 400;
-            } else if (daysUntilTarget <= 7) {
-              score += 100;
+        if (_isMenstrualCycleTask(task.recurrence!)) {
+          // For menstrual tasks, check if current phase matches
+          final phaseMatches = currentMenstrualPhase != null &&
+              _taskMatchesPhase(task.recurrence!, currentMenstrualPhase);
+
+          if (phaseMatches) {
+            // Phase matches - high priority, but respect distant reminders
+            if (hasDistantReminder) {
+              score += 125;
+            } else {
+              final daysUntilTarget = _getDaysUntilMenstrualTarget(task.recurrence!);
+              if (daysUntilTarget != null) {
+                if (daysUntilTarget <= 1) {
+                  score += 700;
+                } else if (daysUntilTarget <= 3) {
+                  score += 400;
+                } else if (daysUntilTarget <= 7) {
+                  score += 100;
+                }
+              } else {
+                score += 200;
+              }
             }
           } else {
-            score += 200;
+            // Phase doesn't match - low priority
+            score += 125;
           }
         } else {
-          score += 700;
+          // Non-menstrual recurring task
+          if (hasDistantReminder) {
+            score += 125;
+          } else {
+            score += 700;
+          }
         }
       }
     }
@@ -521,5 +546,24 @@ class TaskPriorityService {
     return date1.year == date2.year &&
         date1.month == date2.month &&
         date1.day == date2.day;
+  }
+
+  bool _taskMatchesPhase(TaskRecurrence recurrence, String currentPhase) {
+    return recurrence.types.any((type) {
+      switch (type) {
+        case RecurrenceType.menstrualPhase:
+          return currentPhase == MenstrualCycleConstants.menstrualPhase;
+        case RecurrenceType.follicularPhase:
+          return currentPhase == MenstrualCycleConstants.follicularPhase;
+        case RecurrenceType.ovulationPhase:
+          return currentPhase == MenstrualCycleConstants.ovulationPhase;
+        case RecurrenceType.earlyLutealPhase:
+          return currentPhase == MenstrualCycleConstants.earlyLutealPhase;
+        case RecurrenceType.lateLutealPhase:
+          return currentPhase == MenstrualCycleConstants.lateLutealPhase;
+        default:
+          return false;
+      }
+    });
   }
 }

@@ -4,6 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import 'calendar_service.dart';
+import '../shared/error_logger.dart';
 
 // CALENDAR EVENTS CARD
 class CalendarEventsCard extends StatefulWidget {
@@ -38,31 +39,49 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
     });
 
     try {
-      bool hasPermission = await _calendarService.hasCalendarPermission();
-      
-      if (!hasPermission) {
-        setState(() {
-          _hasPermission = false;
-          _isLoading = false;
-        });
-        return;
-      }
-
+      // Try to get events directly - getTodaysEvents handles permission internally
       final events = await _calendarService.getTodaysEvents();
-      
+
       if (mounted) {
+        // Log if we got 0 events from the UI side as well
+        if (events.isEmpty) {
+          await ErrorLogger.logError(
+            source: 'CalendarEventsCard._loadEvents',
+            error: 'Received empty events list from service',
+            context: {
+              'timestamp': DateTime.now().toIso8601String(),
+            },
+          );
+        }
+
         setState(() {
           _events = events;
-          _hasPermission = true;
+          _hasPermission = true; // Assume permission is granted if getTodaysEvents didn't throw
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'CalendarEventsCard._loadEvents',
+        error: 'Exception loading events: $e',
+        stackTrace: stackTrace.toString(),
+      );
+
+      // Check if it's a permission issue
+      bool hasPermission = await _calendarService.hasCalendarPermission();
+
       if (mounted) {
-        setState(() {
-          _errorMessage = 'Error loading events: $e';
-          _isLoading = false;
-        });
+        if (!hasPermission) {
+          setState(() {
+            _hasPermission = false;
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _errorMessage = 'Error loading events: $e';
+            _isLoading = false;
+          });
+        }
       }
     }
   }
