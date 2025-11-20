@@ -44,13 +44,31 @@ class TaskListWidgetFilterService {
       final categories = await taskService.loadCategories();
       taskCount = allTasks.length;
 
+      await ErrorLogger.logError(
+        source: 'TaskListWidget',
+        error: 'Step 1: Loaded tasks',
+        context: {'totalTasks': taskCount},
+      );
+
       // Apply menstrual phase filtering (flower icon ON behavior)
       final filteredTasks = await _applyMenstrualFiltering(allTasks);
       filteredCount = filteredTasks.length;
 
+      await ErrorLogger.logError(
+        source: 'TaskListWidget',
+        error: 'Step 2: After menstrual filter',
+        context: {'filteredTasks': filteredCount},
+      );
+
       // Get prioritized incomplete tasks
       final incompleteTasks = filteredTasks.where((t) => !t.isCompleted).toList();
       incompleteCount = incompleteTasks.length;
+
+      await ErrorLogger.logError(
+        source: 'TaskListWidget',
+        error: 'Step 3: After incomplete filter',
+        context: {'incompleteTasks': incompleteCount},
+      );
 
       final prioritizedTasks = await taskService.getPrioritizedTasks(
         incompleteTasks,
@@ -59,28 +77,27 @@ class TaskListWidgetFilterService {
       );
       prioritizedCount = prioritizedTasks.length;
 
+      await ErrorLogger.logError(
+        source: 'TaskListWidget',
+        error: 'Step 4: After prioritization',
+        context: {'prioritizedTasks': prioritizedCount},
+      );
+
       // Take only first 5 tasks for widget
       final widgetTasks = prioritizedTasks.take(_maxWidgetTasks).toList();
 
+      await ErrorLogger.logError(
+        source: 'TaskListWidget',
+        error: 'Step 5: Saving to widget',
+        context: {'widgetTasks': widgetTasks.length},
+      );
+
       // Save to SharedPreferences for widget to read
       await _saveWidgetTasks(widgetTasks);
-
-      // WIDGET_DEBUG: Log successful update with counts for debugging
-      await ErrorLogger.logError(
-        source: 'WIDGET_DEBUG',
-        error: 'Widget update completed successfully',
-        context: {
-          'totalTasks': taskCount,
-          'afterMenstrualFilter': filteredCount,
-          'incompleteOnly': incompleteCount,
-          'afterPrioritization': prioritizedCount,
-          'savedToWidget': widgetTasks.length,
-        },
-      );
     } catch (e, stackTrace) {
       // Log error to Firebase for debugging
       await ErrorLogger.logWidgetError(
-        error: 'WIDGET_DEBUG: ${e.toString()}',
+        error: e.toString(),
         stackTrace: stackTrace.toString(),
         taskCount: taskCount,
         filteredCount: filteredCount,
@@ -134,7 +151,7 @@ class TaskListWidgetFilterService {
         } catch (e) {
           // If a single task fails, log it but continue with other tasks
           await ErrorLogger.logError(
-            source: 'WIDGET_DEBUG',
+            source: 'TaskListWidget',
             error: 'Failed to filter task: ${task.id}',
             context: {'taskTitle': task.title, 'error': e.toString()},
           );
@@ -145,7 +162,7 @@ class TaskListWidgetFilterService {
     } catch (e, stackTrace) {
       // Log filtering failure but return all tasks as fallback
       await ErrorLogger.logError(
-        source: 'WIDGET_DEBUG',
+        source: 'TaskListWidget',
         error: 'Menstrual filtering failed: ${e.toString()}',
         stackTrace: stackTrace.toString(),
         context: {'taskCount': tasks.length},
@@ -208,7 +225,7 @@ class TaskListWidgetFilterService {
     } catch (e, stackTrace) {
       // Log save error - this will be caught by updateWidgetTasks catch block
       await ErrorLogger.logError(
-        source: 'WIDGET_DEBUG',
+        source: 'TaskListWidget',
         error: 'Failed to save widget tasks: ${e.toString()}',
         stackTrace: stackTrace.toString(),
         context: {'taskCount': tasks.length},

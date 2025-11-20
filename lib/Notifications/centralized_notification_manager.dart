@@ -22,30 +22,13 @@ class CentralizedNotificationManager {
   /// Initialize the centralized notification manager
   Future<void> initialize() async {
     if (_isInitialized) {
-      await ErrorLogger.logError(
-        source: 'CentralizedNotificationManager.initialize',
-        error: 'CentralizedNotificationManager already initialized',
-        stackTrace: '',
-      );
       return;
     }
-
-    await ErrorLogger.logError(
-      source: 'CentralizedNotificationManager.initialize',
-      error: 'Initializing CentralizedNotificationManager...',
-      stackTrace: '',
-    );
 
     _notificationService = NotificationService();
     await _notificationService.initializeNotifications();
 
     _isInitialized = true;
-
-    await ErrorLogger.logError(
-      source: 'CentralizedNotificationManager.initialize',
-      error: 'CentralizedNotificationManager initialized successfully',
-      stackTrace: '',
-    );
   }
 
   /// Schedule ALL notifications for the entire app in one place
@@ -54,21 +37,10 @@ class CentralizedNotificationManager {
       await initialize();
     }
 
-    await ErrorLogger.logError(
-      source: 'CentralizedNotificationManager.scheduleAllNotifications',
-      error: 'Scheduling ALL app notifications from centralized manager...',
-      stackTrace: '',
-    );
-
     try {
       // Check if notifications are enabled before scheduling
       final notificationsEnabled = await _notificationService.areNotificationsEnabled();
       if (!notificationsEnabled) {
-        await ErrorLogger.logError(
-          source: 'CentralizedNotificationManager.scheduleAllNotifications',
-          error: 'Notifications are blocked - cannot schedule notifications',
-          stackTrace: '',
-        );
         return; // Don't schedule notifications if they're blocked
       }
 
@@ -84,11 +56,6 @@ class CentralizedNotificationManager {
       // 4. Schedule food tracking reminder
       await _scheduleFoodTrackingNotifications();
 
-      await ErrorLogger.logError(
-        source: 'CentralizedNotificationManager.scheduleAllNotifications',
-        error: 'All notifications scheduled successfully',
-        stackTrace: '',
-      );
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'CentralizedNotificationManager.scheduleAllNotifications',
@@ -121,14 +88,7 @@ class CentralizedNotificationManager {
   /// Schedule routine notifications using timezone utilities
   Future<void> _scheduleRoutineNotifications() async {
     try {
-      await ErrorLogger.logError(
-        source: 'CentralizedNotificationManager._scheduleRoutineNotifications',
-        error: 'Scheduling routine notifications...',
-        stackTrace: '',
-      );
-
       final routines = await RoutineService.loadRoutines();
-      int scheduledCount = 0;
 
       for (final routine in routines) {
         if (routine.reminderEnabled) {
@@ -154,16 +114,9 @@ class CentralizedNotificationManager {
             uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
             matchDateTimeComponents: DateTimeComponents.time, // Repeat daily at same time
           );
-
-          scheduledCount++;
         }
       }
 
-      await ErrorLogger.logError(
-        source: 'CentralizedNotificationManager._scheduleRoutineNotifications',
-        error: 'Routine notifications scheduled: $scheduledCount',
-        stackTrace: '',
-      );
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'CentralizedNotificationManager._scheduleRoutineNotifications',
@@ -176,20 +129,9 @@ class CentralizedNotificationManager {
   /// Schedule task notifications using timezone utilities
   Future<void> _scheduleTaskNotifications() async {
     try {
-      await ErrorLogger.logError(
-        source: 'CentralizedNotificationManager._scheduleTaskNotifications',
-        error: 'Scheduling task notifications...',
-        stackTrace: '',
-      );
-
       final taskService = TaskService();
       await taskService.forceRescheduleAllNotifications();
 
-      await ErrorLogger.logError(
-        source: 'CentralizedNotificationManager._scheduleTaskNotifications',
-        error: 'Task notifications scheduled',
-        stackTrace: '',
-      );
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'CentralizedNotificationManager._scheduleTaskNotifications',
@@ -203,12 +145,6 @@ class CentralizedNotificationManager {
   /// Schedule cycle notifications using timezone utilities
   Future<void> _scheduleCycleNotifications() async {
     try {
-      await ErrorLogger.logError(
-        source: 'CentralizedNotificationManager._scheduleCycleNotifications',
-        error: 'Scheduling cycle notifications...',
-        stackTrace: '',
-      );
-
       final prefs = await SharedPreferences.getInstance();
       final lastPeriodString = prefs.getString('last_period_start');
       final averageCycleLength = prefs.getInt('average_cycle_length') ?? 28;
@@ -216,12 +152,6 @@ class CentralizedNotificationManager {
       if (lastPeriodString != null) {
         final lastPeriodStart = DateTime.parse(lastPeriodString);
         final now = DateTime.now();
-
-        await ErrorLogger.logError(
-          source: 'CentralizedNotificationManager._scheduleCycleNotifications',
-          error: 'Last period: $lastPeriodStart, Cycle length: $averageCycleLength days',
-          stackTrace: '',
-        );
 
         // Cancel existing notifications
         await _notificationService.flutterLocalNotificationsPlugin.cancel(1001);
@@ -231,18 +161,7 @@ class CentralizedNotificationManager {
         final ovulationDay = lastPeriodStart.add(Duration(days: (averageCycleLength / 2).round()));
         final ovulationNotificationDate = ovulationDay.subtract(const Duration(days: 1));
 
-        await ErrorLogger.logError(
-          source: 'CentralizedNotificationManager._scheduleCycleNotifications',
-          error: 'Ovulation day: $ovulationDay, Notification: $ovulationNotificationDate',
-          stackTrace: '',
-        );
-
         if (ovulationNotificationDate.isAfter(now)) {
-          await ErrorLogger.logError(
-            source: 'CentralizedNotificationManager._scheduleCycleNotifications',
-            error: 'Scheduling ovulation notification for $ovulationNotificationDate',
-            stackTrace: '',
-          );
           await _notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
             1001,
             'Ovulation Tomorrow! 🥚',
@@ -252,30 +171,13 @@ class CentralizedNotificationManager {
             uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
             androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
           );
-        } else {
-          await ErrorLogger.logError(
-            source: 'CentralizedNotificationManager._scheduleCycleNotifications',
-            error: 'Ovulation notification date is in the past, not scheduling',
-            stackTrace: '',
-          );
         }
 
         // Schedule menstruation notification (day before expected period)
         final nextPeriodDate = lastPeriodStart.add(Duration(days: averageCycleLength));
         final menstruationNotificationDate = nextPeriodDate.subtract(const Duration(days: 1));
 
-        await ErrorLogger.logError(
-          source: 'CentralizedNotificationManager._scheduleCycleNotifications',
-          error: 'Next period: $nextPeriodDate, Notification: $menstruationNotificationDate',
-          stackTrace: '',
-        );
-
         if (menstruationNotificationDate.isAfter(now)) {
-          await ErrorLogger.logError(
-            source: 'CentralizedNotificationManager._scheduleCycleNotifications',
-            error: 'Scheduling period notification for $menstruationNotificationDate',
-            stackTrace: '',
-          );
           await _notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
             1002,
             'Period Expected Tomorrow 🩸',
@@ -285,26 +187,9 @@ class CentralizedNotificationManager {
             uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
             androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
           );
-        } else {
-          await ErrorLogger.logError(
-            source: 'CentralizedNotificationManager._scheduleCycleNotifications',
-            error: 'Period notification date is in the past, not scheduling',
-            stackTrace: '',
-          );
         }
-      } else {
-        await ErrorLogger.logError(
-          source: 'CentralizedNotificationManager._scheduleCycleNotifications',
-          error: 'No cycle data found - cannot schedule cycle notifications',
-          stackTrace: '',
-        );
       }
 
-      await ErrorLogger.logError(
-        source: 'CentralizedNotificationManager._scheduleCycleNotifications',
-        error: 'Cycle notifications scheduling completed',
-        stackTrace: '',
-      );
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'CentralizedNotificationManager._scheduleCycleNotifications',
@@ -316,12 +201,6 @@ class CentralizedNotificationManager {
 
   /// Force reschedule all notifications (for when settings change)
   Future<void> forceRescheduleAll() async {
-    await ErrorLogger.logError(
-      source: 'CentralizedNotificationManager.forceRescheduleAll',
-      error: 'Force rescheduling all notifications...',
-      stackTrace: '',
-    );
-
     // Cancel all existing notifications
     await _cancelAllNotifications();
 
@@ -331,20 +210,9 @@ class CentralizedNotificationManager {
 
   /// Schedule food tracking daily reminder
   Future<void> _scheduleFoodTrackingNotifications() async {
-    await ErrorLogger.logError(
-      source: 'CentralizedNotificationManager._scheduleFoodTrackingNotifications',
-      error: 'Scheduling food tracking notifications...',
-      stackTrace: '',
-    );
-
     try {
       await _notificationService.scheduleFoodTrackingReminder();
 
-      await ErrorLogger.logError(
-        source: 'CentralizedNotificationManager._scheduleFoodTrackingNotifications',
-        error: 'Food tracking reminder scheduled successfully',
-        stackTrace: '',
-      );
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'CentralizedNotificationManager._scheduleFoodTrackingNotifications',
@@ -375,11 +243,6 @@ class CentralizedNotificationManager {
       await _notificationService.flutterLocalNotificationsPlugin.cancel(7777);
       await _notificationService.flutterLocalNotificationsPlugin.cancel(7776);
 
-      await ErrorLogger.logError(
-        source: 'CentralizedNotificationManager._cancelAllNotifications',
-        error: 'All notifications cancelled',
-        stackTrace: '',
-      );
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'CentralizedNotificationManager._cancelAllNotifications',

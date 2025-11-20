@@ -118,37 +118,15 @@ class RoutineProgressService {
 
     final today = getEffectiveDate();  // Use effective date for consistency
 
-    await ErrorLogger.logError(
-      source: 'RoutineProgressService.loadProgress',
-      error: 'RoutineSync: Loading progress for routine $routineId on $today',
-      stackTrace: '',
-    );
-
     // Try routine-specific key first
     var progressJson = prefs.getString('${_progressPrefix}${routineId}_$today');
-
-    await ErrorLogger.logError(
-      source: 'RoutineProgressService.loadProgress',
-      error: 'RoutineSync: Tried key: ${_progressPrefix}${routineId}_$today, found: ${progressJson != null}',
-      stackTrace: '',
-    );
 
     // Fallback to legacy morning routine progress for backwards compatibility
     if (progressJson == null) {
       progressJson = prefs.getString('morning_routine_progress_$today');
-      await ErrorLogger.logError(
-        source: 'RoutineProgressService.loadProgress',
-        error: 'RoutineSync: Tried legacy key: morning_routine_progress_$today, found: ${progressJson != null}',
-        stackTrace: '',
-      );
     }
 
     if (progressJson == null) {
-      await ErrorLogger.logError(
-        source: 'RoutineProgressService.loadProgress',
-        error: 'RoutineSync: No progress found for routine $routineId on $today',
-        stackTrace: '',
-      );
       return null;
     }
     

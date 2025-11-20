@@ -13,7 +13,10 @@ class ErrorLogsScreen extends StatefulWidget {
 
 class _ErrorLogsScreenState extends State<ErrorLogsScreen> {
   List<Map<String, dynamic>> _logs = [];
+  List<Map<String, dynamic>> _filteredLogs = [];
   bool _isLoading = true;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -21,12 +24,45 @@ class _ErrorLogsScreenState extends State<ErrorLogsScreen> {
     _loadLogs();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadLogs() async {
     setState(() => _isLoading = true);
     final logs = await ErrorLogger.getLocalLogs();
     setState(() {
       _logs = logs;
+      _filterLogs();
       _isLoading = false;
+    });
+  }
+
+  void _filterLogs() {
+    if (_searchQuery.isEmpty) {
+      _filteredLogs = _logs;
+    } else {
+      final query = _searchQuery.toLowerCase();
+      _filteredLogs = _logs.where((log) {
+        final source = (log['source'] ?? '').toString().toLowerCase();
+        final error = (log['error'] ?? '').toString().toLowerCase();
+        final stackTrace = (log['stackTrace'] ?? '').toString().toLowerCase();
+        final context = (log['context'] ?? '').toString().toLowerCase();
+
+        return source.contains(query) ||
+               error.contains(query) ||
+               stackTrace.contains(query) ||
+               context.contains(query);
+      }).toList();
+    }
+  }
+
+  void _onSearchChanged(String query) {
+    setState(() {
+      _searchQuery = query;
+      _filterLogs();
     });
   }
 
@@ -93,18 +129,56 @@ ${log['stackTrace'] != null ? 'Stack Trace:\n${log['stackTrace']}\n' : ''}${log[
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _logs.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No error logs found',
-                    style: TextStyle(color: AppColors.white70),
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: _onSearchChanged,
+                    decoration: InputDecoration(
+                      hintText: 'Search logs...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                _onSearchChanged('');
+                              },
+                            )
+                          : null,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: _logs.length,
-                  itemBuilder: (context, index) {
-                    final log = _logs[index];
+                ),
+                if (_logs.isEmpty)
+                  const Expanded(
+                    child: Center(
+                      child: Text(
+                        'No error logs found',
+                        style: TextStyle(color: AppColors.white70),
+                      ),
+                    ),
+                  )
+                else if (_filteredLogs.isEmpty)
+                  const Expanded(
+                    child: Center(
+                      child: Text(
+                        'No logs match your search',
+                        style: TextStyle(color: AppColors.white70),
+                      ),
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: _filteredLogs.length,
+                      itemBuilder: (context, index) {
+                        final log = _filteredLogs[index];
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ExpansionTile(
@@ -173,9 +247,12 @@ ${log['stackTrace'] != null ? 'Stack Trace:\n${log['stackTrace']}\n' : ''}${log[
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 

@@ -117,6 +117,20 @@ class CalendarService {
       List<Event> allEvents = [];
 
       for (final calendar in calendars) {
+        // Skip calendars without an ID
+        if (calendar.id == null) {
+          await ErrorLogger.logError(
+            source: 'CalendarService.getTodaysEvents',
+            error: 'Calendar has null ID, skipping',
+            context: {
+              'calendarName': calendar.name ?? 'Unknown',
+              'accountName': calendar.accountName,
+              'accountType': calendar.accountType,
+            },
+          );
+          continue;
+        }
+
         try {
           final eventsResult = await _deviceCalendarPlugin.retrieveEvents(
             calendar.id!,
@@ -133,7 +147,7 @@ class CalendarService {
               source: 'CalendarService.getTodaysEvents',
               error: 'Failed to retrieve events from calendar',
               context: {
-                'calendarName': calendar.name,
+                'calendarName': calendar.name ?? 'Unknown',
                 'calendarId': calendar.id,
                 'isSuccess': eventsResult.isSuccess,
                 'hasData': eventsResult.data != null,
@@ -144,10 +158,10 @@ class CalendarService {
         } catch (e, stackTrace) {
           await ErrorLogger.logError(
             source: 'CalendarService.getTodaysEvents',
-            error: 'Exception retrieving events from calendar ${calendar.name}: $e',
+            error: 'Exception retrieving events from calendar: $e',
             stackTrace: stackTrace.toString(),
             context: {
-              'calendarName': calendar.name,
+              'calendarName': calendar.name ?? 'Unknown',
               'calendarId': calendar.id,
             },
           );
@@ -181,7 +195,7 @@ class CalendarService {
         error: 'Calendar fetch completed',
         context: {
           'calendarsChecked': calendars.length,
-          'calendarNames': calendars.map((c) => c.name).toList(),
+          'calendarNames': calendars.map((c) => c.name ?? 'Unknown').toList(),
           'totalEventsFound': allEvents.length,
           'afterFiltering': currentAndFutureEvents.length,
           'startOfDay': startOfDay.toIso8601String(),

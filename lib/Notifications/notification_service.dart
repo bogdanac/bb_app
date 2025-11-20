@@ -109,14 +109,8 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin>();
 
       if (androidImplementation != null) {
-        final notificationPermission = await androidImplementation.requestNotificationsPermission();
-        final exactAlarmPermission = await androidImplementation.requestExactAlarmsPermission();
-
-        await ErrorLogger.logError(
-          source: 'NotificationService.initializeNotifications',
-          error: 'Notification permission: $notificationPermission, Exact alarm permission: $exactAlarmPermission',
-          stackTrace: '',
-        );
+        await androidImplementation.requestNotificationsPermission();
+        await androidImplementation.requestExactAlarmsPermission();
       }
 
       // Test immediate notification to verify setup
@@ -208,11 +202,6 @@ class NotificationService {
       // For recurring tasks, the TaskService should have already calculated the next occurrence
       // Only skip scheduling if the time has passed AND it's not recurring
       if (scheduledDate.isBefore(now) && !isRecurring) {
-        await ErrorLogger.logError(
-          source: 'NotificationService.scheduleTaskNotification',
-          error: 'Non-recurring task notification not scheduled - time already passed: $title at $scheduledDate',
-          stackTrace: '',
-        );
         return;
       }
 
@@ -225,12 +214,6 @@ class NotificationService {
         );
         return;
       }
-
-      await ErrorLogger.logError(
-        source: 'NotificationService.scheduleTaskNotification',
-        error: 'Scheduling task notification: "$title" at $scheduledDate (recurring: $isRecurring, type: ${recurrenceType ?? 'none'})',
-        stackTrace: '',
-      );
 
       // Determine if we should set up recurring based on the task type
       // Different DateTimeComponents for different recurrence patterns
@@ -283,12 +266,6 @@ class NotificationService {
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: matchComponents, // For recurring tasks, this will repeat daily
         payload: 'task_reminder_$taskId',
-      );
-
-      await ErrorLogger.logError(
-        source: 'NotificationService.scheduleTaskNotification',
-        error: 'Task notification scheduled successfully with ID: $notificationId',
-        stackTrace: '',
       );
 
     } catch (e, stackTrace) {
@@ -396,12 +373,6 @@ class NotificationService {
 
   /// Schedule routine notifications for all enabled routines (centralized)
   Future<void> scheduleAllRoutineNotifications(List<dynamic> routines) async {
-    await ErrorLogger.logError(
-      source: 'NotificationService.scheduleAllRoutineNotifications',
-      error: 'Scheduling routine notifications for ${routines.length} routines...',
-      stackTrace: '',
-    );
-
     for (final routine in routines) {
       if (routine.reminderEnabled == true) {
         await scheduleRoutineNotification(routine.id, routine.title, routine.reminderHour, routine.reminderMinute);
@@ -750,11 +721,6 @@ class NotificationService {
       
       final now = DateTime.now();
       if (reminderTime.isBefore(now)) {
-        await ErrorLogger.logError(
-          source: 'NotificationService.scheduleFastingReminderNotification',
-          error: 'Fasting reminder time has passed, not scheduling',
-          stackTrace: '',
-        );
         return;
       }
 
@@ -825,12 +791,6 @@ class NotificationService {
   // Schedule daily food tracking reminder at 8 PM
   Future<void> scheduleFoodTrackingReminder() async {
     try {
-      await ErrorLogger.logError(
-        source: 'NotificationService.scheduleFoodTrackingReminder',
-        error: 'Scheduling food tracking reminder...',
-        stackTrace: '',
-      );
-
       // Cancel any existing food tracking reminders
       await flutterLocalNotificationsPlugin.cancel(7777);
       await flutterLocalNotificationsPlugin.cancel(7776); // Cancel old second notification if it exists
@@ -879,12 +839,6 @@ class NotificationService {
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time, // CRITICAL: Repeat daily at same time
         payload: 'food_tracking_reminder',
-      );
-
-      await ErrorLogger.logError(
-        source: 'NotificationService.scheduleFoodTrackingReminder',
-        error: 'Food tracking reminder scheduled for 8:00 PM daily (next occurrence: $reminderTime)',
-        stackTrace: '',
       );
 
     } catch (e, stackTrace) {

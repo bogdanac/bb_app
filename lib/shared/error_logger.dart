@@ -35,21 +35,33 @@ class ErrorLogger {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        await _firestore.collection('error_logs').add({
-          'userId': user.uid,
+        // Store all logs in a single document per user with an array of log entries
+        final logEntry = {
           'source': source,
           'error': error,
           'stackTrace': stackTrace,
           'context': context,
           'timestamp': FieldValue.serverTimestamp(),
           'platform': defaultTargetPlatform.name,
-        });
+        };
 
-        // Clean up old logs (older than 7 days) - fire and forget
-        unawaited(_cleanupOldLogs(user.uid, 'error_logs'));
+        await _firestore.collection('error_logs').doc(user.uid).set({
+          'logs': FieldValue.arrayUnion([logEntry]),
+          'lastUpdated': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
     } catch (e) {
-      // Fail silently - don't let logging errors break the app
+      // Log Firebase failures locally so they're visible in release builds
+      final firebaseErrorEntry = {
+        'source': 'ErrorLogger._logToFirebase',
+        'error': 'Failed to log error to Firebase: $e',
+        'stackTrace': '',
+        'context': {'originalSource': source, 'originalError': error},
+        'timestamp': now.toIso8601String(),
+        'platform': defaultTargetPlatform.name,
+      };
+      await _logLocally(firebaseErrorEntry, now);
+
       // ignore: avoid_print
       print('ErrorLogger: Failed to log error to Firebase: $e');
     }

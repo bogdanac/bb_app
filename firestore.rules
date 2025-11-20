@@ -50,6 +50,19 @@ service cloud.firestore {
       allow delete: if false; // Prevent deletion
     }
 
+    // Error logs collection - one document per user containing all their logs
+    match /error_logs/{userId} {
+      allow read, write: if isOwner(userId);
+      allow delete: if false; // Never allow deletion
+    }
+
+    // Widget debug logs collection - users can write their own debug logs
+    match /widget_debug_logs/{logId} {
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if false; // Never allow deletion
+    }
+
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;

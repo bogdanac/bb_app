@@ -38,19 +38,9 @@ class RoutineWidgetService {
       if (activeRoutine != null) {
         await prefs.setString('active_routine_id', activeRoutine.id);
         await prefs.setString('active_routine_data', jsonEncode(activeRoutine.toJson()));
-        await ErrorLogger.logError(
-          source: 'RoutineWidgetService.updateWidget',
-          error: 'Widget: Set active routine to ${activeRoutine.title}',
-          stackTrace: '',
-        );
       } else {
         await prefs.remove('active_routine_id');
         await prefs.remove('active_routine_data');
-        await ErrorLogger.logError(
-          source: 'RoutineWidgetService.updateWidget',
-          error: 'Widget: No active routine found',
-          stackTrace: '',
-        );
       }
 
       // Trigger widget update via platform channel
