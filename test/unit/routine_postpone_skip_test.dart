@@ -2,44 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:bb_app/Routines/routine_data_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bb_app/Routines/routine_progress_service.dart';
-import 'package:firebase_core_platform_interface/firebase_core_platform_interface.dart';
-
-// Mock Firebase
-class MockFirebasePlatform extends FirebasePlatform {
-  @override
-  Future<FirebaseAppPlatform> initializeApp({
-    String? name,
-    FirebaseOptions? options,
-  }) async {
-    return MockFirebaseApp();
-  }
-
-  @override
-  FirebaseAppPlatform app([String name = defaultFirebaseAppName]) {
-    return MockFirebaseApp();
-  }
-
-  @override
-  List<FirebaseAppPlatform> get apps => [MockFirebaseApp()];
-}
-
-class MockFirebaseApp extends FirebaseAppPlatform {
-  MockFirebaseApp() : super(defaultFirebaseAppName, const FirebaseOptions(
-    apiKey: 'test',
-    appId: 'test',
-    messagingSenderId: 'test',
-    projectId: 'test',
-  ));
-}
+import '../helpers/firebase_mock_helper.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
   setUp(() {
+    setupFirebaseMocks();
     SharedPreferences.setMockInitialValues({});
-
-    // Mock Firebase
-    FirebasePlatform.instance = MockFirebasePlatform();
   });
 
   group('RoutineItem - Postpone and Skip States', () {

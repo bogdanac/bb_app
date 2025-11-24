@@ -21,6 +21,7 @@ class Task {
   final bool isCompleted;
   final DateTime? completedAt;
   final DateTime createdAt;
+  final int energyLevel; // Body Battery impact (-5 to +5: negative=draining, positive=charging, default=-1)
 
   Task({
     required this.id,
@@ -36,6 +37,7 @@ class Task {
     this.isCompleted = false,
     this.completedAt,
     DateTime? createdAt,
+    this.energyLevel = -1, // Default to -1 (drains 10%, earns 11 flow points)
   }) : createdAt = createdAt ?? DateTime.now();
 
   /// Create a copy of this task with modified fields
@@ -53,6 +55,7 @@ class Task {
     bool? isCompleted,
     DateTime? completedAt,
     DateTime? createdAt,
+    int? energyLevel,
     bool clearDeadline = false,
     bool clearScheduledDate = false,
     bool clearReminderTime = false,
@@ -73,6 +76,7 @@ class Task {
       isCompleted: isCompleted ?? this.isCompleted,
       completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
       createdAt: createdAt ?? this.createdAt,
+      energyLevel: energyLevel ?? this.energyLevel,
     );
   }
 
@@ -153,23 +157,36 @@ class Task {
     'isCompleted': isCompleted,
     'completedAt': completedAt?.toIso8601String(),
     'createdAt': createdAt.toIso8601String(),
+    'energyLevel': energyLevel,
   };
 
-  static Task fromJson(Map<String, dynamic> json) => Task(
-    id: json['id'],
-    title: json['title'],
-    description: json['description'] ?? '',
-    categoryIds: List<String>.from(json['categoryIds'] ?? []),
-    deadline: json['deadline'] != null ? DateTime.parse(json['deadline']) : null,
-    scheduledDate: json['scheduledDate'] != null ? DateTime.parse(json['scheduledDate']) : null,
-    reminderTime: json['reminderTime'] != null ? DateTime.parse(json['reminderTime']) : null,
-    isImportant: json['isImportant'] ?? false,
-    isPostponed: json['isPostponed'] ?? false,
-    recurrence: json['recurrence'] != null ? TaskRecurrence.fromJson(json['recurrence']) : null,
-    isCompleted: json['isCompleted'] ?? false,
-    completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt']) : null,
-    createdAt: DateTime.parse(json['createdAt']),
-  );
+  static Task fromJson(Map<String, dynamic> json) {
+    // Handle migration from old energy system (1-5) to new system (-5 to +5)
+    int energyLevel = json['energyLevel'] ?? -2;
+
+    // If energy level is in old range (1-5), convert to new system
+    if (energyLevel >= 1 && energyLevel <= 5) {
+      // Convert: 1→-1, 2→-2, 3→-3, 4→-4, 5→-5
+      energyLevel = -energyLevel;
+    }
+
+    return Task(
+      id: json['id'],
+      title: json['title'],
+      description: json['description'] ?? '',
+      categoryIds: List<String>.from(json['categoryIds'] ?? []),
+      deadline: json['deadline'] != null ? DateTime.parse(json['deadline']) : null,
+      scheduledDate: json['scheduledDate'] != null ? DateTime.parse(json['scheduledDate']) : null,
+      reminderTime: json['reminderTime'] != null ? DateTime.parse(json['reminderTime']) : null,
+      isImportant: json['isImportant'] ?? false,
+      isPostponed: json['isPostponed'] ?? false,
+      recurrence: json['recurrence'] != null ? TaskRecurrence.fromJson(json['recurrence']) : null,
+      isCompleted: json['isCompleted'] ?? false,
+      completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt']) : null,
+      createdAt: DateTime.parse(json['createdAt']),
+      energyLevel: energyLevel,
+    );
+  }
 }
 
 class TaskCategory {

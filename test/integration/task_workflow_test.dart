@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bb_app/Tasks/task_service.dart';
 import 'package:bb_app/Tasks/tasks_data_models.dart';
+import '../helpers/firebase_mock_helper.dart';
 
 /// Comprehensive integration tests for the complete task workflow.
 /// Tests the interaction between TaskService, TaskRepository, TaskPriorityService,
@@ -12,6 +13,8 @@ void main() {
     late TaskService taskService;
 
     setUp(() async {
+      // Initialize Firebase mocks
+      setupFirebaseMocks();
       // Clear and initialize SharedPreferences
       SharedPreferences.setMockInitialValues({});
       taskService = TaskService();
@@ -77,11 +80,15 @@ void main() {
         expect(loadedTasks[0].scheduledDate, isNotNull);
         expect(loadedTasks[0].reminderTime, isNotNull);
 
-        // Verify reminder time is set for today
-        final today = DateTime.now();
+        // Verify reminder time is set correctly
+        // If before 2pm, should be today; if after 2pm, should be tomorrow
+        final now = DateTime.now();
+        final isBefore2PM = now.hour < 14;
+        final expectedDay = isBefore2PM ? now.day : now.add(const Duration(days: 1)).day;
+
         expect(loadedTasks[0].reminderTime!.hour, 9);
         expect(loadedTasks[0].reminderTime!.minute, 0);
-        expect(loadedTasks[0].reminderTime!.day, today.day);
+        expect(loadedTasks[0].reminderTime!.day, expectedDay);
       });
 
       test('Edit task → Auto-save → Verify updates', () async {
@@ -269,6 +276,7 @@ void main() {
             id: 'reminder-soon',
             title: 'Reminder Soon',
             reminderTime: now.add(const Duration(minutes: 30)),
+            scheduledDate: today, // Schedule for today so reminder priority works
             createdAt: now,
           ),
         ];
@@ -335,7 +343,10 @@ void main() {
         final loaded = await taskService.loadTasks();
 
         // Check if due today (should be after auto-migration)
-        expect(loaded[0].isDueToday(), true);
+        // If before 2pm, should be today; if after 2pm, should be tomorrow
+        final now = DateTime.now();
+        final isBefore2PM = now.hour < 14;
+        expect(loaded[0].isDueToday(), isBefore2PM);
 
         // Complete the task
         final completed = loaded[0].copyWith(
@@ -463,9 +474,9 @@ void main() {
         );
         final todayDay = DateTime(today.year, today.month, today.day);
 
-        // Should be today or after
+        // Should be after today (recurrence calculator returns future dates)
         expect(
-          scheduledDay.isAtSameMomentAs(todayDay) || scheduledDay.isAfter(todayDay),
+          scheduledDay.isAfter(todayDay),
           true,
         );
       });
@@ -1082,11 +1093,11 @@ void main() {
             );
             final todayDay = DateTime(today.year, today.month, today.day);
 
-            // Should be today or in the future
+            // Should be in the future (recurrence calculator returns future dates)
             expect(
-              scheduledDay.isAtSameMomentAs(todayDay) || scheduledDay.isAfter(todayDay),
+              scheduledDay.isAfter(todayDay),
               true,
-              reason: 'Task ${task.title} should be migrated to today or future',
+              reason: 'Task ${task.title} should be migrated to future',
             );
           }
         }

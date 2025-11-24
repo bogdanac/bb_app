@@ -79,7 +79,13 @@ class TaskPriorityService {
         return aCategoryOrder.compareTo(bCategoryOrder);
       }
 
-      // 4. Scheduled date (earlier dates first)
+      // 4. Energy level (draining tasks first - negative energy = higher priority)
+      // In the new system: -5 (most draining) should come before +5 (most charging)
+      if (a.energyLevel != b.energyLevel) {
+        return a.energyLevel.compareTo(b.energyLevel);
+      }
+
+      // 5. Scheduled date (earlier dates first)
       // This ensures tasks with same priority are ordered chronologically
       if (a.scheduledDate != null && b.scheduledDate != null) {
         final dateComparison = a.scheduledDate!.compareTo(b.scheduledDate!);
@@ -92,7 +98,7 @@ class TaskPriorityService {
         return 1; // Tasks with scheduled dates come before unscheduled
       }
 
-      // 5. Creation date (newer first)
+      // 6. Creation date (newer first)
       return b.createdAt.compareTo(a.createdAt);
     });
 
@@ -285,6 +291,13 @@ class TaskPriorityService {
             score += 700;
           }
         }
+
+        // BODY BATTERY BOOST: Energy-based priority for today's recurring tasks
+        // Formula: 200 - (energyLevel + 5) × 18
+        // Range: -5 gets +200, +5 gets +20
+        if (!hasDistantReminder) {
+          score += 200 - ((task.energyLevel + 5) * 18);
+        }
       }
     }
 
@@ -366,6 +379,11 @@ class TaskPriorityService {
         if (task.isImportant) {
           score += 100;
         }
+
+        // BODY BATTERY BOOST: Energy-based priority for today's tasks
+        // Formula: 200 - (energyLevel + 5) × 18
+        // Range: -5 gets +200, +5 gets +20
+        score += 200 - ((task.energyLevel + 5) * 18);
       }
     }
     // 5e. UNSCHEDULED TASKS (no scheduled date)
@@ -384,6 +402,8 @@ class TaskPriorityService {
         if (task.isImportant) {
           score += 100;
         }
+
+        // Note: Energy boost only applies to tasks scheduled for TODAY
       }
     }
     // 5f. FUTURE SCHEDULED TASKS (non-recurring only, recurring handled in 4b)

@@ -15,6 +15,7 @@ class MainActivity: FlutterActivity() {
     private val TASK_CHANNEL = "com.bb.bb_app/task_widget"
     private val ROUTINE_CHANNEL = "com.bb.bb_app/routine_widget"
     private val TASK_LIST_CHANNEL = "com.bb.bb_app/task_list_widget"
+    private val BATTERY_FLOW_CHANNEL = "com.bb.bb_app/battery_flow_widget"
 
     companion object {
         var instance: MainActivity? = null
@@ -165,6 +166,19 @@ class MainActivity: FlutterActivity() {
             when (call.method) {
                 "updateTaskListWidget" -> {
                     updateTaskListWidget()
+                    result.success(true)
+                }
+                else -> {
+                    result.notImplemented()
+                }
+            }
+        }
+
+        // Battery & Flow widget channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BATTERY_FLOW_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "updateBatteryFlowWidget" -> {
+                    updateBatteryFlowWidget()
                     result.success(true)
                 }
                 else -> {
@@ -367,6 +381,20 @@ class MainActivity: FlutterActivity() {
             android.util.Log.d("MainActivity", "Updated water widget")
         } catch (e: Exception) {
             android.util.Log.e("MainActivity", "Error updating water widget: $e")
+        }
+    }
+
+    private fun updateBatteryFlowWidget() {
+        try {
+            val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(this)
+            val appWidgetIds = appWidgetManager.getAppWidgetIds(
+                ComponentName(this, BatteryFlowWidget::class.java)
+            )
+            val provider = BatteryFlowWidget()
+            provider.onUpdate(this, appWidgetManager, appWidgetIds)
+            android.util.Log.d("MainActivity", "Updated battery flow widget")
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Error updating battery flow widget: $e")
         }
     }
 }

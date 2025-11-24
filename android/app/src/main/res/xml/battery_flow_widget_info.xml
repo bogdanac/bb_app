@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="240dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="5"
+    android:targetCellHeight="1"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="40dp"
+    android:maxResizeWidth="600dp"
+    android:maxResizeHeight="80dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/battery_flow_widget"
+    android:description="@string/battery_flow_widget_description"
+    android:previewLayout="@layout/battery_flow_widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

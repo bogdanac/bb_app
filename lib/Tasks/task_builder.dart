@@ -17,6 +17,7 @@ class TaskBuilder {
     required bool hasUserModifiedScheduledDate,
     required Task? currentTask,
     bool preserveCompletionStatus = false,
+    int energyLevel = 1,
   }) {
     // Calculate effective scheduled date
     final DateTime? effectiveScheduledDate = hasUserModifiedScheduledDate
@@ -37,6 +38,7 @@ class TaskBuilder {
       isCompleted: preserveCompletionStatus ? (currentTask?.isCompleted ?? false) : false,
       completedAt: preserveCompletionStatus ? currentTask?.completedAt : null,
       createdAt: currentTask?.createdAt ?? DateTime.now(),
+      energyLevel: energyLevel,
     );
   }
 

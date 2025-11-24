@@ -5,6 +5,7 @@ import 'routine_data_models.dart';
 import 'routine_progress_service.dart';
 import '../shared/snackbar_utils.dart';
 import '../shared/error_logger.dart';
+import '../Energy/energy_service.dart';
 
 // ROUTINE EXECUTION SCREEN - UPDATED WITH SAVE FUNCTIONALITY
 class RoutineExecutionScreen extends StatefulWidget {
@@ -28,11 +29,13 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
   @override
   void initState() {
     super.initState();
+    // Preserve energyLevel from original routine items
     _items = widget.routine.items.map((item) => RoutineItem(
       id: item.id,
       text: item.text,
       isCompleted: false,
       isSkipped: false,
+      energyLevel: item.energyLevel,
     )).toList();
     _loadProgress();
   }
@@ -99,6 +102,9 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
   }
 
   Future<void> _toggleItem(int index) async {
+    final item = _items[index];
+    final wasCompleted = item.isCompleted;
+
     setState(() {
       _items[index].isCompleted = !_items[index].isCompleted;
       if (_items[index].isCompleted) {
@@ -106,6 +112,114 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
       }
     });
     await _saveProgress();
+
+    // Track energy when completing/uncompleting a step with energy
+    if (item.energyLevel != null && item.energyLevel! > 0) {
+      if (!wasCompleted && _items[index].isCompleted) {
+        // Just completed - add energy
+        await EnergyService.addRoutineStepEnergyConsumption(
+          stepId: item.id,
+          stepTitle: item.text,
+          energyLevel: item.energyLevel!,
+          routineTitle: widget.routine.title,
+        );
+        if (mounted) {
+          await _showEnergyCelebration(item.energyLevel!);
+        }
+      } else if (wasCompleted && !_items[index].isCompleted) {
+        // Uncompleted - remove energy
+        await EnergyService.removeEnergyConsumption(item.id);
+      }
+    }
+  }
+
+  Future<void> _showEnergyCelebration(int energyLevel) async {
+    // Check if we completed our daily goal
+    final summary = await EnergyService.getTodaySummary();
+    final goal = summary['goal'] as int? ?? 0;
+    final consumed = summary['consumed'] as int? ?? 0;
+
+    if (consumed >= goal && goal > 0) {
+      // Daily goal completed! Big celebration
+      if (mounted) {
+        _showGoalCompletedDialog();
+      }
+    } else {
+      // Regular energy added celebration
+      if (mounted) {
+        SnackBarUtils.showSuccess(
+          context,
+          '⚡ +$energyLevel energy! ($consumed/$goal)',
+        );
+      }
+    }
+  }
+
+  Color _getEnergyColor(int level) {
+    switch (level) {
+      case 1:
+        return Colors.green;
+      case 2:
+        return Colors.lightGreen;
+      case 3:
+        return Colors.amber;
+      case 4:
+        return Colors.orange;
+      case 5:
+        return AppColors.coral;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  void _showGoalCompletedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.green[50],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('🎉 ', style: TextStyle(fontSize: 32)),
+            Text('🌟 ', style: TextStyle(fontSize: 32)),
+            Text('🎊 ', style: TextStyle(fontSize: 32)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Daily Energy Goal Complete!',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "You've accomplished amazing things today! Take a moment to celebrate yourself. 💪",
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[700],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Keep Going! 🚀',
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _skipItem(int index) async {
@@ -291,6 +405,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                         itemCount: _items.length,
                         itemBuilder: (context, index) {
                           final item = _items[index];
+                          final hasEnergy = item.energyLevel != null && item.energyLevel! > 0;
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
                             color: item.isSkipped ? Colors.orange.withValues(alpha: 0.1) : null,
@@ -300,15 +415,49 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                                 onChanged: (_) => _toggleItem(index),
                                 activeColor: AppColors.orange,
                               ),
-                              title: Text(
-                                item.text,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  decoration: item.isCompleted
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                  color: item.isSkipped ? Colors.orange[700] : null,
-                                ),
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      item.text,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        decoration: item.isCompleted
+                                            ? TextDecoration.lineThrough
+                                            : null,
+                                        color: item.isSkipped ? Colors.orange[700] : null,
+                                      ),
+                                    ),
+                                  ),
+                                  // Energy indicator
+                                  if (hasEnergy)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: _getEnergyColor(item.energyLevel!).withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.bolt_rounded,
+                                            size: 14,
+                                            color: _getEnergyColor(item.energyLevel!),
+                                          ),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            '${item.energyLevel}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: _getEnergyColor(item.energyLevel!),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
                               ),
                               subtitle: item.isSkipped
                                   ? Text(

@@ -2,10 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:bb_app/Data/backup_service.dart';
+import '../helpers/firebase_mock_helper.dart';
 
 void main() {
   group('BackupService', () {
     setUp(() {
+      // Initialize Firebase mocks
+      setupFirebaseMocks();
       // Set up SharedPreferences mock instance
       SharedPreferences.setMockInitialValues({});
     });

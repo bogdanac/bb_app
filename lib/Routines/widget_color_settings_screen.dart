@@ -4,6 +4,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import 'routine_widget_service.dart';
 import '../Tasks/task_list_widget_service.dart';
+import '../Energy/battery_flow_widget_service.dart';
 import '../shared/snackbar_utils.dart';
 
 class WidgetColorSettingsScreen extends StatefulWidget {
@@ -16,6 +17,7 @@ class WidgetColorSettingsScreen extends StatefulWidget {
 class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
   Color _routineColor = const Color(0xB3202020); // Transparent dark grey default
   Color _taskListColor = const Color(0xB3202020); // Transparent dark grey default
+  Color _batteryFlowColor = const Color(0xB3202020); // Transparent dark grey default
   bool _isLoading = true;
 
   // Predefined color options
@@ -39,15 +41,17 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
 
   Future<void> _loadColors() async {
     final prefs = await SharedPreferences.getInstance();
-    final defaultColor = const Color(0xB3202020).toARGB32(); // Transparent dark grey default for both
+    final defaultColor = const Color(0xB3202020).toARGB32(); // Transparent dark grey default
 
     // Get stored colors, use default if not set
     final routineColor = prefs.getInt('widget_routine_color') ?? defaultColor;
     final taskListColor = prefs.getInt('widget_tasklist_color') ?? defaultColor;
+    final batteryFlowColor = prefs.getInt('widget_battery_flow_color') ?? defaultColor;
 
     setState(() {
       _routineColor = Color(routineColor);
       _taskListColor = Color(taskListColor);
+      _batteryFlowColor = Color(batteryFlowColor);
       _isLoading = false;
     });
   }
@@ -69,6 +73,12 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
         await prefs.setInt(key, color.toARGB32());
         setState(() => _taskListColor = color);
         await TaskListWidgetService.updateWidget();
+        break;
+      case 'batteryflow':
+        key = 'widget_battery_flow_color';
+        await prefs.setInt(key, color.toARGB32());
+        setState(() => _batteryFlowColor = color);
+        await BatteryFlowWidgetService.refreshWidgetColor();
         break;
     }
 
@@ -216,6 +226,13 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
               icon: Icons.check_box_rounded,
               currentColor: _taskListColor,
               widgetType: 'tasklist',
+            ),
+            _buildWidgetColorSection(
+              title: 'Battery & Flow Widget',
+              subtitle: 'Energy tracking & productivity',
+              icon: Icons.bolt_rounded,
+              currentColor: _batteryFlowColor,
+              widgetType: 'batteryflow',
             ),
           ],
         ),

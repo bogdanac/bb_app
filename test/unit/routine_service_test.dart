@@ -3,12 +3,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bb_app/Routines/routine_service.dart';
 import 'package:bb_app/Routines/routine_data_models.dart';
 import 'package:bb_app/Routines/routine_progress_service.dart';
+import '../helpers/firebase_mock_helper.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
   group('RoutineService - getNextRoutine', () {
     setUp(() async {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
     });
 
@@ -218,6 +218,7 @@ void main() {
 
   group('RoutineProgressService - clearRoutineProgress', () {
     setUp(() async {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
     });
 
@@ -260,6 +261,7 @@ void main() {
 
   group('Routine completion tracking', () {
     setUp(() async {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
     });
 
@@ -319,6 +321,7 @@ void main() {
 
   group('getCurrentActiveRoutine with completion tracking', () {
     setUp(() async {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
     });
 

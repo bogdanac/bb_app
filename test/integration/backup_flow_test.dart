@@ -5,12 +5,13 @@ import 'dart:io';
 import 'dart:convert';
 
 import 'package:bb_app/Data/backup_screen.dart';
+import '../helpers/firebase_mock_helper.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
   group('Backup System Integration Tests', () {
     setUp(() async {
+      // Initialize Firebase mocks
+      setupFirebaseMocks();
       // Mock SharedPreferences for testing
       SharedPreferences.setMockInitialValues({
         'test_data': 'integration_test_value',

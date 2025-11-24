@@ -225,23 +225,12 @@ class CentralizedNotificationManager {
   /// Cancel all notifications
   Future<void> _cancelAllNotifications() async {
     try {
-      // Cancel water reminders
-      for (int i = 1; i <= 4; i++) {
-        await _notificationService.flutterLocalNotificationsPlugin.cancel(i);
+      // Get all pending notifications and cancel them efficiently
+      final pendingNotifications = await _notificationService.flutterLocalNotificationsPlugin.pendingNotificationRequests();
+
+      for (final notification in pendingNotifications) {
+        await _notificationService.flutterLocalNotificationsPlugin.cancel(notification.id);
       }
-
-      // Cancel cycle notifications
-      await _notificationService.flutterLocalNotificationsPlugin.cancel(1001);
-      await _notificationService.flutterLocalNotificationsPlugin.cancel(1002);
-
-      // Cancel routine notifications (range 2000-9999)
-      for (int i = 2000; i < 10000; i++) {
-        await _notificationService.flutterLocalNotificationsPlugin.cancel(i);
-      }
-
-      // Cancel food tracking notifications
-      await _notificationService.flutterLocalNotificationsPlugin.cancel(7777);
-      await _notificationService.flutterLocalNotificationsPlugin.cancel(7776);
 
     } catch (e, stackTrace) {
       await ErrorLogger.logError(

@@ -166,6 +166,69 @@ class TaskCardUtils {
     );
   }
 
+  // Build energy level chip with lightning emoji
+  static Widget buildEnergyChip(int energyLevel) {
+    final color = getEnergyColor(energyLevel);
+    final text = getEnergyText(energyLevel);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: AppStyles.borderRadiusSmall,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '⚡',
+            style: const TextStyle(fontSize: 11),
+          ),
+          const SizedBox(width: 3),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Get energy level color
+  static Color getEnergyColor(int energyLevel) {
+    // Positive values = energy-giving (charging tasks)
+    if (energyLevel > 0) {
+      if (energyLevel >= 4) return const Color(0xFF00C853); // Bright green
+      if (energyLevel >= 2) return const Color(0xFF64DD17); // Light green
+      return const Color(0xFF76FF03); // Very light green
+    }
+
+    // Negative values = energy-draining tasks
+    if (energyLevel < 0) {
+      if (energyLevel <= -4) return const Color(0xFFD32F2F); // Deep red
+      if (energyLevel <= -2) return const Color(0xFFFF6F00); // Orange
+      return const Color(0xFFFFB300); // Yellow/amber
+    }
+
+    // Zero = neutral
+    return const Color(0xFF757575); // Gray
+  }
+
+  // Get energy level text
+  static String getEnergyText(int energyLevel) {
+    if (energyLevel > 0) {
+      return '+$energyLevel';
+    } else if (energyLevel < 0) {
+      return '$energyLevel';
+    } else {
+      return '0';
+    }
+  }
+
 
   // Get task priority reason based on urgency and context
   static String getTaskPriorityReason(Task task) {

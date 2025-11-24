@@ -43,6 +43,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   bool _hasUnsavedChanges = false;
   bool _showSaved = false;
   Task? _currentTask; // Track the current task to prevent duplicates
+  int _energyLevel = 1; // Energy cost of the task (1-5)
 
   @override
   void initState() {
@@ -57,11 +58,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
       _scheduledDate = task.scheduledDate;
       _isImportant = task.isImportant;
       _recurrence = task.recurrence;
+      _energyLevel = task.energyLevel;
     } else if (widget.initialCategoryIds != null) {
       // Pre-fill categories for new tasks
       _selectedCategoryIds = List.from(widget.initialCategoryIds!);
     }
-    
+
     // Add listeners for auto-save
     _titleController.addListener(_onFieldChanged);
   }
@@ -72,7 +74,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
     // Cancel any pending auto-save during hot reload to prevent data loss
     _saveTimer?.cancel();
     _savedTimer?.cancel();
-    
+
     // Re-initialize state from widget.task if it changed during hot reload
     if (widget.task != oldWidget.task && widget.task != null) {
       final task = widget.task!;
@@ -83,6 +85,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
       _scheduledDate = task.scheduledDate;
       _isImportant = task.isImportant;
       _recurrence = task.recurrence;
+      _energyLevel = task.energyLevel;
       _currentTask = task;
       _hasUnsavedChanges = false;
       _showSaved = false;
@@ -131,6 +134,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         hasUserModifiedScheduledDate: _hasUserModifiedScheduledDate,
         currentTask: _currentTask,
         preserveCompletionStatus: true,
+        energyLevel: _energyLevel,
       );
 
       // Pass isAutoSave flag to skip expensive operations
@@ -218,6 +222,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         hasUserModifiedScheduledDate: _hasUserModifiedScheduledDate,
         currentTask: _currentTask,
         preserveCompletionStatus: false,
+        energyLevel: _energyLevel,
       );
 
       final taskService = TaskService();
@@ -294,6 +299,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 hasUserModifiedScheduledDate: _hasUserModifiedScheduledDate,
                 currentTask: _currentTask,
                 preserveCompletionStatus: true,
+                energyLevel: _energyLevel,
               );
 
               // Save to disk with isAutoSave: false
@@ -967,12 +973,148 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               ),
             ),
 
+            const SizedBox(height: 16),
+
+            // Energy Level Section
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.dialogBackground.withValues(alpha: 0.08),
+                borderRadius: AppStyles.borderRadiusLarge,
+                border: Border.all(
+                  color: _energyLevel > 1
+                      ? AppColors.coral.withValues(alpha: 0.3)
+                      : AppColors.greyText,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _getEnergyColor(_energyLevel).withValues(alpha: 0.1),
+                            borderRadius: AppStyles.borderRadiusMedium,
+                          ),
+                          child: Icon(
+                            Icons.bolt_rounded,
+                            color: _getEnergyColor(_energyLevel),
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Energy Level',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: _energyLevel > 1
+                                      ? _getEnergyColor(_energyLevel)
+                                      : AppColors.greyText,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _getEnergyDescription(_energyLevel),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.greyText,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '$_energyLevel',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: _getEnergyColor(_energyLevel),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        activeTrackColor: _getEnergyColor(_energyLevel),
+                        inactiveTrackColor: AppColors.greyText.withValues(alpha: 0.2),
+                        thumbColor: _getEnergyColor(_energyLevel),
+                        overlayColor: _getEnergyColor(_energyLevel).withValues(alpha: 0.2),
+                        trackHeight: 8,
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                      ),
+                      child: Slider(
+                        value: _energyLevel.toDouble(),
+                        min: 1,
+                        max: 5,
+                        divisions: 4,
+                        onChanged: (value) {
+                          setState(() => _energyLevel = value.round());
+                          _onFieldChanged();
+                        },
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Quick/Easy', style: TextStyle(fontSize: 12, color: AppColors.greyText)),
+                        Text('Hard/Long', style: TextStyle(fontSize: 12, color: AppColors.greyText)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             const SizedBox(height: 24),
           ],
         ),
       ),
       ),
     );
+  }
+
+  Color _getEnergyColor(int level) {
+    switch (level) {
+      case 1:
+        return AppColors.successGreen;
+      case 2:
+        return AppColors.lightGreen;
+      case 3:
+        return AppColors.yellow;
+      case 4:
+        return AppColors.orange;
+      case 5:
+        return AppColors.coral;
+      default:
+        return AppColors.greyText;
+    }
+  }
+
+  String _getEnergyDescription(int level) {
+    switch (level) {
+      case 1:
+        return 'Quick task (~5 min)';
+      case 2:
+        return 'Short task (~15 min)';
+      case 3:
+        return 'Medium task (~30 min)';
+      case 4:
+        return 'Long task (~1 hour)';
+      case 5:
+        return 'Major task (significant effort)';
+      default:
+        return 'Set energy cost';
+    }
   }
 
   void _selectDeadline() async {

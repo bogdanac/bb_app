@@ -5,12 +5,15 @@ import 'package:bb_app/Tasks/tasks_data_models.dart';
 import 'package:bb_app/Tasks/task_list_widget_filter_service.dart';
 import 'package:bb_app/MenstrualCycle/menstrual_cycle_utils.dart';
 import 'dart:convert';
+import '../helpers/firebase_mock_helper.dart';
 
 void main() {
   group('Widget Synchronization Tests', () {
     late TaskService taskService;
 
     setUp(() async {
+      // Initialize Firebase mocks
+      setupFirebaseMocks();
       // Initialize shared preferences with empty values
       SharedPreferences.setMockInitialValues({});
       taskService = TaskService();

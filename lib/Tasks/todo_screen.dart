@@ -16,6 +16,9 @@ import '../MenstrualCycle/menstrual_cycle_utils.dart';
 import '../MenstrualCycle/menstrual_cycle_constants.dart';
 import '../shared/snackbar_utils.dart';
 import '../shared/error_logger.dart';
+import '../Energy/energy_calendar_screen.dart';
+import '../Energy/energy_service.dart';
+import '../Energy/energy_calculator.dart';
 
 class TodoScreen extends StatefulWidget {
   final bool showFilters;
@@ -69,6 +72,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
   int _triesUsed = 0;
   final int _maxTries = 3;
   final List<String> _selectedCategoryFilters = [];
+  int? _maxEnergyFilter; // null = no filter, otherwise filter by max energy level
   String? _noTasksMessage;
 
   @override
@@ -180,6 +184,11 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
       }).toList();
     }
 
+    // Apply energy level filter if set
+    if (_maxEnergyFilter != null) {
+      filtered = filtered.where((task) => task.energyLevel <= _maxEnergyFilter!).toList();
+    }
+
     return filtered;
   }
 
@@ -195,6 +204,23 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
         });
       }
     });
+  }
+
+  Color _getEnergyColor(int level) {
+    switch (level) {
+      case 1:
+        return AppColors.successGreen;
+      case 2:
+        return AppColors.lightGreen;
+      case 3:
+        return AppColors.yellow;
+      case 4:
+        return AppColors.orange;
+      case 5:
+        return AppColors.coral;
+      default:
+        return AppColors.greyText;
+    }
   }
 
   void _addTaskToToday(Task task) async {
@@ -358,6 +384,64 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         visualDensity: VisualDensity.compact,
                       )),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Energy filter
+                  Text(
+                    'Max energy level (optional):',
+                    style: TextStyle(fontSize: 12, color: AppColors.greyText),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      FilterChip(
+                        label: const Text('Any', style: TextStyle(fontSize: 12)),
+                        selected: _maxEnergyFilter == null,
+                        onSelected: (selected) {
+                          setState(() {
+                            _maxEnergyFilter = null;
+                          });
+                        },
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      ...List.generate(5, (index) {
+                        final level = index + 1;
+                        return FilterChip(
+                          avatar: Icon(
+                            Icons.bolt_rounded,
+                            size: 14,
+                            color: _maxEnergyFilter == level
+                                ? Colors.white
+                                : _getEnergyColor(level),
+                          ),
+                          label: Text(
+                            '$level',
+                            style: TextStyle(
+                              color: _maxEnergyFilter == level
+                                  ? Colors.white
+                                  : null,
+                              fontSize: 12,
+                            ),
+                          ),
+                          selected: _maxEnergyFilter == level,
+                          selectedColor: _getEnergyColor(level),
+                          backgroundColor: Colors.transparent,
+                          side: BorderSide(
+                            color: _getEnergyColor(level).withValues(alpha: 0.5),
+                          ),
+                          onSelected: (selected) {
+                            setState(() {
+                              _maxEnergyFilter = selected ? level : null;
+                            });
+                          },
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        );
+                      }),
                     ],
                   ),
                 ],
@@ -922,9 +1006,14 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
     // For recurring tasks being completed, reschedule immediately instead of marking as completed
     if (!task.isCompleted && task.recurrence != null && newCompletionStatus) {
+      // Track energy for recurring task completion
+      await _trackEnergyForTask(task, true);
       await _handleRecurringTaskCompletion(task);
       return; // Exit early - the recurring handler will update the task
     }
+
+    // Track energy consumption for non-recurring tasks
+    await _trackEnergyForTask(task, newCompletionStatus);
 
     // For non-recurring tasks or uncompleting a task, just toggle the status
     final updatedTask = Task(
@@ -941,6 +1030,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       isCompleted: newCompletionStatus,
       completedAt: newCompletionStatus ? DateTime.now() : null,
       createdAt: task.createdAt,
+      energyLevel: task.energyLevel,
     );
 
     // Update in-memory list immediately for instant UI update
@@ -960,22 +1050,124 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     }
   }
 
+  /// Track energy consumption when task completion state changes
+  Future<void> _trackEnergyForTask(Task task, bool isCompleting) async {
+    try {
+      // Initialize today's record if not exists
+      await EnergyCalculator.initializeToday();
+
+      if (isCompleting) {
+        // Add energy consumption
+        await EnergyService.addTaskEnergyConsumption(
+          taskId: task.id,
+          taskTitle: task.title,
+          energyLevel: task.energyLevel,
+        );
+        // Show celebration
+        if (mounted) {
+          await _showEnergyCelebration(task.energyLevel);
+        }
+      } else {
+        // Remove energy consumption when uncompleting
+        await EnergyService.removeEnergyConsumption(task.id);
+      }
+    } catch (e) {
+      // Don't fail task completion if energy tracking fails
+      debugPrint('Error tracking energy: $e');
+    }
+  }
+
+  Future<void> _showEnergyCelebration(int energyLevel) async {
+    // Check if we completed our daily goal
+    final summary = await EnergyService.getTodaySummary();
+    final goal = summary['goal'] as int? ?? 0;
+    final consumed = summary['consumed'] as int? ?? 0;
+
+    if (consumed >= goal && goal > 0) {
+      // Daily goal completed! Big celebration
+      if (mounted) {
+        _showGoalCompletedDialog();
+      }
+    } else {
+      // Regular energy added celebration
+      if (mounted) {
+        SnackBarUtils.showSuccess(
+          context,
+          '⚡ +$energyLevel energy! ($consumed/$goal)',
+        );
+      }
+    }
+  }
+
+  void _showGoalCompletedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.green[50],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('🎉 ', style: TextStyle(fontSize: 32)),
+            Text('🌟 ', style: TextStyle(fontSize: 32)),
+            Text('🎊 ', style: TextStyle(fontSize: 32)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Daily Energy Goal Complete!',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "You've accomplished amazing things today! Take a moment to celebrate yourself. 💪",
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[700],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Keep Going! 🚀',
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Future<void> _handleRecurringTaskCompletion(Task task) async {
     try {
 
-    // Special handling for menstrual phase tasks with phaseDay:
-    // These should NOT auto-recalculate. User will manually recalculate when next period comes.
-    final isMenstrualPhaseTask = task.recurrence!.phaseDay != null &&
-        (task.recurrence!.types.contains(RecurrenceType.menstrualPhase) ||
-         task.recurrence!.types.contains(RecurrenceType.follicularPhase) ||
-         task.recurrence!.types.contains(RecurrenceType.ovulationPhase) ||
-         task.recurrence!.types.contains(RecurrenceType.earlyLutealPhase) ||
-         task.recurrence!.types.contains(RecurrenceType.lateLutealPhase));
+    // Special handling for menstrual phase tasks:
+    // These should NOT auto-recalculate to avoid scheduling to past dates.
+    // User will manually recalculate when next period comes.
+    final isMenstrualPhaseTask =
+        task.recurrence!.types.contains(RecurrenceType.menstrualPhase) ||
+        task.recurrence!.types.contains(RecurrenceType.follicularPhase) ||
+        task.recurrence!.types.contains(RecurrenceType.ovulationPhase) ||
+        task.recurrence!.types.contains(RecurrenceType.earlyLutealPhase) ||
+        task.recurrence!.types.contains(RecurrenceType.lateLutealPhase) ||
+        task.recurrence!.types.contains(RecurrenceType.menstrualStartDay) ||
+        task.recurrence!.types.contains(RecurrenceType.ovulationPeakDay);
 
     if (isMenstrualPhaseTask) {
-      // For menstrual phase tasks with specific phaseDay, just clear scheduledDate
-      // and mark as completed - user will recalculate when next period comes
+      // For menstrual phase tasks, clear scheduledDate and mark as completed.
+      // This prevents the broken getNextDueDate logic from scheduling to past dates.
       final updatedTask = Task(
         id: task.id,
         title: task.title,
@@ -990,6 +1182,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         isCompleted: true, // Mark as completed
         completedAt: DateTime.now(),
         createdAt: task.createdAt,
+        energyLevel: task.energyLevel,
       );
 
       final allTasks = await _taskService.loadTasks();
@@ -1003,8 +1196,11 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         await _updateDisplayTasks();
         setState(() {}); // Force rebuild AFTER display tasks updated
 
-        // Save to disk in background - this automatically updates widget
-        _taskService.saveTasks(allTasks);
+        // Explicitly cancel the notification for this completed task
+        await _taskService.cancelTaskNotification(updatedTask);
+
+        // Save to disk - this will also reschedule all notifications
+        await _taskService.saveTasks(allTasks);
         widget.onTasksChanged?.call();
       }
       return;
@@ -1696,6 +1892,14 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                   case 'random':
                     _selectRandomTask();
                     break;
+                  case 'energy_history':
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const EnergyCalendarScreen(),
+                      ),
+                    );
+                    break;
                 }
               },
               itemBuilder: (context) => [
@@ -1737,6 +1941,16 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                       Icon(Icons.casino_rounded, size: 20, color: AppColors.lightPink),
                       SizedBox(width: 12),
                       Text('Random Task'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'energy_history',
+                  child: Row(
+                    children: const [
+                      Icon(Icons.bolt_rounded, size: 20, color: AppColors.coral),
+                      SizedBox(width: 12),
+                      Text('Energy History'),
                     ],
                   ),
                 ),

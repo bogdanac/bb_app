@@ -3,12 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bb_app/Tasks/task_service.dart';
 import 'package:bb_app/Tasks/tasks_data_models.dart';
+import '../helpers/firebase_mock_helper.dart';
 
 void main() {
   group('TaskService', () {
     late TaskService taskService;
 
     setUp(() async {
+      // Initialize Firebase mocks
+      setupFirebaseMocks();
       // Initialize mock shared preferences with empty values
       SharedPreferences.setMockInitialValues({});
 

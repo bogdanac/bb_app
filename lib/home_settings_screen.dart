@@ -4,6 +4,7 @@ import 'Data/backup_screen.dart';
 import 'Routines/widget_color_settings_screen.dart';
 import 'WaterTracking/water_settings_screen.dart';
 import 'FoodTracking/food_tracking_settings_screen.dart';
+import 'Energy/energy_settings_screen.dart';
 import 'shared/error_logs_screen.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_styles.dart';
@@ -260,6 +261,75 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                               Text(
                                 'Goal: ${_waterGoal}ml • Tap: ${_waterAmount}ml • Reminders',
                                 style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.greyText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.greyText,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Energy Settings Section
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  border: Border.all(
+                    color: AppColors.normalCardBackground,
+                  ),
+                ),
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const EnergySettingsScreen(),
+                      ),
+                    );
+                  },
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.coral.withValues(alpha: 0.1),
+                            borderRadius: AppStyles.borderRadiusSmall,
+                          ),
+                          child: Icon(
+                            Icons.bolt_rounded,
+                            color: AppColors.coral,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Energy Tracking',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                'Configure daily energy goals based on cycle',
+                                style: TextStyle(
                                   fontSize: 14,
                                   color: AppColors.greyText,
                                 ),

@@ -72,6 +72,7 @@ class RoutineItem {
   bool isCompleted;
   bool isSkipped;      // Permanently skipped - won't come back
   bool isPostponed;    // Temporarily postponed - will come back later
+  int? energyLevel;    // Optional Body Battery impact (-5 to +5, null means use default -2)
 
   RoutineItem({
     required this.id,
@@ -79,6 +80,7 @@ class RoutineItem {
     required this.isCompleted,
     this.isSkipped = false,
     this.isPostponed = false,
+    this.energyLevel,
   });
 
   Map<String, dynamic> toJson() => {
@@ -87,13 +89,26 @@ class RoutineItem {
     'isCompleted': isCompleted,
     'isSkipped': isSkipped,
     'isPostponed': isPostponed,
+    if (energyLevel != null) 'energyLevel': energyLevel,
   };
 
-  static RoutineItem fromJson(Map<String, dynamic> json) => RoutineItem(
-    id: json['id'],
-    text: json['text'],
-    isCompleted: json['isCompleted'],
-    isSkipped: json['isSkipped'] ?? false,
-    isPostponed: json['isPostponed'] ?? false,
-  );
+  static RoutineItem fromJson(Map<String, dynamic> json) {
+    // Handle migration from old energy system (1-5) to new system (-5 to +5)
+    int? energyLevel = json['energyLevel'];
+
+    // If energy level is in old range (1-5), convert to new system
+    if (energyLevel != null && energyLevel >= 1 && energyLevel <= 5) {
+      // Convert: 1→-1, 2→-2, 3→-3, 4→-4, 5→-5
+      energyLevel = -energyLevel;
+    }
+
+    return RoutineItem(
+      id: json['id'],
+      text: json['text'],
+      isCompleted: json['isCompleted'],
+      isSkipped: json['isSkipped'] ?? false,
+      isPostponed: json['isPostponed'] ?? false,
+      energyLevel: energyLevel,
+    );
+  }
 }

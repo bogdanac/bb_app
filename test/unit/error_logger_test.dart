@@ -2,10 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bb_app/shared/error_logger.dart';
 import 'dart:convert';
+import '../helpers/firebase_mock_helper.dart';
 
 void main() {
   group('ErrorLogger Tests', () {
     setUp(() async {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
     });
 

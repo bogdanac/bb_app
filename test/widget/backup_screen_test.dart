@@ -3,10 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:bb_app/Data/backup_screen.dart';
+import '../helpers/firebase_mock_helper.dart';
 
 void main() {
   group('BackupScreen Widget Tests', () {
     setUp(() {
+      // Initialize Firebase mocks
+      setupFirebaseMocks();
       // Set up mock SharedPreferences
       SharedPreferences.setMockInitialValues({
         'auto_backup_enabled': true,

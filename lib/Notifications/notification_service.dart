@@ -295,9 +295,14 @@ class NotificationService {
 
   Future<void> cancelAllTaskNotifications() async {
     try {
-      // Cancel all task notifications (IDs 1000-9999)
-      for (int i = 1000; i < 10000; i++) {
-        await flutterLocalNotificationsPlugin.cancel(i);
+      // Get all pending notifications and cancel only task ones (more efficient)
+      final pendingNotifications = await flutterLocalNotificationsPlugin.pendingNotificationRequests();
+
+      for (final notification in pendingNotifications) {
+        // Task notifications are in range 1000-9999
+        if (notification.id >= 1000 && notification.id < 10000) {
+          await flutterLocalNotificationsPlugin.cancel(notification.id);
+        }
       }
 
     } catch (e, stackTrace) {
@@ -448,9 +453,14 @@ class NotificationService {
 
   Future<void> cancelAllRoutineNotifications() async {
     try {
-      // Cancel all routine notifications (IDs 2000-9999)
-      for (int i = 2000; i < 10000; i++) {
-        await flutterLocalNotificationsPlugin.cancel(i);
+      // Get all pending notifications and cancel only routine ones (more efficient)
+      final pendingNotifications = await flutterLocalNotificationsPlugin.pendingNotificationRequests();
+
+      for (final notification in pendingNotifications) {
+        // Routine notifications are in range 2000-9999
+        if (notification.id >= 2000 && notification.id < 10000) {
+          await flutterLocalNotificationsPlugin.cancel(notification.id);
+        }
       }
 
     } catch (e, stackTrace) {

@@ -122,9 +122,7 @@ class RoutineProgressService {
     var progressJson = prefs.getString('${_progressPrefix}${routineId}_$today');
 
     // Fallback to legacy morning routine progress for backwards compatibility
-    if (progressJson == null) {
-      progressJson = prefs.getString('morning_routine_progress_$today');
-    }
+    progressJson ??= prefs.getString('morning_routine_progress_$today');
 
     if (progressJson == null) {
       return null;

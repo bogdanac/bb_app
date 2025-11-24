@@ -3,14 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bb_app/Tasks/repositories/task_repository.dart';
 import 'package:bb_app/Tasks/tasks_data_models.dart';
+import '../helpers/firebase_mock_helper.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
   group('TaskRepository - CRUD Operations', () {
     late TaskRepository repository;
 
     setUp(() {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
       repository = TaskRepository();
     });
@@ -168,6 +168,7 @@ void main() {
     late TaskRepository repository;
 
     setUp(() {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
       repository = TaskRepository();
     });
@@ -256,6 +257,7 @@ void main() {
     late TaskRepository repository;
 
     setUp(() {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
       repository = TaskRepository();
     });
@@ -305,6 +307,7 @@ void main() {
     late TaskRepository repository;
 
     setUp(() {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
       repository = TaskRepository();
     });
@@ -359,6 +362,7 @@ void main() {
     late TaskRepository repository;
 
     setUp(() {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
       repository = TaskRepository();
     });
@@ -547,6 +551,7 @@ void main() {
     late TaskRepository repository;
 
     setUp(() {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
       repository = TaskRepository();
     });
@@ -673,6 +678,7 @@ void main() {
 
   group('TaskRepository - Multiple Instance Behavior', () {
     setUp(() {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
     });
 
@@ -710,6 +716,7 @@ void main() {
     late TaskRepository repository;
 
     setUp(() {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
       repository = TaskRepository();
     });
@@ -799,6 +806,7 @@ void main() {
     late TaskRepository repository;
 
     setUp(() {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
       repository = TaskRepository();
     });
@@ -855,6 +863,7 @@ void main() {
     late TaskRepository repository;
 
     setUp(() {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
       repository = TaskRepository();
     });

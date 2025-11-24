@@ -4,12 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bb_app/Routines/routine_card.dart';
 import 'package:bb_app/Routines/routine_service.dart';
 import 'package:bb_app/Routines/routine_data_models.dart';
+import '../helpers/firebase_mock_helper.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
   group('RoutineCard - Automatic Routine Progression', () {
     setUp(() async {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
     });
 
@@ -231,6 +231,7 @@ void main() {
 
   group('RoutineCard - Step Navigation', () {
     setUp(() async {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
     });
 
@@ -303,6 +304,7 @@ void main() {
 
   group('RoutineCard - Completion State', () {
     setUp(() async {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
     });
 

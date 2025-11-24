@@ -212,25 +212,88 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                     margin: const EdgeInsets.only(bottom: 8),
                     child: Padding(
                       padding: const EdgeInsets.all(12),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: TextEditingController(text: item.text),
-                              decoration: const InputDecoration(
-                                hintText: 'Enter step description...',
-                                border: InputBorder.none,
+                          Row(
+                            children: [
+                              Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  controller: TextEditingController(text: item.text),
+                                  decoration: const InputDecoration(
+                                    hintText: 'Enter step description...',
+                                    border: InputBorder.none,
+                                  ),
+                                  onChanged: (value) {
+                                    item.text = value;
+                                  },
+                                ),
                               ),
-                              onChanged: (value) {
-                                item.text = value;
-                              },
-                            ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_rounded, color: AppColors.deleteRed),
+                                onPressed: () => _removeItem(index),
+                              ),
+                            ],
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_rounded, color: AppColors.deleteRed),
-                            onPressed: () => _removeItem(index),
+                          // Energy level row
+                          Padding(
+                            padding: const EdgeInsets.only(left: 40, top: 4),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.bolt_rounded,
+                                  size: 16,
+                                  color: _getEnergyColor(item.energyLevel ?? 1),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Energy:',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.greyText,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                ...List.generate(5, (energyIndex) {
+                                  final level = energyIndex + 1;
+                                  final isSelected = (item.energyLevel ?? 1) == level;
+                                  return GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        item.energyLevel = level;
+                                      });
+                                    },
+                                    child: Container(
+                                      width: 28,
+                                      height: 28,
+                                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? _getEnergyColor(level)
+                                            : _getEnergyColor(level).withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: _getEnergyColor(level),
+                                          width: isSelected ? 2 : 1,
+                                        ),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          '$level',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                            color: isSelected ? Colors.white : _getEnergyColor(level),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -243,5 +306,22 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
         ),
       ),
     );
+  }
+
+  Color _getEnergyColor(int level) {
+    switch (level) {
+      case 1:
+        return AppColors.successGreen;
+      case 2:
+        return AppColors.lightGreen;
+      case 3:
+        return AppColors.yellow;
+      case 4:
+        return AppColors.orange;
+      case 5:
+        return AppColors.coral;
+      default:
+        return AppColors.greyText;
+    }
   }
 }

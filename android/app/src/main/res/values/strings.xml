@@ -5,4 +5,5 @@
     <string name="task_widget_description">Quick task creation - tap to add task</string>
     <string name="routine_widget_description">Morning routine tracker - complete your daily steps</string>
     <string name="task_list_widget_description">View and complete your tasks - tap to open app</string>
+    <string name="battery_flow_widget_description">Body Battery &amp; Flow tracker - quick stats and actions</string>
 </resources>

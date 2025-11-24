@@ -106,6 +106,21 @@
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/task_list_widget_info" />
         </receiver>
+
+        <!-- Battery & Flow Widget Provider -->
+        <receiver android:name=".BatteryFlowWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.bb.bb_app.BATTERY_MINUS" />
+                <action android:name="com.bb.bb_app.BATTERY_PLUS" />
+                <action android:name="com.bb.bb_app.FLOW_PLUS_1" />
+                <action android:name="com.bb.bb_app.FLOW_PLUS_2" />
+                <action android:name="com.bb.bb_app.OPEN_APP_ENERGY" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/battery_flow_widget_info" />
+        </receiver>
         
         <!-- Notification Listener Service -->
         <service android:name=".NotificationListener"

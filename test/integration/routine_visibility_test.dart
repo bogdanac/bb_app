@@ -2,12 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bb_app/Routines/routine_service.dart';
 import 'package:bb_app/Routines/routine_data_models.dart';
+import '../helpers/firebase_mock_helper.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
   group('Home Screen - Routine Visibility Based on Completion', () {
     setUp(() async {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
     });
 
@@ -267,6 +267,7 @@ void main() {
 
   group('Routine Override and Completion Interaction', () {
     setUp(() async {
+      setupFirebaseMocks();
       SharedPreferences.setMockInitialValues({});
     });
 

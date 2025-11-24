@@ -422,6 +422,8 @@ class _TaskCardState extends State<TaskCard> {
                                       }
                                     }).where((chip) => chip != null).cast<Widget>(),
                                   ],
+                                  // Energy level chip (last)
+                                  TaskCardUtils.buildEnergyChip(widget.task.energyLevel),
                                 ],
                               ),
                             ],
