@@ -8,3 +8,8 @@
 
 # device_calendar plugin - required for release builds
 -keep class com.builttoroam.devicecalendar.** { *; }
+
+# Play Core library - required for deferred components
+-dontwarn com.google.android.play.core.splitcompat.SplitCompatApplication
+-dontwarn com.google.android.play.core.splitinstall.**
+-dontwarn com.google.android.play.core.tasks.**
