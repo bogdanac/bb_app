@@ -261,7 +261,7 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                           ),
                         ),
                         Text(
-                          '${_settings.lowEnergyPeak}',
+                          '${_settings.minFlowGoal}',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -281,13 +281,13 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
                       ),
                       child: Slider(
-                        value: _settings.lowEnergyPeak.toDouble(),
+                        value: _settings.minFlowGoal.toDouble(),
                         min: 1,
                         max: 15,
                         divisions: 14,
                         onChanged: (value) {
                           setState(() {
-                            _settings = _settings.copyWith(lowEnergyPeak: value.round());
+                            _settings = _settings.copyWith(minFlowGoal: value.round());
                           });
                           _saveSettings();
                         },
@@ -351,7 +351,7 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                           ),
                         ),
                         Text(
-                          '${_settings.highEnergyPeak}',
+                          '${_settings.maxFlowGoal}',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -371,13 +371,13 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
                       ),
                       child: Slider(
-                        value: _settings.highEnergyPeak.toDouble(),
+                        value: _settings.maxFlowGoal.toDouble(),
                         min: 10,
                         max: 40,
                         divisions: 30,
                         onChanged: (value) {
                           setState(() {
-                            _settings = _settings.copyWith(highEnergyPeak: value.round());
+                            _settings = _settings.copyWith(maxFlowGoal: value.round());
                           });
                           _saveSettings();
                         },
