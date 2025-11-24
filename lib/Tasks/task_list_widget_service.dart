@@ -16,10 +16,15 @@ class TaskListWidgetService {
 
       // Trigger widget UI update
       await _channel.invokeMethod('updateTaskListWidget');
+
+      await ErrorLogger.logError(
+        source: 'TaskListWidget',
+        error: 'Step 6: Method channel triggered',
+      );
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
-        source: 'TaskListWidgetService.updateWidget',
-        error: 'Error updating task list widget: $e',
+        source: 'TaskListWidget',
+        error: 'Step 6 FAILED: ${e.toString()}',
         stackTrace: stackTrace.toString(),
       );
     }

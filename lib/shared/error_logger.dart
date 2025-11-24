@@ -35,20 +35,36 @@ class ErrorLogger {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        // Store all logs in a single document per user with an array of log entries
+        // Store all logs in a single document per user
+        // Convert context to string to avoid Firestore nested map issues
         final logEntry = {
           'source': source,
           'error': error,
-          'stackTrace': stackTrace,
-          'context': context,
-          'timestamp': FieldValue.serverTimestamp(),
+          'stackTrace': stackTrace ?? '',
+          'context': context?.toString() ?? '',
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
           'platform': defaultTargetPlatform.name,
         };
 
-        await _firestore.collection('error_logs').doc(user.uid).set({
-          'logs': FieldValue.arrayUnion([logEntry]),
+        final docRef = _firestore.collection('error_logs').doc(user.uid);
+        final doc = await docRef.get();
+
+        List<dynamic> logs = [];
+        if (doc.exists && doc.data() != null) {
+          logs = List<dynamic>.from(doc.data()!['logs'] ?? []);
+        }
+
+        logs.add(logEntry);
+
+        // Keep only last 500 logs
+        if (logs.length > 500) {
+          logs = logs.sublist(logs.length - 500);
+        }
+
+        await docRef.set({
+          'logs': logs,
           'lastUpdated': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        });
       }
     } catch (e) {
       // Log Firebase failures locally so they're visible in release builds

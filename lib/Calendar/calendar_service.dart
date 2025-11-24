@@ -80,8 +80,22 @@ class CalendarService {
   // Get today's events from all calendars
   Future<List<Event>> getTodaysEvents() async {
     try {
-      // Try to retrieve calendars directly - if permission is truly missing, this will fail
-      // This is more reliable than hasPermissions() which can give false negatives
+      // Request permissions first - this ensures the plugin has proper access
+      // Even if Android settings show permission granted, the plugin may need this call
+      final permResult = await _deviceCalendarPlugin.requestPermissions();
+      if (!permResult.isSuccess || !(permResult.data ?? false)) {
+        await ErrorLogger.logError(
+          source: 'CalendarService.getTodaysEvents',
+          error: 'Calendar permission not granted via plugin',
+          context: {
+            'isSuccess': permResult.isSuccess,
+            'data': permResult.data,
+            'errors': permResult.errors.map((e) => e.errorMessage).toList(),
+          },
+        );
+        return [];
+      }
+
       final calendarsResult = await _deviceCalendarPlugin.retrieveCalendars();
       if (!calendarsResult.isSuccess || calendarsResult.data == null) {
         await ErrorLogger.logError(
@@ -111,8 +125,9 @@ class CalendarService {
       }
 
       final today = DateTime.now();
-      final startOfDay = DateTime(today.year, today.month, today.day);
-      final endOfDay = startOfDay.add(const Duration(days: 1));
+      // Use local DateTime for calendar queries
+      final startOfDay = DateTime(today.year, today.month, today.day, 0, 0, 0);
+      final endOfDay = DateTime(today.year, today.month, today.day, 23, 59, 59);
 
       List<Event> allEvents = [];
 
@@ -141,7 +156,20 @@ class CalendarService {
           );
 
           if (eventsResult.isSuccess && eventsResult.data != null) {
+            final eventCount = eventsResult.data!.length;
             allEvents.addAll(eventsResult.data!);
+            // Log each calendar's result for debugging
+            await ErrorLogger.logError(
+              source: 'CalendarService.getTodaysEvents',
+              error: 'Calendar query result',
+              context: {
+                'calendarName': calendar.name ?? 'Unknown',
+                'calendarId': calendar.id,
+                'eventsFound': eventCount,
+                'accountName': calendar.accountName,
+                'isReadOnly': calendar.isReadOnly,
+              },
+            );
           } else {
             await ErrorLogger.logError(
               source: 'CalendarService.getTodaysEvents',
