@@ -208,6 +208,9 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             android.util.Log.d("TaskListWidget", "Loading tasks from SharedPreferences")
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
 
+            // Force reload from disk to get latest Flutter changes
+            prefs.all
+
             // Debug: Log all keys in SharedPreferences
             val allKeys = prefs.all.keys
             android.util.Log.d("TaskListWidget", "Available keys: ${allKeys.joinToString(", ")}")

@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'tasks_data_models.dart';
 import 'task_service.dart';
+import 'services/task_priority_service.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
 import '../MenstrualCycle/menstrual_cycle_constants.dart';
 import '../shared/error_logger.dart';
@@ -50,6 +51,22 @@ class TaskListWidgetFilterService {
         context: {'totalTasks': taskCount},
       );
 
+      // Get current menstrual phase for prioritization (match TODO screen logic)
+      String? currentPhase;
+      final prefs = await SharedPreferences.getInstance();
+      final lastStartStr = prefs.getString('last_period_start');
+      final lastEndStr = prefs.getString('last_period_end');
+      final averageCycleLength = prefs.getInt('average_cycle_length') ?? 28;
+      if (lastStartStr != null) {
+        final lastPeriodStart = DateTime.parse(lastStartStr);
+        final lastPeriodEnd = lastEndStr != null ? DateTime.parse(lastEndStr) : null;
+        currentPhase = MenstrualCycleUtils.getCyclePhase(
+          lastPeriodStart,
+          lastPeriodEnd,
+          averageCycleLength,
+        );
+      }
+
       // Apply menstrual phase filtering (flower icon ON behavior)
       final filteredTasks = await _applyMenstrualFiltering(allTasks);
       filteredCount = filteredTasks.length;
@@ -70,10 +87,13 @@ class TaskListWidgetFilterService {
         context: {'incompleteTasks': incompleteCount},
       );
 
-      final prioritizedTasks = await taskService.getPrioritizedTasks(
+      // Call priority service directly (sync) instead of async wrapper
+      final priorityService = TaskPriorityService();
+      final prioritizedTasks = priorityService.getPrioritizedTasks(
         incompleteTasks,
         categories,
         _maxWidgetTasks,
+        currentMenstrualPhase: currentPhase,
       );
       prioritizedCount = prioritizedTasks.length;
 

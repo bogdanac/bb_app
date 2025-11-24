@@ -88,10 +88,13 @@ class CalendarService {
       List<Event> allEvents = [];
 
       for (final calendar in calendars) {
+        // Skip calendars with null ID
+        final calendarId = calendar.id;
+        if (calendarId == null) continue;
+
         try {
-          // Original logic - use calendar.id! directly
           final eventsResult = await _deviceCalendarPlugin.retrieveEvents(
-            calendar.id!,
+            calendarId,
             RetrieveEventsParams(
               startDate: startOfDay,
               endDate: endOfDay,
@@ -108,7 +111,7 @@ class CalendarService {
             stackTrace: stackTrace.toString(),
             context: {
               'calendarName': calendar.name,
-              'calendarId': calendar.id,
+              'calendarId': calendarId,
             },
           );
         }
