@@ -20,7 +20,7 @@ class TaskListWidgetService {
 
       // Verify data was saved correctly
       final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getStringList('flutter.widget_filtered_tasks');
+      final saved = prefs.getStringList('widget_filtered_tasks');
       await ErrorLogger.logError(
         source: 'TaskListWidget',
         error: 'Step 6: Verified saved data',

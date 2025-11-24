@@ -22,7 +22,7 @@ import '../shared/error_logger.dart';
 /// Filtering = which tasks to include (phase match)
 /// Prioritization = what order to display them (due dates, reminders, etc.)
 class TaskListWidgetFilterService {
-  static const String _widgetTasksKey = 'flutter.widget_filtered_tasks';
+  static const String _widgetTasksKey = 'widget_filtered_tasks';
   static const int _maxWidgetTasks = 5;
 
   /// Update the widget's task list with filtered and prioritized tasks
