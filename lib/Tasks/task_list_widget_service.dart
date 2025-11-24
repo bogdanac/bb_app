@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'task_service.dart';
 import 'task_list_widget_filter_service.dart';
 import '../shared/error_logger.dart';
@@ -17,9 +18,13 @@ class TaskListWidgetService {
       // Trigger widget UI update
       await _channel.invokeMethod('updateTaskListWidget');
 
+      // Verify data was saved correctly
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getStringList('flutter.widget_filtered_tasks');
       await ErrorLogger.logError(
         source: 'TaskListWidget',
-        error: 'Step 6: Method channel triggered',
+        error: 'Step 6: Verified saved data',
+        context: {'savedCount': saved?.length ?? 0},
       );
     } catch (e, stackTrace) {
       await ErrorLogger.logError(

@@ -39,24 +39,23 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
     });
 
     try {
-      // Try to get events directly - getTodaysEvents handles permission internally
+      // Original logic: check permission first
+      bool hasPermission = await _calendarService.hasCalendarPermission();
+
+      if (!hasPermission) {
+        setState(() {
+          _hasPermission = false;
+          _isLoading = false;
+        });
+        return;
+      }
+
       final events = await _calendarService.getTodaysEvents();
 
       if (mounted) {
-        // Log if we got 0 events from the UI side as well
-        if (events.isEmpty) {
-          await ErrorLogger.logError(
-            source: 'CalendarEventsCard._loadEvents',
-            error: 'Received empty events list from service',
-            context: {
-              'timestamp': DateTime.now().toIso8601String(),
-            },
-          );
-        }
-
         setState(() {
           _events = events;
-          _hasPermission = true; // Assume permission is granted if getTodaysEvents didn't throw
+          _hasPermission = true;
           _isLoading = false;
         });
       }
@@ -66,22 +65,11 @@ class _CalendarEventsCardState extends State<CalendarEventsCard> {
         error: 'Exception loading events: $e',
         stackTrace: stackTrace.toString(),
       );
-
-      // Check if it's a permission issue
-      bool hasPermission = await _calendarService.hasCalendarPermission();
-
       if (mounted) {
-        if (!hasPermission) {
-          setState(() {
-            _hasPermission = false;
-            _isLoading = false;
-          });
-        } else {
-          setState(() {
-            _errorMessage = 'Error loading events: $e';
-            _isLoading = false;
-          });
-        }
+        setState(() {
+          _errorMessage = 'Error loading events: $e';
+          _isLoading = false;
+        });
       }
     }
   }

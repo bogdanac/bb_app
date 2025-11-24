@@ -35,35 +35,22 @@ class ErrorLogger {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        // Store all logs in a single document per user
-        // Convert context to string to avoid Firestore nested map issues
-        final logEntry = {
-          'source': source,
-          'error': error,
-          'stackTrace': stackTrace ?? '',
-          'context': context?.toString() ?? '',
-          'timestamp': DateTime.now().toUtc().toIso8601String(),
-          'platform': defaultTargetPlatform.name,
-        };
+        // Format log as single line of text
+        final logLine = '[${DateTime.now().toUtc().toIso8601String()}] [$source] $error${context != null ? ' | $context' : ''}${stackTrace != null && stackTrace.isNotEmpty ? '\n$stackTrace' : ''}';
 
         final docRef = _firestore.collection('error_logs').doc(user.uid);
         final doc = await docRef.get();
 
-        List<dynamic> logs = [];
+        String existingLogs = '';
         if (doc.exists && doc.data() != null) {
-          logs = List<dynamic>.from(doc.data()!['logs'] ?? []);
+          existingLogs = doc.data()!['logs'] ?? '';
         }
 
-        logs.add(logEntry);
-
-        // Keep only last 500 logs
-        if (logs.length > 500) {
-          logs = logs.sublist(logs.length - 500);
-        }
+        // Append new log with newline
+        final newLogs = existingLogs.isEmpty ? logLine : '$existingLogs\n$logLine';
 
         await docRef.set({
-          'logs': logs,
-          'lastUpdated': FieldValue.serverTimestamp(),
+          'logs': newLogs,
         });
       }
     } catch (e) {
