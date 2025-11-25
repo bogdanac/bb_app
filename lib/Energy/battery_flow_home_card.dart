@@ -64,6 +64,8 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
+      // Always reload data on resume to pick up widget changes
+      _loadData();
       _checkForNewDay();
     }
   }
@@ -327,8 +329,8 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                           Text(
                             '$flowPoints/$flowGoal',
                             style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
                               color: _todayRecord!.isGoalMet ? AppColors.successGreen : Colors.white,
                             ),
                           ),

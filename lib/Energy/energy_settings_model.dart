@@ -123,10 +123,6 @@ class DailyEnergyRecord {
   // Flow progress percentage
   double get flowPercentage => flowGoal > 0 ? (flowPoints / flowGoal * 100).clamp(0, 200) : 0;
 
-  // Legacy support for old energy tracking
-  int get energyGoal => flowGoal;
-  int get energyConsumed => entries.fold<int>(0, (sum, e) => sum + e.energyLevel.abs());
-
   double get completionPercentage => flowPercentage;
 
   EnergyCompletionLevel get completionLevel {

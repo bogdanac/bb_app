@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'energy_settings_model.dart';
 import 'flow_calculator.dart';
-import 'battery_flow_widget_channel.dart';
+import 'battery_flow_widget_service.dart';
 
 /// Service for persisting and retrieving Body Battery & Flow data
 class EnergyService {
@@ -54,7 +54,7 @@ class EnergyService {
     await _addToHistory(record);
 
     // Update widget
-    await BatteryFlowWidgetChannel.updateWidget();
+    await BatteryFlowWidgetService.updateWidget();
   }
 
   /// Add energy consumption for completed task
@@ -198,21 +198,26 @@ class EnergyService {
   }
 
   /// Get summary of today's energy (for UI display)
+  /// Uses flowPoints and flowGoal for the new Body Battery & Flow system
   static Future<Map<String, dynamic>> getTodaySummary() async {
     final record = await getTodayRecord();
     if (record == null) {
       return {
         'goal': 0,
-        'consumed': 0,
+        'flowPoints': 0,
         'remaining': 0,
         'percentage': 0.0,
+        'battery': 100,
+        'isGoalMet': false,
       };
     }
     return {
-      'goal': record.energyGoal,
-      'consumed': record.energyConsumed,
-      'remaining': (record.energyGoal - record.energyConsumed).clamp(0, record.energyGoal),
-      'percentage': record.completionPercentage,
+      'goal': record.flowGoal,
+      'flowPoints': record.flowPoints,
+      'remaining': (record.flowGoal - record.flowPoints).clamp(0, record.flowGoal),
+      'percentage': record.flowPercentage,
+      'battery': record.currentBattery,
+      'isGoalMet': record.isGoalMet,
     };
   }
 
@@ -242,9 +247,7 @@ class EnergyService {
     final isGoalMet = FlowCalculator.isFlowGoalMet(newFlowPoints, today.flowGoal);
 
     // If goal was previously met but now broken, reset streak
-    int newStreak = settings.currentStreak;
     if (!isGoalMet && today.isGoalMet) {
-      newStreak = 0;
       await saveSettings(settings.copyWith(currentStreak: 0));
     }
 
@@ -259,10 +262,10 @@ class EnergyService {
     await saveTodayRecord(updatedRecord);
   }
 
-  /// Get total energy consumed today
-  static Future<int> getTodayConsumedEnergy() async {
+  /// Get total flow points earned today
+  static Future<int> getTodayFlowPoints() async {
     final record = await getTodayRecord();
-    return record?.energyConsumed ?? 0;
+    return record?.flowPoints ?? 0;
   }
 
   /// Initialize today's record with battery, flow goal, and phase info

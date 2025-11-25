@@ -93,22 +93,13 @@ class RoutineItem {
   };
 
   static RoutineItem fromJson(Map<String, dynamic> json) {
-    // Handle migration from old energy system (1-5) to new system (-5 to +5)
-    int? energyLevel = json['energyLevel'];
-
-    // If energy level is in old range (1-5), convert to new system
-    if (energyLevel != null && energyLevel >= 1 && energyLevel <= 5) {
-      // Convert: 1→-1, 2→-2, 3→-3, 4→-4, 5→-5
-      energyLevel = -energyLevel;
-    }
-
     return RoutineItem(
       id: json['id'],
       text: json['text'],
       isCompleted: json['isCompleted'],
       isSkipped: json['isSkipped'] ?? false,
       isPostponed: json['isPostponed'] ?? false,
-      energyLevel: energyLevel,
+      energyLevel: json['energyLevel'],
     );
   }
 }

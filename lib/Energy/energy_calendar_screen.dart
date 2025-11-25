@@ -238,7 +238,7 @@ class _EnergyCalendarScreenState extends State<EnergyCalendarScreen> {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              '${record.energyConsumed}',
+                              '${record.flowPoints}',
                               style: const TextStyle(
                                 fontSize: 8,
                                 fontWeight: FontWeight.bold,

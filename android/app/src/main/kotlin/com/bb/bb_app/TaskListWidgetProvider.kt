@@ -502,7 +502,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 if (id == completedTaskId) {
                     // Skip this task - don't add to updated list
                     taskRemoved = true
-                    android.util.Log.d("TaskListWidget", "Removed completed task from widget list: $completedTaskId")
                 } else {
                     // Keep this task
                     updatedWidgetTasks.add(taskJson.toString())
@@ -517,9 +516,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 prefs.edit()
                     .putString("flutter.widget_filtered_tasks", encodedValue)
                     .apply()
-                android.util.Log.d("TaskListWidget", "Saved updated filtered widget tasks (${updatedWidgetTasks.size} remaining)")
-            } else {
-                android.util.Log.d("TaskListWidget", "Task not found in filtered list - may have already been removed")
             }
         } catch (e: Exception) {
             android.util.Log.e("TaskListWidget", "Error updating filtered widget tasks: $e")
@@ -533,7 +529,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             val appWidgetIds = appWidgetManager.getAppWidgetIds(
                 android.content.ComponentName(context, TaskListWidgetProvider::class.java)
             )
-            android.util.Log.d("TaskListWidget", "Refreshing ${appWidgetIds.size} widgets")
             onUpdate(context, appWidgetManager, appWidgetIds)
         } catch (e: Exception) {
             android.util.Log.e("TaskListWidget", "Error refreshing widgets: $e")

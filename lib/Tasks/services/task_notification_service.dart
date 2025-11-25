@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../tasks_data_models.dart';
 import '../../Notifications/notification_service.dart';
 import '../../shared/error_logger.dart';
+import '../../MenstrualCycle/menstrual_cycle_utils.dart';
+import '../../MenstrualCycle/menstrual_cycle_constants.dart';
 
 /// Service responsible for scheduling and managing task notifications.
 /// Handles ONLY notification-related operations.
@@ -23,6 +26,7 @@ class TaskNotificationService {
   }
 
   /// Schedule notifications for all tasks with reminder times
+  /// Menstrual phase tasks are only scheduled if currently in the correct phase
   Future<void> scheduleAllTaskNotifications(List<Task> tasks) async {
     try {
       // Cancel all existing task notifications
@@ -31,7 +35,18 @@ class TaskNotificationService {
       // Schedule notifications for all tasks with reminder times
       for (final task in tasks) {
         if (!task.isCompleted && task.reminderTime != null) {
-          await scheduleTaskNotification(task);
+          // Check if this is a menstrual phase task
+          if (_isMenstrualCycleTask(task)) {
+            // Only schedule if we're in the correct menstrual phase
+            final isDueToday = await _isMenstrualTaskDueToday(task);
+            if (isDueToday) {
+              await scheduleTaskNotification(task);
+            }
+            // Skip scheduling notification if not in correct phase
+          } else {
+            // Non-menstrual tasks are scheduled normally
+            await scheduleTaskNotification(task);
+          }
         }
       }
     } catch (e, stackTrace) {
@@ -42,6 +57,112 @@ class TaskNotificationService {
         context: {'taskCount': tasks.length},
       );
     }
+  }
+
+  /// Check if a task is a menstrual cycle task
+  bool _isMenstrualCycleTask(Task task) {
+    if (task.recurrence == null) return false;
+
+    const menstrualTypes = [
+      RecurrenceType.menstrualPhase,
+      RecurrenceType.follicularPhase,
+      RecurrenceType.ovulationPhase,
+      RecurrenceType.earlyLutealPhase,
+      RecurrenceType.lateLutealPhase,
+      RecurrenceType.menstrualStartDay,
+      RecurrenceType.ovulationPeakDay,
+    ];
+    return task.recurrence!.types.any((type) => menstrualTypes.contains(type));
+  }
+
+  /// Check if a menstrual task should show today based on current phase
+  Future<bool> _isMenstrualTaskDueToday(Task task) async {
+    if (task.recurrence == null) return false;
+
+    final recurrenceTypes = task.recurrence!.types;
+
+    // Check if task has regular recurrence in addition to menstrual phases
+    final hasRegularRecurrence = recurrenceTypes.any((type) =>
+      type == RecurrenceType.daily ||
+      type == RecurrenceType.weekly ||
+      type == RecurrenceType.monthly ||
+      type == RecurrenceType.yearly ||
+      type == RecurrenceType.custom
+    );
+
+    // If task has NO menstrual phases, use regular due today logic
+    if (!_isMenstrualCycleTask(task)) {
+      return task.isDueToday();
+    }
+
+    // Get menstrual cycle data from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final lastStartStr = prefs.getString('last_period_start');
+    final lastEndStr = prefs.getString('last_period_end');
+    final averageCycleLength = prefs.getInt('average_cycle_length') ?? 28;
+
+    if (lastStartStr == null) return false;
+
+    final lastPeriodStart = DateTime.parse(lastStartStr);
+    final lastPeriodEnd = lastEndStr != null ? DateTime.parse(lastEndStr) : null;
+
+    // Get current menstrual cycle phase
+    final currentPhase = MenstrualCycleUtils.getCyclePhase(lastPeriodStart, lastPeriodEnd, averageCycleLength);
+
+    // Check if current phase matches any of the selected menstrual phases
+    bool isInCorrectPhase = false;
+
+    if (recurrenceTypes.contains(RecurrenceType.menstrualPhase) &&
+        currentPhase == MenstrualCycleConstants.menstrualPhase) {
+      isInCorrectPhase = true;
+    }
+    if (recurrenceTypes.contains(RecurrenceType.follicularPhase) &&
+        currentPhase == MenstrualCycleConstants.follicularPhase) {
+      isInCorrectPhase = true;
+    }
+    if (recurrenceTypes.contains(RecurrenceType.ovulationPhase) &&
+        currentPhase == MenstrualCycleConstants.ovulationPhase) {
+      isInCorrectPhase = true;
+    }
+    if (recurrenceTypes.contains(RecurrenceType.earlyLutealPhase) &&
+        currentPhase == MenstrualCycleConstants.earlyLutealPhase) {
+      isInCorrectPhase = true;
+    }
+    if (recurrenceTypes.contains(RecurrenceType.lateLutealPhase) &&
+        currentPhase == MenstrualCycleConstants.lateLutealPhase) {
+      isInCorrectPhase = true;
+    }
+
+    // Handle special day types
+    if (recurrenceTypes.contains(RecurrenceType.menstrualStartDay)) {
+      final now = DateTime.now();
+      final daysSinceStart = now.difference(lastPeriodStart).inDays + 1;
+      if (daysSinceStart == 1) {
+        isInCorrectPhase = true;
+      }
+    }
+    if (recurrenceTypes.contains(RecurrenceType.ovulationPeakDay)) {
+      final now = DateTime.now();
+      final daysSinceStart = now.difference(lastPeriodStart).inDays + 1;
+      if (daysSinceStart == 14) { // Ovulation peak day
+        isInCorrectPhase = true;
+      }
+    }
+
+    // If not in the correct menstrual phase, don't schedule notification
+    if (!isInCorrectPhase) {
+      return false;
+    }
+
+    // If task has BOTH regular recurrence AND menstrual phases:
+    // Must also be due according to regular recurrence
+    if (hasRegularRecurrence) {
+      return task.isDueToday();
+    }
+
+    // If task has ONLY menstrual phases (no regular recurrence):
+    // Task is due if we're in the correct phase
+    return true;
   }
 
   /// Schedule a notification for a single task
@@ -79,8 +200,11 @@ class TaskNotificationService {
       // Determine recurrence type for proper notification scheduling
       // IMPORTANT: If task is postponed, schedule as one-time notification
       // to prevent today's notification from firing
+      // IMPORTANT: Menstrual phase tasks are ALWAYS scheduled as one-time notifications
+      // because they need to be re-evaluated when the phase changes
       String? recurrenceType;
-      bool shouldScheduleAsRecurring = task.recurrence != null && !task.isPostponed;
+      final isMenstrualTask = _isMenstrualCycleTask(task);
+      bool shouldScheduleAsRecurring = task.recurrence != null && !task.isPostponed && !isMenstrualTask;
 
       if (shouldScheduleAsRecurring && task.recurrence!.types.isNotEmpty) {
         final primaryType = task.recurrence!.types.first;

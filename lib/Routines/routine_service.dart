@@ -227,14 +227,6 @@ class RoutineService {
     }
   }
 
-  /// Find routine from a list of routines that is active today
-  /// @deprecated Use getCurrentActiveRoutine instead for consistency
-  static Future<Routine?> findRoutine(List<Routine> routines) async {
-    // Just delegate to the new unified method
-    return getCurrentActiveRoutine(routines);
-  }
-
-
   /// Save routine progress for today
   static Future<void> saveRoutineProgress({
     required int currentStepIndex,

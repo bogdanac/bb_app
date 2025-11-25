@@ -318,12 +318,19 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
   }
 
   String _getEnergyLabel(int level) {
-    if (level <= -4) return 'Very draining';
-    if (level <= -2) return 'Draining';
-    if (level < 0) return 'Slightly draining';
-    if (level == 0) return 'Neutral';
-    if (level <= 2) return 'Slightly charging';
-    if (level <= 4) return 'Charging';
-    return 'Very charging';
+    switch (level) {
+      case -5: return 'Exhausting (-50%)';
+      case -4: return 'Very draining (-40%)';
+      case -3: return 'Draining (-30%)';
+      case -2: return 'Moderate effort (-20%)';
+      case -1: return 'Light effort (-10%)';
+      case 0: return 'Neutral (0%)';
+      case 1: return 'Relaxing (+10%)';
+      case 2: return 'Refreshing (+20%)';
+      case 3: return 'Energizing (+30%)';
+      case 4: return 'Very energizing (+40%)';
+      case 5: return 'Restorative (+50%)';
+      default: return 'Unknown';
+    }
   }
 }

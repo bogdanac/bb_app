@@ -1,23 +1,27 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+/// Service for Battery & Flow widget integration
 class BatteryFlowWidgetService {
-  static const platform = MethodChannel('com.bb.bb_app/widget');
+  static const MethodChannel _channel =
+      MethodChannel('com.bb.bb_app/battery_flow_widget');
 
-  /// Update the widget display (called from Flutter when data changes)
+  /// Update the Battery & Flow widget display
+  /// Call this whenever battery or flow points change
   static Future<void> updateWidget() async {
     try {
-      await platform.invokeMethod('updateBatteryFlowWidget');
+      await _channel.invokeMethod('updateBatteryFlowWidget');
     } catch (e) {
-      print('Error updating battery flow widget: $e');
+      debugPrint('Error updating Battery & Flow widget: $e');
     }
   }
 
-  /// Refresh widget color after color change
+  /// Refresh widget after color/settings change
   static Future<void> refreshWidgetColor() async {
     try {
-      await platform.invokeMethod('updateBatteryFlowWidget');
+      await _channel.invokeMethod('updateBatteryFlowWidget');
     } catch (e) {
-      print('Error refreshing battery flow widget color: $e');
+      debugPrint('Error refreshing Battery & Flow widget: $e');
     }
   }
 }

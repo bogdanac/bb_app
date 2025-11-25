@@ -6,6 +6,8 @@ import 'routine_progress_service.dart';
 import '../shared/snackbar_utils.dart';
 import '../shared/error_logger.dart';
 import '../Energy/energy_service.dart';
+import '../Energy/energy_celebrations.dart';
+import '../Energy/flow_calculator.dart';
 
 // ROUTINE EXECUTION SCREEN - UPDATED WITH SAVE FUNCTIONALITY
 class RoutineExecutionScreen extends StatefulWidget {
@@ -134,92 +136,53 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
   }
 
   Future<void> _showEnergyCelebration(int energyLevel) async {
-    // Check if we completed our daily goal
-    final summary = await EnergyService.getTodaySummary();
-    final goal = summary['goal'] as int? ?? 0;
-    final consumed = summary['consumed'] as int? ?? 0;
+    // Get today's record for proper flow points tracking
+    final record = await EnergyService.getTodayRecord();
+    if (record == null) return;
 
-    if (consumed >= goal && goal > 0) {
-      // Daily goal completed! Big celebration
-      if (mounted) {
-        _showGoalCompletedDialog();
+    final flowPoints = record.flowPoints;
+    final flowGoal = record.flowGoal;
+    final pointsEarned = FlowCalculator.calculateFlowPoints(energyLevel);
+    final settings = await EnergyService.loadSettings();
+
+    // Check for achievements
+    if (record.isGoalMet && mounted) {
+      // Check if this is a streak milestone
+      final milestone = FlowCalculator.getStreakMilestone(settings.currentStreak);
+      if (milestone != null) {
+        await EnergyCelebrations.showStreakMilestoneCelebration(context, settings.currentStreak);
+      } else if (record.isPR) {
+        // Personal record!
+        await EnergyCelebrations.showPersonalRecordCelebration(
+          context,
+          flowPoints,
+          settings.personalRecord > flowPoints ? settings.personalRecord : flowPoints - pointsEarned,
+        );
+      } else {
+        // Goal met celebration
+        await EnergyCelebrations.showGoalMetCelebration(context, flowPoints, flowGoal);
       }
     } else {
-      // Regular energy added celebration
+      // Regular flow points added - show snackbar
       if (mounted) {
+        final batteryChange = FlowCalculator.calculateBatteryChange(energyLevel);
+        final batteryText = batteryChange >= 0 ? '+$batteryChange%' : '$batteryChange%';
         SnackBarUtils.showSuccess(
           context,
-          '⚡ +$energyLevel energy! ($consumed/$goal)',
+          '⚡ $batteryText battery, $pointsEarned pts ($flowPoints/$flowGoal)',
         );
       }
     }
   }
 
   Color _getEnergyColor(int level) {
-    switch (level) {
-      case 1:
-        return Colors.green;
-      case 2:
-        return Colors.lightGreen;
-      case 3:
-        return Colors.amber;
-      case 4:
-        return Colors.orange;
-      case 5:
-        return AppColors.coral;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  void _showGoalCompletedDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.green[50],
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('🎉 ', style: TextStyle(fontSize: 32)),
-            Text('🌟 ', style: TextStyle(fontSize: 32)),
-            Text('🎊 ', style: TextStyle(fontSize: 32)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Daily Energy Goal Complete!',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.green,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              "You've accomplished amazing things today! Take a moment to celebrate yourself. 💪",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[700],
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Keep Going! 🚀',
-              style: TextStyle(fontSize: 16),
-            ),
-          ),
-        ],
-      ),
-    );
+    // -5 to +5 scale: negative = draining (red), positive = charging (green)
+    if (level <= -4) return AppColors.coral;
+    if (level <= -2) return AppColors.orange;
+    if (level < 0) return Colors.amber;
+    if (level == 0) return Colors.grey;
+    if (level <= 2) return Colors.lightGreen;
+    return Colors.green;
   }
 
   Future<void> _skipItem(int index) async {

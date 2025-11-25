@@ -575,7 +575,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('BBetter',
+          title: const Text('bbetter',
               style: TextStyle(fontWeight: FontWeight.w500)),
           backgroundColor: AppColors.transparent,
         ),

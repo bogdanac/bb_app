@@ -3,17 +3,18 @@ import '../MenstrualCycle/menstrual_cycle_utils.dart';
 import 'energy_settings_model.dart';
 import 'energy_service.dart';
 
-/// Calculator for daily energy goals based on menstrual cycle phase
+/// Calculator for daily flow goals and battery suggestions based on menstrual cycle phase
 ///
-/// Energy calculation logic:
-/// - Ovulation = peak high energy goal (highEnergyPeak)
-/// - Last luteal phase day = peak low energy goal (lowEnergyPeak)
-/// - Each day closer to ovulation adds energy
-/// - Each day closer to late luteal subtracts energy
+/// Flow goal calculation logic:
+/// - Ovulation = peak high flow goal (maxFlowGoal)
+/// - Last luteal phase day = peak low flow goal (minFlowGoal)
+/// - Each day closer to ovulation increases goal
+/// - Each day closer to late luteal decreases goal
 ///
-/// Energy levels represent both time AND task difficulty:
-/// - 1 energy = ~5 min easy task
-/// - 5 energy = time consuming/difficult task
+/// Task energy levels (-5 to +5):
+/// - Negative = draining tasks (earn more flow points)
+/// - Positive = charging tasks (restore battery)
+/// - Default is -1 (slightly draining)
 class EnergyCalculator {
   /// Calculate today's flow goal based on menstrual phase
   static Future<int> calculateTodayGoal() async {

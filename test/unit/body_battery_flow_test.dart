@@ -391,7 +391,7 @@ void main() {
     });
   });
 
-  group('Task - Energy Level Migration', () {
+  group('Task - Energy Level', () {
     test('should default to -1 for new tasks', () {
       final task = Task(
         id: 'test1',
@@ -400,7 +400,7 @@ void main() {
       expect(task.energyLevel, -1);
     });
 
-    test('should accept new energy range', () {
+    test('should accept full energy range (-5 to +5)', () {
       final taskDrain = Task(
         id: 'test2',
         title: 'Draining Task',
@@ -415,50 +415,10 @@ void main() {
       );
       expect(taskCharge.energyLevel, 3);
     });
-
-    test('should migrate old energy values (1-5) to new system', () {
-      final json1 = {
-        'id': 'old1',
-        'title': 'Old Task 1',
-        'categoryIds': <String>[],
-        'createdAt': DateTime.now().toIso8601String(),
-        'energyLevel': 1,
-      };
-      expect(Task.fromJson(json1).energyLevel, -1);
-
-      final json2 = {
-        'id': 'old2',
-        'title': 'Old Task 2',
-        'categoryIds': <String>[],
-        'createdAt': DateTime.now().toIso8601String(),
-        'energyLevel': 3,
-      };
-      expect(Task.fromJson(json2).energyLevel, -3);
-
-      final json5 = {
-        'id': 'old5',
-        'title': 'Old Task 5',
-        'categoryIds': <String>[],
-        'createdAt': DateTime.now().toIso8601String(),
-        'energyLevel': 5,
-      };
-      expect(Task.fromJson(json5).energyLevel, -5);
-    });
-
-    test('should not migrate already-migrated values', () {
-      final jsonNew = {
-        'id': 'new1',
-        'title': 'New Task',
-        'categoryIds': <String>[],
-        'createdAt': DateTime.now().toIso8601String(),
-        'energyLevel': -3,
-      };
-      expect(Task.fromJson(jsonNew).energyLevel, -3);
-    });
   });
 
-  group('RoutineItem - Energy Level Migration', () {
-    test('should still default to null', () {
+  group('RoutineItem - Energy Level', () {
+    test('should default to null', () {
       final item = RoutineItem(
         id: 'item1',
         text: 'Test Item',
@@ -467,7 +427,7 @@ void main() {
       expect(item.energyLevel, null);
     });
 
-    test('should accept new energy range', () {
+    test('should accept full energy range (-5 to +5)', () {
       final itemDrain = RoutineItem(
         id: 'item2',
         text: 'Hard Step',
@@ -483,34 +443,6 @@ void main() {
         energyLevel: 2,
       );
       expect(itemCharge.energyLevel, 2);
-    });
-
-    test('should migrate old energy values', () {
-      final json1 = {
-        'id': 'old1',
-        'text': 'Old Item 1',
-        'isCompleted': false,
-        'energyLevel': 2,
-      };
-      expect(RoutineItem.fromJson(json1).energyLevel, -2);
-
-      final json4 = {
-        'id': 'old4',
-        'text': 'Old Item 4',
-        'isCompleted': true,
-        'energyLevel': 4,
-      };
-      expect(RoutineItem.fromJson(json4).energyLevel, -4);
-    });
-
-    test('should not migrate already-migrated values', () {
-      final jsonNew = {
-        'id': 'new1',
-        'text': 'New Item',
-        'isCompleted': false,
-        'energyLevel': -3,
-      };
-      expect(RoutineItem.fromJson(jsonNew).energyLevel, -3);
     });
   });
 }

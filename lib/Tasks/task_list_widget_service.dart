@@ -38,15 +38,11 @@ class TaskListWidgetService {
   /// Force reload and re-sort tasks (called when widget refresh is triggered)
   static Future<void> refreshTasks() async {
     try {
-      if (kDebugMode) {
-        print('Widget refresh triggered - reloading and re-sorting tasks');
-      }
+      debugPrint('Widget refresh triggered - reloading and re-sorting tasks');
       final taskService = TaskService();
       final tasks = await taskService.loadTasks();
       await taskService.saveTasks(tasks); // This will re-sort and save
-      if (kDebugMode) {
-        print('Tasks reloaded and re-sorted successfully');
-      }
+      debugPrint('Tasks reloaded and re-sorted successfully');
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'TaskListWidgetService.refreshTasks',

@@ -10,6 +10,7 @@ import '../shared/snackbar_utils.dart';
 import 'task_service.dart';
 import 'task_builder.dart';
 import '../shared/error_logger.dart';
+import '../Energy/flow_calculator.dart';
 
 class TaskEditScreen extends StatefulWidget {
   final Task? task;
@@ -43,7 +44,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   bool _hasUnsavedChanges = false;
   bool _showSaved = false;
   Task? _currentTask; // Track the current task to prevent duplicates
-  int _energyLevel = 1; // Energy cost of the task (1-5)
+  int _energyLevel = -1; // Energy level of the task (-5 to +5, default -1 = slightly draining)
 
   @override
   void initState() {
@@ -975,100 +976,81 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
 
             const SizedBox(height: 16),
 
-            // Energy Level Section
+            // Energy Level Section (-5 to +5 scale)
             Container(
               decoration: BoxDecoration(
                 color: AppColors.dialogBackground.withValues(alpha: 0.08),
                 borderRadius: AppStyles.borderRadiusLarge,
                 border: Border.all(
-                  color: _energyLevel > 1
-                      ? AppColors.coral.withValues(alpha: 0.3)
+                  color: _energyLevel != -1
+                      ? _getEnergyColor(_energyLevel).withValues(alpha: 0.3)
                       : AppColors.greyText,
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: _getEnergyColor(_energyLevel).withValues(alpha: 0.1),
-                            borderRadius: AppStyles.borderRadiusMedium,
-                          ),
-                          child: Icon(
-                            Icons.bolt_rounded,
-                            color: _getEnergyColor(_energyLevel),
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Energy Level',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: _energyLevel > 1
-                                      ? _getEnergyColor(_energyLevel)
-                                      : AppColors.greyText,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _getEnergyDescription(_energyLevel),
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.greyText,
-                                  fontWeight: FontWeight.normal,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          '$_energyLevel',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: _getEnergyColor(_energyLevel),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: _getEnergyColor(_energyLevel),
-                        inactiveTrackColor: AppColors.greyText.withValues(alpha: 0.2),
-                        thumbColor: _getEnergyColor(_energyLevel),
-                        overlayColor: _getEnergyColor(_energyLevel).withValues(alpha: 0.2),
-                        trackHeight: 8,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: (_energyLevel != -1
+                            ? _getEnergyColor(_energyLevel)
+                            : AppColors.greyText).withValues(alpha: 0.1),
+                        borderRadius: AppStyles.borderRadiusMedium,
                       ),
-                      child: Slider(
-                        value: _energyLevel.toDouble(),
-                        min: 1,
-                        max: 5,
-                        divisions: 4,
-                        onChanged: (value) {
-                          setState(() => _energyLevel = value.round());
-                          _onFieldChanged();
-                        },
+                      child: Icon(
+                        _energyLevel < 0 ? Icons.battery_3_bar_rounded : Icons.battery_charging_full_rounded,
+                        color: _energyLevel != -1
+                            ? _getEnergyColor(_energyLevel)
+                            : AppColors.greyText,
+                        size: 24,
                       ),
                     ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Quick/Easy', style: TextStyle(fontSize: 12, color: AppColors.greyText)),
-                        Text('Hard/Long', style: TextStyle(fontSize: 12, color: AppColors.greyText)),
-                      ],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Energy',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.greyText,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: _getEnergyColor(_energyLevel),
+                              inactiveTrackColor: AppColors.greyText.withValues(alpha: 0.2),
+                              thumbColor: _getEnergyColor(_energyLevel),
+                              overlayColor: _getEnergyColor(_energyLevel).withValues(alpha: 0.2),
+                              trackHeight: 4,
+                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                            ),
+                            child: Slider(
+                              value: _energyLevel.toDouble(),
+                              min: -5,
+                              max: 5,
+                              divisions: 10,
+                              onChanged: (value) {
+                                setState(() => _energyLevel = value.round());
+                                _onFieldChanged();
+                              },
+                            ),
+                          ),
+                          Text(
+                            _getEnergyDescription(_energyLevel),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.normal,
+                              color: _energyLevel != -1 ? _getEnergyColor(_energyLevel) : AppColors.greyText,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -1084,36 +1066,29 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   }
 
   Color _getEnergyColor(int level) {
-    switch (level) {
-      case 1:
-        return AppColors.successGreen;
-      case 2:
-        return AppColors.lightGreen;
-      case 3:
-        return AppColors.yellow;
-      case 4:
-        return AppColors.orange;
-      case 5:
-        return AppColors.coral;
-      default:
-        return AppColors.greyText;
-    }
+    // -5 to +5 scale: negative = draining (red), positive = charging (green)
+    if (level <= -4) return AppColors.coral;
+    if (level <= -2) return AppColors.orange;
+    if (level < 0) return AppColors.yellow;
+    if (level == 0) return AppColors.greyText;
+    if (level <= 2) return AppColors.lightGreen;
+    return AppColors.successGreen;
   }
 
   String _getEnergyDescription(int level) {
     switch (level) {
-      case 1:
-        return 'Quick task (~5 min)';
-      case 2:
-        return 'Short task (~15 min)';
-      case 3:
-        return 'Medium task (~30 min)';
-      case 4:
-        return 'Long task (~1 hour)';
-      case 5:
-        return 'Major task (significant effort)';
-      default:
-        return 'Set energy cost';
+      case -5: return 'Exhausting (-50%)';
+      case -4: return 'Very draining (-40%)';
+      case -3: return 'Draining (-30%)';
+      case -2: return 'Moderate effort (-20%)';
+      case -1: return 'Light effort (-10%)';
+      case 0: return 'Neutral (0%)';
+      case 1: return 'Relaxing (+10%)';
+      case 2: return 'Refreshing (+20%)';
+      case 3: return 'Energizing (+30%)';
+      case 4: return 'Very energizing (+40%)';
+      case 5: return 'Restorative (+50%)';
+      default: return 'Unknown';
     }
   }
 
