@@ -91,6 +91,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
     required String title,
     required String subtitle,
     required IconData icon,
+    required Color iconColor,
     required Color currentColor,
     required String widgetType,
   }) {
@@ -107,10 +108,10 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: currentColor.withValues(alpha: 0.3),
+            color: iconColor.withValues(alpha: 0.1),
             borderRadius: AppStyles.borderRadiusSmall,
           ),
-          child: Icon(icon, color: currentColor, size: 20),
+          child: Icon(icon, color: iconColor, size: 20),
         ),
         title: Text(
           title,
@@ -217,6 +218,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
               title: 'Routine Widget',
               subtitle: 'Morning/evening routine steps',
               icon: Icons.format_list_numbered_rounded,
+              iconColor: AppColors.orange,
               currentColor: _routineColor,
               widgetType: 'routine',
             ),
@@ -224,6 +226,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
               title: 'Task List Widget',
               subtitle: 'Today\'s tasks overview',
               icon: Icons.check_box_rounded,
+              iconColor: AppColors.purple,
               currentColor: _taskListColor,
               widgetType: 'tasklist',
             ),
@@ -231,6 +234,7 @@ class _WidgetColorSettingsScreenState extends State<WidgetColorSettingsScreen> {
               title: 'Battery & Flow Widget',
               subtitle: 'Energy tracking & productivity',
               icon: Icons.bolt_rounded,
+              iconColor: AppColors.coral,
               currentColor: _batteryFlowColor,
               widgetType: 'batteryflow',
             ),

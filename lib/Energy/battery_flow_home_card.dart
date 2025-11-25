@@ -305,7 +305,7 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                       color: batteryColor,
                       size: 20,
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 4),
                     // Battery percentage and flow info
                     Expanded(
                       child: Row(
@@ -318,7 +318,7 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                               color: batteryColor,
                             ),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 20),
                           // Flow icon - target/bullseye for productivity goals
                           Icon(
                             Icons.track_changes_rounded,
@@ -336,7 +336,7 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                           ),
                           // Streak with fire icon
                           if (streak > 0) ...[
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 20),
                             Icon(
                               Icons.whatshot_rounded,
                               color: AppColors.orange,

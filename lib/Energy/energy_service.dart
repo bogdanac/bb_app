@@ -146,6 +146,9 @@ class EnergyService {
       await prefs.setString(dateKey, jsonEncode(updated.toJson()));
       await prefs.setString(lastDecayKey, now.toIso8601String());
 
+      // Update widget with new battery value
+      await BatteryFlowWidgetService.updateWidget();
+
       return updated;
     }
 

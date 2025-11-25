@@ -70,7 +70,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
 
-              // Widget Color Section
+              // Energy Settings Section
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
@@ -84,7 +84,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const WidgetColorSettingsScreen(),
+                        builder: (context) => const EnergySettingsScreen(),
                       ),
                     );
                   },
@@ -96,82 +96,12 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.lightGreen.withValues(alpha: 0.1),
+                            color: AppColors.coral.withValues(alpha: 0.1),
                             borderRadius: AppStyles.borderRadiusSmall,
                           ),
                           child: Icon(
-                            Icons.palette_rounded,
+                            Icons.bolt_rounded,
                             color: AppColors.coral,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Widget Colors',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Customize widget backgrounds',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.greyText,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.greyText,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Food Tracking Settings Section
-              Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: AppStyles.borderRadiusLarge,
-                  border: Border.all(
-                    color: AppColors.normalCardBackground,
-                  ),
-                ),
-                child: InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const FoodTrackingSettingsScreen(),
-                      ),
-                    ).then((_) => _loadFoodSettings());
-                  },
-                  borderRadius: AppStyles.borderRadiusLarge,
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.pastelGreen.withValues(alpha: 0.1),
-                            borderRadius: AppStyles.borderRadiusSmall,
-                          ),
-                          child: Icon(
-                            Icons.restaurant_rounded,
-                            color: AppColors.pastelGreen,
                             size: 20,
                           ),
                         ),
@@ -181,7 +111,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Food Tracking',
+                                'Energy Tracking',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w500,
@@ -189,8 +119,8 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Target: $_foodTargetGoal% • ${_foodResetFrequency == FoodTrackingResetFrequency.weekly ? 'Weekly' : 'Monthly'} reset',
-                                style: const TextStyle(
+                                'Configure daily energy goals based on cycle',
+                                style: TextStyle(
                                   fontSize: 14,
                                   color: AppColors.greyText,
                                 ),
@@ -280,7 +210,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
 
               const SizedBox(height: 16),
 
-              // Energy Settings Section
+              // Food Tracking Settings Section
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
@@ -294,9 +224,9 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const EnergySettingsScreen(),
+                        builder: (context) => const FoodTrackingSettingsScreen(),
                       ),
-                    );
+                    ).then((_) => _loadFoodSettings());
                   },
                   borderRadius: AppStyles.borderRadiusLarge,
                   child: Padding(
@@ -306,30 +236,31 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.coral.withValues(alpha: 0.1),
+                            color: AppColors.pastelGreen.withValues(alpha: 0.1),
                             borderRadius: AppStyles.borderRadiusSmall,
                           ),
                           child: Icon(
-                            Icons.bolt_rounded,
-                            color: AppColors.coral,
+                            Icons.restaurant_rounded,
+                            color: AppColors.pastelGreen,
                             size: 20,
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Energy Tracking',
+                                'Food Tracking',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 18,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
+                              const SizedBox(height: 4),
                               Text(
-                                'Configure daily energy goals based on cycle',
-                                style: TextStyle(
+                                'Target: $_foodTargetGoal% • ${_foodResetFrequency == FoodTrackingResetFrequency.weekly ? 'Weekly' : 'Monthly'} reset',
+                                style: const TextStyle(
                                   fontSize: 14,
                                   color: AppColors.greyText,
                                 ),
@@ -419,7 +350,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
 
               const SizedBox(height: 16),
 
-              // Error Logs Section
+              // Widget Color Section
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
@@ -433,7 +364,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const ErrorLogsScreen(),
+                        builder: (context) => const WidgetColorSettingsScreen(),
                       ),
                     );
                   },
@@ -445,12 +376,12 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.error.withValues(alpha: 0.1),
+                            color: AppColors.lightGreen.withValues(alpha: 0.1),
                             borderRadius: AppStyles.borderRadiusSmall,
                           ),
-                          child: const Icon(
-                            Icons.bug_report_rounded,
-                            color: AppColors.error,
+                          child: Icon(
+                            Icons.palette_rounded,
+                            color: AppColors.coral,
                             size: 20,
                           ),
                         ),
@@ -460,7 +391,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Error Logs',
+                                'Widget Colors',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w500,
@@ -468,7 +399,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                               ),
                               SizedBox(height: 4),
                               Text(
-                                'View app error logs for debugging',
+                                'Customize widget backgrounds',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: AppColors.greyText,
@@ -477,7 +408,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                             ],
                           ),
                         ),
-                        const Icon(
+                        Icon(
                           Icons.chevron_right_rounded,
                           color: AppColors.greyText,
                         ),
@@ -548,6 +479,76 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                           ),
                         ),
                         Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.greyText,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Error Logs Section
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  border: Border.all(
+                    color: AppColors.normalCardBackground,
+                  ),
+                ),
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ErrorLogsScreen(),
+                      ),
+                    );
+                  },
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.error.withValues(alpha: 0.1),
+                            borderRadius: AppStyles.borderRadiusSmall,
+                          ),
+                          child: const Icon(
+                            Icons.bug_report_rounded,
+                            color: AppColors.error,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Error Logs',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'View app error logs for debugging',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.greyText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
                           Icons.chevron_right_rounded,
                           color: AppColors.greyText,
                         ),

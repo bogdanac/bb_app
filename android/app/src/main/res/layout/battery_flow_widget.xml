@@ -26,17 +26,17 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="⚡"
-                android:textSize="18sp" />
+                android:text="🔋"
+                android:textSize="16sp" />
 
             <TextView
                 android:id="@+id/battery_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="75%"
-                android:textSize="20sp"
+                android:textSize="16sp"
                 android:textStyle="bold"
-                android:textColor="#1A1A1A"
+                android:textColor="#FFFFFF"
                 android:layout_marginStart="4dp" />
         </LinearLayout>
 
@@ -51,7 +51,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="💧"
+                android:text="🎯"
                 android:textSize="16sp" />
 
             <TextView
@@ -61,7 +61,7 @@
                 android:text="45/30"
                 android:textSize="16sp"
                 android:textStyle="bold"
-                android:textColor="#1A1A1A"
+                android:textColor="#FFFFFF"
                 android:layout_marginStart="4dp" />
         </LinearLayout>
 
@@ -80,7 +80,7 @@
                 android:text="🔥 5"
                 android:textSize="16sp"
                 android:textStyle="bold"
-                android:textColor="#E65100"
+                android:textColor="#FFFFFF"
                 android:visibility="visible" />
         </LinearLayout>
 

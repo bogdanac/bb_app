@@ -32,25 +32,11 @@ class BatteryFlowWidget : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
 
-        android.util.Log.d("BatteryFlowWidget", "Received intent: ${intent.action}")
-
         when (intent.action) {
-            ACTION_BATTERY_MINUS -> {
-                android.util.Log.d("BatteryFlowWidget", "Battery -10%")
-                adjustBattery(context, -10)
-            }
-            ACTION_BATTERY_PLUS -> {
-                android.util.Log.d("BatteryFlowWidget", "Battery +10%")
-                adjustBattery(context, 10)
-            }
-            ACTION_FLOW_PLUS_1 -> {
-                android.util.Log.d("BatteryFlowWidget", "Flow +1")
-                addFlowPoints(context, 1)
-            }
-            ACTION_FLOW_PLUS_2 -> {
-                android.util.Log.d("BatteryFlowWidget", "Flow +2")
-                addFlowPoints(context, 2)
-            }
+            ACTION_BATTERY_MINUS -> adjustBattery(context, -10)
+            ACTION_BATTERY_PLUS -> adjustBattery(context, 10)
+            ACTION_FLOW_PLUS_1 -> addFlowPoints(context, 1)
+            ACTION_FLOW_PLUS_2 -> addFlowPoints(context, 2)
         }
 
         // Update all widgets after any action
@@ -59,7 +45,6 @@ class BatteryFlowWidget : AppWidgetProvider() {
             val appWidgetIds = appWidgetManager.getAppWidgetIds(
                 android.content.ComponentName(context, BatteryFlowWidget::class.java)
             )
-            android.util.Log.d("BatteryFlowWidget", "Updating ${appWidgetIds.size} widgets")
             onUpdate(context, appWidgetManager, appWidgetIds)
         }
     }
@@ -82,10 +67,6 @@ class BatteryFlowWidget : AppWidgetProvider() {
                 prefs.edit()
                     .putString("flutter.$dateKey", record.toString())
                     .apply()
-
-                android.util.Log.d("BatteryFlowWidget", "Battery updated: $currentBattery -> $newBattery")
-            } else {
-                android.util.Log.w("BatteryFlowWidget", "No energy record found for today")
             }
         } catch (e: Exception) {
             android.util.Log.e("BatteryFlowWidget", "Error adjusting battery: ${e.message}", e)
@@ -112,19 +93,9 @@ class BatteryFlowWidget : AppWidgetProvider() {
                 val isGoalMet = newFlowPoints >= flowGoal
                 record.put("isGoalMet", isGoalMet)
 
-                // Update streak if goal just met (simplified - full logic should be in Flutter)
-                if (isGoalMet && currentFlowPoints < flowGoal) {
-                    // Goal was just achieved - Flutter will handle streak logic properly
-                    android.util.Log.d("BatteryFlowWidget", "Flow goal achieved!")
-                }
-
                 prefs.edit()
                     .putString("flutter.$dateKey", record.toString())
                     .apply()
-
-                android.util.Log.d("BatteryFlowWidget", "Flow points updated: $currentFlowPoints -> $newFlowPoints")
-            } else {
-                android.util.Log.w("BatteryFlowWidget", "No energy record found for today")
             }
         } catch (e: Exception) {
             android.util.Log.e("BatteryFlowWidget", "Error adding flow points: ${e.message}", e)
@@ -153,10 +124,7 @@ class BatteryFlowWidget : AppWidgetProvider() {
                     0
                 }
 
-                android.util.Log.d("BatteryFlowWidget", "Energy data: Battery=$currentBattery%, Flow=$flowPoints/$flowGoal, Streak=$currentStreak")
                 return EnergyData(currentBattery, flowPoints, flowGoal, currentStreak)
-            } else {
-                android.util.Log.w("BatteryFlowWidget", "No energy record found, using defaults")
             }
         } catch (e: Exception) {
             android.util.Log.e("BatteryFlowWidget", "Error loading energy data: ${e.message}", e)
@@ -216,7 +184,6 @@ class BatteryFlowWidget : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_body, openAppPendingIntent)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
-            android.util.Log.d("BatteryFlowWidget", "Widget updated successfully")
         } catch (e: Exception) {
             android.util.Log.e("BatteryFlowWidget", "Error updating widget: ${e.message}", e)
         }
