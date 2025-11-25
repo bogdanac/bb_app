@@ -365,7 +365,7 @@ class _TaskCardState extends State<TaskCard> {
                                   if (TaskCardUtils.getScheduledDateText(widget.task, widget.priorityReason ?? '') != null)
                                     TaskCardUtils.buildInfoChip(
                                       Icons.event_rounded,
-                                      'Scheduled ${TaskCardUtils.getScheduledDateText(widget.task, widget.priorityReason ?? '')}',
+                                      TaskCardUtils.getScheduledDateText(widget.task, widget.priorityReason ?? '')!,
                                       AppColors.successGreen,
                                     ),
                                   if (widget.task.deadline != null && !widget.task.isDueToday())

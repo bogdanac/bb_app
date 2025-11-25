@@ -294,7 +294,7 @@ class TaskCardUtils {
         }
       }
 
-      return 'Scheduled today';
+      return 'Today';
     }
 
     // Check scheduled date tomorrow
@@ -320,13 +320,13 @@ class TaskCardUtils {
       }
       return AppColors.yellow; // Yellow - upcoming
     }
-    
+
     switch (reason) {
       case dueToday:
         return overdueColor; // Red for deadline today (urgent)
       case 'Reminder now':
         return scheduledTodayColor;
-      case 'Scheduled today':
+      case 'Today':
         return scheduledTodayColor; // Green for scheduled today
       case 'Recurring today':
         return recurringColor;
@@ -355,9 +355,9 @@ class TaskCardUtils {
     final scheduledDay = DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day);
 
     // Don't show scheduled date if priority reason already covers it
-    // This prevents duplicate chips (e.g., priority says "Scheduled today" AND scheduled chip says "Scheduled Today")
-    if (priorityReason.contains('Scheduled today') && scheduledDay.isAtSameMomentAs(today)) {
-      return null; // Priority already says "Scheduled today"
+    // This prevents duplicate chips (e.g., priority says "Today" AND scheduled chip says "Today")
+    if (priorityReason == 'Today' && scheduledDay.isAtSameMomentAs(today)) {
+      return null; // Priority already says "Today"
     }
     if (priorityReason == dueToday && scheduledDay.isAtSameMomentAs(today)) {
       return null; // Priority already says "today"

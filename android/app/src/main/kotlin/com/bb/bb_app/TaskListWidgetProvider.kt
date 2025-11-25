@@ -59,7 +59,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
 
             prefs.edit().putString("flutter.widget_debug_logs", filteredLogs.toString()).apply()
         } catch (e: Exception) {
-            android.util.Log.e("TaskListWidget", "Failed to log debug info: $e")
+            // Silently fail
         }
     }
 
@@ -68,7 +68,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        android.util.Log.d("TaskListWidget", "onUpdate called with ${appWidgetIds.size} widget(s)")
         for (appWidgetId in appWidgetIds) {
             try {
                 updateAppWidget(context, appWidgetManager, appWidgetId)
@@ -82,16 +81,12 @@ class TaskListWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
 
-        android.util.Log.d("TaskListWidget", "Received intent: ${intent.action}")
-
         when (intent.action) {
             ACTION_OPEN_APP -> {
-                android.util.Log.d("TaskListWidget", "Processing OPEN_APP action")
                 openApp(context)
             }
             ACTION_COMPLETE_TASK -> {
                 val taskId = intent.getStringExtra("task_id")
-                android.util.Log.d("TaskListWidget", "Processing COMPLETE_TASK action for task: $taskId")
                 if (taskId != null) {
                     completeTask(context, taskId)
                     refreshAllWidgets(context)
@@ -108,17 +103,14 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         if (launchIntent != null) {
             launchIntent.apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                putExtra("open_task_list", true)  // Changed from "widget_trigger" to "open_task_list"
+                putExtra("open_task_list", true)
             }
 
             try {
                 context.startActivity(launchIntent)
-                android.util.Log.d("TaskListWidget", "Launched app with open_task_list intent")
             } catch (e: Exception) {
                 android.util.Log.e("TaskListWidget", "Failed to launch app: $e")
             }
-        } else {
-            android.util.Log.e("TaskListWidget", "Could not get launch intent for app")
         }
     }
 
@@ -127,7 +119,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int
     ) {
-        android.util.Log.d("TaskListWidget", "Updating widget $appWidgetId")
 
         try {
             val views = RemoteViews(context.packageName, R.layout.task_list_widget)
@@ -151,8 +142,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             // Load and display tasks
             val tasks = loadTasks(context)
             displayTasks(context, views, tasks)
-
-            android.util.Log.d("TaskListWidget", "Successfully updated widget $appWidgetId with ${tasks.size} tasks")
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         } catch (e: Exception) {
@@ -205,15 +194,12 @@ class TaskListWidgetProvider : AppWidgetProvider() {
 
     private fun loadTasks(context: Context): List<TaskData> {
         try {
-            android.util.Log.d("TaskListWidget", "Loading tasks from SharedPreferences")
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
 
             // Force reload from disk to get latest Flutter changes
             prefs.all
 
-            // Debug: Log all keys in SharedPreferences
             val allKeys = prefs.all.keys
-            android.util.Log.d("TaskListWidget", "Available keys: ${allKeys.joinToString(", ")}")
 
             // Log to SharedPreferences for Flutter to upload to Firebase
             logWidgetDebug(prefs, "Loading tasks", mapOf(
@@ -225,12 +211,10 @@ class TaskListWidgetProvider : AppWidgetProvider() {
 
             // PRIORITY 1: Try reading filtered widget tasks (pre-filtered with menstrual phase ON)
             val widgetTasksRawValue = prefs.all["flutter.widget_filtered_tasks"]
-            android.util.Log.d("TaskListWidget", "Attempting to load flutter.widget_filtered_tasks: type=${widgetTasksRawValue?.javaClass?.simpleName}")
 
             if (widgetTasksRawValue != null) {
                 when (widgetTasksRawValue) {
                     is String -> {
-                        android.util.Log.d("TaskListWidget", "Widget tasks is String, length=${widgetTasksRawValue.length}")
                         val LIST_IDENTIFIER = "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu"
 
                         if (widgetTasksRawValue.startsWith(LIST_IDENTIFIER)) {
@@ -241,27 +225,23 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                                 }
                                 val jsonArray = JSONArray(encodedData)
                                 tasksJsonStringList = (0 until jsonArray.length()).map { jsonArray.getString(it) }
-                                android.util.Log.d("TaskListWidget", "Successfully loaded ${tasksJsonStringList.size} filtered widget tasks")
                             } catch (e: Exception) {
-                                android.util.Log.e("TaskListWidget", "Failed to decode widget tasks: $e")
+                                // Failed to decode
                             }
                         } else {
                             try {
                                 val jsonArray = JSONArray(widgetTasksRawValue)
                                 tasksJsonStringList = (0 until jsonArray.length()).map { jsonArray.getString(it) }
-                                android.util.Log.d("TaskListWidget", "Successfully loaded ${tasksJsonStringList.size} widget tasks from JSON")
                             } catch (e: Exception) {
-                                android.util.Log.e("TaskListWidget", "Failed to parse widget tasks: $e")
+                                // Failed to parse
                             }
                         }
                     }
                     is Set<*> -> {
                         tasksJsonStringList = widgetTasksRawValue.filterIsInstance<String>()
-                        android.util.Log.d("TaskListWidget", "Loaded ${tasksJsonStringList.size} widget tasks from Set")
                     }
                     is List<*> -> {
                         tasksJsonStringList = widgetTasksRawValue.filterIsInstance<String>()
-                        android.util.Log.d("TaskListWidget", "Loaded ${tasksJsonStringList.size} widget tasks from List")
                     }
                 }
             }
@@ -269,8 +249,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             // NO FALLBACK: Widget should ONLY show pre-filtered tasks from flutter.widget_filtered_tasks
             // This ensures menstrual phase filtering is always active (flower icon ON behavior)
             if (tasksJsonStringList == null || tasksJsonStringList.isEmpty()) {
-                android.util.Log.d("TaskListWidget", "No widget_filtered_tasks found - showing empty list (menstrual filter active)")
-
                 // Log to SharedPreferences for Flutter to upload to Firebase
                 logWidgetDebug(prefs, "TaskListWidget: No tasks to display", mapOf(
                     "keyExists" to (widgetTasksRawValue != null).toString(),
@@ -280,42 +258,31 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             }
 
             if (tasksJsonStringList == null || tasksJsonStringList.isEmpty()) {
-                android.util.Log.w("TaskListWidget", "No tasks found in SharedPreferences")
                 return emptyList()
             }
 
             val tasks = mutableListOf<TaskData>()
 
-            android.util.Log.d("TaskListWidget", "Found ${tasksJsonStringList.size} total tasks in storage")
-
-            for ((index, taskJsonString) in tasksJsonStringList.withIndex()) {
+            for (taskJsonString in tasksJsonStringList) {
                 try {
                     val taskJson = JSONObject(taskJsonString)
 
                     val isCompleted = taskJson.optBoolean("isCompleted", false)
                     if (isCompleted) {
-                        android.util.Log.d("TaskListWidget", "Task $index is completed, skipping")
                         continue
                     }
 
                     val task = parseTask(taskJson)
                     if (task != null) {
                         tasks.add(task)
-                        android.util.Log.d("TaskListWidget", "Added task: ${task.title}")
-                    } else {
-                        android.util.Log.w("TaskListWidget", "Failed to parse task $index")
                     }
                 } catch (e: Exception) {
-                    android.util.Log.e("TaskListWidget", "Error parsing task $index: $e")
+                    // Skip invalid task
                 }
             }
 
-            android.util.Log.d("TaskListWidget", "Loaded ${tasks.size} incomplete tasks")
-
             // Return first MAX_TASKS_DISPLAY tasks (already sorted by priority in storage)
-            val result = tasks.take(MAX_TASKS_DISPLAY)
-            android.util.Log.d("TaskListWidget", "Returning ${result.size} tasks for display")
-            return result
+            return tasks.take(MAX_TASKS_DISPLAY)
 
         } catch (e: Exception) {
             android.util.Log.e("TaskListWidget", "Error loading tasks: $e")
@@ -332,16 +299,12 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 isImportant = taskJson.optBoolean("isImportant", false)
             )
         } catch (e: Exception) {
-            android.util.Log.e("TaskListWidget", "Error parsing task: $e")
             null
         }
     }
 
     private fun displayTasks(context: Context, views: RemoteViews, tasks: List<TaskData>) {
-        android.util.Log.d("TaskListWidget", "Displaying ${tasks.size} tasks")
-
         if (tasks.isEmpty()) {
-            android.util.Log.d("TaskListWidget", "No tasks to display, showing 'No tasks' message")
             views.setViewVisibility(R.id.no_tasks_message, View.VISIBLE)
             views.setViewVisibility(R.id.task_list_container, View.GONE)
             return
@@ -410,7 +373,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
 
     private fun completeTask(context: Context, taskId: String) {
         try {
-            android.util.Log.d("TaskListWidget", "Completing task: $taskId")
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
 
             // Try to load tasks using the same approach as loadTasks()
@@ -461,7 +423,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                     taskJson.put("isCompleted", true)
                     taskJson.put("completedAt", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(Date()))
                     taskCompleted = true
-                    android.util.Log.d("TaskListWidget", "Marked task as completed: $taskId")
                 }
 
                 updatedTasksList.add(taskJson.toString())
@@ -475,7 +436,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 prefs.edit()
                     .putString("flutter.tasks", encodedValue)
                     .apply()
-                android.util.Log.d("TaskListWidget", "Saved updated tasks with Flutter encoding")
 
                 // ALSO update the filtered widget tasks list
                 updateFilteredWidgetTasks(context, taskId)
@@ -488,7 +448,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
 
     private fun updateFilteredWidgetTasks(context: Context, completedTaskId: String) {
         try {
-            android.util.Log.d("TaskListWidget", "Updating filtered widget tasks after completing: $completedTaskId")
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
 
             // Load the filtered widget tasks
@@ -529,7 +488,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             }
 
             if (widgetTasksList == null) {
-                android.util.Log.d("TaskListWidget", "No filtered widget tasks found - will refresh on next app open")
                 return
             }
 

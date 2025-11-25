@@ -26,17 +26,17 @@ Tasks use an energy scale from **-5 to +5**:
 
 | Value | Type | Battery Impact | Flow Points | Example |
 |-------|------|----------------|-------------|---------|
-| **-5** | Most draining | -50% | 15 pts | Exhausting meeting, major project |
-| **-4** | Very draining | -40% | 14 pts | Deep work session |
-| **-3** | Draining | -30% | 13 pts | House cleaning, difficult task |
-| **-2** | Moderately draining | -20% | 12 pts | Regular work task |
-| **-1** | Slightly draining | -10% | 11 pts | Quick chore *(default)* |
-| **0** | Neutral | 0% | 10 pts | Routine maintenance |
-| **+1** | Slightly charging | +10% | 9 pts | Pleasant activity |
-| **+2** | Moderately charging | +20% | 8 pts | Light hobby |
-| **+3** | Charging | +30% | 7 pts | Fun activity |
-| **+4** | Very charging | +40% | 6 pts | Exciting project |
-| **+5** | Most charging | +50% | 5 pts | Passion work, play |
+| **-5** | Most draining | -50% | 10 pts | Exhausting meeting, major project |
+| **-4** | Very draining | -40% | 8 pts | Deep work session |
+| **-3** | Draining | -30% | 6 pts | House cleaning, difficult task |
+| **-2** | Moderately draining | -20% | 4 pts | Regular work task |
+| **-1** | Slightly draining | -10% | 2 pts | Quick chore *(default)* |
+| **0** | Neutral | 0% | 1 pt | Routine maintenance |
+| **+1** | Slightly charging | +10% | 2 pts | Pleasant activity |
+| **+2** | Moderately charging | +20% | 3 pts | Light hobby |
+| **+3** | Charging | +30% | 4 pts | Fun activity |
+| **+4** | Very charging | +40% | 5 pts | Exciting project |
+| **+5** | Most charging | +50% | 6 pts | Passion work, play |
 
 ### Default Energy Level
 
@@ -56,20 +56,21 @@ Battery Change = Energy Level × 10%
 
 ### Flow Points
 ```
-Flow Points = 10 + (Energy Level × -1) + (|Energy Level| / 2)
+Draining tasks (negative energy): |energy| × 2
+  -5 → 10 points
+  -4 →  8 points
+  -3 →  6 points
+  -2 →  4 points
+  -1 →  2 points
 
-Simplified:
-  -5 → 15 points
-  -4 → 14 points
-  -3 → 13 points
-  -2 → 12 points
-  -1 → 11 points
-   0 → 10 points
-  +1 →  9 points
-  +2 →  8 points
-  +3 →  7 points
-  +4 →  6 points
-  +5 →  5 points
+Neutral: 0 → 1 point
+
+Charging tasks (positive energy): energy + 1
+  +1 →  2 points
+  +2 →  3 points
+  +3 →  4 points
+  +4 →  5 points
+  +5 →  6 points
 ```
 
 **Key Insight:** Draining tasks earn MORE flow points than charging tasks. This rewards you for doing hard work!

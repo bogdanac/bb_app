@@ -23,12 +23,11 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <ImageView
-                android:id="@+id/battery_icon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:src="@drawable/ic_battery"
-                android:contentDescription="Battery" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔋"
+                android:textSize="16sp" />
 
             <TextView
                 android:id="@+id/battery_text"
@@ -56,11 +55,11 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <ImageView
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:src="@drawable/ic_flow_target"
-                android:contentDescription="Flow" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🎯"
+                android:textSize="14sp" />
 
             <TextView
                 android:id="@+id/flow_text"
@@ -82,30 +81,15 @@
             android:background="#4DFFFFFF" />
 
         <!-- Streak Display -->
-        <LinearLayout
-            android:id="@+id/streak_container"
+        <TextView
+            android:id="@+id/streak_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:visibility="visible">
-
-            <ImageView
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:src="@drawable/ic_streak_fire"
-                android:contentDescription="Streak" />
-
-            <TextView
-                android:id="@+id/streak_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="5"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:textColor="#FF755D"
-                android:layout_marginStart="2dp" />
-        </LinearLayout>
+            android:text="🔥 5"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="#FF755D"
+            android:visibility="visible" />
 
     </LinearLayout>
 

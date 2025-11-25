@@ -161,15 +161,6 @@ class Task {
   };
 
   static Task fromJson(Map<String, dynamic> json) {
-    // Handle migration from old energy system (1-5) to new system (-5 to +5)
-    int energyLevel = json['energyLevel'] ?? -1;
-
-    // If energy level is in old range (1-5), convert to new system
-    if (energyLevel >= 1 && energyLevel <= 5) {
-      // Convert: 1→-1, 2→-2, 3→-3, 4→-4, 5→-5
-      energyLevel = -energyLevel;
-    }
-
     return Task(
       id: json['id'],
       title: json['title'],
@@ -184,7 +175,7 @@ class Task {
       isCompleted: json['isCompleted'] ?? false,
       completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt']) : null,
       createdAt: DateTime.parse(json['createdAt']),
-      energyLevel: energyLevel,
+      energyLevel: json['energyLevel'] ?? -1,
     );
   }
 }

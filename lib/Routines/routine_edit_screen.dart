@@ -237,61 +237,60 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                               ),
                             ],
                           ),
-                          // Energy level row
+                          // Energy level row - uses -5 to +5 scale
                           Padding(
                             padding: const EdgeInsets.only(left: 40, top: 4),
-                            child: Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(
-                                  Icons.bolt_rounded,
-                                  size: 16,
-                                  color: _getEnergyColor(item.energyLevel ?? 1),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Energy:',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.greyText,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                ...List.generate(5, (energyIndex) {
-                                  final level = energyIndex + 1;
-                                  final isSelected = (item.energyLevel ?? 1) == level;
-                                  return GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        item.energyLevel = level;
-                                      });
-                                    },
-                                    child: Container(
-                                      width: 28,
-                                      height: 28,
-                                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? _getEnergyColor(level)
-                                            : _getEnergyColor(level).withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                          color: _getEnergyColor(level),
-                                          width: isSelected ? 2 : 1,
-                                        ),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.bolt_rounded,
+                                      size: 16,
+                                      color: _getEnergyColor(item.energyLevel ?? -1),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Energy: ${_getEnergyLabel(item.energyLevel ?? -1)}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.greyText,
                                       ),
-                                      child: Center(
-                                        child: Text(
-                                          '$level',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                            color: isSelected ? Colors.white : _getEnergyColor(level),
-                                          ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                // Compact slider for -5 to +5
+                                Row(
+                                  children: [
+                                    Text('-5', style: TextStyle(fontSize: 10, color: AppColors.coral)),
+                                    Expanded(
+                                      child: SliderTheme(
+                                        data: SliderTheme.of(context).copyWith(
+                                          activeTrackColor: _getEnergyColor(item.energyLevel ?? -1),
+                                          inactiveTrackColor: AppColors.greyText.withValues(alpha: 0.2),
+                                          thumbColor: _getEnergyColor(item.energyLevel ?? -1),
+                                          overlayColor: _getEnergyColor(item.energyLevel ?? -1).withValues(alpha: 0.2),
+                                          trackHeight: 4,
+                                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                                        ),
+                                        child: Slider(
+                                          value: (item.energyLevel ?? -1).toDouble(),
+                                          min: -5,
+                                          max: 5,
+                                          divisions: 10,
+                                          onChanged: (value) {
+                                            setState(() {
+                                              item.energyLevel = value.round();
+                                            });
+                                          },
                                         ),
                                       ),
                                     ),
-                                  );
-                                }),
+                                    Text('+5', style: TextStyle(fontSize: 10, color: AppColors.successGreen)),
+                                  ],
+                                ),
                               ],
                             ),
                           ),
@@ -309,19 +308,22 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
   }
 
   Color _getEnergyColor(int level) {
-    switch (level) {
-      case 1:
-        return AppColors.successGreen;
-      case 2:
-        return AppColors.lightGreen;
-      case 3:
-        return AppColors.yellow;
-      case 4:
-        return AppColors.orange;
-      case 5:
-        return AppColors.coral;
-      default:
-        return AppColors.greyText;
-    }
+    // -5 to +5 scale: negative = draining (red), positive = charging (green)
+    if (level <= -4) return AppColors.coral;
+    if (level <= -2) return AppColors.orange;
+    if (level < 0) return AppColors.yellow;
+    if (level == 0) return AppColors.greyText;
+    if (level <= 2) return AppColors.lightGreen;
+    return AppColors.successGreen;
+  }
+
+  String _getEnergyLabel(int level) {
+    if (level <= -4) return 'Very draining';
+    if (level <= -2) return 'Draining';
+    if (level < 0) return 'Slightly draining';
+    if (level == 0) return 'Neutral';
+    if (level <= 2) return 'Slightly charging';
+    if (level <= 4) return 'Charging';
+    return 'Very charging';
   }
 }

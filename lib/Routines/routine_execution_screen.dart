@@ -114,7 +114,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     await _saveProgress();
 
     // Track energy when completing/uncompleting a step with energy
-    if (item.energyLevel != null && item.energyLevel! > 0) {
+    if (item.energyLevel != null) {
       if (!wasCompleted && _items[index].isCompleted) {
         // Just completed - add energy
         await EnergyService.addRoutineStepEnergyConsumption(

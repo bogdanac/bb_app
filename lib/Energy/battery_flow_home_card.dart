@@ -294,14 +294,14 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
               onTap: _toggleExpanded,
               borderRadius: AppStyles.borderRadiusLarge,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 12, 0),
+                padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
                 child: Row(
                   children: [
                     // Battery icon
                     Icon(
                       _getBatteryIcon(battery),
                       color: batteryColor,
-                      size: 24,
+                      size: 20,
                     ),
                     const SizedBox(width: 12),
                     // Battery percentage and flow info

@@ -3,10 +3,9 @@ import 'energy_settings_model.dart';
 /// Calculator for Flow Points system - converts energy levels to productivity points
 ///
 /// Flow Points Formula:
-/// - Energy -5 → 15 points (high drain = high productivity)
-/// - Energy 0 → 10 points (neutral tasks)
-/// - Energy +5 → 5 points (charging tasks = less productivity)
-/// - Linear interpolation between these values
+/// - Draining tasks (negative energy): -5=10pts, -4=8pts, -3=6pts, -2=4pts, -1=2pts
+/// - Neutral tasks: 0=1pt
+/// - Charging tasks (positive energy): +1=2pts, +2=3pts, +3=4pts, +4=5pts, +5=6pts
 ///
 /// Battery Formula:
 /// - Energy × 10% battery change
@@ -17,27 +16,22 @@ class FlowCalculator {
     // Clamp energy level to valid range
     final energy = energyLevel.clamp(-5, 5);
 
-    // Linear interpolation:
-    // -5 → 15 points
-    //  0 → 10 points
-    // +5 → 5 points
+    // Flow points formula:
+    // Draining tasks (negative): absolute value * 2
+    // -5 → 10, -4 → 8, -3 → 6, -2 → 4, -1 → 2
+    // Neutral: 0 → 1
+    // Charging tasks (positive): value + 1
+    // +1 → 2, +2 → 3, +3 → 4, +4 → 5, +5 → 6
 
-    if (energy <= 0) {
-      // From -5 to 0: interpolate between 15 and 10
-      // Formula: 15 + (energy / 5) * (10 - 15)
-      // At -5: 15 + (-1) * (-5) = 15 + 5 = 15 ✗ ERROR
-      // Correct: 15 - (energy.abs() / 5) * 5
-      // At -5: 15 - 1 * 5 = 10 ✗ ERROR
-      // Correct: 10 + (energy.abs() / 5) * 5
-      // At -5: 10 + 1 * 5 = 15 ✓
-      // At 0: 10 + 0 * 5 = 10 ✓
-      return (10 + (energy.abs() / 5) * 5).round();
+    if (energy < 0) {
+      // Draining tasks: |energy| * 2
+      return energy.abs() * 2;
+    } else if (energy == 0) {
+      // Neutral tasks: 1 point
+      return 1;
     } else {
-      // From 0 to +5: interpolate between 10 and 5
-      // Formula: 10 - (energy / 5) * 5
-      // At 0: 10 - 0 = 10 ✓
-      // At +5: 10 - 1 * 5 = 5 ✓
-      return (10 - (energy / 5) * 5).round();
+      // Charging tasks: energy + 1
+      return energy + 1;
     }
   }
 
