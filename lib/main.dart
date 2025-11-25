@@ -101,6 +101,17 @@ class InitialScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Check if Firebase is initialized before using FirebaseAuth
+    try {
+      Firebase.app();
+    } catch (e) {
+      // Firebase not initialized - go directly to main screen without auth
+      if (kDebugMode) {
+        debugPrint('Firebase not initialized, skipping auth check: $e');
+      }
+      return const LauncherScreen();
+    }
+
     // Firebase is already initialized in main(), just check auth state
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),

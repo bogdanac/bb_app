@@ -103,6 +103,55 @@ class EnergyService {
     await saveTodayRecord(updated);
   }
 
+  /// Apply time-based battery decay
+  /// Decays battery by ~5% per hour (~80% total over 16 waking hours)
+  /// Call this when loading today's record to apply any pending decay
+  static Future<DailyEnergyRecord?> getTodayRecordWithDecay() async {
+    final prefs = await SharedPreferences.getInstance();
+    final dateKey = _getTodayKey();
+    final json = prefs.getString(dateKey);
+    if (json == null) return null;
+
+    final record = DailyEnergyRecord.fromJson(jsonDecode(json));
+
+    // Check last decay time
+    final lastDecayKey = '${dateKey}_last_decay';
+    final lastDecayStr = prefs.getString(lastDecayKey);
+    final now = DateTime.now();
+
+    DateTime lastDecay;
+    if (lastDecayStr != null) {
+      lastDecay = DateTime.parse(lastDecayStr);
+    } else {
+      // First time - use record creation time or start of day
+      lastDecay = DateTime(now.year, now.month, now.day, 6, 0); // Assume 6 AM start
+    }
+
+    // Calculate hours since last decay
+    final hoursSinceLastDecay = now.difference(lastDecay).inMinutes / 60.0;
+
+    // Only apply decay if at least 15 minutes have passed
+    if (hoursSinceLastDecay < 0.25) {
+      return record;
+    }
+
+    // Calculate decay: ~5% per hour, max 15% per check to prevent extreme drops
+    final decayAmount = (hoursSinceLastDecay * 5.0).round().clamp(0, 15);
+
+    if (decayAmount > 0) {
+      final newBattery = record.currentBattery - decayAmount;
+      final updated = record.copyWith(currentBattery: newBattery);
+
+      // Save updated record and last decay time
+      await prefs.setString(dateKey, jsonEncode(updated.toJson()));
+      await prefs.setString(lastDecayKey, now.toIso8601String());
+
+      return updated;
+    }
+
+    return record;
+  }
+
   /// Manually add flow points (for quick buttons)
   static Future<void> addFlowPoints(int points) async {
     final today = await getTodayRecord();

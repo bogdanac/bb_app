@@ -22,6 +22,7 @@ import 'package:bb_app/FoodTracking/food_tracking_card.dart';
 import 'package:bb_app/home_settings_screen.dart';
 import 'package:bb_app/Data/backup_service.dart';
 import 'package:bb_app/shared/widget_update_service.dart';
+import 'package:bb_app/Energy/battery_flow_home_card.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 
@@ -662,6 +663,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   );
                 },
               ),
+              const SizedBox(height: 4), // Consistent spacing
+
+              // Battery & Flow Card
+              const BatteryFlowHomeCard(),
               const SizedBox(height: 4), // Consistent spacing
 
               // Calendar Events Card
