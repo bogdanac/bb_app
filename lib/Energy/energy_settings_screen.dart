@@ -92,7 +92,7 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                           ),
                           const SizedBox(width: 8),
                           const Text(
-                            "Today's Energy",
+                            "Today's Flow Goal",
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -126,23 +126,23 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             decoration: BoxDecoration(
-                              color: AppColors.coral.withValues(alpha: 0.2),
+                              color: AppColors.purple.withValues(alpha: 0.2),
                               borderRadius: AppStyles.borderRadiusMedium,
                             ),
                             child: Row(
                               children: [
                                 Icon(
-                                  Icons.bolt_rounded,
-                                  color: AppColors.coral,
+                                  Icons.track_changes_rounded,
+                                  color: AppColors.purple,
                                   size: 20,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '${_phaseInfo!['energyGoal']}',
+                                  '${_phaseInfo!['energyGoal']} pts',
                                   style: TextStyle(
-                                    fontSize: 24,
+                                    fontSize: 20,
                                     fontWeight: FontWeight.bold,
-                                    color: AppColors.coral,
+                                    color: AppColors.purple,
                                   ),
                                 ),
                               ],
@@ -154,61 +154,8 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
             ],
-
-            // Info Section
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.waterBlue.withValues(alpha: 0.1),
-                borderRadius: AppStyles.borderRadiusLarge,
-                border: Border.all(
-                  color: AppColors.waterBlue.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline_rounded,
-                          color: AppColors.waterBlue,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'How Energy Goals Work',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Your daily energy goal adjusts based on your menstrual cycle phase:\n\n'
-                      '- Ovulation: Peak energy (highest goal)\n'
-                      '- Late Luteal: Low energy (lowest goal)\n'
-                      '- Other phases: Gradually transitions between peaks\n\n'
-                      'Energy represents both time and task difficulty:\n'
-                      '1 = Quick/easy (~5 min)\n'
-                      '5 = Hard/long (significant effort)',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.greyText,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
 
             // Low Energy Peak Setting
             Container(
@@ -298,7 +245,7 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
             // High Energy Peak Setting
             Container(
@@ -388,7 +335,7 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
               ),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
             // Energy Scale Preview
             Container(
@@ -405,18 +352,158 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Energy Level Guide',
+                      'Task Energy Scale',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _buildEnergyLevelRow(1, 'Quick task (~5 min)', AppColors.successGreen),
-                    _buildEnergyLevelRow(2, 'Short task (~15 min)', AppColors.lightGreen),
-                    _buildEnergyLevelRow(3, 'Medium task (~30 min)', AppColors.yellow),
-                    _buildEnergyLevelRow(4, 'Long task (~1 hour)', AppColors.orange),
-                    _buildEnergyLevelRow(5, 'Major task (significant effort)', AppColors.coral),
+                    _buildEnergyLevelRow('-5', 'Most draining → 15 pts, -50% battery', AppColors.coral),
+                    _buildEnergyLevelRow('-4', 'Very draining → 14 pts, -40% battery', AppColors.coral),
+                    _buildEnergyLevelRow('-3', 'Draining → 13 pts, -30% battery', AppColors.orange),
+                    _buildEnergyLevelRow('-2', 'Moderate drain → 12 pts, -20% battery', AppColors.orange),
+                    _buildEnergyLevelRow('-1', 'Slight drain → 11 pts, -10% battery', AppColors.yellow),
+                    _buildEnergyLevelRow('0', 'Neutral → 10 pts, no change', AppColors.greyText),
+                    _buildEnergyLevelRow('+1', 'Slight charge → 9 pts, +10% battery', AppColors.yellow),
+                    _buildEnergyLevelRow('+2', 'Moderate charge → 8 pts, +20% battery', AppColors.lightGreen),
+                    _buildEnergyLevelRow('+3', 'Charging → 7 pts, +30% battery', AppColors.lightGreen),
+                    _buildEnergyLevelRow('+4', 'Very charging → 6 pts, +40% battery', AppColors.successGreen),
+                    _buildEnergyLevelRow('+5', 'Most charging → 5 pts, +50% battery', AppColors.successGreen),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // How It Works Section
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.waterBlue.withValues(alpha: 0.1),
+                borderRadius: AppStyles.borderRadiusLarge,
+                border: Border.all(
+                  color: AppColors.waterBlue.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          color: AppColors.waterBlue,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Understanding the System',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Task Energy
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.flash_on_rounded, color: AppColors.yellow, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Task Energy (-5 to +5)',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'How draining or charging a task is. Set this when creating tasks.',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.greyText,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Body Battery
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.battery_charging_full_rounded, color: AppColors.successGreen, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Body Battery (%)',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Your current energy level. Starts each morning based on how rested you feel. Goes down when you do draining tasks, goes up with charging tasks.',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.greyText,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Flow Points
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.track_changes_rounded, color: AppColors.purple, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Flow Points',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Your productivity score. Earned by completing tasks. Harder tasks earn MORE points! Daily goal adapts to your cycle phase.',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.greyText,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -427,24 +514,25 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
     );
   }
 
-  Widget _buildEnergyLevelRow(int level, String description, Color color) {
+  Widget _buildEnergyLevelRow(String level, String description, Color color) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Container(
-            width: 32,
-            height: 32,
+            width: 36,
+            height: 28,
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Center(
               child: Text(
-                '$level',
+                level,
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
+                  fontSize: 13,
                 ),
               ),
             ),

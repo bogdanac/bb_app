@@ -152,7 +152,6 @@ class DailyEnergyRecord {
 
   static DailyEnergyRecord fromJson(Map<String, dynamic> json) {
     // Handle migration from old format
-    final hasOldFormat = json['energyGoal'] != null;
 
     return DailyEnergyRecord(
       date: DateTime.parse(json['date']),

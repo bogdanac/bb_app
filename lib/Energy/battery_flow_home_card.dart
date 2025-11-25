@@ -1,10 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import 'energy_service.dart';
 import 'energy_settings_model.dart';
-import 'energy_settings_screen.dart';
 import 'flow_calculator.dart';
 import 'morning_battery_prompt.dart';
 
@@ -26,6 +26,7 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
   EnergySettings? _settings;
   bool _isLoading = true;
   DateTime? _lastLoadDate;
+  Timer? _decayTimer;
 
   @override
   void initState() {
@@ -40,13 +41,24 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
       curve: Curves.easeInOut,
     );
     _loadData();
+    _startDecayTimer();
   }
 
   @override
   void dispose() {
+    _decayTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Start periodic timer to apply battery decay every 15 minutes
+  void _startDecayTimer() {
+    _decayTimer = Timer.periodic(const Duration(minutes: 15), (_) {
+      if (mounted) {
+        _loadData();
+      }
+    });
   }
 
   @override
@@ -233,13 +245,6 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
     );
   }
 
-  void _openSettings() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const EnergySettingsScreen()),
-    ).then((_) => _loadData());
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -273,7 +278,6 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
     final flowGoal = _todayRecord!.flowGoal;
     final streak = _settings!.currentStreak;
     final batteryColor = _getBatteryColor(battery);
-    final batteryChange = _todayRecord!.batteryChange;
 
     return Card(
       elevation: 4,
@@ -312,11 +316,12 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                               color: batteryColor,
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 16),
+                          // Flow icon - target/bullseye for productivity goals
                           Icon(
-                            Icons.whatshot_rounded,
-                            color: _todayRecord!.isGoalMet ? AppColors.successGreen : AppColors.coral,
-                            size: 18,
+                            Icons.track_changes_rounded,
+                            color: _todayRecord!.isGoalMet ? AppColors.successGreen : AppColors.purple,
+                            size: 20,
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -327,19 +332,30 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                               color: _todayRecord!.isGoalMet ? AppColors.successGreen : Colors.white,
                             ),
                           ),
+                          // Streak with fire icon
                           if (streak > 0) ...[
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 12),
+                            Icon(
+                              Icons.whatshot_rounded,
+                              color: AppColors.orange,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 4),
                             Text(
-                              '🔥$streak',
-                              style: const TextStyle(fontSize: 14),
+                              '$streak',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.orange,
+                              ),
                             ),
                           ],
                         ],
                       ),
                     ),
-                    // Progress bar
+                    // Flow points progress bar
                     SizedBox(
-                      width: 60,
+                      width: 100,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
@@ -352,15 +368,7 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: _openSettings,
-                      icon: const Icon(Icons.settings_outlined, size: 20),
-                      tooltip: 'Settings',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
                     AnimatedRotation(
                       turns: _isExpanded ? 0.5 : 0,
                       duration: const Duration(milliseconds: 300),
@@ -387,43 +395,7 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                 child: Column(
                   children: [
                     const Divider(color: AppColors.white24),
-                    const SizedBox(height: 2),
-                    // Battery change indicator
-                    if (batteryChange != 0)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'Today: ',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.greyText,
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: batteryChange > 0
-                                    ? AppColors.successGreen.withValues(alpha: 0.2)
-                                    : AppColors.coral.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                '${batteryChange > 0 ? '+' : ''}$batteryChange%',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: batteryChange > 0
-                                      ? AppColors.successGreen
-                                      : AppColors.coral,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    const SizedBox(height: 8),
                     // Quick action buttons
                     Row(
                       children: [
@@ -459,6 +431,16 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                           ),
                         ),
                         const SizedBox(width: 8),
+                        // Adjust battery dialog button
+                        IconButton(
+                          onPressed: _showAdjustBatteryDialog,
+                          icon: const Icon(Icons.tune_rounded),
+                          tooltip: 'Adjust Battery',
+                          style: IconButton.styleFrom(
+                            foregroundColor: AppColors.greyText,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () => _addFlowPoints(1),
@@ -488,15 +470,6 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                               elevation: 0,
                             ),
                             child: const Text('+2pts', style: TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: _showAdjustBatteryDialog,
-                          icon: const Icon(Icons.tune_rounded),
-                          tooltip: 'Adjust Battery',
-                          style: IconButton.styleFrom(
-                            foregroundColor: AppColors.purple,
                           ),
                         ),
                       ],
