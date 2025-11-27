@@ -46,6 +46,24 @@ class TaskPriorityService {
 
       // If same priority score, use secondary sorting criteria
 
+      // Check if both tasks are scheduled in the future
+      final aScheduledFuture = a.scheduledDate != null && a.scheduledDate!.isAfter(today);
+      final bScheduledFuture = b.scheduledDate != null && b.scheduledDate!.isAfter(today);
+
+      // For future-scheduled tasks: sort by date FIRST to prevent intercalation
+      // This ensures tasks in 2026, 2027, etc. are always in chronological order
+      if (aScheduledFuture && bScheduledFuture) {
+        final dateComparison = a.scheduledDate!.compareTo(b.scheduledDate!);
+        if (dateComparison != 0) {
+          return dateComparison;
+        }
+        // If same date, fall through to other criteria
+      } else if (aScheduledFuture && !bScheduledFuture) {
+        return 1; // Future tasks come after non-future tasks with same score
+      } else if (!aScheduledFuture && bScheduledFuture) {
+        return -1; // Non-future tasks come before future tasks with same score
+      }
+
       // 1. For reminders within 30 minutes, earlier times get higher priority
       final aReminder = a.reminderTime;
       final bReminder = b.reminderTime;
@@ -85,7 +103,7 @@ class TaskPriorityService {
         return a.energyLevel.compareTo(b.energyLevel);
       }
 
-      // 5. Scheduled date (earlier dates first)
+      // 5. Scheduled date (earlier dates first) - for non-future tasks
       // This ensures tasks with same priority are ordered chronologically
       if (a.scheduledDate != null && b.scheduledDate != null) {
         final dateComparison = a.scheduledDate!.compareTo(b.scheduledDate!);

@@ -218,26 +218,30 @@ void main() {
 
   group('Sorting Tests', () {
     test('tasks sort in correct priority order', () {
+      // Use real dates since getPrioritizedTasks uses DateTime.now() internally
+      final realNow = DateTime.now();
+      final realToday = DateTime(realNow.year, realNow.month, realNow.day);
+
       final tasks = [
         Task(
           id: 'future_important',
           title: 'Future Important',
           isImportant: true,
-          scheduledDate: today.add(const Duration(days: 10)),
-          createdAt: now,
+          scheduledDate: realToday.add(const Duration(days: 10)),
+          createdAt: realNow,
         ),
         Task(
           id: 'today_regular',
           title: 'Today Regular',
-          scheduledDate: today,
-          createdAt: now,
+          scheduledDate: realToday,
+          createdAt: realNow,
         ),
         Task(
           id: 'today_important',
           title: 'Today Important',
           isImportant: true,
-          scheduledDate: today,
-          createdAt: now,
+          scheduledDate: realToday,
+          createdAt: realNow,
         ),
       ];
 

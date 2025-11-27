@@ -25,7 +25,7 @@ class MorningBatteryPrompt extends StatefulWidget {
 
     await showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (context) => const MorningBatteryPrompt(),
     );
   }
@@ -49,9 +49,22 @@ class _MorningBatteryPromptState extends State<MorningBatteryPrompt> {
       final suggestion = await EnergyCalculator.calculateTodayBatterySuggestion();
       final phaseInfo = await EnergyCalculator.getCurrentPhaseInfo();
 
+      // Adjust suggestion based on time of day
+      // Battery decays ~5% per hour, so if it's later in the day, reduce suggestion
+      final now = DateTime.now();
+      final hourOfDay = now.hour;
+
+      // Assume "morning" baseline is 8 AM - if later, apply decay
+      int adjustedSuggestion = suggestion;
+      if (hourOfDay > 8) {
+        final hoursLate = hourOfDay - 8;
+        final decay = (hoursLate * 5).clamp(0, 50); // Max 50% decay
+        adjustedSuggestion = (suggestion - decay).clamp(5, 120);
+      }
+
       setState(() {
-        _suggestedBattery = suggestion;
-        _selectedBattery = suggestion;
+        _suggestedBattery = adjustedSuggestion;
+        _selectedBattery = adjustedSuggestion;
         _phase = phaseInfo['phase'] ?? '';
         _cycleDay = phaseInfo['cycleDay'] ?? 0;
         _isLoading = false;
@@ -130,14 +143,22 @@ class _MorningBatteryPromptState extends State<MorningBatteryPrompt> {
                   size: 32,
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Good Morning!',
-                    style: TextStyle(
+                    DateTime.now().hour < 12 ? 'Good Morning!' : 'Set Your Battery',
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: Icon(
+                    Icons.close_rounded,
+                    color: AppColors.greyText,
+                  ),
+                  tooltip: 'Skip for now',
                 ),
               ],
             ),

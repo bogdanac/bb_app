@@ -36,6 +36,8 @@ class EnergyService {
   /// Get today's energy record
   static Future<DailyEnergyRecord?> getTodayRecord() async {
     final prefs = await SharedPreferences.getInstance();
+    // Reload to pick up changes made by Android widget
+    await prefs.reload();
     final dateKey = _getTodayKey();
     final json = prefs.getString(dateKey);
     if (json != null) {
@@ -108,6 +110,8 @@ class EnergyService {
   /// Call this when loading today's record to apply any pending decay
   static Future<DailyEnergyRecord?> getTodayRecordWithDecay() async {
     final prefs = await SharedPreferences.getInstance();
+    // Reload to pick up changes made by Android widget
+    await prefs.reload();
     final dateKey = _getTodayKey();
     final json = prefs.getString(dateKey);
     if (json == null) return null;

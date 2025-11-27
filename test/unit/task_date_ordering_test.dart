@@ -131,39 +131,44 @@ void main() {
     });
 
     test('recurring tasks with same priority maintain chronological order', () {
-      // GIVEN: Daily recurring tasks with same priority
-      final nov20Recurring = Task(
+      // GIVEN: Daily recurring tasks scheduled in the future (same priority score)
+      final now = DateTime.now();
+      final fiveDays = now.add(const Duration(days: 5));
+      final tenDays = now.add(const Duration(days: 10));
+      final fifteenDays = now.add(const Duration(days: 15));
+
+      final firstRecurring = Task(
         id: 'r1',
-        title: 'Daily task Nov 20',
+        title: 'Daily task 5 days',
         recurrence: TaskRecurrence(type: RecurrenceType.daily),
-        scheduledDate: DateTime(2025, 11, 20),
-        createdAt: DateTime(2025, 11, 1),
+        scheduledDate: fiveDays,
+        createdAt: now.subtract(const Duration(days: 10)),
       );
 
-      final nov25Recurring = Task(
+      final secondRecurring = Task(
         id: 'r2',
-        title: 'Daily task Nov 25',
+        title: 'Daily task 10 days',
         recurrence: TaskRecurrence(type: RecurrenceType.daily),
-        scheduledDate: DateTime(2025, 11, 25),
-        createdAt: DateTime(2025, 11, 1),
+        scheduledDate: tenDays,
+        createdAt: now.subtract(const Duration(days: 10)),
       );
 
-      final dec1Recurring = Task(
+      final thirdRecurring = Task(
         id: 'r3',
-        title: 'Daily task Dec 1',
+        title: 'Daily task 15 days',
         recurrence: TaskRecurrence(type: RecurrenceType.daily),
-        scheduledDate: DateTime(2025, 12, 1),
-        createdAt: DateTime(2025, 11, 1),
+        scheduledDate: fifteenDays,
+        createdAt: now.subtract(const Duration(days: 10)),
       );
 
       // WHEN: Tasks are prioritized (out of order)
-      final tasks = [dec1Recurring, nov20Recurring, nov25Recurring];
+      final tasks = [thirdRecurring, firstRecurring, secondRecurring];
       final prioritized = service.getPrioritizedTasks(tasks, categories, 10);
 
-      // THEN: Tasks should be ordered by scheduled date
-      expect(prioritized[0].id, equals('r1'), reason: 'Nov 20 recurring should be first');
-      expect(prioritized[1].id, equals('r2'), reason: 'Nov 25 recurring should be second');
-      expect(prioritized[2].id, equals('r3'), reason: 'Dec 1 recurring should be third');
+      // THEN: Tasks should be ordered by scheduled date (earliest first)
+      expect(prioritized[0].id, equals('r1'), reason: '5 days recurring should be first');
+      expect(prioritized[1].id, equals('r2'), reason: '10 days recurring should be second');
+      expect(prioritized[2].id, equals('r3'), reason: '15 days recurring should be third');
     });
 
     test('month boundary ordering is correct', () {

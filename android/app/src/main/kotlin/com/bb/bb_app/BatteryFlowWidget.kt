@@ -64,8 +64,13 @@ class BatteryFlowWidget : AppWidgetProvider() {
                 // Update battery
                 record.put("currentBattery", newBattery)
 
+                // Update last decay timestamp so Flutter doesn't apply old decay on resume
+                val lastDecayKey = "flutter.${dateKey}_last_decay"
+                val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US).format(Date())
+
                 prefs.edit()
                     .putString("flutter.$dateKey", record.toString())
+                    .putString(lastDecayKey, now)
                     .apply()
             }
         } catch (e: Exception) {
@@ -93,8 +98,13 @@ class BatteryFlowWidget : AppWidgetProvider() {
                 val isGoalMet = newFlowPoints >= flowGoal
                 record.put("isGoalMet", isGoalMet)
 
+                // Update last decay timestamp so Flutter doesn't apply old decay on resume
+                val lastDecayKey = "flutter.${dateKey}_last_decay"
+                val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US).format(Date())
+
                 prefs.edit()
                     .putString("flutter.$dateKey", record.toString())
+                    .putString(lastDecayKey, now)
                     .apply()
             }
         } catch (e: Exception) {

@@ -14,17 +14,33 @@ class CalendarEventsCard extends StatefulWidget {
   State<CalendarEventsCard> createState() => _CalendarEventsCardState();
 }
 
-class _CalendarEventsCardState extends State<CalendarEventsCard> {
+class _CalendarEventsCardState extends State<CalendarEventsCard>
+    with WidgetsBindingObserver {
   final CalendarService _calendarService = CalendarService();
   List<Event> _events = [];
   bool _isLoading = true;
   bool _hasPermission = false;
   String _errorMessage = '';
-  
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadEvents();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Refresh events when app comes back to foreground
+    if (state == AppLifecycleState.resumed && mounted) {
+      _loadEvents();
+    }
   }
 
   // Public method that can be called from parent widgets

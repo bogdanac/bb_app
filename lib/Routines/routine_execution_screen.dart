@@ -145,8 +145,12 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     final pointsEarned = FlowCalculator.calculateFlowPoints(energyLevel);
     final settings = await EnergyService.loadSettings();
 
-    // Check for achievements
-    if (record.isGoalMet && mounted) {
+    // Check if goal was JUST met (not already met before this task)
+    final flowPointsBefore = flowPoints - pointsEarned;
+    final goalJustMet = record.isGoalMet && flowPointsBefore < flowGoal;
+
+    // Check for achievements - only celebrate when goal is JUST crossed
+    if (goalJustMet && mounted) {
       // Check if this is a streak milestone
       final milestone = FlowCalculator.getStreakMilestone(settings.currentStreak);
       if (milestone != null) {
@@ -156,7 +160,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
         await EnergyCelebrations.showPersonalRecordCelebration(
           context,
           flowPoints,
-          settings.personalRecord > flowPoints ? settings.personalRecord : flowPoints - pointsEarned,
+          settings.personalRecord > flowPoints ? settings.personalRecord : flowPointsBefore,
         );
       } else {
         // Goal met celebration
