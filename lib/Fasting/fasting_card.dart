@@ -77,47 +77,32 @@ class _FastingCardState extends State<FastingCard> {
     final endTimeString = prefs.getString('current_fast_end');
     final fastType = prefs.getString('current_fast_type') ?? '';
 
-    if (startTimeString != null) {
+    // Never auto-end a fast - only user can end it manually
+    if (isFastingStored && startTimeString != null) {
       final startTime = DateTime.parse(startTimeString);
       final endTime = endTimeString != null ? DateTime.parse(endTimeString) : null;
       final now = DateTime.now();
 
-      // Check if we have a valid ongoing fast
-      if (isFastingStored && endTime != null && now.isBefore(endTime) && now.isAfter(startTime)) {
-        setState(() {
-          isFasting = true;
-          fastingStartTime = startTime;
-          fastingEndTime = endTime;
-          currentFastType = fastType;
-          fastingDuration = now.difference(startTime);
-        });
-        _notifyFastingStatusChanged();
-        _startTimer();
-      } else if (!isFastingStored || (endTime != null && now.isAfter(endTime))) {
-        // Only clear if explicitly not fasting OR fast has definitely ended
-        setState(() {
-          isFasting = false;
-          fastingStartTime = null;
-          fastingEndTime = null;
-          currentFastType = '';
-          fastingDuration = Duration.zero;
-        });
-        _notifyFastingStatusChanged();
-        _timer?.cancel();
-      }
-    } else {
-      // Only clear if no start time and explicitly not fasting
-      if (!isFastingStored) {
-        setState(() {
-          isFasting = false;
-          fastingStartTime = null;
-          fastingEndTime = null;
-          currentFastType = '';
-          fastingDuration = Duration.zero;
-        });
-        _notifyFastingStatusChanged();
-        _timer?.cancel();
-      }
+      setState(() {
+        isFasting = true;
+        fastingStartTime = startTime;
+        fastingEndTime = endTime;
+        currentFastType = fastType;
+        fastingDuration = now.difference(startTime);
+      });
+      _notifyFastingStatusChanged();
+      _startTimer();
+    } else if (!isFastingStored) {
+      // Only clear if explicitly not fasting (user ended it)
+      setState(() {
+        isFasting = false;
+        fastingStartTime = null;
+        fastingEndTime = null;
+        currentFastType = '';
+        fastingDuration = Duration.zero;
+      });
+      _notifyFastingStatusChanged();
+      _timer?.cancel();
     }
 
     // Load recommended fast
@@ -146,11 +131,14 @@ class _FastingCardState extends State<FastingCard> {
 
     await prefs.setBool('is_fasting', isFasting);
 
-    if (isFasting && fastingStartTime != null && fastingEndTime != null) {
+    if (isFasting && fastingStartTime != null) {
       await prefs.setString('current_fast_start', fastingStartTime!.toIso8601String());
-      await prefs.setString('current_fast_end', fastingEndTime!.toIso8601String());
+      if (fastingEndTime != null) {
+        await prefs.setString('current_fast_end', fastingEndTime!.toIso8601String());
+      }
       await prefs.setString('current_fast_type', currentFastType);
-    } else {
+    } else if (!isFasting) {
+      // Only clear data when explicitly not fasting
       await prefs.remove('current_fast_start');
       await prefs.remove('current_fast_end');
       await prefs.remove('current_fast_type');

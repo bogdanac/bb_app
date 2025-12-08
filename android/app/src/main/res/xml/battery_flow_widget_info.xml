@@ -7,7 +7,7 @@
     android:minResizeWidth="180dp"
     android:minResizeHeight="40dp"
     android:maxResizeWidth="600dp"
-    android:maxResizeHeight="200dp"
+    android:maxResizeHeight="800dp"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/battery_flow_widget"
     android:description="@string/battery_flow_widget_description"

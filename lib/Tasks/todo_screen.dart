@@ -839,13 +839,24 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    await _loadCategories();
-    // Only load category filters when filters UI is shown
-    if (widget.showFilters) {
-      await _loadCategoryFilters();
+    try {
+      await _loadCategories();
+      // Only load category filters when filters UI is shown
+      if (widget.showFilters) {
+        await _loadCategoryFilters();
+      }
+      await _loadTasks(); // This already calls _updateDisplayTasks() internally
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'TodoScreen._loadData',
+        error: 'Error loading data: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-    await _loadTasks(); // This already calls _updateDisplayTasks() internally
-    setState(() => _isLoading = false);
   }
 
   Future<void> _updateDisplayTasks() async {
@@ -1219,6 +1230,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         isCompleted: false, // Reset completion status
         completedAt: null,  // Clear completion timestamp
         createdAt: task.createdAt, // Keep original creation date
+        energyLevel: task.energyLevel, // Preserve energy level
       );
       
       // Load fresh task list and update the existing task
@@ -1255,6 +1267,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         isCompleted: true,
         completedAt: DateTime.now(),
         createdAt: task.createdAt,
+        energyLevel: task.energyLevel, // Preserve energy level
       );
 
       final allTasks = await _taskService.loadTasks();
@@ -1303,6 +1316,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           isCompleted: true,
           completedAt: DateTime.now(),
           createdAt: task.createdAt,
+          energyLevel: task.energyLevel, // Preserve energy level
         );
         
         final allTasks = await _taskService.loadTasks();

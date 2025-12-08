@@ -71,10 +71,43 @@ class RecurrenceCalculator {
   }
 
   /// Calculate scheduled date for menstrual cycle tasks
+  /// IMPORTANT: Respects startDate and endDate constraints
   Future<DateTime?> calculateMenstrualTaskScheduledDate(
     Task task,
     SharedPreferences prefs,
   ) async {
+    final recurrence = task.recurrence!;
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+
+    // Check if recurrence has ended - if endDate is in the past, return null
+    if (recurrence.endDate != null) {
+      final endDateOnly = DateTime(
+        recurrence.endDate!.year,
+        recurrence.endDate!.month,
+        recurrence.endDate!.day,
+      );
+      if (endDateOnly.isBefore(todayDate)) {
+        return null;
+      }
+    }
+
+    // Check if recurrence has a future startDate
+    if (recurrence.startDate != null) {
+      final startDateOnly = DateTime(
+        recurrence.startDate!.year,
+        recurrence.startDate!.month,
+        recurrence.startDate!.day,
+      );
+      if (startDateOnly.isAfter(todayDate)) {
+        // Start date is in the future - check it doesn't exceed endDate
+        if (recurrence.endDate != null && startDateOnly.isAfter(recurrence.endDate!)) {
+          return null;
+        }
+        return startDateOnly;
+      }
+    }
+
     final lastStartStr = prefs.getString('last_period_start');
     if (lastStartStr == null) return null;
 
@@ -87,7 +120,6 @@ class RecurrenceCalculator {
       averageCycleLength
     );
 
-    final recurrence = task.recurrence!;
     for (final recurrenceType in recurrence.types) {
       DateTime? phaseStart;
 
@@ -113,7 +145,13 @@ class RecurrenceCalculator {
 
       if (phaseStart != null && recurrence.phaseDay != null) {
         final dayInPhase = recurrence.phaseDay!;
-        return phaseStart.add(Duration(days: dayInPhase - 1));
+        final result = phaseStart.add(Duration(days: dayInPhase - 1));
+
+        // Check if result exceeds endDate
+        if (recurrence.endDate != null && result.isAfter(recurrence.endDate!)) {
+          return null;
+        }
+        return result;
       }
     }
 
@@ -122,8 +160,39 @@ class RecurrenceCalculator {
 
   /// Calculate scheduled date for regular recurring tasks - OPTIMIZED
   /// IMPORTANT: Always returns a date in the FUTURE (never today or past)
+  /// IMPORTANT: Respects startDate - won't schedule before it
   DateTime? calculateRegularRecurringTaskDate(Task task, DateTime todayDate) {
     final recurrence = task.recurrence!;
+
+    // Check if recurrence has ended - if endDate is in the past, return null
+    if (recurrence.endDate != null) {
+      final endDateOnly = DateTime(
+        recurrence.endDate!.year,
+        recurrence.endDate!.month,
+        recurrence.endDate!.day,
+      );
+      if (endDateOnly.isBefore(todayDate)) {
+        // End date has passed, no more occurrences
+        return null;
+      }
+    }
+
+    // Check if recurrence has a future startDate - if so, return startDate
+    if (recurrence.startDate != null) {
+      final startDateOnly = DateTime(
+        recurrence.startDate!.year,
+        recurrence.startDate!.month,
+        recurrence.startDate!.day,
+      );
+      if (startDateOnly.isAfter(todayDate)) {
+        // Start date is in the future, schedule for start date
+        // But also check it doesn't exceed endDate
+        if (recurrence.endDate != null && startDateOnly.isAfter(recurrence.endDate!)) {
+          return null;
+        }
+        return startDateOnly;
+      }
+    }
 
     // Determine the base date to calculate from
     // If task has scheduledDate in the past, use that as base; otherwise use today
@@ -131,24 +200,33 @@ class RecurrenceCalculator {
         ? DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day)
         : todayDate;
 
+    // Helper to check if result exceeds endDate
+    DateTime? checkEndDate(DateTime? result) {
+      if (result == null) return null;
+      if (recurrence.endDate != null && result.isAfter(recurrence.endDate!)) {
+        return null; // Result exceeds end date
+      }
+      return result;
+    }
+
     // Find the next occurrence AFTER today (never return today or past)
     // For daily tasks, optimize by calculating directly
     if (recurrence.types.contains(RecurrenceType.daily)) {
       final interval = recurrence.interval;
       if (task.scheduledDate == null || !task.scheduledDate!.isBefore(todayDate)) {
         // Task is not overdue, return tomorrow (or next interval)
-        return todayDate.add(Duration(days: interval));
+        return checkEndDate(todayDate.add(Duration(days: interval)));
       }
       // Task is overdue - calculate how many intervals have passed and add one more
       final daysSinceScheduled = todayDate.difference(baseDate).inDays;
       final intervalsToSkip = (daysSinceScheduled / interval).ceil() + 1;
-      return baseDate.add(Duration(days: intervalsToSkip * interval));
+      return checkEndDate(baseDate.add(Duration(days: intervalsToSkip * interval)));
     } else if (recurrence.types.contains(RecurrenceType.weekly)) {
       final daysToCheck = 7 * recurrence.interval;
       for (int i = 1; i <= daysToCheck; i++) {
         final checkDate = todayDate.add(Duration(days: i));
         if (recurrence.isDueOn(checkDate, taskCreatedAt: task.createdAt)) {
-          return checkDate;
+          return checkEndDate(checkDate);
         }
       }
     } else if (recurrence.types.contains(RecurrenceType.monthly)) {
@@ -164,7 +242,7 @@ class RecurrenceCalculator {
 
         // Get the last day of the next month
         final lastDayOfNextMonth = DateTime(nextYear, nextMonth + 1, 0).day;
-        return DateTime(nextYear, nextMonth, lastDayOfNextMonth);
+        return checkEndDate(DateTime(nextYear, nextMonth, lastDayOfNextMonth));
       }
 
       // Handle specific day of month
@@ -182,7 +260,7 @@ class RecurrenceCalculator {
 
       final daysInMonth = DateTime(nextYear, nextMonth + 1, 0).day;
       final actualDay = targetDay > daysInMonth ? daysInMonth : targetDay;
-      return DateTime(nextYear, nextMonth, actualDay);
+      return checkEndDate(DateTime(nextYear, nextMonth, actualDay));
     } else if (recurrence.types.contains(RecurrenceType.yearly)) {
       final targetMonth = recurrence.interval;
       final targetDay = recurrence.dayOfMonth ?? task.createdAt.day;
@@ -194,13 +272,13 @@ class RecurrenceCalculator {
         nextYear++;
       }
 
-      return DateTime(nextYear, targetMonth, targetDay);
+      return checkEndDate(DateTime(nextYear, targetMonth, targetDay));
     } else {
       // For custom recurrence, limit to 30 days
       for (int i = 1; i <= 30; i++) {
         final checkDate = todayDate.add(Duration(days: i));
         if (recurrence.isDueOn(checkDate, taskCreatedAt: task.createdAt)) {
-          return checkDate;
+          return checkEndDate(checkDate);
         }
       }
     }

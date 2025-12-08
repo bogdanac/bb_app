@@ -37,19 +37,12 @@ class TaskListWidgetFilterService {
     int? taskCount;
     int? filteredCount;
     int? prioritizedCount;
-    int? incompleteCount;
 
     try {
       final taskService = TaskService();
       final allTasks = await taskService.loadTasks();
       final categories = await taskService.loadCategories();
       taskCount = allTasks.length;
-
-      await ErrorLogger.logError(
-        source: 'TaskListWidget',
-        error: 'Step 1: Loaded tasks',
-        context: {'totalTasks': taskCount},
-      );
 
       // Get current menstrual phase for prioritization (match TODO screen logic)
       String? currentPhase;
@@ -71,21 +64,8 @@ class TaskListWidgetFilterService {
       final filteredTasks = await _applyMenstrualFiltering(allTasks);
       filteredCount = filteredTasks.length;
 
-      await ErrorLogger.logError(
-        source: 'TaskListWidget',
-        error: 'Step 2: After menstrual filter',
-        context: {'filteredTasks': filteredCount},
-      );
-
       // Get prioritized incomplete tasks
       final incompleteTasks = filteredTasks.where((t) => !t.isCompleted).toList();
-      incompleteCount = incompleteTasks.length;
-
-      await ErrorLogger.logError(
-        source: 'TaskListWidget',
-        error: 'Step 3: After incomplete filter',
-        context: {'incompleteTasks': incompleteCount},
-      );
 
       // Call priority service directly (sync) instead of async wrapper
       final priorityService = TaskPriorityService();
@@ -97,20 +77,8 @@ class TaskListWidgetFilterService {
       );
       prioritizedCount = prioritizedTasks.length;
 
-      await ErrorLogger.logError(
-        source: 'TaskListWidget',
-        error: 'Step 4: After prioritization',
-        context: {'prioritizedTasks': prioritizedCount},
-      );
-
       // Take only first 5 tasks for widget
       final widgetTasks = prioritizedTasks.take(_maxWidgetTasks).toList();
-
-      await ErrorLogger.logError(
-        source: 'TaskListWidget',
-        error: 'Step 5: Saving to widget',
-        context: {'widgetTasks': widgetTasks.length},
-      );
 
       // Save to SharedPreferences for widget to read
       await _saveWidgetTasks(widgetTasks);

@@ -1042,6 +1042,89 @@ void main() {
           expect(results[i].isBefore(results[i + 1]), isTrue);
         }
       });
+
+      test('menstrual task with future startDate - should return startDate', () async {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final futureStartDate = todayDate.add(const Duration(days: 14));
+
+        SharedPreferences.setMockInitialValues({
+          'last_period_start': todayDate.subtract(const Duration(days: 5)).toIso8601String(),
+          'average_cycle_length': 28,
+        });
+        final prefs = await SharedPreferences.getInstance();
+
+        final task = Task(
+          id: '1',
+          title: 'Menstrual Task With Future Start',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.menstrualPhase],
+            phaseDay: 1,
+            startDate: futureStartDate,
+          ),
+          createdAt: todayDate,
+        );
+
+        final result = await calculator.calculateMenstrualTaskScheduledDate(task, prefs);
+
+        expect(result, futureStartDate);
+      });
+
+      test('menstrual task with past endDate - should return null', () async {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final pastEndDate = todayDate.subtract(const Duration(days: 7));
+
+        SharedPreferences.setMockInitialValues({
+          'last_period_start': todayDate.subtract(const Duration(days: 5)).toIso8601String(),
+          'average_cycle_length': 28,
+        });
+        final prefs = await SharedPreferences.getInstance();
+
+        final task = Task(
+          id: '1',
+          title: 'Menstrual Task Already Ended',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.menstrualPhase],
+            phaseDay: 1,
+            endDate: pastEndDate,
+          ),
+          createdAt: todayDate.subtract(const Duration(days: 30)),
+        );
+
+        final result = await calculator.calculateMenstrualTaskScheduledDate(task, prefs);
+
+        expect(result, isNull);
+      });
+
+      test('menstrual task with startDate after endDate - should return null', () async {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final futureStartDate = todayDate.add(const Duration(days: 30));
+        final endDate = todayDate.add(const Duration(days: 10));
+
+        SharedPreferences.setMockInitialValues({
+          'last_period_start': todayDate.subtract(const Duration(days: 5)).toIso8601String(),
+          'average_cycle_length': 28,
+        });
+        final prefs = await SharedPreferences.getInstance();
+
+        final task = Task(
+          id: '1',
+          title: 'Invalid Date Range Menstrual Task',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.menstrualPhase],
+            phaseDay: 1,
+            startDate: futureStartDate,
+            endDate: endDate,
+          ),
+          createdAt: todayDate,
+        );
+
+        final result = await calculator.calculateMenstrualTaskScheduledDate(task, prefs);
+
+        expect(result, isNull);
+      });
     });
 
     group('Edge Cases', () {
@@ -1765,6 +1848,273 @@ void main() {
         // Should limit search to 30 days max
         // Result may be null if no matching date found, which is acceptable
         expect(stopwatch.elapsedMilliseconds, lessThan(10));
+      });
+    });
+
+    group('Start Date Handling', () {
+      test('daily task with future startDate - should return startDate, not tomorrow', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final futureStartDate = todayDate.add(const Duration(days: 7));
+
+        final task = Task(
+          id: '1',
+          title: 'Daily Task Starting Next Week',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+            startDate: futureStartDate,
+          ),
+          createdAt: todayDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, futureStartDate);
+      });
+
+      test('weekly task with future startDate - should return startDate', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final futureStartDate = todayDate.add(const Duration(days: 14));
+
+        final task = Task(
+          id: '1',
+          title: 'Weekly Task Starting in 2 Weeks',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.weekly],
+            interval: 1,
+            weekDays: [1, 3, 5], // Mon, Wed, Fri
+            startDate: futureStartDate,
+          ),
+          createdAt: todayDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, futureStartDate);
+      });
+
+      test('monthly task with future startDate - should return startDate', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final futureStartDate = todayDate.add(const Duration(days: 30));
+
+        final task = Task(
+          id: '1',
+          title: 'Monthly Task Starting Next Month',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.monthly],
+            interval: 1,
+            dayOfMonth: 15,
+            startDate: futureStartDate,
+          ),
+          createdAt: todayDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, futureStartDate);
+      });
+
+      test('daily task with past startDate - should calculate normally', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final pastStartDate = todayDate.subtract(const Duration(days: 7));
+        final tomorrow = todayDate.add(const Duration(days: 1));
+
+        final task = Task(
+          id: '1',
+          title: 'Daily Task Started Last Week',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+            startDate: pastStartDate,
+          ),
+          createdAt: pastStartDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, tomorrow);
+      });
+
+      test('daily task with startDate today - should return tomorrow (startDate not after today)', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final tomorrow = todayDate.add(const Duration(days: 1));
+
+        final task = Task(
+          id: '1',
+          title: 'Daily Task Starting Today',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+            startDate: todayDate,
+          ),
+          createdAt: todayDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, tomorrow);
+      });
+
+      test('every 3 days task with future startDate - should return startDate', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final futureStartDate = todayDate.add(const Duration(days: 10));
+
+        final task = Task(
+          id: '1',
+          title: 'Every 3 Days Task',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 3,
+            startDate: futureStartDate,
+          ),
+          createdAt: todayDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, futureStartDate);
+      });
+    });
+
+    group('End Date Handling', () {
+      test('daily task with past endDate - should return null', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final pastEndDate = todayDate.subtract(const Duration(days: 7));
+
+        final task = Task(
+          id: '1',
+          title: 'Daily Task Already Ended',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+            endDate: pastEndDate,
+          ),
+          createdAt: todayDate.subtract(const Duration(days: 30)),
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, isNull);
+      });
+
+      test('daily task where next occurrence exceeds endDate - should return null', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        // End date is today, so tomorrow (next occurrence) would exceed it
+        final endDate = todayDate;
+
+        final task = Task(
+          id: '1',
+          title: 'Daily Task Ending Today',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+            endDate: endDate,
+          ),
+          createdAt: todayDate.subtract(const Duration(days: 10)),
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, isNull);
+      });
+
+      test('daily task with future endDate - should return tomorrow', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final futureEndDate = todayDate.add(const Duration(days: 30));
+        final tomorrow = todayDate.add(const Duration(days: 1));
+
+        final task = Task(
+          id: '1',
+          title: 'Daily Task With Future End',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+            endDate: futureEndDate,
+          ),
+          createdAt: todayDate.subtract(const Duration(days: 10)),
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, tomorrow);
+      });
+
+      test('monthly task where next occurrence exceeds endDate - should return null', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        // End date is in 10 days, but monthly task would be next month
+        final endDate = todayDate.add(const Duration(days: 10));
+
+        final task = Task(
+          id: '1',
+          title: 'Monthly Task Ending Soon',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.monthly],
+            interval: 1,
+            dayOfMonth: todayDate.day, // Same day as today, so next is next month
+            endDate: endDate,
+          ),
+          createdAt: todayDate.subtract(const Duration(days: 60)),
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, isNull);
+      });
+
+      test('task with startDate after endDate - should return null', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final futureStartDate = todayDate.add(const Duration(days: 30));
+        final endDate = todayDate.add(const Duration(days: 10)); // Before startDate
+
+        final task = Task(
+          id: '1',
+          title: 'Invalid Date Range Task',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+            startDate: futureStartDate,
+            endDate: endDate,
+          ),
+          createdAt: todayDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, isNull);
+      });
+
+      test('task with valid startDate and endDate range - should return startDate', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final futureStartDate = todayDate.add(const Duration(days: 10));
+        final endDate = todayDate.add(const Duration(days: 30));
+
+        final task = Task(
+          id: '1',
+          title: 'Valid Date Range Task',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+            startDate: futureStartDate,
+            endDate: endDate,
+          ),
+          createdAt: todayDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, futureStartDate);
       });
     });
   });

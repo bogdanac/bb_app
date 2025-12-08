@@ -122,6 +122,13 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
       appBar: AppBar(
         title: const Text('Task Categories'),
         backgroundColor: Colors.transparent,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_rounded),
+            onPressed: _addCategory,
+            tooltip: 'Add Category',
+          ),
+        ],
       ),
       body: ReorderableListView.builder(
         padding: const EdgeInsets.all(16),
@@ -170,11 +177,6 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
             ),
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addCategory,
-        backgroundColor: AppColors.successGreen,
-        child: const Icon(Icons.add_rounded),
       ),
     );
   }

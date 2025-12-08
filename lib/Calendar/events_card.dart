@@ -66,7 +66,9 @@ class _CalendarEventsCardState extends State<CalendarEventsCard>
         return;
       }
 
-      final events = await _calendarService.getTodaysEvents();
+      // Add timeout to prevent blocking on slow calendar sync
+      final events = await _calendarService.getTodaysEvents()
+          .timeout(const Duration(seconds: 5), onTimeout: () => _events);
 
       if (mounted) {
         setState(() {

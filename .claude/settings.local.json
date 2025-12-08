@@ -25,7 +25,13 @@
       "Bash(export GRADLE_USER_HOME=\"C:\\Dev\\Projects\\bb_app\\android\\.gradle_cache\")",
       "Bash(git add:*)",
       "Bash(flutter build:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" log -1 --name-only)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff HEAD~1 --stat)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff HEAD~1 -- lib/Calendar/events_card.dart)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff HEAD~1 -- lib/Energy/energy_service.dart)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" status)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff --stat lib/Energy lib/Calendar lib/Tasks/todo_screen.dart lib/Routines/routine_execution_screen.dart)"
     ]
   },
   "outputStyle": "default"

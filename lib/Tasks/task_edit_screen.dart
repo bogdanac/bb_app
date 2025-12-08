@@ -10,7 +10,6 @@ import '../shared/snackbar_utils.dart';
 import 'task_service.dart';
 import 'task_builder.dart';
 import '../shared/error_logger.dart';
-import '../Energy/flow_calculator.dart';
 
 class TaskEditScreen extends StatefulWidget {
   final Task? task;
@@ -976,7 +975,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
 
             const SizedBox(height: 16),
 
-            // Energy Level Section (-5 to +5 scale)
+            // Energy Level Section (-5 to +5 scale) - Compact version
             Container(
               decoration: BoxDecoration(
                 color: AppColors.dialogBackground.withValues(alpha: 0.08),
@@ -988,39 +987,22 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: (_energyLevel != -1
-                            ? _getEnergyColor(_energyLevel)
-                            : AppColors.greyText).withValues(alpha: 0.1),
-                        borderRadius: AppStyles.borderRadiusMedium,
-                      ),
-                      child: Icon(
-                        _energyLevel < 0 ? Icons.battery_3_bar_rounded : Icons.battery_charging_full_rounded,
-                        color: _energyLevel != -1
-                            ? _getEnergyColor(_energyLevel)
-                            : AppColors.greyText,
-                        size: 24,
-                      ),
+                    Icon(
+                      _energyLevel < 0 ? Icons.battery_3_bar_rounded : Icons.battery_charging_full_rounded,
+                      color: _energyLevel != -1
+                          ? _getEnergyColor(_energyLevel)
+                          : AppColors.greyText,
+                      size: 22,
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            'Energy',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.greyText,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
                           SliderTheme(
                             data: SliderTheme.of(context).copyWith(
                               activeTrackColor: _getEnergyColor(_energyLevel),
@@ -1028,7 +1010,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                               thumbColor: _getEnergyColor(_energyLevel),
                               overlayColor: _getEnergyColor(_energyLevel).withValues(alpha: 0.2),
                               trackHeight: 4,
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
                             ),
                             child: Slider(
                               value: _energyLevel.toDouble(),
@@ -1041,12 +1023,14 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                               },
                             ),
                           ),
-                          Text(
-                            _getEnergyDescription(_energyLevel),
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.normal,
-                              color: _energyLevel != -1 ? _getEnergyColor(_energyLevel) : AppColors.greyText,
+                          Padding(
+                            padding: const EdgeInsets.only(left: 12),
+                            child: Text(
+                              _getEnergyDescription(_energyLevel),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: _energyLevel != -1 ? _getEnergyColor(_energyLevel) : AppColors.greyText,
+                              ),
                             ),
                           ),
                         ],

@@ -9,8 +9,13 @@ class EnergySettings {
   final int maxFlowGoal;   // Maximum flow goal on high-energy days (default: 20)
 
   // Achievement Tracking
-  final int currentStreak; // Current days streak of meeting flow goals
-  final int personalRecord; // Personal best flow points in a single day
+  final int currentStreak;   // Current days streak of meeting flow goals
+  final int longestStreak;   // Longest streak ever achieved
+  final int personalRecord;  // Personal best flow points in a single day
+
+  // Streak Skip Tracking (1 skip allowed per week, not consecutive)
+  final DateTime? lastSkipDate;     // Last date a skip was used
+  final DateTime? lastStreakDate;   // Last date that counted towards streak
 
   const EnergySettings({
     this.minBattery = 5,        // Default: 5% on low energy days
@@ -18,7 +23,10 @@ class EnergySettings {
     this.minFlowGoal = 5,       // Default: 5 flow points minimum
     this.maxFlowGoal = 20,      // Default: 20 flow points maximum
     this.currentStreak = 0,     // Default: no streak
+    this.longestStreak = 0,     // Default: no longest streak
     this.personalRecord = 0,    // Default: no PR yet
+    this.lastSkipDate,
+    this.lastStreakDate,
   });
 
   Map<String, dynamic> toJson() => {
@@ -27,21 +35,29 @@ class EnergySettings {
     'minFlowGoal': minFlowGoal,
     'maxFlowGoal': maxFlowGoal,
     'currentStreak': currentStreak,
+    'longestStreak': longestStreak,
     'personalRecord': personalRecord,
+    'lastSkipDate': lastSkipDate?.toIso8601String(),
+    'lastStreakDate': lastStreakDate?.toIso8601String(),
   };
 
   static EnergySettings fromJson(Map<String, dynamic> json) {
     // Handle migration from old field names
     final lowEnergyPeak = json['lowEnergyPeak'];
     final highEnergyPeak = json['highEnergyPeak'];
+    final currentStreak = json['currentStreak'] ?? 0;
 
     return EnergySettings(
       minBattery: json['minBattery'] ?? lowEnergyPeak ?? 5,
       maxBattery: json['maxBattery'] ?? highEnergyPeak ?? 120,
       minFlowGoal: json['minFlowGoal'] ?? lowEnergyPeak ?? 5,
       maxFlowGoal: json['maxFlowGoal'] ?? highEnergyPeak ?? 20,
-      currentStreak: json['currentStreak'] ?? 0,
+      currentStreak: currentStreak,
+      // Migration: if no longestStreak, use currentStreak as baseline
+      longestStreak: json['longestStreak'] ?? currentStreak,
       personalRecord: json['personalRecord'] ?? 0,
+      lastSkipDate: json['lastSkipDate'] != null ? DateTime.parse(json['lastSkipDate']) : null,
+      lastStreakDate: json['lastStreakDate'] != null ? DateTime.parse(json['lastStreakDate']) : null,
     );
   }
 
@@ -51,7 +67,12 @@ class EnergySettings {
     int? minFlowGoal,
     int? maxFlowGoal,
     int? currentStreak,
+    int? longestStreak,
     int? personalRecord,
+    DateTime? lastSkipDate,
+    DateTime? lastStreakDate,
+    bool clearLastSkipDate = false,
+    bool clearLastStreakDate = false,
   }) {
     return EnergySettings(
       minBattery: minBattery ?? this.minBattery,
@@ -59,7 +80,10 @@ class EnergySettings {
       minFlowGoal: minFlowGoal ?? this.minFlowGoal,
       maxFlowGoal: maxFlowGoal ?? this.maxFlowGoal,
       currentStreak: currentStreak ?? this.currentStreak,
+      longestStreak: longestStreak ?? this.longestStreak,
       personalRecord: personalRecord ?? this.personalRecord,
+      lastSkipDate: clearLastSkipDate ? null : (lastSkipDate ?? this.lastSkipDate),
+      lastStreakDate: clearLastStreakDate ? null : (lastStreakDate ?? this.lastStreakDate),
     );
   }
 
@@ -73,7 +97,10 @@ class EnergySettings {
           minFlowGoal == other.minFlowGoal &&
           maxFlowGoal == other.maxFlowGoal &&
           currentStreak == other.currentStreak &&
-          personalRecord == other.personalRecord;
+          longestStreak == other.longestStreak &&
+          personalRecord == other.personalRecord &&
+          lastSkipDate == other.lastSkipDate &&
+          lastStreakDate == other.lastStreakDate;
 
   @override
   int get hashCode =>
@@ -82,7 +109,10 @@ class EnergySettings {
       minFlowGoal.hashCode ^
       maxFlowGoal.hashCode ^
       currentStreak.hashCode ^
-      personalRecord.hashCode;
+      longestStreak.hashCode ^
+      personalRecord.hashCode ^
+      lastSkipDate.hashCode ^
+      lastStreakDate.hashCode;
 }
 
 /// Daily energy record for Body Battery & Flow tracking

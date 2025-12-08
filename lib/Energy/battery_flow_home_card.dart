@@ -27,6 +27,7 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
   bool _isLoading = true;
   DateTime? _lastLoadDate;
   Timer? _decayTimer;
+  bool _canUseSkip = false;
 
   @override
   void initState() {
@@ -64,27 +65,30 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
-      // Always reload data on resume to pick up widget changes
-      _loadData();
+      // Check for new day (which also reloads data)
       _checkForNewDay();
     }
   }
 
   /// Check if it's a new day and show morning prompt if needed
+  /// Also reloads data on every call to pick up widget changes
   Future<void> _checkForNewDay() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // If we haven't loaded yet or it's a different day, check for morning prompt
-    if (_lastLoadDate == null || _lastLoadDate != today) {
+    // If it's a different day, check streak for previous day and show morning prompt
+    if (_lastLoadDate != null && _lastLoadDate != today) {
+      // Check streak at end of previous day (uses skip if available)
+      await EnergyService.checkStreakAtDayEnd(_lastLoadDate!);
+
       final record = await EnergyService.getTodayRecord();
       if (record == null && mounted) {
         // It's a new day with no record - show morning prompt
         await MorningBatteryPrompt.show(context);
       }
-      // Reload data (whether we showed prompt or not)
-      await _loadData();
     }
+    // Always reload data to pick up widget changes
+    await _loadData();
   }
 
   void _toggleExpanded() {
@@ -100,20 +104,23 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
 
   Future<void> _loadData() async {
     // Use getTodayRecordWithDecay to apply automatic battery decay
-    final record = await EnergyService.getTodayRecordWithDecay();
+    // forceReload: true to sync with Android widget changes
+    final record = await EnergyService.getTodayRecordWithDecay(forceReload: true);
     final settings = await EnergyService.loadSettings();
+    final canSkip = await EnergyService.canUseSkip();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
     // If no record today, show morning prompt
     if (record == null && mounted) {
       await MorningBatteryPrompt.show(context);
-      // Reload after prompt (with decay)
+      // Reload after prompt (no need to forceReload, we just wrote locally)
       final newRecord = await EnergyService.getTodayRecordWithDecay();
       if (mounted) {
         setState(() {
           _todayRecord = newRecord;
           _settings = settings;
+          _canUseSkip = canSkip;
           _isLoading = false;
           _lastLoadDate = today;
         });
@@ -125,6 +132,7 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
       setState(() {
         _todayRecord = record;
         _settings = settings;
+        _canUseSkip = canSkip;
         _isLoading = false;
         _lastLoadDate = today;
       });
@@ -141,6 +149,46 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
     HapticFeedback.lightImpact();
     await EnergyService.addFlowPoints(points);
     await _loadData();
+  }
+
+  Future<void> _useSkipDay() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Use Skip Day?'),
+        content: const Text(
+          'This will preserve your streak if you don\'t meet today\'s goal.\n\n'
+          'You can only use 1 skip per week, and not on consecutive days.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.orange,
+            ),
+            child: const Text('Use Skip'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final success = await EnergyService.useStreakSkip();
+      if (success && mounted) {
+        HapticFeedback.mediumImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Skip day activated! Your streak is protected.'),
+            backgroundColor: AppColors.orange,
+          ),
+        );
+        await _loadData();
+      }
+    }
   }
 
   Color _getBatteryColor(int battery) {
@@ -506,6 +554,25 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                    ],
+                    // Skip day button - show when goal not met, streak > 0, and skip available
+                    if (!_todayRecord!.isGoalMet && streak > 0 && _canUseSkip) ...[
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _useSkipDay,
+                          icon: const Icon(Icons.skip_next_rounded, size: 18),
+                          label: const Text('Use Skip Day (protect streak)'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.orange,
+                            side: BorderSide(color: AppColors.orange),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: AppStyles.borderRadiusMedium,
+                            ),
+                          ),
                         ),
                       ),
                     ],

@@ -81,14 +81,15 @@ class FlowCalculator {
 
   /// Update streak based on goal achievement
   /// Returns new streak count
+  /// Note: This is called when goal is MET - streak only breaks at end of day check
   static int updateStreak({
     required bool goalMetToday,
     required bool goalMetYesterday,
     required int currentStreak,
   }) {
     if (!goalMetToday) {
-      // Goal not met today - streak broken
-      return 0;
+      // Goal not met today - don't increment (but don't break here - that's done at day end)
+      return currentStreak;
     }
 
     if (goalMetYesterday || currentStreak > 0) {
@@ -98,6 +99,57 @@ class FlowCalculator {
 
     // First day of new streak
     return 1;
+  }
+
+  /// Check if a skip can be used for the streak
+  /// Rules: 1 skip allowed per week, no consecutive skips
+  static bool canUseStreakSkip({
+    required DateTime? lastSkipDate,
+    required DateTime? lastStreakDate,
+    required DateTime today,
+  }) {
+    // If no last skip, can always use one
+    if (lastSkipDate == null) return true;
+
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final lastSkip = DateTime(lastSkipDate.year, lastSkipDate.month, lastSkipDate.day);
+
+    // Check if last skip was yesterday (no consecutive skips)
+    final yesterday = todayDate.subtract(const Duration(days: 1));
+    if (lastSkip == yesterday) {
+      return false; // Can't skip two days in a row
+    }
+
+    // Check if a skip was used in the last 7 days
+    final weekAgo = todayDate.subtract(const Duration(days: 7));
+    if (lastSkip.isAfter(weekAgo)) {
+      return false; // Already used skip this week
+    }
+
+    return true;
+  }
+
+  /// Calculate streak with skip consideration at end of day
+  /// Returns (newStreak, skipUsed, streakBroken)
+  static ({int newStreak, bool skipUsed, bool streakBroken}) calculateStreakAtDayEnd({
+    required bool goalMetToday,
+    required int currentStreak,
+    required DateTime? lastSkipDate,
+    required DateTime today,
+  }) {
+    // If goal was met, streak continues
+    if (goalMetToday) {
+      return (newStreak: currentStreak, skipUsed: false, streakBroken: false);
+    }
+
+    // Goal not met - check if we can use a skip
+    if (currentStreak > 0 && canUseStreakSkip(lastSkipDate: lastSkipDate, lastStreakDate: null, today: today)) {
+      // Use a skip to preserve streak
+      return (newStreak: currentStreak, skipUsed: true, streakBroken: false);
+    }
+
+    // No skip available or no streak to preserve - streak breaks
+    return (newStreak: 0, skipUsed: false, streakBroken: currentStreak > 0);
   }
 
   /// Get streak milestone for celebration (returns milestone value or null)

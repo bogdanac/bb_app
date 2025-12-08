@@ -34,10 +34,13 @@ class EnergyService {
   // ========================
 
   /// Get today's energy record
-  static Future<DailyEnergyRecord?> getTodayRecord() async {
+  /// Set [forceReload] to true when syncing with Android widget
+  static Future<DailyEnergyRecord?> getTodayRecord({bool forceReload = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    // Reload to pick up changes made by Android widget
-    await prefs.reload();
+    if (forceReload) {
+      // Reload to pick up changes made by Android widget
+      await prefs.reload();
+    }
     final dateKey = _getTodayKey();
     final json = prefs.getString(dateKey);
     if (json != null) {
@@ -108,10 +111,13 @@ class EnergyService {
   /// Apply time-based battery decay
   /// Decays battery by ~5% per hour (~80% total over 16 waking hours)
   /// Call this when loading today's record to apply any pending decay
-  static Future<DailyEnergyRecord?> getTodayRecordWithDecay() async {
+  /// Set [forceReload] to true when syncing with Android widget
+  static Future<DailyEnergyRecord?> getTodayRecordWithDecay({bool forceReload = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    // Reload to pick up changes made by Android widget
-    await prefs.reload();
+    if (forceReload) {
+      // Reload to pick up changes made by Android widget
+      await prefs.reload();
+    }
     final dateKey = _getTodayKey();
     final json = prefs.getString(dateKey);
     if (json == null) return null;
@@ -171,6 +177,7 @@ class EnergyService {
 
     // Update streak if goal just met
     int newStreak = settings.currentStreak;
+    int newLongestStreak = settings.longestStreak;
     if (isGoalMet && !today.isGoalMet) {
       // Goal was just achieved
       final yesterday = DateTime.now().subtract(const Duration(days: 1));
@@ -180,6 +187,10 @@ class EnergyService {
         goalMetYesterday: yesterdayRecord?.isGoalMet ?? false,
         currentStreak: settings.currentStreak,
       );
+      // Update longest streak if current beats it
+      if (newStreak > newLongestStreak) {
+        newLongestStreak = newStreak;
+      }
     }
 
     // Update personal record if needed
@@ -189,9 +200,10 @@ class EnergyService {
     }
 
     // Save updated settings
-    if (newStreak != settings.currentStreak || newPR != settings.personalRecord) {
+    if (newStreak != settings.currentStreak || newPR != settings.personalRecord || newLongestStreak != settings.longestStreak) {
       await saveSettings(settings.copyWith(
         currentStreak: newStreak,
+        longestStreak: newLongestStreak,
         personalRecord: newPR,
       ));
     }
@@ -372,6 +384,7 @@ class EnergyService {
 
     // Update streak if goal just met
     int newStreak = settings.currentStreak;
+    int newLongestStreak = settings.longestStreak;
     if (isGoalMet && !today.isGoalMet) {
       // Goal was just achieved
       final yesterday = DateTime.now().subtract(const Duration(days: 1));
@@ -381,10 +394,12 @@ class EnergyService {
         goalMetYesterday: yesterdayRecord?.isGoalMet ?? false,
         currentStreak: settings.currentStreak,
       );
-    } else if (!isGoalMet && today.isGoalMet) {
-      // Goal was previously met but now broken (shouldn't happen, but handle it)
-      newStreak = 0;
+      // Update longest streak if current beats it
+      if (newStreak > newLongestStreak) {
+        newLongestStreak = newStreak;
+      }
     }
+    // Note: Don't break streak here if goal drops below - that's handled at day end
 
     // Update personal record if needed
     int newPR = settings.personalRecord;
@@ -393,9 +408,10 @@ class EnergyService {
     }
 
     // Save updated settings
-    if (newStreak != settings.currentStreak || newPR != settings.personalRecord) {
+    if (newStreak != settings.currentStreak || newPR != settings.personalRecord || newLongestStreak != settings.longestStreak) {
       await saveSettings(settings.copyWith(
         currentStreak: newStreak,
+        longestStreak: newLongestStreak,
         personalRecord: newPR,
       ));
     }
@@ -415,6 +431,70 @@ class EnergyService {
     final prefs = await SharedPreferences.getInstance();
     final key = _getDateKey(record.date);
     await prefs.setString(key, jsonEncode(record.toJson()));
+  }
+
+  /// Check and update streak at end of day (called when day changes)
+  /// This is where streak can break or skip is used
+  static Future<void> checkStreakAtDayEnd(DateTime previousDay) async {
+    final settings = await loadSettings();
+    final previousRecord = await getRecordForDate(previousDay);
+
+    // If no record for previous day, treat as goal not met
+    final goalMetPreviousDay = previousRecord?.isGoalMet ?? false;
+
+    if (goalMetPreviousDay) {
+      // Goal was met, streak continues normally
+      return;
+    }
+
+    // Goal was NOT met - check if we can use a skip
+    final result = FlowCalculator.calculateStreakAtDayEnd(
+      goalMetToday: goalMetPreviousDay,
+      currentStreak: settings.currentStreak,
+      lastSkipDate: settings.lastSkipDate,
+      today: previousDay,
+    );
+
+    if (result.skipUsed) {
+      // Save that we used a skip
+      await saveSettings(settings.copyWith(
+        lastSkipDate: previousDay,
+      ));
+    } else if (result.streakBroken) {
+      // Streak is broken
+      await saveSettings(settings.copyWith(
+        currentStreak: 0,
+      ));
+    }
+  }
+
+  /// Manually use a skip day to preserve streak (user-triggered)
+  static Future<bool> useStreakSkip() async {
+    final settings = await loadSettings();
+    final today = DateTime.now();
+
+    if (!FlowCalculator.canUseStreakSkip(
+      lastSkipDate: settings.lastSkipDate,
+      lastStreakDate: settings.lastStreakDate,
+      today: today,
+    )) {
+      return false; // Can't use skip
+    }
+
+    await saveSettings(settings.copyWith(
+      lastSkipDate: today,
+    ));
+    return true;
+  }
+
+  /// Check if a streak skip is available
+  static Future<bool> canUseSkip() async {
+    final settings = await loadSettings();
+    return FlowCalculator.canUseStreakSkip(
+      lastSkipDate: settings.lastSkipDate,
+      lastStreakDate: settings.lastStreakDate,
+      today: DateTime.now(),
+    );
   }
 
   static String _getTodayKey() {

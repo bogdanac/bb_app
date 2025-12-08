@@ -17,6 +17,7 @@ class _EnergyCalendarScreenState extends State<EnergyCalendarScreen> {
   DateTime? _selectedDate;
   DailyEnergyRecord? _selectedDayRecord;
   Map<DateTime, DailyEnergyRecord> _energyHistory = {};
+  EnergySettings? _settings;
   bool _isLoading = true;
 
   @override
@@ -26,9 +27,13 @@ class _EnergyCalendarScreenState extends State<EnergyCalendarScreen> {
   }
 
   Future<void> _loadData() async {
+    final settings = await EnergyService.loadSettings();
     await _loadEnergyHistory();
     if (mounted) {
-      setState(() => _isLoading = false);
+      setState(() {
+        _settings = settings;
+        _isLoading = false;
+      });
     }
   }
 
@@ -591,29 +596,107 @@ class _EnergyCalendarScreenState extends State<EnergyCalendarScreen> {
     );
   }
 
-  Widget _buildInfoCard() {
+  Widget _buildStatsCard() {
+    if (_settings == null) return const SizedBox.shrink();
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.purple.withValues(alpha: 0.2),
-        borderRadius: AppStyles.borderRadiusSmall,
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: AppStyles.borderRadiusMedium,
+        border: Border.all(color: AppColors.normalCardBackground),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.info_outline_rounded,
-            color: AppColors.purple,
-            size: 20,
-          ),
-          const SizedBox(width: 8),
+          // Personal Record
           Expanded(
-            child: Text(
-              'Battery & Flow tracking shows how tasks affect your energy and productivity',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.purple,
-              ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.emoji_events_rounded,
+                  color: AppColors.purple,
+                  size: 28,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_settings!.personalRecord}',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.purple,
+                  ),
+                ),
+                Text(
+                  'Personal Record',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.greyText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 50,
+            color: AppColors.greyText.withValues(alpha: 0.3),
+          ),
+          // Current Streak
+          Expanded(
+            child: Column(
+              children: [
+                const Text('🔥', style: TextStyle(fontSize: 24)),
+                const SizedBox(height: 4),
+                Text(
+                  '${_settings!.currentStreak}',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.orange,
+                  ),
+                ),
+                Text(
+                  'Current Streak',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.greyText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 50,
+            color: AppColors.greyText.withValues(alpha: 0.3),
+          ),
+          // Longest Streak
+          Expanded(
+            child: Column(
+              children: [
+                Icon(
+                  Icons.military_tech_rounded,
+                  color: AppColors.successGreen,
+                  size: 28,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_settings!.longestStreak}',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.successGreen,
+                  ),
+                ),
+                Text(
+                  'Longest Streak',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.greyText,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -641,11 +724,11 @@ class _EnergyCalendarScreenState extends State<EnergyCalendarScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
+            _buildStatsCard(),
+            const SizedBox(height: 16),
             _buildCalendar(),
             const SizedBox(height: 8),
             _buildLegend(),
-            const SizedBox(height: 8),
-            _buildInfoCard(),
             _buildSelectedDayDetails(),
           ],
         ),
