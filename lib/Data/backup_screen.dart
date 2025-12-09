@@ -215,7 +215,7 @@ class _BackupScreenState extends State<BackupScreen> {
                 constraints: BoxConstraints(
                   minWidth: MediaQuery.of(context).size.width * 0.95,
                   maxWidth: MediaQuery.of(context).size.width * 0.95,
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  maxHeight: MediaQuery.of(context).size.height * 0.9,
                 ),
                 child: SingleChildScrollView(
                   child: Column(

@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Tasks/task_list_widget_service.dart';
+import '../Routines/routine_widget_service.dart';
 import 'timezone_utils.dart';
 import 'error_logger.dart';
 
@@ -25,13 +26,17 @@ class WidgetUpdateService {
         await Future.wait([
           _updateTaskWidget(),
           _updateWaterWidget(),
+          _updateRoutineWidget(),
         ]);
 
         // Save the new date
         await prefs.setString('widget_last_update_date', today);
       } else {
-        // Not a new day, but still refresh task widget to ensure it has current phase filtering
-        await _updateTaskWidget();
+        // Not a new day, but still refresh task widget and routine widget to ensure current data
+        await Future.wait([
+          _updateTaskWidget(),
+          _updateRoutineWidget(),
+        ]);
       }
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
@@ -48,6 +53,7 @@ class WidgetUpdateService {
       await Future.wait([
         _updateTaskWidget(),
         _updateWaterWidget(),
+        _updateRoutineWidget(),
       ]);
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
@@ -79,6 +85,19 @@ class WidgetUpdateService {
       await ErrorLogger.logError(
         source: 'WidgetUpdateService._updateWaterWidget',
         error: 'Error updating water widget: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }
+  }
+
+  /// Update routine widget
+  static Future<void> _updateRoutineWidget() async {
+    try {
+      await RoutineWidgetService.checkDailyReset();
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'WidgetUpdateService._updateRoutineWidget',
+        error: 'Error updating routine widget: $e',
         stackTrace: stackTrace.toString(),
       );
     }

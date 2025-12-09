@@ -283,7 +283,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.55,
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
         ),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
@@ -947,7 +947,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           child: Container(
             width: MediaQuery.of(context).size.width * 0.5,
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.8,
+              maxHeight: MediaQuery.of(context).size.height * 0.9,
               maxWidth: 600,
             ),
             child: TaskEditScreen(
@@ -1030,7 +1030,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           child: Container(
             width: MediaQuery.of(context).size.width * 0.5,
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.8,
+              maxHeight: MediaQuery.of(context).size.height * 0.9,
               maxWidth: 600,
             ),
             child: TaskEditScreen(
@@ -1842,12 +1842,12 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           },
         );
 
-    // For desktop mode, center the list and constrain width to 60%
+    // For desktop mode, center the list and constrain width to 50%
     if (isDesktopMode) {
       return Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.6,
+            maxWidth: MediaQuery.of(context).size.width * 0.5,
           ),
           child: listWidget,
         ),

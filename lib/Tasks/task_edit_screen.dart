@@ -1188,7 +1188,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
           child: Container(
             width: MediaQuery.of(context).size.width * 0.5,
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.85,
+              maxHeight: MediaQuery.of(context).size.height * 0.9,
               maxWidth: 600,
             ),
             child: RecurrenceDialog(

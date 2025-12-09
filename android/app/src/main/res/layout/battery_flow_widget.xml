@@ -13,7 +13,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="10dp">
+        android:layout_marginBottom="8dp">
 
         <!-- Battery Display -->
         <LinearLayout
@@ -27,14 +27,14 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🔋"
-                android:textSize="16sp" />
+                android:textSize="20sp" />
 
             <TextView
                 android:id="@+id/battery_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="75%"
-                android:textSize="16sp"
+                android:textSize="20sp"
                 android:textStyle="bold"
                 android:textColor="#FFFFFF"
                 android:layout_marginStart="4dp" />
@@ -52,14 +52,14 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🎯"
-                android:textSize="16sp" />
+                android:textSize="20sp" />
 
             <TextView
                 android:id="@+id/flow_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="45/30"
-                android:textSize="16sp"
+                android:textSize="20sp"
                 android:textStyle="bold"
                 android:textColor="#FFFFFF"
                 android:layout_marginStart="4dp" />
@@ -78,7 +78,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🔥 5"
-                android:textSize="16sp"
+                android:textSize="20sp"
                 android:textStyle="bold"
                 android:textColor="#FFFFFF"
                 android:visibility="visible" />
@@ -86,66 +86,81 @@
 
     </LinearLayout>
 
+    <!-- Spacer to push buttons down -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
     <!-- Bottom Row: Action Buttons -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center">
+        android:gravity="center"
+        android:layout_marginBottom="6dp">
 
         <!-- Battery Minus Button -->
         <Button
             android:id="@+id/button_battery_minus"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="1"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:minWidth="80dp"
             android:text="−10%"
-            android:textSize="13sp"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF"
             android:background="@drawable/widget_button_battery_minus"
-            android:layout_marginEnd="6dp"
+            android:layout_marginEnd="10dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
             style="?android:attr/borderlessButtonStyle" />
 
         <!-- Battery Plus Button -->
         <Button
             android:id="@+id/button_battery_plus"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="1"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:minWidth="80dp"
             android:text="+10%"
-            android:textSize="13sp"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF"
             android:background="@drawable/widget_button_battery_plus"
-            android:layout_marginEnd="10dp"
+            android:layout_marginEnd="20dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
             style="?android:attr/borderlessButtonStyle" />
 
         <!-- Flow +1 Button -->
         <Button
             android:id="@+id/button_flow_plus_1"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="1"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:minWidth="80dp"
             android:text="+1pt"
-            android:textSize="13sp"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF"
             android:background="@drawable/widget_button_flow"
-            android:layout_marginEnd="6dp"
+            android:layout_marginEnd="10dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
             style="?android:attr/borderlessButtonStyle" />
 
         <!-- Flow +2 Button -->
         <Button
             android:id="@+id/button_flow_plus_2"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="1"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:minWidth="80dp"
             android:text="+2pts"
-            android:textSize="13sp"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF"
             android:background="@drawable/widget_button_flow"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
             style="?android:attr/borderlessButtonStyle" />
 
     </LinearLayout>
