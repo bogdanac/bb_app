@@ -13,6 +13,7 @@ import 'Notifications/centralized_notification_manager.dart';
 import 'Notifications/notification_listener_service.dart';
 import 'Data/backup_service.dart';
 import 'Services/firebase_backup_service.dart';
+import 'Services/realtime_sync_service.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_styles.dart';
 import 'widgets/side_navigation.dart';
@@ -53,6 +54,22 @@ void main() async {
     await ErrorLogger.logError(
       source: 'main.initializeFirebaseBackupService',
       error: 'Firebase Backup Service initialization failed: $e',
+      stackTrace: stackTrace.toString(),
+    );
+  }
+
+  // Initialize Real-time Sync Service
+  try {
+    await RealtimeSyncService().initialize();
+    await ErrorLogger.logError(
+      source: 'main.initializeRealtimeSyncService',
+      error: 'Real-time Sync Service initialized successfully',
+      stackTrace: '',
+    );
+  } catch (e, stackTrace) {
+    await ErrorLogger.logError(
+      source: 'main.initializeRealtimeSyncService',
+      error: 'Real-time Sync Service initialization failed: $e',
       stackTrace: stackTrace.toString(),
     );
   }

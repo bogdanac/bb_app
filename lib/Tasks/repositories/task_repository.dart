@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../tasks_data_models.dart';
 import '../../shared/error_logger.dart';
+import '../../Services/realtime_sync_service.dart';
 
 /// Repository responsible for ONLY data persistence operations.
 /// NO business logic, NO notifications, NO widget updates.
@@ -9,6 +10,8 @@ class TaskRepository {
   static final TaskRepository _instance = TaskRepository._internal();
   factory TaskRepository() => _instance;
   TaskRepository._internal();
+
+  final _realtimeSync = RealtimeSyncService();
 
   /// Load tasks from SharedPreferences
   Future<List<Task>> loadTasks() async {
@@ -50,6 +53,15 @@ class TaskRepository {
           .map((task) => jsonEncode(task.toJson()))
           .toList();
       await prefs.setStringList('tasks', tasksJson);
+
+      // Sync to Firestore real-time collection (non-blocking)
+      _realtimeSync.syncTasks(jsonEncode(tasksJson)).catchError((e, stackTrace) async {
+        await ErrorLogger.logError(
+          source: 'TaskRepository.saveTasks',
+          error: 'Real-time sync failed: $e',
+          stackTrace: stackTrace.toString(),
+        );
+      });
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'TaskRepository.saveTasks',

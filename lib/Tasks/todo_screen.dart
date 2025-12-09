@@ -936,71 +936,164 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   }
 
   void _addTask() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => TaskEditScreen(
-          categories: _categories,
-          initialCategoryIds: _selectedCategoryFilters.isNotEmpty ? _selectedCategoryFilters : null,
-          onSave: (task, {bool isAutoSave = false}) async {
-            // Update in-memory list immediately for instant UI update
-            final existingIndex = _tasks.indexWhere((t) => t.id == task.id);
-            if (existingIndex != -1) {
-              _tasks[existingIndex] = task;
-            } else {
-              _tasks.add(task);
-            }
-            _updateDisplayTasks(); // Immediate UI refresh
+    final isDesktopMode = MediaQuery.of(context).size.width > 800;
 
-            // Only save to disk on final save (not during typing)
-            if (!isAutoSave) {
-              _isUpdatingTasks = true; // Prevent duplicate refresh from listener
+    if (isDesktopMode) {
+      // Show task editor as a dialog for desktop mode
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.5,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+              maxWidth: 600,
+            ),
+            child: TaskEditScreen(
+              categories: _categories,
+              initialCategoryIds: _selectedCategoryFilters.isNotEmpty ? _selectedCategoryFilters : null,
+              onSave: (task, {bool isAutoSave = false}) async {
+                // Update in-memory list immediately for instant UI update
+                final existingIndex = _tasks.indexWhere((t) => t.id == task.id);
+                if (existingIndex != -1) {
+                  _tasks[existingIndex] = task;
+                } else {
+                  _tasks.add(task);
+                }
+                _updateDisplayTasks(); // Immediate UI refresh
 
-              await _taskService.saveTasks(_tasks,
-                skipNotificationUpdate: false,
-                skipWidgetUpdate: false);
+                // Only save to disk on final save (not during typing)
+                if (!isAutoSave) {
+                  _isUpdatingTasks = true; // Prevent duplicate refresh from listener
 
-              widget.onTasksChanged?.call();
+                  await _taskService.saveTasks(_tasks,
+                    skipNotificationUpdate: false,
+                    skipWidgetUpdate: false);
 
-              _isUpdatingTasks = false; // Re-enable listener
-            }
-          },
+                  widget.onTasksChanged?.call();
+
+                  _isUpdatingTasks = false; // Re-enable listener
+                }
+              },
+            ),
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      // Use full-screen navigation for mobile
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => TaskEditScreen(
+            categories: _categories,
+            initialCategoryIds: _selectedCategoryFilters.isNotEmpty ? _selectedCategoryFilters : null,
+            onSave: (task, {bool isAutoSave = false}) async {
+              // Update in-memory list immediately for instant UI update
+              final existingIndex = _tasks.indexWhere((t) => t.id == task.id);
+              if (existingIndex != -1) {
+                _tasks[existingIndex] = task;
+              } else {
+                _tasks.add(task);
+              }
+              _updateDisplayTasks(); // Immediate UI refresh
+
+              // Only save to disk on final save (not during typing)
+              if (!isAutoSave) {
+                _isUpdatingTasks = true; // Prevent duplicate refresh from listener
+
+                await _taskService.saveTasks(_tasks,
+                  skipNotificationUpdate: false,
+                  skipWidgetUpdate: false);
+
+                widget.onTasksChanged?.call();
+
+                _isUpdatingTasks = false; // Re-enable listener
+              }
+            },
+          ),
+        ),
+      );
+    }
   }
 
   void _editTask(Task task) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => TaskEditScreen(
-          task: task,
-          categories: _categories,
-          onSave: (updatedTask, {bool isAutoSave = false}) async {
-            // Update in-memory list immediately for instant UI update
-            final taskIndex = _tasks.indexWhere((t) => t.id == task.id);
-            if (taskIndex != -1) {
-              _tasks[taskIndex] = updatedTask;
-              await _updateDisplayTasks(); // Immediate UI refresh
-            }
+    final isDesktopMode = MediaQuery.of(context).size.width > 800;
 
-            // Only save to disk on final save (not during typing)
-            if (!isAutoSave) {
-              _isUpdatingTasks = true; // Prevent duplicate refresh from listener
+    dynamic result;
+    if (isDesktopMode) {
+      // Show task editor as a dialog for desktop mode
+      result = await showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.5,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+              maxWidth: 600,
+            ),
+            child: TaskEditScreen(
+              task: task,
+              categories: _categories,
+              onSave: (updatedTask, {bool isAutoSave = false}) async {
+                // Update in-memory list immediately for instant UI update
+                final taskIndex = _tasks.indexWhere((t) => t.id == task.id);
+                if (taskIndex != -1) {
+                  _tasks[taskIndex] = updatedTask;
+                  await _updateDisplayTasks(); // Immediate UI refresh
+                }
 
-              await _taskService.saveTasks(_tasks,
-                skipNotificationUpdate: false,
-                skipWidgetUpdate: false);
+                // Only save to disk on final save (not during typing)
+                if (!isAutoSave) {
+                  _isUpdatingTasks = true; // Prevent duplicate refresh from listener
 
-              widget.onTasksChanged?.call();
+                  await _taskService.saveTasks(_tasks,
+                    skipNotificationUpdate: false,
+                    skipWidgetUpdate: false);
 
-              _isUpdatingTasks = false; // Re-enable listener
-            }
-          },
+                  widget.onTasksChanged?.call();
+
+                  _isUpdatingTasks = false; // Re-enable listener
+                }
+              },
+            ),
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      // Use full-screen navigation for mobile
+      result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => TaskEditScreen(
+            task: task,
+            categories: _categories,
+            onSave: (updatedTask, {bool isAutoSave = false}) async {
+              // Update in-memory list immediately for instant UI update
+              final taskIndex = _tasks.indexWhere((t) => t.id == task.id);
+              if (taskIndex != -1) {
+                _tasks[taskIndex] = updatedTask;
+                await _updateDisplayTasks(); // Immediate UI refresh
+              }
+
+              // Only save to disk on final save (not during typing)
+              if (!isAutoSave) {
+                _isUpdatingTasks = true; // Prevent duplicate refresh from listener
+
+                await _taskService.saveTasks(_tasks,
+                  skipNotificationUpdate: false,
+                  skipWidgetUpdate: false);
+
+                widget.onTasksChanged?.call();
+
+                _isUpdatingTasks = false; // Re-enable listener
+              }
+            },
+          ),
+        ),
+      );
+    }
 
     // Reload tasks after editor closes (in case task was skipped or modified outside onSave)
     if (mounted) {
@@ -1688,7 +1781,10 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildTasksList(List<Task> prioritizedTasks) {
-    return prioritizedTasks.isEmpty
+    // Check if we're in desktop/web mode with wider resolution
+    final isDesktopMode = MediaQuery.of(context).size.width > 800;
+
+    final listWidget = prioritizedTasks.isEmpty
         ? ListView(
           // Need ListView for RefreshIndicator to work with empty state
           children: [
@@ -1745,6 +1841,20 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
             );
           },
         );
+
+    // For desktop mode, center the list and constrain width to 60%
+    if (isDesktopMode) {
+      return Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.6,
+          ),
+          child: listWidget,
+        ),
+      );
+    }
+
+    return listWidget;
   }
 
   @override

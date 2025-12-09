@@ -159,7 +159,7 @@ class RecurrenceCalculator {
   }
 
   /// Calculate scheduled date for regular recurring tasks - OPTIMIZED
-  /// IMPORTANT: Always returns a date in the FUTURE (never today or past)
+  /// IMPORTANT: For daily tasks with reminder time after current time, can return today
   /// IMPORTANT: Respects startDate - won't schedule before it
   DateTime? calculateRegularRecurringTaskDate(Task task, DateTime todayDate) {
     final recurrence = task.recurrence!;
@@ -209,10 +209,43 @@ class RecurrenceCalculator {
       return result;
     }
 
-    // Find the next occurrence AFTER today (never return today or past)
-    // For daily tasks, optimize by calculating directly
+    // For daily tasks, check if reminder time is later today
     if (recurrence.types.contains(RecurrenceType.daily)) {
       final interval = recurrence.interval;
+      final now = DateTime.now();
+
+      // Check if task has a reminder time set for later today
+      if ((task.reminderTime != null || recurrence.reminderTime != null) &&
+          (task.scheduledDate == null || !task.scheduledDate!.isBefore(todayDate))) {
+
+        int reminderHour;
+        int reminderMinute;
+
+        if (task.reminderTime != null) {
+          // task.reminderTime is a DateTime
+          reminderHour = task.reminderTime!.hour;
+          reminderMinute = task.reminderTime!.minute;
+        } else {
+          // recurrence.reminderTime is a TimeOfDay
+          reminderHour = recurrence.reminderTime!.hour;
+          reminderMinute = recurrence.reminderTime!.minute;
+        }
+
+        // Create a datetime for the reminder time today
+        final reminderTimeToday = DateTime(
+          todayDate.year,
+          todayDate.month,
+          todayDate.day,
+          reminderHour,
+          reminderMinute,
+        );
+
+        // If reminder time hasn't passed yet today, schedule for today
+        if (reminderTimeToday.isAfter(now)) {
+          return checkEndDate(todayDate);
+        }
+      }
+
       if (task.scheduledDate == null || !task.scheduledDate!.isBefore(todayDate)) {
         // Task is not overdue, return tomorrow (or next interval)
         return checkEndDate(todayDate.add(Duration(days: interval)));

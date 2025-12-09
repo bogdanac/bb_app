@@ -89,19 +89,25 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.dialogBackground,
-      appBar: AppBar(
-        title: const Text('Repeat Task'),
-        backgroundColor: AppColors.transparent,
-        leading: IconButton(
-          onPressed: () => Navigator.pop(context, widget.initialRecurrence),
-          icon: const Icon(Icons.close_rounded),
+    // Check if we're in a dialog context (desktop mode)
+    final isInDialog = MediaQuery.of(context).size.width > 800;
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: isInDialog ? AppStyles.borderRadiusLarge : null,
+      child: Scaffold(
+        backgroundColor: isInDialog ? AppColors.dialogBackground : AppColors.dialogBackground,
+        appBar: AppBar(
+          title: const Text('Repeat Task'),
+          backgroundColor: isInDialog ? AppColors.dialogBackground : AppColors.transparent,
+          leading: IconButton(
+            onPressed: () => Navigator.pop(context, widget.initialRecurrence),
+            icon: const Icon(Icons.close_rounded),
+          ),
         ),
-      ),
-      body: Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
+        body: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
           children: [
             // Content
             Expanded(
@@ -827,6 +833,7 @@ class _RecurrenceDialogState extends State<RecurrenceDialog> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

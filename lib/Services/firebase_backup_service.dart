@@ -235,7 +235,18 @@ class FirebaseBackupService {
     _syncEnabled = enabled;
   }
 
-  // Backup ALL SharedPreferences data
+  // Keys handled by RealtimeSyncService (excluded from full backup)
+  static const Set<String> _realtimeSyncedKeys = {
+    'tasks',
+    'task_categories',
+    'task_settings',
+    'selected_category_filters',
+    'routines',
+    'habits',
+    'energy_settings',
+  };
+
+  // Backup ALL SharedPreferences data (except real-time synced collections)
   Future<void> backupAllData() async {
     if (!_syncEnabled || _userId == null || _isRestoring) return;
 
@@ -247,13 +258,36 @@ class FirebaseBackupService {
       final allKeys = prefs.getKeys();
       final Map<String, dynamic> allData = {};
 
-      // Export all data from SharedPreferences (exclude Firebase-specific keys)
+      // Export all data from SharedPreferences
+      // Exclude: Firebase-specific keys, real-time synced collections, and their progress data
       for (final key in allKeys) {
-        if (key != 'has_restored_from_firebase' && key != 'device_id') {
-          final value = prefs.get(key);
-          if (value != null) {
-            allData[key] = value;
-          }
+        // Skip Firebase-specific keys
+        if (key == 'has_restored_from_firebase' || key == 'device_id') {
+          continue;
+        }
+
+        // Skip real-time synced collections
+        if (_realtimeSyncedKeys.contains(key)) {
+          continue;
+        }
+
+        // Skip routine progress data (synced with routines)
+        if (key.startsWith('routine_progress_') ||
+            key.startsWith('active_routine_') ||
+            key.startsWith('morning_routine_progress_') ||
+            key == 'morning_routine_last_date' ||
+            key == 'routine_last_date') {
+          continue;
+        }
+
+        // Skip energy data (synced separately)
+        if (key.startsWith('energy_today_') || key.startsWith('energy_settings')) {
+          continue;
+        }
+
+        final value = prefs.get(key);
+        if (value != null) {
+          allData[key] = value;
         }
       }
 

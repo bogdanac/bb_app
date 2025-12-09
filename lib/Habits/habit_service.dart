@@ -2,10 +2,13 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'habit_data_models.dart';
 import '../Services/firebase_backup_service.dart';
+import '../Services/realtime_sync_service.dart';
 import '../shared/error_logger.dart';
 
 class HabitService {
   static const String _habitsKey = 'habits';
+
+  static final _realtimeSync = RealtimeSyncService();
 
   /// Load all habits from SharedPreferences
   static Future<List<Habit>> loadHabits() async {
@@ -36,7 +39,16 @@ class HabitService {
         .toList();
     await prefs.setStringList(_habitsKey, habitsJson);
 
-    // Backup to Firebase
+    // Sync to Firestore real-time collection (non-blocking)
+    _realtimeSync.syncHabits(jsonEncode(habitsJson)).catchError((e, stackTrace) async {
+      await ErrorLogger.logError(
+        source: 'HabitService.saveHabits',
+        error: 'Real-time sync failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    });
+
+    // Backup to Firebase (legacy full backup)
     FirebaseBackupService.triggerBackup();
   }
 

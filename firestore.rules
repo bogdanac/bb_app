@@ -26,6 +26,11 @@ service cloud.firestore {
       // Explicitly deny delete operations
       allow delete: if false;
 
+      // Real-time sync collections (granular sync for high-frequency data)
+      match /data/{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+
       // Access logs subcollection
       match /access_log/{ipAddress} {
         allow read, write: if isOwner(userId);

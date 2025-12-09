@@ -3,11 +3,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'energy_settings_model.dart';
 import 'flow_calculator.dart';
 import 'battery_flow_widget_service.dart';
+import '../Services/realtime_sync_service.dart';
+import '../shared/error_logger.dart';
 
 /// Service for persisting and retrieving Body Battery & Flow data
 class EnergyService {
   static const String _settingsKey = 'energy_settings';
   static const String _todayKey = 'energy_today';
+
+  static final _realtimeSync = RealtimeSyncService();
 
   // ========================
   // SETTINGS MANAGEMENT
@@ -27,6 +31,15 @@ class EnergyService {
   static Future<void> saveSettings(EnergySettings settings) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_settingsKey, jsonEncode(settings.toJson()));
+
+    // Sync energy data to Firestore real-time collection (non-blocking)
+    _syncEnergyData(prefs).catchError((e, stackTrace) async {
+      await ErrorLogger.logError(
+        source: 'EnergyService.saveSettings',
+        error: 'Real-time sync failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    });
   }
 
   // ========================
@@ -57,6 +70,15 @@ class EnergyService {
 
     // Also add to history
     await _addToHistory(record);
+
+    // Sync energy data to Firestore real-time collection (non-blocking)
+    _syncEnergyData(prefs).catchError((e, stackTrace) async {
+      await ErrorLogger.logError(
+        source: 'EnergyService.saveTodayRecord',
+        error: 'Real-time sync failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    });
 
     // Update widget
     await BatteryFlowWidgetService.updateWidget();
@@ -504,5 +526,24 @@ class EnergyService {
 
   static String _getDateKey(DateTime date) {
     return '${_todayKey}_${date.year}_${date.month}_${date.day}';
+  }
+
+  /// Sync all energy-related data to Firestore
+  static Future<void> _syncEnergyData(SharedPreferences prefs) async {
+    final energyData = <String, String>{};
+
+    // Collect all energy-related keys
+    final allKeys = prefs.getKeys();
+    for (final key in allKeys) {
+      if (key.startsWith(_settingsKey) || key.startsWith(_todayKey)) {
+        final value = prefs.getString(key);
+        if (value != null) {
+          energyData[key] = value;
+        }
+      }
+    }
+
+    // Sync to Firestore
+    await _realtimeSync.syncEnergy(energyData);
   }
 }

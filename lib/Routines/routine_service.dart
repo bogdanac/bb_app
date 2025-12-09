@@ -5,12 +5,15 @@ import '../Notifications/centralized_notification_manager.dart';
 import 'routine_widget_service.dart';
 import '../shared/timezone_utils.dart';
 import '../Services/firebase_backup_service.dart';
+import '../Services/realtime_sync_service.dart';
 import '../shared/error_logger.dart';
 
 class RoutineService {
   static const String _routinesKey = 'routines';
   static const String _routineProgressPrefix = 'routine_progress_';
   static const String _routineLastDateKey = 'routine_last_date';
+
+  static final _realtimeSync = RealtimeSyncService();
 
   /// Get today's date in yyyy-MM-dd format
   static String getTodayString() {
@@ -67,7 +70,27 @@ class RoutineService {
         .toList();
     await prefs.setStringList(_routinesKey, routinesJson);
 
-    // Backup to Firebase
+    // Collect all routine progress data to sync
+    final progressData = <String, String>{};
+    final today = getEffectiveDate();
+    for (final routine in routines) {
+      final progressKey = '${_routineProgressPrefix}${routine.id}_$today';
+      final progressJson = prefs.getString(progressKey);
+      if (progressJson != null) {
+        progressData[progressKey] = progressJson;
+      }
+    }
+
+    // Sync to Firestore real-time collection (non-blocking)
+    _realtimeSync.syncRoutines(jsonEncode(routinesJson), progressData).catchError((e, stackTrace) async {
+      await ErrorLogger.logError(
+        source: 'RoutineService.saveRoutines',
+        error: 'Real-time sync failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    });
+
+    // Backup to Firebase (legacy full backup)
     FirebaseBackupService.triggerBackup();
 
     // Update Android widget

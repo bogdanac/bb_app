@@ -25,6 +25,13 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
   void initState() {
     super.initState();
     _editableHistory = List.from(widget.history);
+
+    // Sort history by end time (most recent first)
+    _editableHistory.sort((a, b) {
+      final aEndTime = DateTime.parse(a['endTime'] as String);
+      final bEndTime = DateTime.parse(b['endTime'] as String);
+      return bEndTime.compareTo(aEndTime);
+    });
   }
 
   void _editFast(int index) {

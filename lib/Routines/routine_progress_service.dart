@@ -7,11 +7,14 @@ import 'routine_data_models.dart';
 import 'routine_widget_service.dart';
 import '../shared/timezone_utils.dart';
 import '../Services/firebase_backup_service.dart';
+import '../Services/realtime_sync_service.dart';
 import '../shared/error_logger.dart';
 
 class RoutineProgressService {
   static const String _progressPrefix = 'routine_progress_';
   static const String _activeRoutineKey = 'active_routine_';
+
+  static final _realtimeSync = RealtimeSyncService();
   
   /// Get today's date in yyyy-MM-dd format
   static String getTodayString() {
@@ -84,7 +87,7 @@ class RoutineProgressService {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final today = getEffectiveDate();  // Use effective date for consistency
-    
+
     final progressData = {
       'routineId': routineId,
       'currentStepIndex': currentStepIndex,
@@ -94,15 +97,28 @@ class RoutineProgressService {
       'lastUpdated': DateTime.now().toIso8601String(),
       'itemCount': items.length,
     };
-    
+
+    final progressKey = '${_progressPrefix}${routineId}_$today';
+    final progressJson = jsonEncode(progressData);
+
     // Save with routine-specific key
-    await prefs.setString('${_progressPrefix}${routineId}_$today', jsonEncode(progressData));
-    
+    await prefs.setString(progressKey, progressJson);
+
     // Legacy: Also save as morning_routine_progress for backwards compatibility
-    await prefs.setString('morning_routine_progress_$today', jsonEncode(progressData));
+    await prefs.setString('morning_routine_progress_$today', progressJson);
     await prefs.setString('morning_routine_last_date', today);
 
-    // Backup to Firebase
+    // Sync progress to Firestore real-time collection (non-blocking)
+    final progressMap = {progressKey: progressJson};
+    _realtimeSync.syncRoutines('', progressMap).catchError((e, stackTrace) async {
+      await ErrorLogger.logError(
+        source: 'RoutineProgressService.saveRoutineProgress',
+        error: 'Real-time sync failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    });
+
+    // Backup to Firebase (legacy full backup)
     FirebaseBackupService.triggerBackup();
 
     // Update widget

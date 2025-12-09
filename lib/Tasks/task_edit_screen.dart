@@ -189,6 +189,32 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                                           (recurrence.interval <= -100 || recurrence.interval == -1));
   }
 
+  DateTime? _calculateNextOccurrenceDate() {
+    if (_recurrence == null) return null;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    bool isMenstrualTask = _isMenstrualCycleTask(_recurrence!);
+
+    // For menstrual phase tasks, they don't get a specific next date
+    if (isMenstrualTask) {
+      return null;
+    }
+
+    // For regular recurring tasks, calculate the NEXT occurrence AFTER today
+    // Search up to 60 days ahead for the next occurrence
+    for (int i = 1; i <= 60; i++) {
+      final checkDate = today.add(Duration(days: i));
+      if (_recurrence!.isDueOn(checkDate, taskCreatedAt: _currentTask?.createdAt)) {
+        return checkDate;
+      }
+    }
+
+    // If nothing found within 60 days, default to tomorrow
+    return today.add(const Duration(days: 1));
+  }
+
   void _skipTask() async {
     if (_titleController.text.trim().isEmpty) {
       return;
@@ -279,6 +305,9 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Check if we're in a dialog context (desktop mode)
+    final isInDialog = MediaQuery.of(context).size.width > 800;
+
     return PopScope(
       canPop: false,  // Intercept back button to save first
       onPopInvokedWithResult: (bool didPop, dynamic result) async {
@@ -327,10 +356,10 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: AppColors.dialogBackground,
+        backgroundColor: isInDialog ? Colors.transparent : AppColors.dialogBackground,
         appBar: AppBar(
           title: Text(widget.task == null ? 'Add Task' : 'Edit Task'),
-          backgroundColor: Colors.transparent,
+          backgroundColor: isInDialog ? AppColors.dialogBackground : Colors.transparent,
         actions: [
           if (_hasUnsavedChanges)
             Container(
@@ -385,9 +414,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
             ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+      body: Material(
+        color: isInDialog ? AppColors.dialogBackground : Colors.transparent,
+        borderRadius: isInDialog ? AppStyles.borderRadiusLarge : null,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
@@ -528,20 +560,35 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                                 ),
                               ),
                               const SizedBox(height: 2),
-                              Text(
-                                _recurrence!.types.any((type) => [
-                                  RecurrenceType.menstrualPhase,
-                                  RecurrenceType.follicularPhase,
-                                  RecurrenceType.ovulationPhase,
-                                  RecurrenceType.earlyLutealPhase,
-                                  RecurrenceType.lateLutealPhase
-                                ].contains(type))
-                                    ? 'Put on hold until next appropriate phase'
-                                    : 'Advance to the next scheduled recurrence',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.white24,
-                                ),
+                              Builder(
+                                builder: (context) {
+                                  final nextDate = _calculateNextOccurrenceDate();
+                                  final isMenstrualTask = _recurrence!.types.any((type) => [
+                                    RecurrenceType.menstrualPhase,
+                                    RecurrenceType.follicularPhase,
+                                    RecurrenceType.ovulationPhase,
+                                    RecurrenceType.earlyLutealPhase,
+                                    RecurrenceType.lateLutealPhase
+                                  ].contains(type));
+
+                                  String description;
+                                  if (isMenstrualTask) {
+                                    description = 'Put on hold until next appropriate phase';
+                                  } else if (nextDate != null) {
+                                    final dateStr = DateFormatUtils.formatFullDate(nextDate);
+                                    description = 'Reschedule to $dateStr';
+                                  } else {
+                                    description = 'Advance to the next scheduled recurrence';
+                                  }
+
+                                  return Text(
+                                    description,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.white24,
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -1044,6 +1091,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
             const SizedBox(height: 24),
           ],
         ),
+        ),
       ),
       ),
     );
@@ -1128,12 +1176,36 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   }
 
   void _selectRecurrence() async {
-    final recurrence = await showDialog<TaskRecurrence?>(
-      context: context,
-      builder: (context) => RecurrenceDialog(
-        initialRecurrence: _recurrence,
-      ),
-    );
+    final isDesktopMode = MediaQuery.of(context).size.width > 800;
+
+    TaskRecurrence? recurrence;
+    if (isDesktopMode) {
+      // Show recurrence dialog with constraints for desktop mode
+      recurrence = await showDialog<TaskRecurrence?>(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.5,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+              maxWidth: 600,
+            ),
+            child: RecurrenceDialog(
+              initialRecurrence: _recurrence,
+            ),
+          ),
+        ),
+      );
+    } else {
+      // Show full-screen for mobile
+      recurrence = await showDialog<TaskRecurrence?>(
+        context: context,
+        builder: (context) => RecurrenceDialog(
+          initialRecurrence: _recurrence,
+        ),
+      );
+    }
 
     if (recurrence != _recurrence) {
       setState(() {

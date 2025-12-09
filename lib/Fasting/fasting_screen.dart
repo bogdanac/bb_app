@@ -102,6 +102,13 @@ class _FastingScreenState extends State<FastingScreen>
         .map((item) => Map<String, dynamic>.from(jsonDecode(item) as Map))
         .toList();
 
+    // Sort history by end time (most recent first)
+    _fastingHistory.sort((a, b) {
+      final aEndTime = DateTime.parse(a['endTime'] as String);
+      final bEndTime = DateTime.parse(b['endTime'] as String);
+      return bEndTime.compareTo(aEndTime);
+    });
+
     _calculateFastingProgress();
 
     // Update recommended fast type based on scheduled fastings
@@ -564,90 +571,141 @@ class _FastingScreenState extends State<FastingScreen>
   }
 
   void _showEndFastConfirmationDialog(Duration currentDuration) {
+    DateTime? customEndTime;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.dialogBackground,
-        title: const Text(
-          'End Fast?',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Are you sure you want to end your $_currentFastType?',
-              style: const TextStyle(color: AppColors.white70, fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.dialogCardBackground,
-                borderRadius: AppStyles.borderRadiusMedium,
-                border: Border.all(color: AppColors.greyText.withValues(alpha: 0.3)),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.dialogBackground,
+          title: const Text(
+            'End Fast?',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to end your $_currentFastType?',
+                style: const TextStyle(color: AppColors.white70, fontSize: 16),
               ),
-              child: Column(
-                children: [
-                  Row(
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.dialogCardBackground,
+                  borderRadius: AppStyles.borderRadiusMedium,
+                  border: Border.all(color: AppColors.greyText.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.timer, color: AppColors.coral, size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Current Duration:',
+                          style: TextStyle(color: AppColors.white70, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      FastingUtils.formatDuration(
+                        customEndTime != null
+                            ? customEndTime!.difference(_currentFastStart!)
+                            : currentDuration,
+                      ),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (_totalFastDuration.inMinutes > 0) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Target: ${FastingUtils.formatDuration(_totalFastDuration)}',
+                        style: const TextStyle(
+                          color: AppColors.white54,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // End time picker
+              InkWell(
+                onTap: () async {
+                  final currentContext = context;
+                  final selectedDateTime = await DatePickerUtils.showStyledDateTimePicker(
+                    context: currentContext,
+                    initialDateTime: customEndTime ?? DateTime.now(),
+                    firstDate: _currentFastStart!,
+                    lastDate: DateTime.now(),
+                  );
+
+                  if (selectedDateTime != null) {
+                    setDialogState(() {
+                      customEndTime = selectedDateTime;
+                    });
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.coral),
+                    borderRadius: AppStyles.borderRadiusSmall,
+                  ),
+                  child: Row(
                     children: [
-                      Icon(Icons.timer, color: AppColors.coral, size: 20),
+                      Icon(Icons.schedule_rounded, color: AppColors.coral, size: 20),
                       const SizedBox(width: 8),
-                      const Text(
-                        'Current Duration:',
-                        style: TextStyle(color: AppColors.white70, fontSize: 14),
+                      Expanded(
+                        child: Text(
+                          customEndTime != null
+                              ? 'End: ${customEndTime!.day}/${customEndTime!.month} at ${customEndTime!.hour.toString().padLeft(2, '0')}:${customEndTime!.minute.toString().padLeft(2, '0')}'
+                              : 'Change end time (optional)',
+                          style: TextStyle(
+                            color: customEndTime != null ? Colors.white : AppColors.white54,
+                            fontSize: 14,
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    FastingUtils.formatDuration(currentDuration),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (_totalFastDuration.inMinutes > 0) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Target: ${FastingUtils.formatDuration(_totalFastDuration)}',
-                      style: const TextStyle(
-                        color: AppColors.white54,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ],
+                ),
               ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Continue Fasting', style: TextStyle(color: AppColors.white54)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _confirmEndFast(customEndTime: customEndTime);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('End Fast'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Continue Fasting', style: TextStyle(color: AppColors.white54)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _confirmEndFast();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('End Fast'),
-          ),
-        ],
       ),
     );
   }
 
-  void _confirmEndFast() {
+  void _confirmEndFast({DateTime? customEndTime}) {
     if (_currentFastStart != null) {
-      final endTime = DateTime.now();
+      final endTime = customEndTime ?? DateTime.now();
       final actualDuration = endTime.difference(_currentFastStart!);
 
       _fastingHistory.add({

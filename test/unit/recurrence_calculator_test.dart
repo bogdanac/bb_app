@@ -13,7 +13,7 @@ void main() {
     });
 
     group('Daily Recurrence', () {
-      test('every day (interval=1) - should return tomorrow (never returns today)', () {
+      test('every day (interval=1) without reminder - should return tomorrow', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
         final tomorrow = todayDate.add(const Duration(days: 1));
@@ -33,7 +33,79 @@ void main() {
         expect(result, tomorrow);
       });
 
-      test('every day (interval=1) - should return tomorrow when task not overdue', () {
+      test('every day with reminder time later today - should return today', () {
+        final now = DateTime.now();
+        final todayDate = DateTime(now.year, now.month, now.day);
+        // Set reminder time 2 hours from now
+        final futureReminderTime = now.add(const Duration(hours: 2));
+
+        final task = Task(
+          id: '1',
+          title: 'Daily Task with Future Reminder',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+          ),
+          reminderTime: futureReminderTime,
+          createdAt: todayDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, todayDate);
+      });
+
+      test('every day with reminder time already passed today - should return tomorrow', () {
+        final now = DateTime.now();
+        final todayDate = DateTime(now.year, now.month, now.day);
+        // Set reminder time 2 hours ago
+        final pastReminderTime = now.subtract(const Duration(hours: 2));
+
+        final task = Task(
+          id: '1',
+          title: 'Daily Task with Past Reminder',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+          ),
+          reminderTime: pastReminderTime,
+          createdAt: todayDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        expect(result, todayDate.add(const Duration(days: 1)));
+      });
+
+      test('every day with recurrence reminder time later today - should return today', () {
+        final now = DateTime.now();
+        final todayDate = DateTime(now.year, now.month, now.day);
+        // Set reminder time for 8 PM if it's before 8 PM, otherwise use current hour + 2
+        final reminderHour = now.hour < 20 ? 20 : (now.hour + 2) % 24;
+        final reminderMinute = now.minute;
+
+        final task = Task(
+          id: '1',
+          title: 'Daily Task with Recurrence Reminder',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+            reminderTime: TimeOfDay(hour: reminderHour, minute: reminderMinute),
+          ),
+          createdAt: todayDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        // Should return today if reminder time is later today
+        if (now.hour < reminderHour || (now.hour == reminderHour && now.minute < reminderMinute)) {
+          expect(result, todayDate);
+        } else {
+          expect(result, todayDate.add(const Duration(days: 1)));
+        }
+      });
+
+      test('every day (interval=1) without reminder - should return tomorrow when task not overdue', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
         final yesterday = todayDate.subtract(const Duration(days: 1));
@@ -51,7 +123,7 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        // Always returns future date - tomorrow
+        // Without reminder time, returns tomorrow
         expect(result, tomorrow);
       });
 
@@ -147,7 +219,7 @@ void main() {
         expect(stopwatch.elapsedMilliseconds, lessThan(10));
       });
 
-      test('task created today - should return tomorrow (consistent with never returning today)', () {
+      test('task created today without reminder - should return tomorrow', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
         final tomorrow = todayDate.add(const Duration(days: 1));
@@ -164,11 +236,11 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        // Should return tomorrow (never returns today)
+        // Without reminder time, should return tomorrow
         expect(result, tomorrow);
       });
 
-      test('next occurrence calculation - returns tomorrow (future date)', () {
+      test('next occurrence calculation without reminder - returns tomorrow', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
         final yesterday = todayDate.subtract(const Duration(days: 1));
@@ -186,7 +258,7 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        // Always returns future date - tomorrow
+        // Without reminder time, returns tomorrow
         expect(result, tomorrow);
       });
     });
@@ -1939,7 +2011,7 @@ void main() {
         expect(result, tomorrow);
       });
 
-      test('daily task with startDate today - should return tomorrow (startDate not after today)', () {
+      test('daily task with startDate today without reminder - should return tomorrow', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
         final tomorrow = todayDate.add(const Duration(days: 1));
@@ -1957,6 +2029,7 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
+        // Without reminder time, should return tomorrow
         expect(result, tomorrow);
       });
 
