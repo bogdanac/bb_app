@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'task_edit_screen.dart';
 import 'task_service.dart';
 import '../shared/error_logger.dart';
@@ -8,6 +9,9 @@ class TaskWidgetService {
   static const MethodChannel _channel = MethodChannel('com.bb.bb_app/task_widget');
 
   static Future<bool> checkForWidgetIntent() async {
+    // Skip on web - widgets are only available on mobile platforms
+    if (kIsWeb) return false;
+
     try {
       final bool hasWidgetIntent = await _channel.invokeMethod('checkWidgetIntent');
       return hasWidgetIntent;
@@ -22,6 +26,9 @@ class TaskWidgetService {
   }
 
   static Future<bool> checkForTaskListIntent() async {
+    // Skip on web - widgets are only available on mobile platforms
+    if (kIsWeb) return false;
+
     try {
       final bool hasTaskListIntent = await _channel.invokeMethod('checkTaskListIntent');
       return hasTaskListIntent;

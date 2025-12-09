@@ -41,7 +41,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isFastingInProgress = false;
   bool showRoutine = true;
   bool showHabitCard = false;
-  bool _isLoading = true;
   bool _isDisposed = false;
   Timer? _waterSyncTimer;
   bool _backupOverdue = false;
@@ -77,38 +76,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _initializeData() async {
     try {
-      // Upload any widget debug logs from Android before updating
-      await ErrorLogger.uploadWidgetDebugLogs();
+      // Non-critical: run in background without blocking
+      ErrorLogger.uploadWidgetDebugLogs().catchError((e) {
+        debugPrint('ERROR uploading widget debug logs: $e');
+      });
 
-      // Check if it's a new day and update widgets on app start
-      await WidgetUpdateService.checkAndUpdateWidgetsOnNewDay();
+      // Run independent operations in parallel for faster load
+      await Future.wait([
+        WidgetUpdateService.checkAndUpdateWidgetsOnNewDay(),
+        _loadWaterIntake(),
+        _loadWaterGoal(),
+        _initializeWaterAmountSetting(),
+      ]);
 
-      await _loadWaterIntake();
-      await _loadWaterGoal();
-      await _initializeWaterAmountSetting();
+      // These update UI state - fire and forget (they call setState internally)
       _checkFastingVisibility();
       _checkRoutineVisibility();
-      await _checkHabitCardVisibility();
+      _checkHabitCardVisibility();
 
-      // DON'T update widget on app open - let RoutineCard read widget progress first
-      // Widget will be updated when RoutineCard saves progress
-      // await RoutineWidgetService.updateWidget();
-
-      // Inițializează și programează notificările de apă
-      await _initializeWaterNotifications();
-
-      if (!_isDisposed && mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      // Non-critical: run in background without blocking UI
+      _initializeWaterNotifications().catchError((e) {
+        debugPrint('ERROR initializing water notifications: $e');
+      });
     } catch (e) {
       debugPrint('ERROR initializing home data: $e');
-      if (!_isDisposed && mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     }
   }
 
@@ -257,52 +248,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         });
 
       } else {
-        // Load data for current day - prioritize widget data
+        // Load data for current day - SharedPreferences first (fast)
         int appIntake = prefs.getInt('water_$today') ?? 0;
+
+        // Try flutter-prefixed key (widget writes here)
+        var widgetValue = prefs.get('flutter.water_$today');
+        widgetValue ??= prefs.get('water_$today');
+
         int widgetIntake = 0;
-
-        // First try to get widget data using method channel
-        try {
-          final widgetIntakeFromChannel = await platform
-              .invokeMethod('getWaterFromWidget', {'date': today});
-          if (widgetIntakeFromChannel != null &&
-              widgetIntakeFromChannel is int) {
-            widgetIntake = widgetIntakeFromChannel;
-          }
-        } catch (e, stackTrace) {
-          await ErrorLogger.logError(
-            source: 'HomeScreen._loadWaterIntake.getWaterFromWidget',
-            error: 'Method channel failed to get water from widget: $e',
-            stackTrace: stackTrace.toString(),
-          );
-        }
-
-        // If method channel didn't work, try SharedPreferences with different approaches
-        if (widgetIntake == 0) {
-          // Try the flutter-prefixed key first (this is what the widget actually writes to)
-          var widgetValue = prefs.get('flutter.water_$today');
-
-          // If that doesn't work, try the regular key
-          widgetValue ??= prefs.get('water_$today');
-
-          if (widgetValue != null) {
-            if (widgetValue is int) {
-              widgetIntake = widgetValue;
-            } else if (widgetValue is double) {
-              widgetIntake = widgetValue.toInt();
-            } else {
-              // Try to parse as number
-              widgetIntake = int.tryParse(widgetValue.toString()) ?? 0;
-            }
+        if (widgetValue != null) {
+          if (widgetValue is int) {
+            widgetIntake = widgetValue;
+          } else if (widgetValue is double) {
+            widgetIntake = widgetValue.toInt();
+          } else {
+            widgetIntake = int.tryParse(widgetValue.toString()) ?? 0;
           }
         }
 
-        // Use the higher value (widget has priority since user might be using it)
+        // Use the higher value
         intake = widgetIntake > appIntake ? widgetIntake : appIntake;
 
-        // Only sync if there's a significant difference to avoid constant writing
-        if ((widgetIntake - appIntake).abs() > 0) {
-          await prefs.setInt('water_$today', intake);
+        // Method channel sync in background (non-blocking) - only if no data found
+        if (intake == 0) {
+          platform.invokeMethod('getWaterFromWidget', {'date': today}).then((result) {
+            if (result != null && result is int && result > 0 && mounted && !_isDisposed) {
+              setState(() => waterIntake = result);
+              prefs.setInt('water_$today', result);
+            }
+          }).catchError((e) {
+            debugPrint('Method channel water sync failed: $e');
+          });
+        } else if ((widgetIntake - appIntake).abs() > 0) {
+          prefs.setInt('water_$today', intake);
         }
       }
 
@@ -572,21 +550,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('bbetter',
-              style: TextStyle(fontWeight: FontWeight.w500)),
-          backgroundColor: AppColors.transparent,
-        ),
-        body: const Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(AppColors.pink),
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('bbetter',

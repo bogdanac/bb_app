@@ -103,31 +103,21 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
   }
 
   Future<void> _loadData() async {
-    // Use getTodayRecordWithDecay to apply automatic battery decay
-    // forceReload: true to sync with Android widget changes
-    final record = await EnergyService.getTodayRecordWithDecay(forceReload: true);
-    final settings = await EnergyService.loadSettings();
-    final canSkip = await EnergyService.canUseSkip();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // If no record today, show morning prompt
-    if (record == null && mounted) {
-      await MorningBatteryPrompt.show(context);
-      // Reload after prompt (no need to forceReload, we just wrote locally)
-      final newRecord = await EnergyService.getTodayRecordWithDecay();
-      if (mounted) {
-        setState(() {
-          _todayRecord = newRecord;
-          _settings = settings;
-          _canUseSkip = canSkip;
-          _isLoading = false;
-          _lastLoadDate = today;
-        });
-      }
-      return;
-    }
+    // Load all data in parallel for faster loading
+    final results = await Future.wait([
+      EnergyService.getTodayRecordWithDecay(forceReload: true),
+      EnergyService.loadSettings(),
+      EnergyService.canUseSkip(),
+    ]);
 
+    final record = results[0] as DailyEnergyRecord?;
+    final settings = results[1] as EnergySettings;
+    final canSkip = results[2] as bool;
+
+    // Update UI first, then show prompt if needed (non-blocking)
     if (mounted) {
       setState(() {
         _todayRecord = record;
@@ -135,6 +125,23 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
         _canUseSkip = canSkip;
         _isLoading = false;
         _lastLoadDate = today;
+      });
+    }
+
+    // Show morning prompt after UI is ready (if no record today)
+    if (record == null && mounted) {
+      // Small delay to let UI render first
+      Future.delayed(const Duration(milliseconds: 100), () async {
+        if (mounted) {
+          await MorningBatteryPrompt.show(context);
+          // Reload after prompt
+          final newRecord = await EnergyService.getTodayRecordWithDecay();
+          if (mounted) {
+            setState(() {
+              _todayRecord = newRecord;
+            });
+          }
+        }
       });
     }
   }

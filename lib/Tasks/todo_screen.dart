@@ -840,11 +840,11 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      await _loadCategories();
-      // Only load category filters when filters UI is shown
-      if (widget.showFilters) {
-        await _loadCategoryFilters();
-      }
+      // Load categories and filters in parallel, then tasks
+      await Future.wait([
+        _loadCategories(),
+        if (widget.showFilters) _loadCategoryFilters(),
+      ]);
       await _loadTasks(); // This already calls _updateDisplayTasks() internally
     } catch (e, stackTrace) {
       await ErrorLogger.logError(

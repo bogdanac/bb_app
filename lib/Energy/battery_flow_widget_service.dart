@@ -9,6 +9,9 @@ class BatteryFlowWidgetService {
   /// Update the Battery & Flow widget display
   /// Call this whenever battery or flow points change
   static Future<void> updateWidget() async {
+    // Skip on web - widgets are only available on mobile platforms
+    if (kIsWeb) return;
+
     try {
       await _channel.invokeMethod('updateBatteryFlowWidget');
     } catch (e) {
@@ -18,6 +21,9 @@ class BatteryFlowWidgetService {
 
   /// Refresh widget after color/settings change
   static Future<void> refreshWidgetColor() async {
+    // Skip on web - widgets are only available on mobile platforms
+    if (kIsWeb) return;
+
     try {
       await _channel.invokeMethod('updateBatteryFlowWidget');
     } catch (e) {

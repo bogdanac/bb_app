@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -237,7 +238,11 @@ class RealtimeSyncService {
       if (tasksJson == null) return;
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('tasks', tasksJson);
+      // FIX: Tasks must be stored as StringList, not String
+      // The JSON string contains an array of task JSON strings
+      final List<dynamic> tasksList = jsonDecode(tasksJson);
+      final List<String> tasksStringList = tasksList.map((e) => e.toString()).toList();
+      await prefs.setStringList('tasks', tasksStringList);
 
       if (kDebugMode) {
         await ErrorLogger.logError(

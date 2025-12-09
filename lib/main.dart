@@ -20,6 +20,7 @@ import 'widgets/side_navigation.dart';
 import 'Auth/auth_wrapper.dart';
 import 'Auth/login_screen.dart';
 import 'shared/error_logger.dart';
+import 'Tasks/utils/task_recovery_helper.dart';
 import 'dart:io';
 import 'dart:math';
 import 'dart:async';
@@ -70,6 +71,39 @@ void main() async {
     await ErrorLogger.logError(
       source: 'main.initializeRealtimeSyncService',
       error: 'Real-time Sync Service initialization failed: $e',
+      stackTrace: stackTrace.toString(),
+    );
+  }
+
+  // AUTO-RECOVERY: Check for corrupted tasks and recover from Firestore
+  try {
+    final isCorrupted = await TaskRecoveryHelper.areTasksCorrupted();
+    if (isCorrupted) {
+      await ErrorLogger.logError(
+        source: 'main.taskRecoveryCheck',
+        error: 'Corrupted tasks detected, attempting recovery...',
+        stackTrace: '',
+      );
+
+      final recovered = await TaskRecoveryHelper.recoverTasksFromFirestore();
+      if (recovered) {
+        await ErrorLogger.logError(
+          source: 'main.taskRecoveryCheck',
+          error: 'Tasks successfully recovered from Firestore!',
+          stackTrace: '',
+        );
+      } else {
+        await ErrorLogger.logError(
+          source: 'main.taskRecoveryCheck',
+          error: 'Task recovery failed - no backup found in Firestore',
+          stackTrace: '',
+        );
+      }
+    }
+  } catch (e, stackTrace) {
+    await ErrorLogger.logError(
+      source: 'main.taskRecoveryCheck',
+      error: 'Task recovery check failed: $e',
       stackTrace: stackTrace.toString(),
     );
   }
@@ -371,69 +405,57 @@ class _LauncherScreenState extends State<LauncherScreen>
   }
 
   Future<void> _initializeApp() async {
-    try {
-      // Initialize centralized notification manager with timeout protection
-      await (() async {
-        final notificationManager = CentralizedNotificationManager();
-        await notificationManager.initialize();
-        await notificationManager.scheduleAllNotifications();
-      })().timeout(Duration(seconds: 15)).catchError((error, stackTrace) async {
-        await ErrorLogger.logError(
-          source: 'LauncherScreen.initializeCentralizedNotificationManager',
-          error: 'Centralized notification initialization error: $error',
-          stackTrace: stackTrace.toString(),
-        );
-      });
-      
-      // Initialize notification listener service for motion alerts with debug protection and timeout
-      try {
-        await NotificationListenerService.initialize().timeout(Duration(seconds: 5));
-        if (kDebugMode) {
-        }
-      } catch (error, stackTrace) {
-        await ErrorLogger.logError(
-          source: 'LauncherScreen.initializeNotificationListenerService',
-          error: 'WARNING: NotificationListenerService failed to initialize (motion alerts may not work): $error',
-          stackTrace: stackTrace.toString(),
-        );
-      }
+    // All initialization runs in background - don't block navigation
+    // This allows the app to show UI faster while services initialize
 
-      // Check for auto backup on startup (non-blocking)
-      BackupService.checkStartupAutoBackup().timeout(Duration(seconds: 10)).catchError((error, stackTrace) async {
-        await ErrorLogger.logError(
-          source: 'LauncherScreen.checkStartupAutoBackup',
-          error: 'Startup auto backup check error: $error',
-          stackTrace: stackTrace.toString(),
-        );
-      });
-
-      // Food tracking reminders are now handled by the centralized notification manager
-
-      // Request notification permissions (non-blocking with timeout)
-      if (Platform.isAndroid) {
-        Permission.notification.request().timeout(Duration(seconds: 5)).then((status) {
-          if (!status.isGranted) {
-            ErrorLogger.logError(
-              source: 'LauncherScreen.initState',
-              error: 'Notifications permission denied',
-              stackTrace: '',
-            );
-          }
-        }).catchError((error, stackTrace) async {
-          await ErrorLogger.logError(
-            source: 'LauncherScreen.requestNotificationPermission',
-            error: 'Error requesting notification permission or timed out: $error',
-            stackTrace: stackTrace.toString(),
-          );
-        });
-      }
-    } catch (e, stackTrace) {
+    // Notification manager - run in background, don't await
+    (() async {
+      final notificationManager = CentralizedNotificationManager();
+      await notificationManager.initialize();
+      await notificationManager.scheduleAllNotifications();
+    })().timeout(Duration(seconds: 15)).catchError((error, stackTrace) async {
       await ErrorLogger.logError(
-        source: 'LauncherScreen.initializeApp',
-        error: 'Error initializing app: $e',
+        source: 'LauncherScreen.initializeCentralizedNotificationManager',
+        error: 'Centralized notification initialization error: $error',
         stackTrace: stackTrace.toString(),
       );
-      // Continue regardless of initialization errors
+    });
+
+    // Notification listener - run in background, don't await
+    NotificationListenerService.initialize().timeout(Duration(seconds: 5)).catchError((error, stackTrace) async {
+      await ErrorLogger.logError(
+        source: 'LauncherScreen.initializeNotificationListenerService',
+        error: 'WARNING: NotificationListenerService failed to initialize: $error',
+        stackTrace: stackTrace.toString(),
+      );
+    });
+
+    // Backup check - already non-blocking
+    BackupService.checkStartupAutoBackup().timeout(Duration(seconds: 10)).catchError((error, stackTrace) async {
+      await ErrorLogger.logError(
+        source: 'LauncherScreen.checkStartupAutoBackup',
+        error: 'Startup auto backup check error: $error',
+        stackTrace: stackTrace.toString(),
+      );
+    });
+
+    // Permission request - already non-blocking
+    if (Platform.isAndroid) {
+      Permission.notification.request().timeout(Duration(seconds: 5)).then((status) {
+        if (!status.isGranted) {
+          ErrorLogger.logError(
+            source: 'LauncherScreen.initState',
+            error: 'Notifications permission denied',
+            stackTrace: '',
+          );
+        }
+      }).catchError((error, stackTrace) async {
+        await ErrorLogger.logError(
+          source: 'LauncherScreen.requestNotificationPermission',
+          error: 'Error requesting notification permission or timed out: $error',
+          stackTrace: stackTrace.toString(),
+        );
+      });
     }
   }
 

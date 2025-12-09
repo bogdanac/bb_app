@@ -31,7 +31,13 @@
       "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff HEAD~1 -- lib/Calendar/events_card.dart)",
       "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff HEAD~1 -- lib/Energy/energy_service.dart)",
       "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" status)",
-      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff --stat lib/Energy lib/Calendar lib/Tasks/todo_screen.dart lib/Routines/routine_execution_screen.dart)"
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff --stat lib/Energy lib/Calendar lib/Tasks/todo_screen.dart lib/Routines/routine_execution_screen.dart)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" log -1 --stat)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff HEAD~1 -- lib/Tasks)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" log --oneline -5)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff HEAD~2..HEAD~1 -- lib/Tasks)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" show 4f3a7e2 --stat)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff 4f3a7e2~1..4f3a7e2 -- lib/Tasks/repositories/task_repository.dart)"
     ]
   },
   "outputStyle": "default"

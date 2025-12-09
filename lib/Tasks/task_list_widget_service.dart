@@ -11,6 +11,9 @@ class TaskListWidgetService {
 
   /// Update the task list widget to reflect latest task data
   static Future<void> updateWidget() async {
+    // Skip on web - widgets are only available on mobile platforms
+    if (kIsWeb) return;
+
     try {
       // Update the filtered task list for widget
       await TaskListWidgetFilterService.updateWidgetTasks();
