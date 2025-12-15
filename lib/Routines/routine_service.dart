@@ -37,24 +37,13 @@ class RoutineService {
         error: 'Warning: Routines data type mismatch, clearing corrupted data: $e',
         stackTrace: '',
       );
-      await prefs.remove(_routinesKey);
-      routinesJson = [];
+        await prefs.remove(_routinesKey);
+        routinesJson = [];
     }
 
     if (routinesJson.isEmpty) {
-      // Return default routine
-      return [
-        Routine(
-          id: '1',
-          title: 'Daily Routine',
-          items: [
-            RoutineItem(id: '1', text: '☀️ Stretch and breathe', isCompleted: false),
-            RoutineItem(id: '2', text: '💧 Drink a glass of water', isCompleted: false),
-            RoutineItem(id: '3', text: '🧘 5 minutes meditation', isCompleted: false),
-            RoutineItem(id: '4', text: '📝 Write 3 gratitudes', isCompleted: false),
-          ],
-        ),
-      ];
+      // Return empty list - user creates their own routines
+      return [];
     }
 
     return routinesJson
