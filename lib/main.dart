@@ -14,13 +14,15 @@ import 'Notifications/notification_listener_service.dart';
 import 'Data/backup_service.dart';
 import 'Services/firebase_backup_service.dart';
 import 'Services/realtime_sync_service.dart';
+import 'FoodTracking/food_tracking_service.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_styles.dart';
 import 'widgets/side_navigation.dart';
 import 'Auth/auth_wrapper.dart';
 import 'Auth/login_screen.dart';
 import 'shared/error_logger.dart';
-import 'Tasks/utils/task_recovery_helper.dart';
+import 'Habits/habit_recovery_helper.dart';
+import 'Routines/routine_recovery_helper.dart';
 import 'dart:io';
 import 'dart:math';
 import 'dart:async';
@@ -75,35 +77,68 @@ void main() async {
     );
   }
 
-  // AUTO-RECOVERY: Check for corrupted tasks and recover from Firestore
+  // AUTO-RECOVERY: Check for corrupted habits and recover from Firestore
   try {
-    final isCorrupted = await TaskRecoveryHelper.areTasksCorrupted();
-    if (isCorrupted) {
+    final isHabitsCorrupted = await HabitRecoveryHelper.areHabitsCorrupted();
+    if (isHabitsCorrupted) {
       await ErrorLogger.logError(
-        source: 'main.taskRecoveryCheck',
-        error: 'Corrupted tasks detected, attempting recovery...',
+        source: 'main.habitRecoveryCheck',
+        error: 'Corrupted habits detected, attempting recovery...',
         stackTrace: '',
       );
 
-      final recovered = await TaskRecoveryHelper.recoverTasksFromFirestore();
+      final recovered = await HabitRecoveryHelper.recoverHabitsFromFirestore();
       if (recovered) {
         await ErrorLogger.logError(
-          source: 'main.taskRecoveryCheck',
-          error: 'Tasks successfully recovered from Firestore!',
+          source: 'main.habitRecoveryCheck',
+          error: 'Habits successfully recovered from Firestore!',
           stackTrace: '',
         );
       } else {
         await ErrorLogger.logError(
-          source: 'main.taskRecoveryCheck',
-          error: 'Task recovery failed - no backup found in Firestore',
+          source: 'main.habitRecoveryCheck',
+          error: 'Habit recovery failed - no backup found in Firestore',
           stackTrace: '',
         );
       }
     }
   } catch (e, stackTrace) {
     await ErrorLogger.logError(
-      source: 'main.taskRecoveryCheck',
-      error: 'Task recovery check failed: $e',
+      source: 'main.habitRecoveryCheck',
+      error: 'Habit recovery check failed: $e',
+      stackTrace: stackTrace.toString(),
+    );
+  }
+
+  // AUTO-RECOVERY: Check for corrupted routines and recover from Firestore
+  try {
+    final isRoutinesCorrupted = await RoutineRecoveryHelper.areRoutinesCorrupted();
+    if (isRoutinesCorrupted) {
+      await ErrorLogger.logError(
+        source: 'main.routineRecoveryCheck',
+        error: 'Corrupted routines detected, attempting recovery...',
+        stackTrace: '',
+      );
+
+      final recovered = await RoutineRecoveryHelper.recoverRoutinesFromFirestore();
+      if (recovered) {
+        await ErrorLogger.logError(
+          source: 'main.routineRecoveryCheck',
+          error: 'Routines successfully recovered from Firestore!',
+          stackTrace: '',
+        );
+      } else {
+        await ErrorLogger.logError(
+          source: 'main.routineRecoveryCheck',
+          error: 'Routine recovery failed - no backup found in Firestore',
+          stackTrace: '',
+        );
+      }
+    }
+  } catch (e, stackTrace) {
+    await ErrorLogger.logError(
+      source: 'main.routineRecoveryCheck',
+      error: 'Routine recovery check failed: $e',
       stackTrace: stackTrace.toString(),
     );
   }
@@ -435,6 +470,15 @@ class _LauncherScreenState extends State<LauncherScreen>
       await ErrorLogger.logError(
         source: 'LauncherScreen.checkStartupAutoBackup',
         error: 'Startup auto backup check error: $error',
+        stackTrace: stackTrace.toString(),
+      );
+    });
+
+    // Food tracking reset check - runs on app startup to handle period resets
+    FoodTrackingService.checkAndPerformResetIfNeeded().timeout(Duration(seconds: 5)).catchError((error, stackTrace) async {
+      await ErrorLogger.logError(
+        source: 'LauncherScreen.checkFoodTrackingReset',
+        error: 'Food tracking reset check error: $error',
         stackTrace: stackTrace.toString(),
       );
     });

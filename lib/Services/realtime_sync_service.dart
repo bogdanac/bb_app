@@ -356,7 +356,11 @@ class RealtimeSyncService {
       if (routinesJson == null) return;
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('routines', routinesJson);
+      // FIX: Routines must be stored as StringList, not String
+      // The JSON string contains an array of routine JSON strings
+      final List<dynamic> routinesList = jsonDecode(routinesJson);
+      final List<String> routinesStringList = routinesList.map((e) => e.toString()).toList();
+      await prefs.setStringList('routines', routinesStringList);
 
       // Restore progress data
       if (progressData != null) {
@@ -477,7 +481,11 @@ class RealtimeSyncService {
       if (habitsJson == null) return;
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('habits', habitsJson);
+      // FIX: Habits must be stored as StringList, not String
+      // The JSON string contains an array of habit JSON strings
+      final List<dynamic> habitsList = jsonDecode(habitsJson);
+      final List<String> habitsStringList = habitsList.map((e) => e.toString()).toList();
+      await prefs.setStringList('habits', habitsStringList);
 
       if (kDebugMode) {
         await ErrorLogger.logError(

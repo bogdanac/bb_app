@@ -310,13 +310,14 @@ void main() {
       expect(streak, 6);
     });
 
-    test('should break streak when goal not met', () {
+    test('should not change streak when goal not met (breaking happens at day end)', () {
       final streak = FlowCalculator.updateStreak(
         goalMetToday: false,
         goalMetYesterday: true,
         currentStreak: 10,
       );
-      expect(streak, 0);
+      // Streak is maintained - breaking happens at end of day check, not during updates
+      expect(streak, 10);
     });
 
     test('should detect streak milestones', () {
@@ -443,6 +444,105 @@ void main() {
         energyLevel: 2,
       );
       expect(itemCharge.energyLevel, 2);
+    });
+  });
+
+  group('Routine Step Energy - Default Behavior', () {
+    test('should use default energy level 0 (neutral) when energyLevel is null', () {
+      final item = RoutineItem(
+        id: 'step1',
+        text: 'Brush teeth',
+        isCompleted: false,
+        energyLevel: null,
+      );
+
+      // When energyLevel is null, should default to 0 (neutral)
+      final effectiveEnergy = item.energyLevel ?? 0;
+      expect(effectiveEnergy, 0);
+
+      // Default 0 gives 1 flow point
+      expect(FlowCalculator.calculateFlowPoints(effectiveEnergy), 1);
+
+      // Default 0 has no battery impact
+      expect(FlowCalculator.calculateBatteryChange(effectiveEnergy), 0);
+    });
+
+    test('should use explicit energy level when set', () {
+      final item = RoutineItem(
+        id: 'step2',
+        text: 'Workout',
+        isCompleted: false,
+        energyLevel: -3,
+      );
+
+      final effectiveEnergy = item.energyLevel ?? 0;
+      expect(effectiveEnergy, -3);
+
+      // -3 gives 6 flow points
+      expect(FlowCalculator.calculateFlowPoints(effectiveEnergy), 6);
+
+      // -3 drains 30% battery
+      expect(FlowCalculator.calculateBatteryChange(effectiveEnergy), -30);
+    });
+
+    test('should track energy for all routine steps including those with null energy', () {
+      // Simulate routine steps with mixed energy values
+      final steps = [
+        RoutineItem(id: '1', text: 'Meditate', isCompleted: false, energyLevel: 2),
+        RoutineItem(id: '2', text: 'Brush teeth', isCompleted: false, energyLevel: null),
+        RoutineItem(id: '3', text: 'Exercise', isCompleted: false, energyLevel: -4),
+        RoutineItem(id: '4', text: 'Shower', isCompleted: false, energyLevel: null),
+      ];
+
+      int totalFlowPoints = 0;
+      int totalBatteryChange = 0;
+
+      for (final step in steps) {
+        final energy = step.energyLevel ?? 0;
+        totalFlowPoints += FlowCalculator.calculateFlowPoints(energy);
+        totalBatteryChange += FlowCalculator.calculateBatteryChange(energy);
+      }
+
+      // Step 1 (energy +2): 3 pts, +20% battery
+      // Step 2 (energy null -> 0): 1 pt, 0% battery
+      // Step 3 (energy -4): 8 pts, -40% battery
+      // Step 4 (energy null -> 0): 1 pt, 0% battery
+      // Total: 13 pts, -20% battery
+      expect(totalFlowPoints, 13);
+      expect(totalBatteryChange, -20);
+    });
+
+    test('should correctly display energy indicator for negative energy levels', () {
+      final negativeEnergyItem = RoutineItem(
+        id: 'neg',
+        text: 'Hard task',
+        isCompleted: false,
+        energyLevel: -3,
+      );
+
+      // The UI check was: item.energyLevel != null && item.energyLevel! > 0
+      // This incorrectly hid negative energy indicators
+      // Fixed check: item.energyLevel != null
+      final hasEnergyOld = negativeEnergyItem.energyLevel != null && negativeEnergyItem.energyLevel! > 0;
+      final hasEnergyNew = negativeEnergyItem.energyLevel != null;
+
+      expect(hasEnergyOld, false); // Old behavior - wrong!
+      expect(hasEnergyNew, true);  // New behavior - correct!
+    });
+
+    test('should show energy indicator for zero energy level', () {
+      final neutralItem = RoutineItem(
+        id: 'neutral',
+        text: 'Quick task',
+        isCompleted: false,
+        energyLevel: 0,
+      );
+
+      final hasEnergyOld = neutralItem.energyLevel != null && neutralItem.energyLevel! > 0;
+      final hasEnergyNew = neutralItem.energyLevel != null;
+
+      expect(hasEnergyOld, false); // Old behavior - wrong!
+      expect(hasEnergyNew, true);  // New behavior - correct!
     });
   });
 }

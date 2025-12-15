@@ -5,8 +5,11 @@ import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import 'energy_service.dart';
 import 'energy_settings_model.dart';
+import 'energy_calendar_screen.dart';
+import 'energy_settings_screen.dart';
 import 'flow_calculator.dart';
 import 'morning_battery_prompt.dart';
+import 'skip_day_notification.dart';
 
 /// Battery & Flow Home Card - Expandable card matching food tracking style
 class BatteryFlowHomeCard extends StatefulWidget {
@@ -28,6 +31,7 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
   DateTime? _lastLoadDate;
   Timer? _decayTimer;
   bool _canUseSkip = false;
+  bool _isShowingMorningPrompt = false;
 
   @override
   void initState() {
@@ -76,18 +80,13 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // If it's a different day, check streak for previous day and show morning prompt
+    // If it's a different day, check streak for previous day
     if (_lastLoadDate != null && _lastLoadDate != today) {
       // Check streak at end of previous day (uses skip if available)
       await EnergyService.checkStreakAtDayEnd(_lastLoadDate!);
-
-      final record = await EnergyService.getTodayRecord();
-      if (record == null && mounted) {
-        // It's a new day with no record - show morning prompt
-        await MorningBatteryPrompt.show(context);
-      }
     }
-    // Always reload data to pick up widget changes
+
+    // Always reload data - this will also show morning prompt if needed
     await _loadData();
   }
 
@@ -129,20 +128,47 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
     }
 
     // Show morning prompt after UI is ready (if no record today)
-    if (record == null && mounted) {
-      // Small delay to let UI render first
-      Future.delayed(const Duration(milliseconds: 100), () async {
+    if (record == null && mounted && !_isShowingMorningPrompt) {
+      // Use post-frame callback to ensure the widget tree is stable
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _showMorningPromptSafely();
+      });
+    }
+
+    // Check for pending skip notification (shown after morning prompt)
+    if (mounted && !_isShowingMorningPrompt) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (mounted) {
-          await MorningBatteryPrompt.show(context);
-          // Reload after prompt
-          final newRecord = await EnergyService.getTodayRecordWithDecay();
-          if (mounted) {
-            setState(() {
-              _todayRecord = newRecord;
-            });
-          }
+          await SkipDayNotification.checkAndShow(context);
         }
       });
+    }
+  }
+
+  /// Safely show the morning prompt with proper guards
+  Future<void> _showMorningPromptSafely() async {
+    // Guard against multiple calls
+    if (_isShowingMorningPrompt || !mounted) return;
+
+    // Double-check we still need to show it
+    final record = await EnergyService.getTodayRecord();
+    if (record != null || !mounted) return;
+
+    _isShowingMorningPrompt = true;
+    try {
+      await MorningBatteryPrompt.show(context);
+    } finally {
+      _isShowingMorningPrompt = false;
+    }
+
+    // Reload after prompt closes
+    if (mounted) {
+      final newRecord = await EnergyService.getTodayRecordWithDecay();
+      if (mounted) {
+        setState(() {
+          _todayRecord = newRecord;
+        });
+      }
     }
   }
 
@@ -531,6 +557,68 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    // History and Settings row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const EnergyCalendarScreen(),
+                                ),
+                              );
+                            },
+                            icon: Icon(
+                              Icons.calendar_month_rounded,
+                              size: 16,
+                              color: AppColors.greyText,
+                            ),
+                            label: Text(
+                              'History',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.greyText,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: TextButton.icon(
+                            onPressed: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const EnergySettingsScreen(),
+                                ),
+                              );
+                              // Reload data after settings change
+                              _loadData();
+                            },
+                            icon: Icon(
+                              Icons.settings_rounded,
+                              size: 16,
+                              color: AppColors.greyText,
+                            ),
+                            label: Text(
+                              'Settings',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.greyText,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     // Warning for low battery
                     if (FlowCalculator.isBatteryCritical(battery)) ...[
                       const SizedBox(height: 8),
@@ -566,19 +654,18 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                     ],
                     // Skip day button - show when goal not met, streak > 0, and skip available
                     if (!_todayRecord!.isGoalMet && streak > 0 && _canUseSkip) ...[
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _useSkipDay,
-                          icon: const Icon(Icons.skip_next_rounded, size: 18),
-                          label: const Text('Use Skip Day (protect streak)'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.orange,
-                            side: BorderSide(color: AppColors.orange),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: AppStyles.borderRadiusMedium,
-                            ),
+                      const SizedBox(height: 4),
+                      TextButton(
+                        onPressed: _useSkipDay,
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.greyText,
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                        ),
+                        child: Text(
+                          'Skip day available',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.greyText.withValues(alpha: 0.7),
                           ),
                         ),
                       ),

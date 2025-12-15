@@ -432,7 +432,7 @@ void main() {
         expect(skipped.recurrence!.types, contains(RecurrenceType.ovulationPhase));
       });
 
-      test('Overdue recurring task → Load → Verify auto-migration to next occurrence', () async {
+      test('Overdue recurring task → Load → Verify task stays overdue for manual completion', () async {
         final yesterday = DateTime.now().subtract(const Duration(days: 1));
         final recurrence = TaskRecurrence(
           types: [RecurrenceType.daily],
@@ -459,25 +459,26 @@ void main() {
         // Clear and save properly
         await taskService.saveTasks([task]);
 
-        // Load - should trigger auto-migration
+        // Load - should NOT auto-advance overdue tasks (they stay overdue for manual completion)
         final loaded = await taskService.loadTasks();
 
-        // Verify task was migrated to today or future
+        // Verify task stays at its scheduled date (not auto-migrated)
         expect(loaded.length, 1);
         expect(loaded[0].scheduledDate, isNotNull);
 
-        final today = DateTime.now();
         final scheduledDay = DateTime(
           loaded[0].scheduledDate!.year,
           loaded[0].scheduledDate!.month,
           loaded[0].scheduledDate!.day,
         );
-        final todayDay = DateTime(today.year, today.month, today.day);
+        final yesterdayDay = DateTime(yesterday.year, yesterday.month, yesterday.day);
 
-        // Should be after today (recurrence calculator returns future dates)
+        // Task should stay at its original overdue date for manual completion
+        // (NO AUTO-ADVANCE: Tasks stay overdue indefinitely until manually completed)
         expect(
-          scheduledDay.isAfter(todayDay),
+          scheduledDay.isAtSameMomentAs(yesterdayDay),
           true,
+          reason: 'Overdue recurring tasks should stay at their original date until manually completed'
         );
       });
 
@@ -1051,9 +1052,10 @@ void main() {
         expect(prioritized[0].isImportant || prioritized[1].isImportant, true);
       });
 
-      test('Task migration: Overdue tasks auto-update on app launch', () async {
+      test('Task migration: Overdue tasks stay overdue for manual completion', () async {
         final yesterday = DateTime.now().subtract(const Duration(days: 1));
         final twoDaysAgo = DateTime.now().subtract(const Duration(days: 2));
+        final eightDaysAgo = yesterday.subtract(const Duration(days: 7));
 
         // Create tasks with old dates
         final oldTasks = [
@@ -1072,35 +1074,48 @@ void main() {
               interval: 1,
               weekDays: [DateTime.now().weekday],
             ),
-            scheduledDate: yesterday.subtract(const Duration(days: 7)),
+            scheduledDate: eightDaysAgo,
             createdAt: DateTime.now().subtract(const Duration(days: 20)),
           ),
         ];
 
         await taskService.saveTasks(oldTasks);
 
-        // Load - triggers auto-migration
-        final migrated = await taskService.loadTasks();
+        // Load - should NOT auto-migrate overdue tasks (they stay for manual completion)
+        final loaded = await taskService.loadTasks();
 
-        // Verify tasks were migrated to current/future dates
-        for (final task in migrated) {
-          if (task.scheduledDate != null) {
-            final today = DateTime.now();
-            final scheduledDay = DateTime(
-              task.scheduledDate!.year,
-              task.scheduledDate!.month,
-              task.scheduledDate!.day,
-            );
-            final todayDay = DateTime(today.year, today.month, today.day);
+        // Verify tasks stay at their original overdue dates
+        // (NO AUTO-ADVANCE: Tasks stay overdue indefinitely until manually completed)
+        final dailyTask = loaded.firstWhere((t) => t.id == 'old-1');
+        final weeklyTask = loaded.firstWhere((t) => t.id == 'old-2');
 
-            // Should be in the future (recurrence calculator returns future dates)
-            expect(
-              scheduledDay.isAfter(todayDay),
-              true,
-              reason: 'Task ${task.title} should be migrated to future',
-            );
-          }
-        }
+        expect(dailyTask.scheduledDate, isNotNull);
+        expect(weeklyTask.scheduledDate, isNotNull);
+
+        // Tasks should stay at their original overdue dates
+        final dailyScheduled = DateTime(
+          dailyTask.scheduledDate!.year,
+          dailyTask.scheduledDate!.month,
+          dailyTask.scheduledDate!.day,
+        );
+        final weeklyScheduled = DateTime(
+          weeklyTask.scheduledDate!.year,
+          weeklyTask.scheduledDate!.month,
+          weeklyTask.scheduledDate!.day,
+        );
+        final twoDaysAgoDay = DateTime(twoDaysAgo.year, twoDaysAgo.month, twoDaysAgo.day);
+        final eightDaysAgoDay = DateTime(eightDaysAgo.year, eightDaysAgo.month, eightDaysAgo.day);
+
+        expect(
+          dailyScheduled.isAtSameMomentAs(twoDaysAgoDay),
+          true,
+          reason: 'Overdue daily task should stay at original date for manual completion',
+        );
+        expect(
+          weeklyScheduled.isAtSameMomentAs(eightDaysAgoDay),
+          true,
+          reason: 'Overdue weekly task should stay at original date for manual completion',
+        );
       });
 
       test('Multi-user scenario: Multiple task lists managed independently', () async {

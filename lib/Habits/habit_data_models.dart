@@ -1,25 +1,59 @@
 import 'package:intl/intl.dart';
 
+/// Duration options for habit cycles
+enum HabitDuration {
+  oneWeek(7, '1 Week'),
+  threeWeeks(21, '21 Days'),
+  threeMonths(90, '3 Months');
+
+  final int days;
+  final String label;
+  const HabitDuration(this.days, this.label);
+
+  static HabitDuration fromDays(int days) {
+    return HabitDuration.values.firstWhere(
+      (d) => d.days == days,
+      orElse: () => HabitDuration.threeWeeks, // Default fallback
+    );
+  }
+}
+
 // HABIT DATA MODELS
 class Habit {
   final String id;
   String name;
   bool isActive;
   DateTime createdAt;
+  DateTime startDate; // When the habit tracking should start (can be future date)
+  int cycleDurationDays; // Duration of each cycle (7, 21, or 90 days)
   List<String> completedDates; // List of dates in 'yyyy-MM-dd' format
-  int currentCycle; // Which 21-day cycle we're on
-  bool isCompleted; // Has the habit been fully completed (21 days)
+  int currentCycle; // Which cycle we're on
+  bool isCompleted; // Has the habit cycle been fully completed
 
   Habit({
     required this.id,
     required this.name,
     this.isActive = true,
     DateTime? createdAt,
+    DateTime? startDate,
+    this.cycleDurationDays = 21, // Default to 21 days for backward compatibility
     List<String>? completedDates,
     this.currentCycle = 1,
     this.isCompleted = false,
   }) : createdAt = createdAt ?? DateTime.now(),
+       startDate = startDate ?? createdAt ?? DateTime.now(),
        completedDates = completedDates ?? [];
+
+  /// Get the HabitDuration enum for this habit
+  HabitDuration get duration => HabitDuration.fromDays(cycleDurationDays);
+
+  /// Check if the habit has started (startDate <= today)
+  bool hasStarted() {
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    final startOnly = DateTime(startDate.year, startDate.month, startDate.day);
+    return !startOnly.isAfter(todayOnly);
+  }
 
   bool isCompletedToday() {
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -65,22 +99,21 @@ class Habit {
 
   int getCurrentCycleProgress() {
     if (completedDates.isEmpty) return 0;
-    
-    // Get the start date of current cycle (21 days ago from the most recent completion)
-    final sortedDates = List<String>.from(completedDates)..sort();
-    final latestDate = DateTime.parse(sortedDates.last);
-    final cycleStartDate = latestDate.subtract(const Duration(days: 20)); // 21 days total
-    
-    // Count completed days in current 21-day cycle
+
+    // Calculate cycle start based on startDate and current cycle
+    final habitStart = DateTime(startDate.year, startDate.month, startDate.day);
+    final cycleStartDate = habitStart.add(Duration(days: (currentCycle - 1) * cycleDurationDays));
+
+    // Count completed days in current cycle window
     int progress = 0;
-    for (int i = 0; i < 21; i++) {
+    for (int i = 0; i < cycleDurationDays; i++) {
       final checkDate = cycleStartDate.add(Duration(days: i));
       final checkDateString = DateFormat('yyyy-MM-dd').format(checkDate);
       if (completedDates.contains(checkDateString)) {
         progress++;
       }
     }
-    
+
     return progress;
   }
   
@@ -112,7 +145,7 @@ class Habit {
   }
   
   bool canContinueToNextCycle() {
-    return getCurrentCycleProgress() >= 21;
+    return getCurrentCycleProgress() >= cycleDurationDays;
   }
   
   void continueToNextCycle() {
@@ -153,20 +186,29 @@ class Habit {
     'name': name,
     'isActive': isActive,
     'createdAt': createdAt.toIso8601String(),
+    'startDate': startDate.toIso8601String(),
+    'cycleDurationDays': cycleDurationDays,
     'completedDates': completedDates,
     'currentCycle': currentCycle,
     'isCompleted': isCompleted,
   };
 
-  static Habit fromJson(Map<String, dynamic> json) => Habit(
-    id: json['id'],
-    name: json['name'],
-    isActive: json['isActive'] ?? true,
-    createdAt: DateTime.parse(json['createdAt']),
-    completedDates: List<String>.from(json['completedDates'] ?? []),
-    currentCycle: json['currentCycle'] ?? 1,
-    isCompleted: json['isCompleted'] ?? false,
-  );
+  static Habit fromJson(Map<String, dynamic> json) {
+    final createdAt = DateTime.parse(json['createdAt']);
+    return Habit(
+      id: json['id'],
+      name: json['name'],
+      isActive: json['isActive'] ?? true,
+      createdAt: createdAt,
+      // For backward compatibility: use startDate if present, otherwise fall back to createdAt
+      startDate: json['startDate'] != null ? DateTime.parse(json['startDate']) : createdAt,
+      // For backward compatibility: default to 21 days if not present
+      cycleDurationDays: json['cycleDurationDays'] ?? 21,
+      completedDates: List<String>.from(json['completedDates'] ?? []),
+      currentCycle: json['currentCycle'] ?? 1,
+      isCompleted: json['isCompleted'] ?? false,
+    );
+  }
 }
 
 class HabitStatistics {

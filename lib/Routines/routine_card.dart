@@ -62,6 +62,13 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
   Future<void> _loadCurrentRoutine() async {
     if (!mounted) return; // Don't proceed if widget is disposed
 
+    // Set loading state at the start to prevent stale renders
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+
     try {
       // Load all routines
       final routines = await RoutineService.loadRoutines();
@@ -244,10 +251,15 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
   }
 
   Future<void> _skipRoutine() async {
+    if (_currentRoutine == null) return;
+
+    // Store the current routine ID before any async operations
+    final currentRoutineId = _currentRoutine!.id;
+
     // Mark current routine as completed (skipped)
     final prefs = await SharedPreferences.getInstance();
     final today = RoutineService.getEffectiveDate();
-    final completedKey = 'routine_completed_${_currentRoutine!.id}_$today';
+    final completedKey = 'routine_completed_${currentRoutineId}_$today';
     await prefs.setBool(completedKey, true);
 
     final hasNextRoutine = await _loadNextRoutine();
@@ -290,7 +302,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
         error: 'Error loading next routine: $e',
         stackTrace: stackTrace.toString(),
       );
-      return false;
+      // On error, reload current routine to try to recover
+      // Don't return false (which hides the card) unless we're sure there's no next routine
+      await _loadCurrentRoutine();
+      // Check if we have a routine loaded after recovery attempt
+      return _currentRoutine != null;
     }
   }
 

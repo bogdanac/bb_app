@@ -1,3 +1,12 @@
+/// Skip day configuration modes
+enum SkipDayMode {
+  weekly,       // 1 skip per week (default)
+  biweekly,     // 1 skip every 2 weeks
+  perCycle,     // 1 skip per menstrual cycle (~28 days)
+  unlimited,    // Unlimited skips (no restrictions)
+  disabled,     // No skips allowed
+}
+
 /// Energy Settings Model - Stores user preferences for Body Battery & Flow tracking
 class EnergySettings {
   // Battery Settings (percentage-based: 5%-120%)
@@ -13,9 +22,14 @@ class EnergySettings {
   final int longestStreak;   // Longest streak ever achieved
   final int personalRecord;  // Personal best flow points in a single day
 
-  // Streak Skip Tracking (1 skip allowed per week, not consecutive)
+  // Streak Skip Tracking
   final DateTime? lastSkipDate;     // Last date a skip was used
   final DateTime? lastStreakDate;   // Last date that counted towards streak
+  final SkipDayMode skipDayMode;    // How often skips are allowed
+  final bool autoUseSkip;           // Automatically use skip when streak would break
+
+  // Skip notification tracking
+  final DateTime? pendingSkipNotification;  // Date when skip was auto-used, needs notification
 
   const EnergySettings({
     this.minBattery = 5,        // Default: 5% on low energy days
@@ -27,6 +41,9 @@ class EnergySettings {
     this.personalRecord = 0,    // Default: no PR yet
     this.lastSkipDate,
     this.lastStreakDate,
+    this.skipDayMode = SkipDayMode.weekly,
+    this.autoUseSkip = true,
+    this.pendingSkipNotification,
   });
 
   Map<String, dynamic> toJson() => {
@@ -39,6 +56,9 @@ class EnergySettings {
     'personalRecord': personalRecord,
     'lastSkipDate': lastSkipDate?.toIso8601String(),
     'lastStreakDate': lastStreakDate?.toIso8601String(),
+    'skipDayMode': skipDayMode.name,
+    'autoUseSkip': autoUseSkip,
+    'pendingSkipNotification': pendingSkipNotification?.toIso8601String(),
   };
 
   static EnergySettings fromJson(Map<String, dynamic> json) {
@@ -46,6 +66,15 @@ class EnergySettings {
     final lowEnergyPeak = json['lowEnergyPeak'];
     final highEnergyPeak = json['highEnergyPeak'];
     final currentStreak = json['currentStreak'] ?? 0;
+
+    // Parse skip day mode with fallback
+    SkipDayMode skipMode = SkipDayMode.weekly;
+    if (json['skipDayMode'] != null) {
+      skipMode = SkipDayMode.values.firstWhere(
+        (e) => e.name == json['skipDayMode'],
+        orElse: () => SkipDayMode.weekly,
+      );
+    }
 
     return EnergySettings(
       minBattery: json['minBattery'] ?? lowEnergyPeak ?? 5,
@@ -58,6 +87,11 @@ class EnergySettings {
       personalRecord: json['personalRecord'] ?? 0,
       lastSkipDate: json['lastSkipDate'] != null ? DateTime.parse(json['lastSkipDate']) : null,
       lastStreakDate: json['lastStreakDate'] != null ? DateTime.parse(json['lastStreakDate']) : null,
+      skipDayMode: skipMode,
+      autoUseSkip: json['autoUseSkip'] ?? true,
+      pendingSkipNotification: json['pendingSkipNotification'] != null
+          ? DateTime.parse(json['pendingSkipNotification'])
+          : null,
     );
   }
 
@@ -71,8 +105,12 @@ class EnergySettings {
     int? personalRecord,
     DateTime? lastSkipDate,
     DateTime? lastStreakDate,
+    SkipDayMode? skipDayMode,
+    bool? autoUseSkip,
+    DateTime? pendingSkipNotification,
     bool clearLastSkipDate = false,
     bool clearLastStreakDate = false,
+    bool clearPendingSkipNotification = false,
   }) {
     return EnergySettings(
       minBattery: minBattery ?? this.minBattery,
@@ -84,6 +122,11 @@ class EnergySettings {
       personalRecord: personalRecord ?? this.personalRecord,
       lastSkipDate: clearLastSkipDate ? null : (lastSkipDate ?? this.lastSkipDate),
       lastStreakDate: clearLastStreakDate ? null : (lastStreakDate ?? this.lastStreakDate),
+      skipDayMode: skipDayMode ?? this.skipDayMode,
+      autoUseSkip: autoUseSkip ?? this.autoUseSkip,
+      pendingSkipNotification: clearPendingSkipNotification
+          ? null
+          : (pendingSkipNotification ?? this.pendingSkipNotification),
     );
   }
 
@@ -100,7 +143,10 @@ class EnergySettings {
           longestStreak == other.longestStreak &&
           personalRecord == other.personalRecord &&
           lastSkipDate == other.lastSkipDate &&
-          lastStreakDate == other.lastStreakDate;
+          lastStreakDate == other.lastStreakDate &&
+          skipDayMode == other.skipDayMode &&
+          autoUseSkip == other.autoUseSkip &&
+          pendingSkipNotification == other.pendingSkipNotification;
 
   @override
   int get hashCode =>
@@ -112,7 +158,10 @@ class EnergySettings {
       longestStreak.hashCode ^
       personalRecord.hashCode ^
       lastSkipDate.hashCode ^
-      lastStreakDate.hashCode;
+      lastStreakDate.hashCode ^
+      skipDayMode.hashCode ^
+      autoUseSkip.hashCode ^
+      pendingSkipNotification.hashCode;
 }
 
 /// Daily energy record for Body Battery & Flow tracking

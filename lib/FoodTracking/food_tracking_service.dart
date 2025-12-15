@@ -35,6 +35,9 @@ class FoodTrackingService {
   }
 
   static Future<void> addEntry(FoodEntry entry) async {
+    // Check for period reset before adding new entry
+    await _checkAndPerformReset();
+
     final entries = await getAllEntries();
 
     // Generate a new ID if the entry doesn't have one
@@ -110,6 +113,11 @@ class FoodTrackingService {
     await _checkAndPerformReset();
   }
 
+  // Public method to check and perform reset - call this on app startup
+  static Future<void> checkAndPerformResetIfNeeded() async {
+    await _checkAndPerformReset();
+  }
+
   // Check if reset is needed and perform it
   static Future<void> _checkAndPerformReset() async {
     final prefs = await SharedPreferences.getInstance();
@@ -163,32 +171,68 @@ class FoodTrackingService {
 
   static Future<void> _performReset() async {
     final frequency = await getResetFrequency();
-
-    // Save current period's final percentage before reset
-    final currentCounts = frequency == FoodTrackingResetFrequency.monthly
-        ? await getMonthlyCount()
-        : await getWeeklyCounts();
-
-    await _savePeriodToHistory(frequency, currentCounts);
-
-    // Now delete all current entries for true reset
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_entriesKey);
+    final lastResetStr = prefs.getString(_lastResetKey);
 
-    final healthy = currentCounts['healthy'] ?? 0;
-    final processed = currentCounts['processed'] ?? 0;
+    // Determine the previous period to save
+    // We need to save data from the PREVIOUS period, not the current one
+    DateTime previousPeriodStart;
+    DateTime previousPeriodEnd;
+
+    if (lastResetStr != null) {
+      previousPeriodStart = DateTime.parse(lastResetStr);
+    } else {
+      // Fallback: calculate previous period start
+      final now = DateTime.now();
+      if (frequency == FoodTrackingResetFrequency.monthly) {
+        previousPeriodStart = DateTime(now.year, now.month - 1, 1);
+      } else {
+        previousPeriodStart = getCurrentWeekStart().subtract(const Duration(days: 7));
+      }
+    }
+
+    // Calculate previous period end (day before current period start)
+    if (frequency == FoodTrackingResetFrequency.monthly) {
+      previousPeriodEnd = DateTime(previousPeriodStart.year, previousPeriodStart.month + 1, 0); // Last day of that month
+    } else {
+      previousPeriodEnd = previousPeriodStart.add(const Duration(days: 6)); // Sunday of that week
+    }
+
+    // Get entries specifically from the PREVIOUS period
+    final previousPeriodCounts = frequency == FoodTrackingResetFrequency.monthly
+        ? await getMonthlyCount(previousPeriodStart)
+        : await getWeeklyCounts(previousPeriodStart);
+
+    await _savePeriodToHistory(frequency, previousPeriodCounts, previousPeriodStart, previousPeriodEnd);
+
+    // Now delete entries from the previous period only
+    // Keep any entries from the current period (Dec 1-15 in your case)
+    await _deleteEntriesBeforeDate(_getCurrentPeriodStart(frequency, DateTime.now()));
+
+    final healthy = previousPeriodCounts['healthy'] ?? 0;
+    final processed = previousPeriodCounts['processed'] ?? 0;
     final total = healthy + processed;
     final percentage = total > 0 ? (healthy / total * 100).round() : 0;
     await ErrorLogger.logError(
       source: 'FoodTrackingService.resetCounts',
-      error: 'Food tracking reset: $percentage% healthy saved to history, data cleared',
+      error: 'Food tracking reset: $percentage% healthy saved to history for ${_getMonthLabel(previousPeriodStart)}',
       stackTrace: '',
     );
   }
 
-  static Future<void> _savePeriodToHistory(FoodTrackingResetFrequency frequency, Map<String, int> counts) async {
+  // Delete entries before a specific date
+  static Future<void> _deleteEntriesBeforeDate(DateTime date) async {
+    final entries = await getAllEntries();
+    final filteredEntries = entries.where((entry) =>
+        entry.timestamp.isAfter(date) || entry.timestamp.isAtSameMomentAs(date)).toList();
+
     final prefs = await SharedPreferences.getInstance();
-    final now = DateTime.now();
+    final entriesJson = filteredEntries.map((entry) => entry.toJsonString()).toList();
+    await prefs.setStringList(_entriesKey, entriesJson);
+  }
+
+  static Future<void> _savePeriodToHistory(FoodTrackingResetFrequency frequency, Map<String, int> counts, DateTime periodStart, DateTime periodEnd) async {
+    final prefs = await SharedPreferences.getInstance();
 
     final healthy = counts['healthy'] ?? 0;
     final processed = counts['processed'] ?? 0;
@@ -198,17 +242,17 @@ class FoodTrackingService {
 
     final percentage = (healthy / total * 100).round();
 
-    // Create period record
+    // Create period record with the correct period dates
     final periodRecord = {
       'percentage': percentage,
       'healthy': healthy,
       'processed': processed,
       'total': total,
       'frequency': frequency.name,
-      'endDate': now.toIso8601String(),
+      'endDate': periodEnd.toIso8601String(),
       'periodLabel': frequency == FoodTrackingResetFrequency.monthly
-          ? _getMonthLabel(now)
-          : _getWeekLabel(_getCurrentPeriodStart(frequency, now), now)
+          ? _getMonthLabel(periodStart)
+          : _getWeekLabel(periodStart, periodEnd)
     };
 
     // Load existing history

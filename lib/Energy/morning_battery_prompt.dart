@@ -23,10 +23,13 @@ class MorningBatteryPrompt extends StatefulWidget {
 
     if (!context.mounted) return;
 
+    // Use rootNavigator to ensure dialog shows above all other routes
+    // and can be dismissed properly regardless of nested navigators
     await showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (context) => const MorningBatteryPrompt(),
+      useRootNavigator: true,
+      builder: (dialogContext) => const MorningBatteryPrompt(),
     );
   }
 }

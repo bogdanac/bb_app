@@ -246,8 +246,12 @@ class RecurrenceCalculator {
         }
       }
 
-      if (task.scheduledDate == null || !task.scheduledDate!.isBefore(todayDate)) {
-        // Task is not overdue, return tomorrow (or next interval)
+      if (task.scheduledDate == null) {
+        // Task has no scheduled date yet - schedule for today so it shows "Scheduled today" chip
+        return checkEndDate(todayDate);
+      }
+      if (!task.scheduledDate!.isBefore(todayDate)) {
+        // Task is not overdue (scheduled today or future), return next interval from today
         return checkEndDate(todayDate.add(Duration(days: interval)));
       }
       // Task is overdue - calculate how many intervals have passed and add one more
@@ -256,7 +260,9 @@ class RecurrenceCalculator {
       return checkEndDate(baseDate.add(Duration(days: intervalsToSkip * interval)));
     } else if (recurrence.types.contains(RecurrenceType.weekly)) {
       final daysToCheck = 7 * recurrence.interval;
-      for (int i = 1; i <= daysToCheck; i++) {
+      // Start from i=0 to check today first - a task created on its target day
+      // (e.g., Sunday task created on Sunday) should appear today, not next week
+      for (int i = 0; i <= daysToCheck; i++) {
         final checkDate = todayDate.add(Duration(days: i));
         if (recurrence.isDueOn(checkDate, taskCreatedAt: task.createdAt)) {
           return checkEndDate(checkDate);
@@ -283,7 +289,9 @@ class RecurrenceCalculator {
       var nextMonth = todayDate.month;
       var nextYear = todayDate.year;
 
-      if (todayDate.day >= targetDay) {
+      // Use > instead of >= so that if today IS the target day, we return today
+      // (e.g., monthly task on the 15th created on the 15th should appear today)
+      if (todayDate.day > targetDay) {
         nextMonth += recurrence.interval; // Use interval for number of months
         while (nextMonth > 12) {
           nextMonth -= 12;
@@ -300,8 +308,9 @@ class RecurrenceCalculator {
       var nextYear = todayDate.year;
 
       final targetDate = DateTime(nextYear, targetMonth, targetDay);
-      if (todayDate.isAfter(targetDate) ||
-          todayDate.isAtSameMomentAs(targetDate)) {
+      // Only skip to next year if today is AFTER the target date
+      // If today IS the target date, return today (e.g., yearly March 15 task created on March 15)
+      if (todayDate.isAfter(targetDate)) {
         nextYear++;
       }
 

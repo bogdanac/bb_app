@@ -52,8 +52,14 @@ class HabitService {
     FirebaseBackupService.triggerBackup();
   }
 
-  /// Get only active habits
+  /// Get only active habits that have started (startDate <= today)
   static Future<List<Habit>> getActiveHabits() async {
+    final habits = await loadHabits();
+    return habits.where((habit) => habit.isActive && habit.hasStarted()).toList();
+  }
+
+  /// Get all active habits including those scheduled for the future
+  static Future<List<Habit>> getAllActiveHabits() async {
     final habits = await loadHabits();
     return habits.where((habit) => habit.isActive).toList();
   }
@@ -79,8 +85,8 @@ class HabitService {
       } else {
         habit.markCompleted();
 
-        // Check if this completion completed the 21-day cycle
-        if (habit.getCurrentCycleProgress() >= 21) {
+        // Check if this completion completed the cycle
+        if (habit.getCurrentCycleProgress() >= habit.cycleDurationDays) {
           cycleCompleted = true;
         }
       }

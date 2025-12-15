@@ -4,6 +4,8 @@ import '../theme/app_styles.dart';
 import 'energy_settings_model.dart';
 import 'energy_service.dart';
 import 'energy_calculator.dart';
+import 'flow_calculator.dart';
+import 'skip_day_notification.dart';
 
 class EnergySettingsScreen extends StatefulWidget {
   const EnergySettingsScreen({super.key});
@@ -156,6 +158,212 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
               ),
               const SizedBox(height: 12),
             ],
+
+            // Battery Settings Section Header
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 8),
+              child: Text(
+                'Battery Settings',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.greyText,
+                ),
+              ),
+            ),
+
+            // Lowest Battery Setting (Luteal)
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: AppStyles.borderRadiusLarge,
+                border: Border.all(
+                  color: AppColors.normalCardBackground,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.purple.withValues(alpha: 0.1),
+                            borderRadius: AppStyles.borderRadiusSmall,
+                          ),
+                          child: Icon(
+                            Icons.battery_1_bar_rounded,
+                            color: AppColors.purple,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Lowest Battery',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                'Late luteal phase (before period)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.greyText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '${_settings.minBattery}%',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.purple,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        activeTrackColor: AppColors.purple,
+                        inactiveTrackColor: AppColors.greyText.withValues(alpha: 0.2),
+                        thumbColor: AppColors.purple,
+                        overlayColor: AppColors.purple.withValues(alpha: 0.2),
+                        trackHeight: 8,
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                      ),
+                      child: Slider(
+                        value: _settings.minBattery.toDouble(),
+                        min: 5,
+                        max: 50,
+                        divisions: 9,
+                        onChanged: (value) {
+                          setState(() {
+                            _settings = _settings.copyWith(minBattery: value.round());
+                          });
+                          _saveSettings();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Highest Battery Setting (Ovulation)
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: AppStyles.borderRadiusLarge,
+                border: Border.all(
+                  color: AppColors.normalCardBackground,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.coral.withValues(alpha: 0.1),
+                            borderRadius: AppStyles.borderRadiusSmall,
+                          ),
+                          child: Icon(
+                            Icons.battery_full_rounded,
+                            color: AppColors.coral,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Highest Battery',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                'Ovulation phase (peak energy)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.greyText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '${_settings.maxBattery}%',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.coral,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        activeTrackColor: AppColors.coral,
+                        inactiveTrackColor: AppColors.greyText.withValues(alpha: 0.2),
+                        thumbColor: AppColors.coral,
+                        overlayColor: AppColors.coral.withValues(alpha: 0.2),
+                        trackHeight: 8,
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                      ),
+                      child: Slider(
+                        value: _settings.maxBattery.toDouble(),
+                        min: 80,
+                        max: 150,
+                        divisions: 14,
+                        onChanged: (value) {
+                          setState(() {
+                            _settings = _settings.copyWith(maxBattery: value.round());
+                          });
+                          _saveSettings();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Flow Points Settings Section Header
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 8),
+              child: Text(
+                'Flow Points Settings',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.greyText,
+                ),
+              ),
+            ),
 
             // Low Energy Peak Setting
             Container(
@@ -331,6 +539,101 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Skip Day Settings Section Header
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 8),
+              child: Text(
+                'Streak Skip Settings',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.greyText,
+                ),
+              ),
+            ),
+
+            // Skip Day Settings Card
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: AppStyles.borderRadiusLarge,
+                border: Border.all(
+                  color: AppColors.normalCardBackground,
+                ),
+              ),
+              child: InkWell(
+                onTap: () async {
+                  final newSettings = await SkipDaySettingsDialog.show(context, _settings);
+                  if (newSettings != null) {
+                    setState(() {
+                      _settings = newSettings;
+                    });
+                    _saveSettings();
+                  }
+                },
+                borderRadius: AppStyles.borderRadiusLarge,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.orange.withValues(alpha: 0.1),
+                          borderRadius: AppStyles.borderRadiusSmall,
+                        ),
+                        child: Icon(
+                          Icons.shield_rounded,
+                          color: AppColors.orange,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Skip Day Frequency',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              FlowCalculator.getSkipModeDescription(_settings.skipDayMode),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: AppColors.orange,
+                              ),
+                            ),
+                            if (_settings.autoUseSkip && _settings.skipDayMode != SkipDayMode.disabled)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Auto-use enabled',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.greyText,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.greyText,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

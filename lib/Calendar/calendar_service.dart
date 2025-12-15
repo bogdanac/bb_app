@@ -138,20 +138,6 @@ class CalendarService {
         return a.start!.compareTo(b.start!);
       });
 
-      // Log the results for debugging
-      await ErrorLogger.logError(
-        source: 'CalendarService.getTodaysEvents',
-        error: 'Calendar fetch completed',
-        context: {
-          'calendarsChecked': calendars.length,
-          'calendarNames': calendars.map((c) => c.name ?? 'Unknown').toList(),
-          'totalEventsFound': allEvents.length,
-          'afterFiltering': currentAndFutureEvents.length,
-          'startOfDay': startOfDay.toIso8601String(),
-          'endOfDay': endOfDay.toIso8601String(),
-          'currentTime': now.toIso8601String(),
-        },
-      );
 
       return currentAndFutureEvents;
     } catch (e, stackTrace) {

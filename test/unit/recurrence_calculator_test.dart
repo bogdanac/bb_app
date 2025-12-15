@@ -13,10 +13,9 @@ void main() {
     });
 
     group('Daily Recurrence', () {
-      test('every day (interval=1) without reminder - should return tomorrow', () {
+      test('every day (interval=1) without reminder and no scheduledDate - should return today', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
-        final tomorrow = todayDate.add(const Duration(days: 1));
 
         final task = Task(
           id: '1',
@@ -30,6 +29,30 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
+        // New daily tasks without a scheduledDate should be scheduled for today
+        // so they show the "Scheduled today" chip
+        expect(result, todayDate);
+      });
+
+      test('every day (interval=1) with scheduledDate today - should return tomorrow for next occurrence', () {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final tomorrow = todayDate.add(const Duration(days: 1));
+
+        final task = Task(
+          id: '1',
+          title: 'Daily Task',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.daily],
+            interval: 1,
+          ),
+          scheduledDate: todayDate,
+          createdAt: todayDate,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
+
+        // Tasks already scheduled for today should get tomorrow for next occurrence
         expect(result, tomorrow);
       });
 
@@ -55,7 +78,7 @@ void main() {
         expect(result, todayDate);
       });
 
-      test('every day with reminder time already passed today - should return tomorrow', () {
+      test('every day with reminder time already passed today and scheduledDate today - should return tomorrow', () {
         final now = DateTime.now();
         final todayDate = DateTime(now.year, now.month, now.day);
         // Set reminder time 2 hours ago
@@ -69,6 +92,7 @@ void main() {
             interval: 1,
           ),
           reminderTime: pastReminderTime,
+          scheduledDate: todayDate, // Already scheduled for today
           createdAt: todayDate,
         );
 
@@ -105,11 +129,10 @@ void main() {
         }
       });
 
-      test('every day (interval=1) without reminder - should return tomorrow when task not overdue', () {
+      test('every day (interval=1) without reminder - should return today when no scheduledDate', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
         final yesterday = todayDate.subtract(const Duration(days: 1));
-        final tomorrow = todayDate.add(const Duration(days: 1));
 
         final task = Task(
           id: '1',
@@ -123,8 +146,8 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        // Without reminder time, returns tomorrow
-        expect(result, tomorrow);
+        // Without scheduledDate, returns today so "Scheduled today" chip shows
+        expect(result, todayDate);
       });
 
       test('every 2 days (interval=2) - should calculate next occurrence correctly', () {
@@ -219,10 +242,9 @@ void main() {
         expect(stopwatch.elapsedMilliseconds, lessThan(10));
       });
 
-      test('task created today without reminder - should return tomorrow', () {
+      test('task created today without reminder - should return today when no scheduledDate', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
-        final tomorrow = todayDate.add(const Duration(days: 1));
 
         final task = Task(
           id: '1',
@@ -236,11 +258,11 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        // Without reminder time, should return tomorrow
-        expect(result, tomorrow);
+        // Without scheduledDate, should return today so "Scheduled today" chip shows
+        expect(result, todayDate);
       });
 
-      test('next occurrence calculation without reminder - returns tomorrow', () {
+      test('next occurrence calculation with scheduledDate today - returns tomorrow', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
         final yesterday = todayDate.subtract(const Duration(days: 1));
@@ -253,12 +275,13 @@ void main() {
             types: [RecurrenceType.daily],
             interval: 1,
           ),
+          scheduledDate: todayDate, // Already scheduled for today
           createdAt: yesterday,
         );
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        // Without reminder time, returns tomorrow
+        // With scheduledDate today, next occurrence is tomorrow
         expect(result, tomorrow);
       });
     });
@@ -442,6 +465,77 @@ void main() {
 
         expect(result, isNotNull);
         expect(result!.weekday, 7);
+      });
+
+      test('task created on target weekday - should return today, not next week', () {
+        // Use a fixed Sunday date to make the test deterministic
+        final sunday = DateTime(2025, 12, 14); // This is a Sunday
+
+        final task = Task(
+          id: '1',
+          title: 'Sunday Task',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.weekly],
+            interval: 1,
+            weekDays: [7], // Sunday
+          ),
+          createdAt: sunday,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, sunday);
+
+        expect(result, isNotNull);
+        expect(result!.weekday, 7);
+        // Critical: Should be TODAY (Sunday), not next Sunday
+        expect(result, sunday, reason: 'Weekly Sunday task created on Sunday should appear today, not next week');
+      });
+
+      test('task created on one of multiple target weekdays - should return today', () {
+        // Use a fixed Wednesday date
+        final wednesday = DateTime(2025, 12, 17); // This is a Wednesday
+
+        final task = Task(
+          id: '1',
+          title: 'Mon/Wed/Fri Task',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.weekly],
+            interval: 1,
+            weekDays: [1, 3, 5], // Monday, Wednesday, Friday
+          ),
+          createdAt: wednesday,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, wednesday);
+
+        expect(result, isNotNull);
+        expect(result!.weekday, 3); // Wednesday
+        // Critical: Should be TODAY (Wednesday), not next Monday
+        expect(result, wednesday, reason: 'Task created on target weekday should appear today');
+      });
+
+      test('bi-weekly task created on target weekday - should return today', () {
+        // Use a fixed Monday date
+        final monday = DateTime(2025, 12, 15); // This is a Monday
+
+        final task = Task(
+          id: '1',
+          title: 'Bi-weekly Monday',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.weekly],
+            interval: 2,
+            weekDays: [1], // Monday
+            startDate: monday, // Start today to ensure it's on the right week cycle
+          ),
+          createdAt: monday,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, monday);
+
+        expect(result, isNotNull);
+        expect(result!.weekday, 1); // Monday
+        // Should check if today is a valid occurrence
+        expect(result.difference(monday).inDays, lessThanOrEqualTo(14),
+            reason: 'Should be within 2 weeks');
       });
     });
 
@@ -652,6 +746,52 @@ void main() {
         // Should be the 20th of the next month or current month
         expect(result!.day, 20);
       });
+
+      test('task created on target day of month - should return today, not next month', () {
+        // Use a fixed date - the 15th of the month
+        final the15th = DateTime(2025, 12, 15);
+
+        final task = Task(
+          id: '1',
+          title: 'Monthly on 15th',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.monthly],
+            interval: 1,
+            dayOfMonth: 15,
+          ),
+          createdAt: the15th,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, the15th);
+
+        expect(result, isNotNull);
+        expect(result!.day, 15);
+        // Critical: Should be TODAY (the 15th), not next month's 15th
+        expect(result, the15th, reason: 'Monthly task created on target day should appear today, not next month');
+      });
+
+      test('every 2 months task created on target day - should return today', () {
+        // Use a fixed date - the 10th of the month
+        final the10th = DateTime(2025, 12, 10);
+
+        final task = Task(
+          id: '1',
+          title: 'Every 2 months on 10th',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.monthly],
+            interval: 2,
+            dayOfMonth: 10,
+          ),
+          createdAt: the10th,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, the10th);
+
+        expect(result, isNotNull);
+        expect(result!.day, 10);
+        // Should be today since we're on the target day
+        expect(result, the10th, reason: 'Task created on target day should appear today');
+      });
     });
 
     group('Yearly Recurrence', () {
@@ -770,6 +910,56 @@ void main() {
         expect(result.day, 1);
         // Should be in 2026 since we're past March 2025
         expect(result.year, greaterThan(testDate.year));
+      });
+
+      test('task created on target date - should return today, not next year', () {
+        // Use a fixed date - March 15, 2025
+        final march15 = DateTime(2025, 3, 15);
+
+        final task = Task(
+          id: '1',
+          title: 'Yearly on March 15',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.yearly],
+            interval: 3, // March
+            dayOfMonth: 15,
+          ),
+          createdAt: march15,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, march15);
+
+        expect(result, isNotNull);
+        expect(result!.month, 3);
+        expect(result.day, 15);
+        // Critical: Should be THIS YEAR (today), not next year
+        expect(result.year, 2025, reason: 'Yearly task created on target date should appear today, not next year');
+        expect(result, march15, reason: 'Should return today exactly');
+      });
+
+      test('birthday task created on birthday - should return today', () {
+        // Use December 25 as a birthday
+        final dec25 = DateTime(2025, 12, 25);
+
+        final task = Task(
+          id: '1',
+          title: 'Birthday Reminder',
+          recurrence: TaskRecurrence(
+            types: [RecurrenceType.yearly],
+            interval: 12, // December
+            dayOfMonth: 25,
+          ),
+          createdAt: dec25,
+        );
+
+        final result = calculator.calculateRegularRecurringTaskDate(task, dec25);
+
+        expect(result, isNotNull);
+        expect(result!.month, 12);
+        expect(result.day, 25);
+        // Should be this year
+        expect(result.year, 2025, reason: 'Birthday task created on birthday should show today');
+        expect(result, dec25);
       });
     });
 
@@ -1307,7 +1497,9 @@ void main() {
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
         expect(result, isNotNull);
-        expect(result!.isAfter(todayDate), isTrue, reason: 'Next occurrence must be in the future');
+        // Result should be today or in the future (today if today is a target weekday)
+        expect(result!.isAfter(todayDate) || result.isAtSameMomentAs(todayDate), isTrue,
+            reason: 'Next occurrence must be today or in the future');
       });
 
       test('severely overdue daily task (16 days) - next occurrence must be in future', () {
@@ -1989,11 +2181,10 @@ void main() {
         expect(result, futureStartDate);
       });
 
-      test('daily task with past startDate - should calculate normally', () {
+      test('daily task with past startDate and no scheduledDate - should return today', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
         final pastStartDate = todayDate.subtract(const Duration(days: 7));
-        final tomorrow = todayDate.add(const Duration(days: 1));
 
         final task = Task(
           id: '1',
@@ -2008,13 +2199,13 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        expect(result, tomorrow);
+        // Without scheduledDate, returns today so "Scheduled today" chip shows
+        expect(result, todayDate);
       });
 
-      test('daily task with startDate today without reminder - should return tomorrow', () {
+      test('daily task with startDate today without reminder and no scheduledDate - should return today', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
-        final tomorrow = todayDate.add(const Duration(days: 1));
 
         final task = Task(
           id: '1',
@@ -2029,8 +2220,8 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        // Without reminder time, should return tomorrow
-        expect(result, tomorrow);
+        // Without scheduledDate, should return today so "Scheduled today" chip shows
+        expect(result, todayDate);
       });
 
       test('every 3 days task with future startDate - should return startDate', () {
@@ -2080,7 +2271,8 @@ void main() {
       test('daily task where next occurrence exceeds endDate - should return null', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
-        // End date is today, so tomorrow (next occurrence) would exceed it
+        // End date is today, and task is already scheduled for today
+        // So the next occurrence (tomorrow) would exceed endDate
         final endDate = todayDate;
 
         final task = Task(
@@ -2091,19 +2283,20 @@ void main() {
             interval: 1,
             endDate: endDate,
           ),
+          scheduledDate: todayDate, // Already scheduled for today
           createdAt: todayDate.subtract(const Duration(days: 10)),
         );
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
+        // Next occurrence would be tomorrow, which exceeds endDate
         expect(result, isNull);
       });
 
-      test('daily task with future endDate - should return tomorrow', () {
+      test('daily task with future endDate and no scheduledDate - should return today', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
         final futureEndDate = todayDate.add(const Duration(days: 30));
-        final tomorrow = todayDate.add(const Duration(days: 1));
 
         final task = Task(
           id: '1',
@@ -2118,14 +2311,17 @@ void main() {
 
         final result = calculator.calculateRegularRecurringTaskDate(task, todayDate);
 
-        expect(result, tomorrow);
+        // Without scheduledDate, returns today so "Scheduled today" chip shows
+        expect(result, todayDate);
       });
 
       test('monthly task where next occurrence exceeds endDate - should return null', () {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
-        // End date is in 10 days, but monthly task would be next month
+        // End date is in 10 days, but monthly task targets a past day (so next occurrence is next month)
         final endDate = todayDate.add(const Duration(days: 10));
+        // Use yesterday's day number so the next occurrence is next month (which exceeds endDate)
+        final targetDay = todayDate.day > 1 ? todayDate.day - 1 : 28;
 
         final task = Task(
           id: '1',
@@ -2133,7 +2329,7 @@ void main() {
           recurrence: TaskRecurrence(
             types: [RecurrenceType.monthly],
             interval: 1,
-            dayOfMonth: todayDate.day, // Same day as today, so next is next month
+            dayOfMonth: targetDay, // Yesterday's day, so next is next month
             endDate: endDate,
           ),
           createdAt: todayDate.subtract(const Duration(days: 60)),

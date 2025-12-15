@@ -198,7 +198,7 @@ class _FastingCardState extends State<FastingCard> {
       currentFastType = recommendedFast;
       fastingDuration = Duration.zero;
     });
-    
+
     _notifyFastingStatusChanged();
     _saveFastingState();
     _startTimer();
@@ -208,8 +208,6 @@ class _FastingCardState extends State<FastingCard> {
 
     SnackBarUtils.showSuccess(context, '🚀 $recommendedFast started!');
   }
-
-
 
   // Calculate progress percentage
   double _getProgress() {

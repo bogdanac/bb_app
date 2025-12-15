@@ -799,19 +799,33 @@ class NotificationService {
   // Handle auto backup trigger from notification
 
   // Schedule daily food tracking reminder at 8 PM
+  // This method schedules notifications for the next 7 days to ensure reliability
+  // on devices with aggressive battery optimization
   Future<void> scheduleFoodTrackingReminder() async {
     try {
-      // Cancel any existing food tracking reminders
+      // Cancel any existing food tracking reminders (IDs 7770-7779)
+      for (int i = 7770; i <= 7779; i++) {
+        await flutterLocalNotificationsPlugin.cancel(i);
+      }
+      // Also cancel legacy IDs
       await flutterLocalNotificationsPlugin.cancel(7777);
-      await flutterLocalNotificationsPlugin.cancel(7776); // Cancel old second notification if it exists
+      await flutterLocalNotificationsPlugin.cancel(7776);
 
-      // Schedule for 8 PM today (or tomorrow if it's already past 8 PM)
-      final now = DateTime.now();
-      var reminderTime = DateTime(now.year, now.month, now.day, 20, 0); // 8:00 PM
+      // Check if exact alarms are permitted on Android 12+
+      final androidImpl = flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
-      // If the time has passed today, schedule for tomorrow
-      if (reminderTime.isBefore(now)) {
-        reminderTime = reminderTime.add(const Duration(days: 1));
+      if (androidImpl != null) {
+        final canScheduleExact = await androidImpl.canScheduleExactNotifications();
+        if (canScheduleExact != true) {
+          // Request exact alarm permission - user needs to grant this in settings
+          await androidImpl.requestExactAlarmsPermission();
+          // Log this for debugging
+          await ErrorLogger.logError(
+            source: 'NotificationService.scheduleFoodTrackingReminder',
+            error: 'Exact alarm permission not granted - food tracking reminders may be unreliable',
+          );
+        }
       }
 
       const androidDetails = AndroidNotificationDetails(
@@ -838,18 +852,33 @@ class NotificationService {
         iOS: iosDetails,
       );
 
-      // Schedule repeating daily notification at 8 PM
-      await flutterLocalNotificationsPlugin.zonedSchedule(
-        7777, // Unique ID for food tracking reminders
-        '🍽️ Food Tracking Time',
-        'Don\'t forget to log what you ate today! Tap to track your meals.',
-        TimezoneUtils.forNotification(reminderTime),
-        notificationDetails,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time, // CRITICAL: Repeat daily at same time
-        payload: 'food_tracking_reminder',
-      );
+      // Schedule notifications for the next 7 days individually
+      // This approach is more reliable than DateTimeComponents.time on Android
+      // because each notification is scheduled as a specific one-time event
+      final now = DateTime.now();
+
+      for (int dayOffset = 0; dayOffset < 7; dayOffset++) {
+        final targetDate = now.add(Duration(days: dayOffset));
+        var reminderTime = DateTime(targetDate.year, targetDate.month, targetDate.day, 20, 0); // 8:00 PM
+
+        // Skip if this time has already passed
+        if (reminderTime.isBefore(now)) {
+          continue;
+        }
+
+        final notificationId = 7770 + dayOffset; // Use IDs 7770-7776 for 7 days
+
+        await flutterLocalNotificationsPlugin.zonedSchedule(
+          notificationId,
+          '🍽️ Food Tracking Time',
+          'Don\'t forget to log what you ate today! Tap to track your meals.',
+          TimezoneUtils.forNotification(reminderTime),
+          notificationDetails,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          payload: 'food_tracking_reminder',
+        );
+      }
 
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
@@ -863,6 +892,11 @@ class NotificationService {
   // Cancel food tracking reminders
   Future<void> cancelFoodTrackingReminders() async {
     try {
+      // Cancel all food tracking notification IDs (7770-7779 for 7-day scheduling)
+      for (int i = 7770; i <= 7779; i++) {
+        await flutterLocalNotificationsPlugin.cancel(i);
+      }
+      // Also cancel legacy IDs
       await flutterLocalNotificationsPlugin.cancel(7777);
       await flutterLocalNotificationsPlugin.cancel(7776);
 

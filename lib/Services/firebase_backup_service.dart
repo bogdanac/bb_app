@@ -246,6 +246,15 @@ class FirebaseBackupService {
     'energy_settings',
   };
 
+  // Keys that should NEVER be restored from remote because they represent
+  // time-sensitive local state (e.g., active fasting sessions)
+  static const Set<String> _neverRestoreKeys = {
+    'is_fasting',
+    'current_fast_start',
+    'current_fast_end',
+    'current_fast_type',
+  };
+
   // Backup ALL SharedPreferences data (except real-time synced collections)
   Future<void> backupAllData() async {
     if (!_syncEnabled || _userId == null || _isRestoring) return;
@@ -331,6 +340,12 @@ class FirebaseBackupService {
         for (final entry in data.entries) {
           final key = entry.key;
           final value = entry.value;
+
+          // Skip keys that should never be restored from remote
+          // (time-sensitive local state like active fasting sessions)
+          if (_neverRestoreKeys.contains(key)) {
+            continue;
+          }
 
           if (value is String) {
             await prefs.setString(key, value);

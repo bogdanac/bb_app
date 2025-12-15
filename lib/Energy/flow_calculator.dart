@@ -101,32 +101,102 @@ class FlowCalculator {
     return 1;
   }
 
-  /// Check if a skip can be used for the streak
-  /// Rules: 1 skip allowed per week, no consecutive skips
+  /// Check if a skip can be used for the streak based on skip mode
   static bool canUseStreakSkip({
     required DateTime? lastSkipDate,
     required DateTime? lastStreakDate,
     required DateTime today,
+    SkipDayMode skipDayMode = SkipDayMode.weekly,
   }) {
+    // Disabled mode - no skips allowed
+    if (skipDayMode == SkipDayMode.disabled) return false;
+
+    // Unlimited mode - always allow
+    if (skipDayMode == SkipDayMode.unlimited) return true;
+
     // If no last skip, can always use one
     if (lastSkipDate == null) return true;
 
     final todayDate = DateTime(today.year, today.month, today.day);
     final lastSkip = DateTime(lastSkipDate.year, lastSkipDate.month, lastSkipDate.day);
 
-    // Check if last skip was yesterday (no consecutive skips)
+    // Check if last skip was yesterday (no consecutive skips for all modes except unlimited)
     final yesterday = todayDate.subtract(const Duration(days: 1));
     if (lastSkip == yesterday) {
       return false; // Can't skip two days in a row
     }
 
-    // Check if a skip was used in the last 7 days
-    final weekAgo = todayDate.subtract(const Duration(days: 7));
-    if (lastSkip.isAfter(weekAgo)) {
-      return false; // Already used skip this week
+    // Check based on mode
+    switch (skipDayMode) {
+      case SkipDayMode.weekly:
+        // 1 skip per 7 days
+        final weekAgo = todayDate.subtract(const Duration(days: 7));
+        return !lastSkip.isAfter(weekAgo);
+
+      case SkipDayMode.biweekly:
+        // 1 skip per 14 days
+        final twoWeeksAgo = todayDate.subtract(const Duration(days: 14));
+        return !lastSkip.isAfter(twoWeeksAgo);
+
+      case SkipDayMode.perCycle:
+        // 1 skip per 28 days (menstrual cycle)
+        final cycleAgo = todayDate.subtract(const Duration(days: 28));
+        return !lastSkip.isAfter(cycleAgo);
+
+      case SkipDayMode.unlimited:
+      case SkipDayMode.disabled:
+        return false; // Already handled above
+    }
+  }
+
+  /// Get description for skip day mode
+  static String getSkipModeDescription(SkipDayMode mode) {
+    switch (mode) {
+      case SkipDayMode.weekly:
+        return '1 skip per week';
+      case SkipDayMode.biweekly:
+        return '1 skip every 2 weeks';
+      case SkipDayMode.perCycle:
+        return '1 skip per cycle (~28 days)';
+      case SkipDayMode.unlimited:
+        return 'Unlimited skips (no restrictions)';
+      case SkipDayMode.disabled:
+        return 'No skips allowed';
+    }
+  }
+
+  /// Get days until next skip available
+  static int? getDaysUntilNextSkip({
+    required DateTime? lastSkipDate,
+    required DateTime today,
+    required SkipDayMode skipDayMode,
+  }) {
+    if (skipDayMode == SkipDayMode.disabled) return null;
+    if (skipDayMode == SkipDayMode.unlimited) return 0;
+    if (lastSkipDate == null) return 0;
+
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final lastSkip = DateTime(lastSkipDate.year, lastSkipDate.month, lastSkipDate.day);
+
+    int cooldownDays;
+    switch (skipDayMode) {
+      case SkipDayMode.weekly:
+        cooldownDays = 7;
+        break;
+      case SkipDayMode.biweekly:
+        cooldownDays = 14;
+        break;
+      case SkipDayMode.perCycle:
+        cooldownDays = 28;
+        break;
+      case SkipDayMode.unlimited:
+      case SkipDayMode.disabled:
+        return 0;
     }
 
-    return true;
+    final nextAvailable = lastSkip.add(Duration(days: cooldownDays));
+    final daysRemaining = nextAvailable.difference(todayDate).inDays;
+    return daysRemaining > 0 ? daysRemaining : 0;
   }
 
   /// Calculate streak with skip consideration at end of day
@@ -136,14 +206,23 @@ class FlowCalculator {
     required int currentStreak,
     required DateTime? lastSkipDate,
     required DateTime today,
+    SkipDayMode skipDayMode = SkipDayMode.weekly,
+    bool autoUseSkip = true,
   }) {
     // If goal was met, streak continues
     if (goalMetToday) {
       return (newStreak: currentStreak, skipUsed: false, streakBroken: false);
     }
 
-    // Goal not met - check if we can use a skip
-    if (currentStreak > 0 && canUseStreakSkip(lastSkipDate: lastSkipDate, lastStreakDate: null, today: today)) {
+    // Goal not met - check if we can use a skip (only if auto-skip is enabled)
+    if (autoUseSkip &&
+        currentStreak > 0 &&
+        canUseStreakSkip(
+          lastSkipDate: lastSkipDate,
+          lastStreakDate: null,
+          today: today,
+          skipDayMode: skipDayMode,
+        )) {
       // Use a skip to preserve streak
       return (newStreak: currentStreak, skipUsed: true, streakBroken: false);
     }

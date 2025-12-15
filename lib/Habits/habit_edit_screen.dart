@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import 'habit_data_models.dart';
@@ -22,6 +23,8 @@ class HabitEditScreen extends StatefulWidget {
 class _HabitEditScreenState extends State<HabitEditScreen> {
   final _nameController = TextEditingController();
   bool _isActive = true;
+  late DateTime _startDate;
+  late HabitDuration _duration;
 
   @override
   void initState() {
@@ -29,6 +32,11 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
     if (widget.habit != null) {
       _nameController.text = widget.habit!.name;
       _isActive = widget.habit!.isActive;
+      _startDate = widget.habit!.startDate;
+      _duration = widget.habit!.duration;
+    } else {
+      _startDate = DateTime.now();
+      _duration = HabitDuration.threeWeeks; // Default to 21 days
     }
   }
 
@@ -49,6 +57,8 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
       name: _nameController.text.trim(),
       isActive: _isActive,
       createdAt: widget.habit?.createdAt,
+      startDate: _startDate,
+      cycleDurationDays: _duration.days,
       completedDates: widget.habit?.completedDates,
       currentCycle: widget.habit?.currentCycle ?? 1,
       isCompleted: widget.habit?.isCompleted ?? false,
@@ -56,6 +66,34 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
 
     widget.onSave(habit);
     Navigator.pop(context);
+  }
+
+  Future<void> _selectStartDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.orange,
+              onPrimary: Colors.white,
+              surface: AppColors.dialogCardBackground,
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _startDate = picked;
+      });
+    }
   }
 
   Future<void> _toggleDateCompletion(DateTime date) async {
@@ -83,7 +121,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Are you sure you want to restart the current 21-day cycle for "${widget.habit!.name}"?',
+              'Are you sure you want to restart the current ${widget.habit!.duration.label} cycle for "${widget.habit!.name}"?',
               style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 16),
@@ -109,7 +147,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text('• Clear all progress in the current cycle'),
-                  const Text('• Reset to day 1 of 21'),
+                  Text('• Reset to day 1 of ${widget.habit!.cycleDurationDays}'),
                   const Text('• Keep the same cycle number'),
                 ],
               ),
@@ -143,9 +181,10 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
       // Clear all completed dates to restart the cycle
       widget.habit!.completedDates.clear();
 
-      // Update createdAt to today to reset the calendar
+      // Update startDate to today to reset the calendar
       final now = DateTime.now();
-      widget.habit!.createdAt = DateTime(now.year, now.month, now.day);
+      widget.habit!.startDate = DateTime(now.year, now.month, now.day);
+      _startDate = widget.habit!.startDate;
 
       // Save the updated habit
       await HabitService.updateHabit(widget.habit!);
@@ -204,7 +243,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
                   const SizedBox(height: 8),
                   Text('• Start cycle $nextCycle'),
                   const Text('• Clear current progress'),
-                  const Text('• Begin a fresh 21-day challenge'),
+                  Text('• Begin a fresh ${widget.habit!.duration.label} challenge'),
                 ],
               ),
             ),
@@ -250,25 +289,26 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
     }
   }
 
-  Widget _build21DayCalendar() {
+  Widget _buildCycleCalendar() {
     if (widget.habit == null) return const SizedBox.shrink();
 
     final habit = widget.habit!;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    final duration = habit.cycleDurationDays;
 
-    // Calculate the current 21-day cycle start date
-    // For cycle 1: start from creation date
-    // For cycle 2+: start from (creation date + (cycle-1) * 21 days)
-    final creationDate = DateTime(
-      habit.createdAt.year,
-      habit.createdAt.month,
-      habit.createdAt.day,
+    // Calculate the current cycle start date
+    // For cycle 1: start from startDate
+    // For cycle 2+: start from (startDate + (cycle-1) * duration days)
+    final habitStartDate = DateTime(
+      habit.startDate.year,
+      habit.startDate.month,
+      habit.startDate.day,
     );
-    final cycleStartDate = creationDate.add(Duration(days: (habit.currentCycle - 1) * 21));
+    final cycleStartDate = habitStartDate.add(Duration(days: (habit.currentCycle - 1) * duration));
 
-    // Create 21 days starting from the cycle start date
-    final days = List.generate(21, (index) => cycleStartDate.add(Duration(days: index)));
+    // Create days starting from the cycle start date
+    final days = List.generate(duration, (index) => cycleStartDate.add(Duration(days: index)));
 
     return Card(
       child: Padding(
@@ -276,16 +316,16 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              '21-Day Progress Calendar',
-              style: TextStyle(
+            Text(
+              '${habit.duration.label} Progress Calendar',
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              'Current cycle ${habit.currentCycle} - Days ${(habit.currentCycle - 1) * 21 + 1} to ${habit.currentCycle * 21}. Tap to check/uncheck days.',
+              'Current cycle ${habit.currentCycle} - Days ${(habit.currentCycle - 1) * duration + 1} to ${habit.currentCycle * duration}. Tap to check/uncheck days.',
               style: const TextStyle(
                 fontSize: 12,
                 color: AppColors.greyText,
@@ -483,6 +523,151 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            // Start Date picker
+            Card(
+              child: InkWell(
+                onTap: _selectStartDate,
+                borderRadius: AppStyles.borderRadiusMedium,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Start Date',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _startDate.isAfter(DateTime.now())
+                                  ? 'Habit will start tracking on this date'
+                                  : 'Habit tracking started on this date',
+                              style: const TextStyle(
+                                color: AppColors.greyText,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.orange.withValues(alpha: 0.1),
+                          borderRadius: AppStyles.borderRadiusSmall,
+                          border: Border.all(color: AppColors.orange.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.calendar_today, color: AppColors.orange, size: 16),
+                            const SizedBox(width: 8),
+                            Text(
+                              DateFormat('MMM d, yyyy').format(_startDate),
+                              style: const TextStyle(
+                                color: AppColors.orange,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Duration picker (only for new habits or if habit has no progress)
+            if (widget.habit == null || widget.habit!.completedDates.isEmpty)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Challenge Duration',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'How long should each cycle be?',
+                        style: TextStyle(
+                          color: AppColors.greyText,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: HabitDuration.values.map((duration) {
+                          final isSelected = _duration == duration;
+                          return Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _duration = duration;
+                                  });
+                                },
+                                borderRadius: AppStyles.borderRadiusSmall,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? AppColors.orange.withValues(alpha: 0.2)
+                                        : AppColors.transparent,
+                                    borderRadius: AppStyles.borderRadiusSmall,
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? AppColors.orange
+                                          : AppColors.greyText.withValues(alpha: 0.3),
+                                      width: isSelected ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        duration.label,
+                                        style: TextStyle(
+                                          color: isSelected ? AppColors.orange : AppColors.white,
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${duration.days} days',
+                                        style: TextStyle(
+                                          color: isSelected
+                                              ? AppColors.orange.withValues(alpha: 0.8)
+                                              : AppColors.greyText,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             const SizedBox(height: 24),
             if (widget.habit != null) ...[
               Card(
@@ -493,9 +678,9 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
                     children: [
                       Row(
                         children: [
-                          const Text(
-                            '21-Day Challenge',
-                            style: TextStyle(
+                          Text(
+                            '${widget.habit!.duration.label} Challenge',
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w500,
                             ),
@@ -512,7 +697,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        '${widget.habit!.getCurrentCycleProgress()}/21 days completed',
+                        '${widget.habit!.getCurrentCycleProgress()}/${widget.habit!.cycleDurationDays} days completed',
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
@@ -524,7 +709,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
                             });
                           },
                           icon: const Icon(Icons.refresh),
-                          label: const Text('Start Next 21-Day Cycle'),
+                          label: Text('Start Next ${widget.habit!.duration.label} Cycle'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.orange,
                             foregroundColor: Colors.white,
@@ -563,7 +748,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              _build21DayCalendar(),
+              _buildCycleCalendar(),
             ],
             const Spacer(),
             SizedBox(

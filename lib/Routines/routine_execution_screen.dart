@@ -115,23 +115,23 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     });
     await _saveProgress();
 
-    // Track energy when completing/uncompleting a step with energy
-    if (item.energyLevel != null) {
-      if (!wasCompleted && _items[index].isCompleted) {
-        // Just completed - add energy
-        await EnergyService.addRoutineStepEnergyConsumption(
-          stepId: item.id,
-          stepTitle: item.text,
-          energyLevel: item.energyLevel!,
-          routineTitle: widget.routine.title,
-        );
-        if (mounted) {
-          await _showEnergyCelebration(item.energyLevel!);
-        }
-      } else if (wasCompleted && !_items[index].isCompleted) {
-        // Uncompleted - remove energy
-        await EnergyService.removeEnergyConsumption(item.id);
+    // Track energy when completing/uncompleting a step
+    // Use energyLevel if set, otherwise default to 0 (neutral - no battery impact)
+    final energyLevel = item.energyLevel ?? 0;
+    if (!wasCompleted && _items[index].isCompleted) {
+      // Just completed - add energy
+      await EnergyService.addRoutineStepEnergyConsumption(
+        stepId: item.id,
+        stepTitle: item.text,
+        energyLevel: energyLevel,
+        routineTitle: widget.routine.title,
+      );
+      if (mounted) {
+        await _showEnergyCelebration(energyLevel);
       }
+    } else if (wasCompleted && !_items[index].isCompleted) {
+      // Uncompleted - remove energy
+      await EnergyService.removeEnergyConsumption(item.id);
     }
   }
 
@@ -372,7 +372,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                         itemCount: _items.length,
                         itemBuilder: (context, index) {
                           final item = _items[index];
-                          final hasEnergy = item.energyLevel != null && item.energyLevel! > 0;
+                          final hasEnergy = item.energyLevel != null;
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
                             color: item.isSkipped ? Colors.orange.withValues(alpha: 0.1) : null,

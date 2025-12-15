@@ -249,6 +249,7 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
         isCompleted: task.isCompleted,
         completedAt: task.completedAt,
         createdAt: task.createdAt,
+        energyLevel: task.energyLevel,
       );
 
       // Load all tasks, update this specific task, and save back
@@ -1479,6 +1480,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         isCompleted: task.isCompleted,
         completedAt: task.completedAt,
         createdAt: task.createdAt,
+        energyLevel: task.energyLevel,
       );
 
       // Update in-memory list immediately for instant UI update

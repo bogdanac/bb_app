@@ -72,7 +72,7 @@ class RoutineItem {
   bool isCompleted;
   bool isSkipped;      // Permanently skipped - won't come back
   bool isPostponed;    // Temporarily postponed - will come back later
-  int? energyLevel;    // Optional Body Battery impact (-5 to +5, null means use default -1)
+  int? energyLevel;    // Optional Body Battery impact (-5 to +5, null means neutral/0)
 
   RoutineItem({
     required this.id,

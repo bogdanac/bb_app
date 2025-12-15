@@ -17,6 +17,8 @@ import 'fasting_stage_timeline.dart';
 import 'scheduled_fastings_service.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
 import '../shared/error_logger.dart';
+import 'package:flutter/services.dart';
+import 'start_fast_dialog.dart';
 
 class FastingScreen extends StatefulWidget {
   const FastingScreen({super.key});
@@ -563,6 +565,51 @@ class _FastingScreenState extends State<FastingScreen>
     SnackBarUtils.showSuccess(context, '🚀 $fastType started!');
   }
 
+  // Show custom fast dialog from card tap
+  Future<void> _showStartFastDialog() async {
+    HapticFeedback.lightImpact();
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => const StartFastDialog(defaultHours: 18),
+    );
+
+    if (result != null && mounted) {
+      final hours = result['hours'] as int;
+      final startTime = result['startTime'] as DateTime;
+      final endTime = result['endTime'] as DateTime;
+      final duration = Duration(hours: hours);
+      final fastType = '${hours}h Fast';
+
+      setState(() {
+        _isFasting = true;
+        _currentFastStart = startTime;
+        _currentFastEnd = endTime;
+        _currentFastType = fastType;
+        _elapsedTime = DateTime.now().difference(startTime);
+        _totalFastDuration = duration;
+      });
+
+      // Reset milestone tracking for new fast
+      _triggeredMilestones.clear();
+
+      _saveFastingData();
+      _progressController.forward();
+      _pulseController.repeat(reverse: true);
+
+      // Show started notification
+      _notificationService.showFastingStartedNotification(
+        fastType: fastType,
+        totalDuration: duration,
+      );
+
+      // Show initial progress notification
+      _updateFastingNotification();
+
+      SnackBarUtils.showSuccess(context, '🚀 $fastType started!');
+    }
+  }
+
   void _endFast() {
     if (_currentFastStart != null) {
       final currentDuration = DateTime.now().difference(_currentFastStart!);
@@ -576,131 +623,160 @@ class _FastingScreenState extends State<FastingScreen>
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: AppColors.dialogBackground,
-          title: const Text(
-            'End Fast?',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Are you sure you want to end your $_currentFastType?',
-                style: const TextStyle(color: AppColors.white70, fontSize: 16),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.dialogCardBackground,
-                  borderRadius: AppStyles.borderRadiusMedium,
-                  border: Border.all(color: AppColors.greyText.withValues(alpha: 0.3)),
+        builder: (context, setDialogState) {
+          final effectiveDuration = customEndTime != null
+              ? customEndTime!.difference(_currentFastStart!)
+              : currentDuration;
+
+          return AlertDialog(
+            backgroundColor: AppColors.dialogBackground,
+            title: const Text(
+              'End Fast?',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Are you sure you want to end your $_currentFastType?',
+                  style: const TextStyle(color: AppColors.white70, fontSize: 16),
                 ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.timer, color: AppColors.coral, size: 20),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Current Duration:',
-                          style: TextStyle(color: AppColors.white70, fontSize: 14),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      FastingUtils.formatDuration(
-                        customEndTime != null
-                            ? customEndTime!.difference(_currentFastStart!)
-                            : currentDuration,
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.dialogCardBackground,
+                    borderRadius: AppStyles.borderRadiusMedium,
+                    border: Border.all(color: AppColors.greyText.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.timer, color: AppColors.coral, size: 20),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Current Duration:',
+                            style: TextStyle(color: AppColors.white70, fontSize: 14),
+                          ),
+                        ],
                       ),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (_totalFastDuration.inMinutes > 0) ...[
                       const SizedBox(height: 8),
                       Text(
-                        'Target: ${FastingUtils.formatDuration(_totalFastDuration)}',
+                        FastingUtils.formatDuration(effectiveDuration),
                         style: const TextStyle(
-                          color: AppColors.white54,
-                          fontSize: 14,
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              // End time picker
-              InkWell(
-                onTap: () async {
-                  final currentContext = context;
-                  final selectedDateTime = await DatePickerUtils.showStyledDateTimePicker(
-                    context: currentContext,
-                    initialDateTime: customEndTime ?? DateTime.now(),
-                    firstDate: _currentFastStart!,
-                    lastDate: DateTime.now(),
-                  );
-
-                  if (selectedDateTime != null) {
-                    setDialogState(() {
-                      customEndTime = selectedDateTime;
-                    });
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.coral),
-                    borderRadius: AppStyles.borderRadiusSmall,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.schedule_rounded, color: AppColors.coral, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          customEndTime != null
-                              ? 'End: ${customEndTime!.day}/${customEndTime!.month} at ${customEndTime!.hour.toString().padLeft(2, '0')}:${customEndTime!.minute.toString().padLeft(2, '0')}'
-                              : 'Change end time (optional)',
-                          style: TextStyle(
-                            color: customEndTime != null ? Colors.white : AppColors.white54,
+                      if (_totalFastDuration.inMinutes > 0) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Target: ${FastingUtils.formatDuration(_totalFastDuration)}',
+                          style: const TextStyle(
+                            color: AppColors.white54,
                             fontSize: 14,
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                // End time picker
+                InkWell(
+                  onTap: () async {
+                    final currentContext = context;
+                    final selectedDateTime = await DatePickerUtils.showStyledDateTimePicker(
+                      context: currentContext,
+                      initialDateTime: customEndTime ?? DateTime.now(),
+                      firstDate: _currentFastStart!,
+                      lastDate: DateTime.now(),
+                    );
+
+                    if (selectedDateTime != null) {
+                      setDialogState(() {
+                        customEndTime = selectedDateTime;
+                      });
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.coral),
+                      borderRadius: AppStyles.borderRadiusSmall,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.schedule_rounded, color: AppColors.coral, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            customEndTime != null
+                                ? 'End: ${customEndTime!.day}/${customEndTime!.month} at ${customEndTime!.hour.toString().padLeft(2, '0')}:${customEndTime!.minute.toString().padLeft(2, '0')}'
+                                : 'Change end time (optional)',
+                            style: TextStyle(
+                              color: customEndTime != null ? Colors.white : AppColors.white54,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Continue', style: TextStyle(color: AppColors.white54)),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _cancelFast();
+                },
+                child: const Text('Cancel Fast', style: TextStyle(color: AppColors.orange)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _confirmEndFast(customEndTime: customEndTime);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('End Fast'),
               ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Continue Fasting', style: TextStyle(color: AppColors.white54)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _confirmEndFast(customEndTime: customEndTime);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('End Fast'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
+  }
+
+  void _cancelFast() {
+    setState(() {
+      _isFasting = false;
+      _currentFastStart = null;
+      _currentFastEnd = null;
+      _currentFastType = '';
+      _elapsedTime = Duration.zero;
+      _totalFastDuration = Duration.zero;
+    });
+
+    _saveFastingData();
+    _progressController.reset();
+    _pulseController.stop();
+    _pulseController.reset();
+
+    _notificationService.cancelFastingProgressNotification();
+
+    SnackBarUtils.showWarning(context, 'Fast cancelled');
   }
 
   void _confirmEndFast({DateTime? customEndTime}) {
@@ -1534,25 +1610,27 @@ class _FastingScreenState extends State<FastingScreen>
             const SizedBox(height: 12),
 
             // Enhanced Current Fast Status Card
-            Card(
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                  borderRadius: AppStyles.borderRadiusXLarge),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  borderRadius: AppStyles.borderRadiusXLarge,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      phaseInfo['color'].withValues(alpha: 0.2),
-                      phaseInfo['color'].withValues(alpha: 0.05),
-                    ],
+            GestureDetector(
+              onTap: _isFasting ? null : _showStartFastDialog,
+              child: Card(
+                elevation: 8,
+                shape: RoundedRectangleBorder(
+                    borderRadius: AppStyles.borderRadiusXLarge),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    borderRadius: AppStyles.borderRadiusXLarge,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        phaseInfo['color'].withValues(alpha: 0.2),
+                        phaseInfo['color'].withValues(alpha: 0.05),
+                      ],
+                    ),
                   ),
-                ),
-                child: Column(
+                  child: Column(
                   children: [
                     // Enhanced Circular Progress
                     _buildEnhancedCircularProgress(),
@@ -1624,6 +1702,7 @@ class _FastingScreenState extends State<FastingScreen>
                       ),
                     ],
                   ],
+                ),
                 ),
               ),
             ),

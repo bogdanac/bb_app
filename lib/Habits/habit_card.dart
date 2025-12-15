@@ -77,7 +77,7 @@ class _HabitCardState extends State<HabitCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Congratulations! You\'ve completed a 21-day cycle for "${habit.name}".',
+              'Congratulations! You\'ve completed a ${habit.duration.label} cycle for "${habit.name}".',
               style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 16),
@@ -94,7 +94,7 @@ class _HabitCardState extends State<HabitCard> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '21 days completed! This is a major milestone in building lasting habits.',
+                      '${habit.cycleDurationDays} days completed! This is a major milestone in building lasting habits.',
                       style: TextStyle(
                         color: AppColors.successGreen.withValues(alpha: 0.9),
                         fontWeight: FontWeight.w500,
@@ -105,9 +105,9 @@ class _HabitCardState extends State<HabitCard> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Would you like to start a new 21-day cycle for this habit?',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            Text(
+              'Would you like to start a new ${habit.duration.label} cycle for this habit?',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -127,7 +127,7 @@ class _HabitCardState extends State<HabitCard> {
 
               // Show confirmation
               if (context.mounted) {
-                SnackBarUtils.showSuccess(context, 'New 21-day cycle started for "${habit.name}"!');
+                SnackBarUtils.showSuccess(context, 'New ${habit.duration.label} cycle started for "${habit.name}"!');
               }
             },
             style: ElevatedButton.styleFrom(

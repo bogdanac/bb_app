@@ -23,12 +23,7 @@ class TaskListWidgetService {
 
       // Verify data was saved correctly
       final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getStringList('widget_filtered_tasks');
-      await ErrorLogger.logError(
-        source: 'TaskListWidget',
-        error: 'Step 6: Verified saved data',
-        context: {'savedCount': saved?.length ?? 0},
-      );
+      prefs.getStringList('widget_filtered_tasks');
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'TaskListWidget',

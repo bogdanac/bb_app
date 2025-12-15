@@ -264,16 +264,21 @@ class EnergyService {
 
   /// Remove energy consumption (when task is uncompleted)
   /// Reverses battery and flow changes
+  /// Only removes from today's record - entries from other days are not affected
   static Future<void> removeEnergyConsumption(String id) async {
     final today = await getTodayRecord();
     if (today == null) return;
 
-    // Find the entry to remove
-    final entryToRemove = today.entries.firstWhere(
-      (e) => e.id == id,
-      orElse: () => throw Exception('Entry not found'),
-    );
+    // Find the entry to remove - only in today's record
+    // If the task was completed on a different day, the entry won't be here
+    final entryIndex = today.entries.indexWhere((e) => e.id == id);
+    if (entryIndex == -1) {
+      // Entry not in today's record (task may have been completed on a different day)
+      // Nothing to reverse for today
+      return;
+    }
 
+    final entryToRemove = today.entries[entryIndex];
     final updatedEntries = today.entries.where((e) => e.id != id).toList();
 
     // Reverse the battery and flow changes
@@ -382,8 +387,10 @@ class EnergyService {
   // ========================
 
   static Future<void> _addEnergyEntry(EnergyConsumptionEntry entry) async {
-    final today = await getTodayRecord();
-    if (today == null) return;
+    // If no record exists for today, initialize one
+    // This ensures energy is always tracked to today's record,
+    // even when completing tasks scheduled for other dates
+    final today = await getTodayRecord() ?? await _initializeDefaultTodayRecord();
 
     // Check if entry already exists (prevent duplicates)
     if (today.entries.any((e) => e.id == entry.id)) {
@@ -457,7 +464,8 @@ class EnergyService {
 
   /// Check and update streak at end of day (called when day changes)
   /// This is where streak can break or skip is used
-  static Future<void> checkStreakAtDayEnd(DateTime previousDay) async {
+  /// Returns true if a skip was auto-used
+  static Future<bool> checkStreakAtDayEnd(DateTime previousDay) async {
     final settings = await loadSettings();
     final previousRecord = await getRecordForDate(previousDay);
 
@@ -466,7 +474,7 @@ class EnergyService {
 
     if (goalMetPreviousDay) {
       // Goal was met, streak continues normally
-      return;
+      return false;
     }
 
     // Goal was NOT met - check if we can use a skip
@@ -475,19 +483,36 @@ class EnergyService {
       currentStreak: settings.currentStreak,
       lastSkipDate: settings.lastSkipDate,
       today: previousDay,
+      skipDayMode: settings.skipDayMode,
+      autoUseSkip: settings.autoUseSkip,
     );
 
     if (result.skipUsed) {
-      // Save that we used a skip
+      // Save that we used a skip and mark for notification
       await saveSettings(settings.copyWith(
         lastSkipDate: previousDay,
+        pendingSkipNotification: previousDay,
       ));
+      return true;
     } else if (result.streakBroken) {
       // Streak is broken
       await saveSettings(settings.copyWith(
         currentStreak: 0,
       ));
     }
+    return false;
+  }
+
+  /// Check if there's a pending skip notification and clear it
+  /// Returns the date the skip was used if there's a pending notification
+  static Future<DateTime?> checkAndClearSkipNotification() async {
+    final settings = await loadSettings();
+    if (settings.pendingSkipNotification != null) {
+      final skipDate = settings.pendingSkipNotification;
+      await saveSettings(settings.copyWith(clearPendingSkipNotification: true));
+      return skipDate;
+    }
+    return null;
   }
 
   /// Manually use a skip day to preserve streak (user-triggered)
@@ -516,6 +541,7 @@ class EnergyService {
       lastSkipDate: settings.lastSkipDate,
       lastStreakDate: settings.lastStreakDate,
       today: DateTime.now(),
+      skipDayMode: settings.skipDayMode,
     );
   }
 
@@ -526,6 +552,22 @@ class EnergyService {
 
   static String _getDateKey(DateTime date) {
     return '${_todayKey}_${date.year}_${date.month}_${date.day}';
+  }
+
+  /// Initialize a default today record when none exists
+  /// Used when completing tasks from other dates before today's record is created
+  static Future<DailyEnergyRecord> _initializeDefaultTodayRecord() async {
+    final newRecord = DailyEnergyRecord(
+      date: DateTime.now(),
+      startingBattery: 100,
+      currentBattery: 100,
+      flowGoal: 10, // Default goal
+      menstrualPhase: 'Unknown',
+      cycleDayNumber: 0,
+      entries: [],
+    );
+    await saveTodayRecord(newRecord);
+    return newRecord;
   }
 
   /// Sync all energy-related data to Firestore
