@@ -968,9 +968,11 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                 if (!isAutoSave) {
                   _isUpdatingTasks = true; // Prevent duplicate refresh from listener
 
-                  await _taskService.saveTasks(_tasks,
+                  // saveTasks returns updated tasks with auto-scheduled dates
+                  _tasks = await _taskService.saveTasks(_tasks,
                     skipNotificationUpdate: false,
                     skipWidgetUpdate: false);
+                  await _updateDisplayTasks(); // Refresh UI with updated tasks
 
                   widget.onTasksChanged?.call();
 
@@ -1003,9 +1005,11 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
               if (!isAutoSave) {
                 _isUpdatingTasks = true; // Prevent duplicate refresh from listener
 
-                await _taskService.saveTasks(_tasks,
+                // saveTasks returns updated tasks with auto-scheduled dates
+                _tasks = await _taskService.saveTasks(_tasks,
                   skipNotificationUpdate: false,
                   skipWidgetUpdate: false);
+                await _updateDisplayTasks(); // Refresh UI with updated tasks
 
                 widget.onTasksChanged?.call();
 
@@ -1049,9 +1053,11 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                 if (!isAutoSave) {
                   _isUpdatingTasks = true; // Prevent duplicate refresh from listener
 
-                  await _taskService.saveTasks(_tasks,
+                  // saveTasks returns updated tasks with auto-scheduled dates
+                  _tasks = await _taskService.saveTasks(_tasks,
                     skipNotificationUpdate: false,
                     skipWidgetUpdate: false);
+                  await _updateDisplayTasks(); // Refresh UI with updated tasks
 
                   widget.onTasksChanged?.call();
 
@@ -1082,9 +1088,11 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
               if (!isAutoSave) {
                 _isUpdatingTasks = true; // Prevent duplicate refresh from listener
 
-                await _taskService.saveTasks(_tasks,
+                // saveTasks returns updated tasks with auto-scheduled dates
+                _tasks = await _taskService.saveTasks(_tasks,
                   skipNotificationUpdate: false,
                   skipWidgetUpdate: false);
+                await _updateDisplayTasks(); // Refresh UI with updated tasks
 
                 widget.onTasksChanged?.call();
 

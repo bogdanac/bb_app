@@ -13,6 +13,7 @@ class FoodTrackingSettingsScreen extends StatefulWidget {
 class _FoodTrackingSettingsScreenState extends State<FoodTrackingSettingsScreen> {
   FoodTrackingResetFrequency _resetFrequency = FoodTrackingResetFrequency.monthly;
   int _targetGoal = 80;
+  bool _autoResetEnabled = true;
 
   @override
   void initState() {
@@ -23,9 +24,11 @@ class _FoodTrackingSettingsScreenState extends State<FoodTrackingSettingsScreen>
   Future<void> _loadSettings() async {
     final frequency = await FoodTrackingService.getResetFrequency();
     final targetGoal = await FoodTrackingService.getTargetGoal();
+    final autoResetEnabled = await FoodTrackingService.getAutoResetEnabled();
     setState(() {
       _resetFrequency = frequency;
       _targetGoal = targetGoal;
+      _autoResetEnabled = autoResetEnabled;
     });
   }
 
@@ -155,6 +158,49 @@ class _FoodTrackingSettingsScreenState extends State<FoodTrackingSettingsScreen>
     );
   }
 
+  void _showResetDialog() async {
+    final debugInfo = await FoodTrackingService.getDebugInfo();
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Reset Period'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('This will save all your current entries to history and start a new period.'),
+              const SizedBox(height: 16),
+              Text('Current state:', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('Total entries: ${debugInfo['totalEntries']}', style: TextStyle(fontSize: 12)),
+              Text('Entries this month: ${debugInfo['entriesThisMonth']}', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await FoodTrackingService.resetNow();
+                if (mounted) {
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    const SnackBar(content: Text('Period saved to history')),
+                  );
+                }
+              },
+              child: Text('Reset', style: TextStyle(color: AppColors.orange)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -232,6 +278,71 @@ class _FoodTrackingSettingsScreenState extends State<FoodTrackingSettingsScreen>
 
             const SizedBox(height: 16),
 
+            // Auto Reset Toggle
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: AppStyles.borderRadiusLarge,
+                border: Border.all(
+                  color: AppColors.normalCardBackground,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.coral.withValues(alpha: 0.1),
+                        borderRadius: AppStyles.borderRadiusSmall,
+                      ),
+                      child: Icon(
+                        Icons.autorenew_rounded,
+                        color: AppColors.coral,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Auto Reset',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _autoResetEnabled ? 'Automatically resets each period' : 'Manual reset only',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.greyText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _autoResetEnabled,
+                      onChanged: (value) async {
+                        await FoodTrackingService.setAutoResetEnabled(value);
+                        setState(() {
+                          _autoResetEnabled = value;
+                        });
+                      },
+                      activeTrackColor: AppColors.coral,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // Target Goal Section
             Container(
               decoration: BoxDecoration(
@@ -275,6 +386,69 @@ class _FoodTrackingSettingsScreenState extends State<FoodTrackingSettingsScreen>
                             const SizedBox(height: 4),
                             Text(
                               'Currently: $_targetGoal% healthy',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: AppColors.greyText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.greyText,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Reset Section
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: AppStyles.borderRadiusLarge,
+                border: Border.all(
+                  color: AppColors.normalCardBackground,
+                ),
+              ),
+              child: InkWell(
+                onTap: _showResetDialog,
+                borderRadius: AppStyles.borderRadiusLarge,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.orange.withValues(alpha: 0.1),
+                          borderRadius: AppStyles.borderRadiusSmall,
+                        ),
+                        child: Icon(
+                          Icons.restart_alt_rounded,
+                          color: AppColors.orange,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Reset',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Save current period to history',
                               style: const TextStyle(
                                 fontSize: 14,
                                 color: AppColors.greyText,

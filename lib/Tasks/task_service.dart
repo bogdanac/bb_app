@@ -151,12 +151,31 @@ class TaskService {
   }
 
   /// Save tasks with optimized operations
-  Future<void> saveTasks(
+  /// Returns the list of tasks with any auto-scheduled dates applied
+  Future<List<Task>> saveTasks(
     List<Task> tasks, {
     bool skipNotificationUpdate = false,
     bool skipWidgetUpdate = false,
   }) async {
     try {
+      // Auto-schedule recurring tasks without scheduledDate (same logic as loadTasks)
+      final prefs = await SharedPreferences.getInstance();
+      for (int i = 0; i < tasks.length; i++) {
+        final isMenstrualTask = tasks[i].recurrence != null &&
+            _isMenstrualCycleTask(tasks[i].recurrence!);
+
+        if (tasks[i].recurrence != null &&
+            tasks[i].scheduledDate == null &&
+            !tasks[i].isPostponed &&
+            !tasks[i].isCompleted &&
+            !isMenstrualTask) {
+          final updatedTask = await _recurrenceCalculator.calculateNextScheduledDate(tasks[i], prefs);
+          if (updatedTask != null) {
+            tasks[i] = updatedTask;
+          }
+        }
+      }
+
       // Sort tasks before saving - OPTIMIZED: Only sort, don't reload categories
       final categories = await _repository.loadCategories();
       final sortedTasks = await _sortTasksForStorage(tasks, categories);
@@ -179,6 +198,8 @@ class TaskService {
 
       // Notify all listeners
       _notifyTasksChanged();
+
+      return sortedTasks;
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'TaskService.saveTasks',
@@ -190,6 +211,7 @@ class TaskService {
           'skipWidgetUpdate': skipWidgetUpdate,
         },
       );
+      return tasks; // Return original tasks on error
     }
   }
 

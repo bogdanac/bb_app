@@ -12,6 +12,7 @@ class FoodTrackingService {
   static const String _lastResetKey = 'food_tracking_last_reset';
   static const String _periodHistoryKey = 'food_tracking_period_history';
   static const String _targetGoalKey = 'food_tracking_target_goal';
+  static const String _autoResetEnabledKey = 'food_tracking_auto_reset_enabled';
 
   static Future<List<FoodEntry>> getAllEntries() async {
     final prefs = await SharedPreferences.getInstance();
@@ -118,8 +119,23 @@ class FoodTrackingService {
     await _checkAndPerformReset();
   }
 
+  // Auto reset setting
+  static Future<bool> getAutoResetEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_autoResetEnabledKey) ?? true; // Default to enabled
+  }
+
+  static Future<void> setAutoResetEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_autoResetEnabledKey, enabled);
+  }
+
   // Check if reset is needed and perform it
   static Future<void> _checkAndPerformReset() async {
+    // Check if auto reset is enabled
+    final autoResetEnabled = await getAutoResetEnabled();
+    if (!autoResetEnabled) return;
+
     final prefs = await SharedPreferences.getInstance();
     final frequency = await getResetFrequency();
     final lastResetStr = prefs.getString(_lastResetKey);
@@ -153,6 +169,63 @@ class FoodTrackingService {
       await _performReset();
       await _setLastReset(_getCurrentPeriodStart(frequency, now));
     }
+  }
+
+  // Manual reset - saves ALL current entries to history and clears everything
+  static Future<void> resetNow() async {
+    final frequency = await getResetFrequency();
+    final entries = await getAllEntries();
+
+    if (entries.isEmpty) return;
+
+    // Count ALL entries
+    int healthyCount = 0;
+    int processedCount = 0;
+    for (final entry in entries) {
+      if (entry.type == FoodType.healthy) {
+        healthyCount++;
+      } else {
+        processedCount++;
+      }
+    }
+
+    // Find date range of all entries
+    final oldestEntry = entries.reduce((a, b) => a.timestamp.isBefore(b.timestamp) ? a : b);
+    final newestEntry = entries.reduce((a, b) => a.timestamp.isAfter(b.timestamp) ? a : b);
+
+    // Save ALL entries to history
+    await _savePeriodToHistory(
+      frequency,
+      {'healthy': healthyCount, 'processed': processedCount},
+      oldestEntry.timestamp,
+      newestEntry.timestamp,
+    );
+
+    // Clear all entries
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_entriesKey);
+
+    // Set last reset to now
+    await _setLastReset(_getCurrentPeriodStart(frequency, DateTime.now()));
+  }
+
+  // Debug method to check current state
+  static Future<Map<String, dynamic>> getDebugInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final frequency = await getResetFrequency();
+    final lastResetStr = prefs.getString(_lastResetKey);
+    final entries = await getAllEntries();
+
+    return {
+      'frequency': frequency.name,
+      'lastReset': lastResetStr,
+      'currentMonthStart': getCurrentMonthStart().toIso8601String(),
+      'currentWeekStart': getCurrentWeekStart().toIso8601String(),
+      'totalEntries': entries.length,
+      'entriesThisMonth': entries.where((e) =>
+        e.timestamp.isAfter(getCurrentMonthStart()) ||
+        e.timestamp.isAtSameMomentAs(getCurrentMonthStart())).length,
+    };
   }
 
   static DateTime _getCurrentPeriodStart(FoodTrackingResetFrequency frequency, DateTime now) {
@@ -206,18 +279,8 @@ class FoodTrackingService {
     await _savePeriodToHistory(frequency, previousPeriodCounts, previousPeriodStart, previousPeriodEnd);
 
     // Now delete entries from the previous period only
-    // Keep any entries from the current period (Dec 1-15 in your case)
+    // Keep any entries from the current period
     await _deleteEntriesBeforeDate(_getCurrentPeriodStart(frequency, DateTime.now()));
-
-    final healthy = previousPeriodCounts['healthy'] ?? 0;
-    final processed = previousPeriodCounts['processed'] ?? 0;
-    final total = healthy + processed;
-    final percentage = total > 0 ? (healthy / total * 100).round() : 0;
-    await ErrorLogger.logError(
-      source: 'FoodTrackingService.resetCounts',
-      error: 'Food tracking reset: $percentage% healthy saved to history for ${_getMonthLabel(previousPeriodStart)}',
-      stackTrace: '',
-    );
   }
 
   // Delete entries before a specific date

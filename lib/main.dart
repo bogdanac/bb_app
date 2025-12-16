@@ -21,7 +21,6 @@ import 'widgets/side_navigation.dart';
 import 'Auth/auth_wrapper.dart';
 import 'Auth/login_screen.dart';
 import 'shared/error_logger.dart';
-import 'Habits/habit_recovery_helper.dart';
 import 'Routines/routine_recovery_helper.dart';
 import 'dart:io';
 import 'dart:math';
@@ -73,39 +72,6 @@ void main() async {
     await ErrorLogger.logError(
       source: 'main.initializeRealtimeSyncService',
       error: 'Real-time Sync Service initialization failed: $e',
-      stackTrace: stackTrace.toString(),
-    );
-  }
-
-  // AUTO-RECOVERY: Check for corrupted habits and recover from Firestore
-  try {
-    final isHabitsCorrupted = await HabitRecoveryHelper.areHabitsCorrupted();
-    if (isHabitsCorrupted) {
-      await ErrorLogger.logError(
-        source: 'main.habitRecoveryCheck',
-        error: 'Corrupted habits detected, attempting recovery...',
-        stackTrace: '',
-      );
-
-      final recovered = await HabitRecoveryHelper.recoverHabitsFromFirestore();
-      if (recovered) {
-        await ErrorLogger.logError(
-          source: 'main.habitRecoveryCheck',
-          error: 'Habits successfully recovered from Firestore!',
-          stackTrace: '',
-        );
-      } else {
-        await ErrorLogger.logError(
-          source: 'main.habitRecoveryCheck',
-          error: 'Habit recovery failed - no backup found in Firestore',
-          stackTrace: '',
-        );
-      }
-    }
-  } catch (e, stackTrace) {
-    await ErrorLogger.logError(
-      source: 'main.habitRecoveryCheck',
-      error: 'Habit recovery check failed: $e',
       stackTrace: stackTrace.toString(),
     );
   }

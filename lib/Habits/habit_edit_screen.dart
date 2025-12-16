@@ -468,7 +468,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
         title: Text(widget.habit == null ? 'Add Habit' : 'Edit Habit'),
         backgroundColor: Colors.transparent,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -750,7 +750,7 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
               const SizedBox(height: 16),
               _buildCycleCalendar(),
             ],
-            const Spacer(),
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
