@@ -102,28 +102,31 @@ class RealtimeSyncService {
       _userId = newUserId;
 
       // AUTO-RECOVERY: Check for corrupted routines and recover from Firestore
-      // This runs even for same user to handle app restart with corrupted local data
-      try {
-        final isRoutinesCorrupted = await RoutineRecoveryHelper.areRoutinesCorrupted();
-        if (isRoutinesCorrupted) {
+      // Only run on web where SharedPreferences doesn't persist, or on new user login
+      // Skip for mobile same-user case to prevent hanging
+      if (kIsWeb || !isSameUser) {
+        try {
+          final isRoutinesCorrupted = await RoutineRecoveryHelper.areRoutinesCorrupted();
+          if (isRoutinesCorrupted) {
+            await ErrorLogger.logError(
+              source: 'RealtimeSyncService._onAuthStateChanged',
+              error: 'Corrupted routines detected, attempting recovery...',
+              stackTrace: '',
+            );
+            final recovered = await RoutineRecoveryHelper.recoverRoutinesFromFirestore();
+            await ErrorLogger.logError(
+              source: 'RealtimeSyncService._onAuthStateChanged',
+              error: recovered ? 'Routines recovered successfully!' : 'Routine recovery failed',
+              stackTrace: '',
+            );
+          }
+        } catch (e) {
           await ErrorLogger.logError(
             source: 'RealtimeSyncService._onAuthStateChanged',
-            error: 'Corrupted routines detected, attempting recovery...',
-            stackTrace: '',
-          );
-          final recovered = await RoutineRecoveryHelper.recoverRoutinesFromFirestore();
-          await ErrorLogger.logError(
-            source: 'RealtimeSyncService._onAuthStateChanged',
-            error: recovered ? 'Routines recovered successfully!' : 'Routine recovery failed',
+            error: 'Routine recovery check failed: $e',
             stackTrace: '',
           );
         }
-      } catch (e) {
-        await ErrorLogger.logError(
-          source: 'RealtimeSyncService._onAuthStateChanged',
-          error: 'Routine recovery check failed: $e',
-          stackTrace: '',
-        );
       }
 
       // Skip listener setup if same user (already set up)
@@ -310,10 +313,25 @@ class RealtimeSyncService {
       if (tasksJson == null) return;
 
       final prefs = await SharedPreferences.getInstance();
-      // FIX: Tasks must be stored as StringList, not String
-      // Each task must be re-encoded as JSON string (not .toString())
+      // Decode the outer JSON array
       final List<dynamic> tasksList = jsonDecode(tasksJson);
-      final List<String> tasksStringList = tasksList.map((e) => jsonEncode(e)).toList();
+
+      // Process each item - could be a Map (object) or String (already JSON)
+      final List<String> tasksStringList = [];
+      for (final item in tasksList) {
+        if (item is Map) {
+          // Item is a parsed object, encode it
+          tasksStringList.add(jsonEncode(item));
+        } else if (item is String) {
+          // Item is already a JSON string, use as-is (validate first)
+          try {
+            jsonDecode(item); // Validate it's valid JSON
+            tasksStringList.add(item);
+          } catch (_) {
+            // Invalid JSON string, skip
+          }
+        }
+      }
       await prefs.setStringList('tasks', tasksStringList);
 
       if (kDebugMode) {
@@ -634,10 +652,25 @@ class RealtimeSyncService {
       if (habitsJson == null) return;
 
       final prefs = await SharedPreferences.getInstance();
-      // FIX: Habits must be stored as StringList, not String
-      // Each habit must be re-encoded as JSON string (not .toString())
+      // Decode the outer JSON array
       final List<dynamic> habitsList = jsonDecode(habitsJson);
-      final List<String> habitsStringList = habitsList.map((e) => jsonEncode(e)).toList();
+
+      // Process each item - could be a Map (object) or String (already JSON)
+      final List<String> habitsStringList = [];
+      for (final item in habitsList) {
+        if (item is Map) {
+          // Item is a parsed object, encode it
+          habitsStringList.add(jsonEncode(item));
+        } else if (item is String) {
+          // Item is already a JSON string, use as-is (validate first)
+          try {
+            jsonDecode(item); // Validate it's valid JSON
+            habitsStringList.add(item);
+          } catch (_) {
+            // Invalid JSON string, skip
+          }
+        }
+      }
       await prefs.setStringList('habits', habitsStringList);
 
       if (kDebugMode) {

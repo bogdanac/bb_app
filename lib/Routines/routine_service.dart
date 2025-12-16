@@ -40,7 +40,7 @@ class RoutineService {
       }
     }
 
-    // Try SharedPreferences (primary for mobile)
+    // Try SharedPreferences (primary for mobile, fallback for web)
     if (routinesJson.isEmpty) {
       final prefs = await SharedPreferences.getInstance();
       try {
@@ -53,19 +53,6 @@ class RoutineService {
         );
         await prefs.remove(_routinesKey);
         routinesJson = [];
-      }
-    }
-
-    // On mobile: if SharedPreferences is empty, try Firestore as recovery
-    if (routinesJson.isEmpty && !kIsWeb) {
-      debugPrint('RoutineService.loadRoutines: MOBILE - local empty, trying Firestore recovery...');
-      final firestoreRoutines = await _realtimeSync.fetchRoutinesFromFirestore();
-      if (firestoreRoutines != null && firestoreRoutines.isNotEmpty) {
-        debugPrint('RoutineService.loadRoutines: MOBILE - recovered ${firestoreRoutines.length} routines from Firestore');
-        routinesJson = firestoreRoutines;
-        // Save recovered routines to SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setStringList(_routinesKey, routinesJson);
       }
     }
 
