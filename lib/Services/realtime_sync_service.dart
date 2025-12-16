@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../shared/error_logger.dart';
+import '../Routines/routine_recovery_helper.dart';
 
 /// Real-time sync service for granular collection syncing
 /// Handles high-frequency data (Tasks, Routines, Habits, Energy) with Firestore real-time listeners
@@ -94,13 +95,41 @@ class RealtimeSyncService {
         return;
       }
 
-      // Same user, no change
-      if (newUserId == _userId) {
-        return;
+      // Check if same user - but still do recovery check
+      final isSameUser = newUserId == _userId;
+
+      // Set user ID
+      _userId = newUserId;
+
+      // AUTO-RECOVERY: Check for corrupted routines and recover from Firestore
+      // This runs even for same user to handle app restart with corrupted local data
+      try {
+        final isRoutinesCorrupted = await RoutineRecoveryHelper.areRoutinesCorrupted();
+        if (isRoutinesCorrupted) {
+          await ErrorLogger.logError(
+            source: 'RealtimeSyncService._onAuthStateChanged',
+            error: 'Corrupted routines detected, attempting recovery...',
+            stackTrace: '',
+          );
+          final recovered = await RoutineRecoveryHelper.recoverRoutinesFromFirestore();
+          await ErrorLogger.logError(
+            source: 'RealtimeSyncService._onAuthStateChanged',
+            error: recovered ? 'Routines recovered successfully!' : 'Routine recovery failed',
+            stackTrace: '',
+          );
+        }
+      } catch (e) {
+        await ErrorLogger.logError(
+          source: 'RealtimeSyncService._onAuthStateChanged',
+          error: 'Routine recovery check failed: $e',
+          stackTrace: '',
+        );
       }
 
-      // New user logged in
-      _userId = newUserId;
+      // Skip listener setup if same user (already set up)
+      if (isSameUser) {
+        return;
+      }
 
       if (kDebugMode) {
         await ErrorLogger.logError(
@@ -203,6 +232,18 @@ class RealtimeSyncService {
   Future<void> syncTasks(String tasksJson) async {
     if (!_syncEnabled || _userId == null || _isRestoringTasks) return;
 
+    // SAFETY: Never sync empty tasks data - this prevents data loss
+    try {
+      final List<dynamic> tasksList = jsonDecode(tasksJson);
+      if (tasksList.isEmpty) {
+        debugPrint('RealtimeSyncService.syncTasks: BLOCKED - refusing to sync empty tasks!');
+        return;
+      }
+    } catch (e) {
+      debugPrint('RealtimeSyncService.syncTasks: BLOCKED - invalid tasks JSON!');
+      return;
+    }
+
     try {
       _lastSyncTimestamps['tasks'] = DateTime.now().millisecondsSinceEpoch;
 
@@ -232,6 +273,37 @@ class RealtimeSyncService {
     }
   }
 
+  /// Sync categories to Firestore (stored in the same 'tasks' document)
+  Future<void> syncCategories(String categoriesJson) async {
+    if (!_syncEnabled || _userId == null) return;
+
+    // SAFETY: Allow empty categories (user might delete all custom categories)
+    try {
+      _lastSyncTimestamps['categories'] = DateTime.now().millisecondsSinceEpoch;
+
+      // Use update to preserve existing 'tasks' field
+      await _firestore
+          .collection('users')
+          .doc(_userId)
+          .collection('data')
+          .doc('tasks')
+          .set({
+        'categories': categoriesJson,
+        'lastSync': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (kDebugMode) {
+        debugPrint('RealtimeSyncService.syncCategories: Categories synced to Firestore');
+      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService.syncCategories',
+        error: 'Categories sync failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }
+  }
+
   Future<void> _restoreTasksData(Map<String, dynamic> data) async {
     try {
       final tasksJson = data['tasks'] as String?;
@@ -239,9 +311,9 @@ class RealtimeSyncService {
 
       final prefs = await SharedPreferences.getInstance();
       // FIX: Tasks must be stored as StringList, not String
-      // The JSON string contains an array of task JSON strings
+      // Each task must be re-encoded as JSON string (not .toString())
       final List<dynamic> tasksList = jsonDecode(tasksJson);
-      final List<String> tasksStringList = tasksList.map((e) => e.toString()).toList();
+      final List<String> tasksStringList = tasksList.map((e) => jsonEncode(e)).toList();
       await prefs.setStringList('tasks', tasksStringList);
 
       if (kDebugMode) {
@@ -280,20 +352,32 @@ class RealtimeSyncService {
         final data = snapshot.data();
         if (data == null) return;
 
+        // Check if local routines are empty - if so, always restore from remote
+        final prefs = await SharedPreferences.getInstance();
+        final localRoutines = prefs.getStringList('routines');
+        final localIsEmpty = localRoutines == null || localRoutines.isEmpty;
+
+        // For timestamp comparison (only if lastSync exists)
         final lastSync = data['lastSync'] as Timestamp?;
-        if (lastSync == null) return;
+        if (lastSync != null) {
+          final remoteTimestamp = lastSync.millisecondsSinceEpoch;
+          final localTimestamp = _lastSyncTimestamps['routines'] ?? 0;
 
-        final remoteTimestamp = lastSync.millisecondsSinceEpoch;
-        final localTimestamp = _lastSyncTimestamps['routines'] ?? 0;
-
-        if (remoteTimestamp <= localTimestamp) {
+          // Skip if remote is not newer AND local is not empty
+          if (remoteTimestamp <= localTimestamp && !localIsEmpty) {
+            return;
+          }
+        } else if (!localIsEmpty) {
+          // No lastSync field and local has data - don't overwrite
           return;
         }
 
         if (kDebugMode) {
           await ErrorLogger.logError(
             source: 'RealtimeSyncService._setupRoutinesListener',
-            error: 'Routines changed remotely - syncing...',
+            error: localIsEmpty
+                ? 'Local routines empty - restoring from Firestore...'
+                : 'Routines changed remotely - syncing...',
             stackTrace: '',
           );
         }
@@ -317,6 +401,18 @@ class RealtimeSyncService {
 
   Future<void> syncRoutines(String routinesJson, Map<String, String> progressData) async {
     if (!_syncEnabled || _userId == null || _isRestoringRoutines) return;
+
+    // SAFETY: Never sync empty routines data - this prevents data loss
+    try {
+      final List<dynamic> routinesList = jsonDecode(routinesJson);
+      if (routinesList.isEmpty) {
+        debugPrint('RealtimeSyncService.syncRoutines: BLOCKED - refusing to sync empty routines!');
+        return;
+      }
+    } catch (e) {
+      debugPrint('RealtimeSyncService.syncRoutines: BLOCKED - invalid routines JSON!');
+      return;
+    }
 
     try {
       _lastSyncTimestamps['routines'] = DateTime.now().millisecondsSinceEpoch;
@@ -350,19 +446,66 @@ class RealtimeSyncService {
 
   Future<void> _restoreRoutinesData(Map<String, dynamic> data) async {
     try {
-      final routinesJson = data['routines'] as String?;
-      final progressData = data['progress'] as Map<String, dynamic>?;
-
-      if (routinesJson == null) return;
-
       final prefs = await SharedPreferences.getInstance();
-      // FIX: Routines must be stored as StringList, not String
-      // The JSON string contains an array of routine JSON strings
-      final List<dynamic> routinesList = jsonDecode(routinesJson);
-      final List<String> routinesStringList = routinesList.map((e) => e.toString()).toList();
+      final List<String> routinesStringList = [];
+
+      // Check for new format: 'routines' field with JSON array
+      final routinesJson = data['routines'] as String?;
+      if (routinesJson != null) {
+        // Decode the outer JSON array
+        final List<dynamic> routinesList = jsonDecode(routinesJson);
+
+        // Process each item - could be a Map (object) or String
+        for (final item in routinesList) {
+          if (item is Map) {
+            // Item is already a parsed object, encode it
+            routinesStringList.add(jsonEncode(item));
+          } else if (item is String) {
+            // Item is a string - check if it's valid JSON
+            try {
+              jsonDecode(item); // Validate it's valid JSON
+              routinesStringList.add(item); // It's valid, use as-is
+            } catch (_) {
+              // Invalid JSON string, skip it
+            }
+          }
+        }
+      }
+
+      // Check for legacy format: any field that contains a valid routine JSON
+      if (routinesStringList.isEmpty) {
+        for (final entry in data.entries) {
+          // Skip known non-routine fields
+          if (entry.key == 'lastSync' || entry.key == 'progress') continue;
+
+          final value = entry.value;
+          if (value is String) {
+            try {
+              final parsed = jsonDecode(value);
+              // Verify it looks like a routine (has id and title or items)
+              if (parsed is Map && (parsed.containsKey('id') && (parsed.containsKey('title') || parsed.containsKey('items')))) {
+                routinesStringList.add(value);
+              }
+            } catch (_) {
+              // Invalid JSON, skip
+            }
+          }
+        }
+      }
+
+      if (routinesStringList.isEmpty) {
+        await ErrorLogger.logError(
+          source: 'RealtimeSyncService._restoreRoutinesData',
+          error: 'No valid routines found in Firestore data',
+          stackTrace: '',
+        );
+        return;
+      }
+
       await prefs.setStringList('routines', routinesStringList);
 
       // Restore progress data
+      final progressData = data['progress'] as Map<String, dynamic>?;
       if (progressData != null) {
         for (final entry in progressData.entries) {
           final value = entry.value;
@@ -372,13 +515,11 @@ class RealtimeSyncService {
         }
       }
 
-      if (kDebugMode) {
-        await ErrorLogger.logError(
-          source: 'RealtimeSyncService._restoreRoutinesData',
-          error: 'Routines restored from Firestore',
-          stackTrace: '',
-        );
-      }
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService._restoreRoutinesData',
+        error: 'Routines restored from Firestore: ${routinesStringList.length} routines',
+        stackTrace: '',
+      );
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'RealtimeSyncService._restoreRoutinesData',
@@ -446,6 +587,18 @@ class RealtimeSyncService {
   Future<void> syncHabits(String habitsJson) async {
     if (!_syncEnabled || _userId == null || _isRestoringHabits) return;
 
+    // SAFETY: Never sync empty habits data - this prevents data loss
+    try {
+      final List<dynamic> habitsList = jsonDecode(habitsJson);
+      if (habitsList.isEmpty) {
+        debugPrint('RealtimeSyncService.syncHabits: BLOCKED - refusing to sync empty habits!');
+        return;
+      }
+    } catch (e) {
+      debugPrint('RealtimeSyncService.syncHabits: BLOCKED - invalid habits JSON!');
+      return;
+    }
+
     try {
       _lastSyncTimestamps['habits'] = DateTime.now().millisecondsSinceEpoch;
 
@@ -482,9 +635,9 @@ class RealtimeSyncService {
 
       final prefs = await SharedPreferences.getInstance();
       // FIX: Habits must be stored as StringList, not String
-      // The JSON string contains an array of habit JSON strings
+      // Each habit must be re-encoded as JSON string (not .toString())
       final List<dynamic> habitsList = jsonDecode(habitsJson);
-      final List<String> habitsStringList = habitsList.map((e) => e.toString()).toList();
+      final List<String> habitsStringList = habitsList.map((e) => jsonEncode(e)).toList();
       await prefs.setStringList('habits', habitsStringList);
 
       if (kDebugMode) {
@@ -624,6 +777,276 @@ class RealtimeSyncService {
   // ========================
   // UTILITY METHODS
   // ========================
+
+  /// Fetch habits directly from Firestore (for web where SharedPreferences is unreliable)
+  Future<List<String>?> fetchHabitsFromFirestore() async {
+    final user = _auth.currentUser;
+    final userId = user?.uid ?? _userId;
+
+    if (userId == null) {
+      debugPrint('RealtimeSyncService.fetchHabitsFromFirestore: No user logged in');
+      return null;
+    }
+
+    debugPrint('RealtimeSyncService.fetchHabitsFromFirestore: Fetching for user $userId');
+
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('data')
+          .doc('habits')
+          .get();
+
+      if (!doc.exists) {
+        debugPrint('RealtimeSyncService.fetchHabitsFromFirestore: No habits doc in Firestore');
+        return null;
+      }
+
+      final data = doc.data();
+      if (data == null) {
+        debugPrint('RealtimeSyncService.fetchHabitsFromFirestore: Habits doc is empty');
+        return null;
+      }
+
+      final habitsJson = data['habits'] as String?;
+      if (habitsJson == null) {
+        debugPrint('RealtimeSyncService.fetchHabitsFromFirestore: No habits field');
+        return null;
+      }
+
+      final List<dynamic> habitsList = jsonDecode(habitsJson);
+      debugPrint('RealtimeSyncService.fetchHabitsFromFirestore: Found ${habitsList.length} habits');
+
+      final List<String> habitsStringList = [];
+      for (final item in habitsList) {
+        if (item is Map) {
+          habitsStringList.add(jsonEncode(item));
+        } else if (item is String) {
+          try {
+            jsonDecode(item);
+            habitsStringList.add(item);
+          } catch (_) {}
+        }
+      }
+
+      return habitsStringList;
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService.fetchHabitsFromFirestore',
+        error: 'Failed to fetch habits from Firestore: $e',
+        stackTrace: stackTrace.toString(),
+      );
+      return null;
+    }
+  }
+
+  /// Fetch tasks directly from Firestore (for web where SharedPreferences is unreliable)
+  Future<List<String>?> fetchTasksFromFirestore() async {
+    final user = _auth.currentUser;
+    final userId = user?.uid ?? _userId;
+
+    if (userId == null) {
+      debugPrint('RealtimeSyncService.fetchTasksFromFirestore: No user logged in');
+      return null;
+    }
+
+    debugPrint('RealtimeSyncService.fetchTasksFromFirestore: Fetching for user $userId');
+
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('data')
+          .doc('tasks')
+          .get();
+
+      if (!doc.exists) {
+        debugPrint('RealtimeSyncService.fetchTasksFromFirestore: No tasks doc in Firestore');
+        return null;
+      }
+
+      final data = doc.data();
+      if (data == null) {
+        debugPrint('RealtimeSyncService.fetchTasksFromFirestore: Tasks doc is empty');
+        return null;
+      }
+
+      final tasksJson = data['tasks'] as String?;
+      if (tasksJson == null) {
+        debugPrint('RealtimeSyncService.fetchTasksFromFirestore: No tasks field');
+        return null;
+      }
+
+      final List<dynamic> tasksList = jsonDecode(tasksJson);
+      debugPrint('RealtimeSyncService.fetchTasksFromFirestore: Found ${tasksList.length} tasks');
+
+      final List<String> tasksStringList = [];
+      for (final item in tasksList) {
+        if (item is Map) {
+          tasksStringList.add(jsonEncode(item));
+        } else if (item is String) {
+          try {
+            jsonDecode(item);
+            tasksStringList.add(item);
+          } catch (_) {}
+        }
+      }
+
+      return tasksStringList;
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService.fetchTasksFromFirestore',
+        error: 'Failed to fetch tasks from Firestore: $e',
+        stackTrace: stackTrace.toString(),
+      );
+      return null;
+    }
+  }
+
+  /// Fetch routines directly from Firestore (for web where SharedPreferences is unreliable)
+  /// Returns null if not available, empty list if no routines in Firestore
+  Future<List<String>?> fetchRoutinesFromFirestore() async {
+    // Get user directly from FirebaseAuth (don't rely on _userId which may not be set yet)
+    final user = _auth.currentUser;
+    final userId = user?.uid ?? _userId;
+
+    if (userId == null) {
+      debugPrint('RealtimeSyncService.fetchRoutinesFromFirestore: No user logged in');
+      return null;
+    }
+
+    debugPrint('RealtimeSyncService.fetchRoutinesFromFirestore: Fetching for user $userId');
+
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('data')
+          .doc('routines')
+          .get();
+
+      if (!doc.exists) {
+        debugPrint('RealtimeSyncService.fetchRoutinesFromFirestore: No routines doc in Firestore');
+        return null;
+      }
+
+      final data = doc.data();
+      if (data == null) {
+        debugPrint('RealtimeSyncService.fetchRoutinesFromFirestore: Routines doc is empty');
+        return null;
+      }
+
+      final List<String> routinesStringList = [];
+
+      // Check for new format: 'routines' field with JSON array
+      final routinesJson = data['routines'] as String?;
+      if (routinesJson != null) {
+        final List<dynamic> routinesList = jsonDecode(routinesJson);
+        debugPrint('RealtimeSyncService.fetchRoutinesFromFirestore: Found ${routinesList.length} routines in Firestore');
+
+        for (final item in routinesList) {
+          if (item is Map) {
+            routinesStringList.add(jsonEncode(item));
+          } else if (item is String) {
+            try {
+              jsonDecode(item);
+              routinesStringList.add(item);
+            } catch (_) {}
+          }
+        }
+      }
+
+      // Check for legacy format if new format didn't work
+      if (routinesStringList.isEmpty) {
+        for (final entry in data.entries) {
+          if (entry.key == 'lastSync' || entry.key == 'progress') continue;
+          final value = entry.value;
+          if (value is String) {
+            try {
+              final parsed = jsonDecode(value);
+              if (parsed is Map && (parsed.containsKey('id') && (parsed.containsKey('title') || parsed.containsKey('items')))) {
+                routinesStringList.add(value);
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      debugPrint('RealtimeSyncService.fetchRoutinesFromFirestore: Returning ${routinesStringList.length} routines');
+      return routinesStringList;
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService.fetchRoutinesFromFirestore',
+        error: 'Failed to fetch routines from Firestore: $e',
+        stackTrace: stackTrace.toString(),
+      );
+      return null;
+    }
+  }
+
+  /// Fetch categories directly from Firestore (for web where SharedPreferences is unreliable)
+  Future<List<String>?> fetchCategoriesFromFirestore() async {
+    final user = _auth.currentUser;
+    final userId = user?.uid ?? _userId;
+
+    if (userId == null) {
+      debugPrint('RealtimeSyncService.fetchCategoriesFromFirestore: No user logged in');
+      return null;
+    }
+
+    debugPrint('RealtimeSyncService.fetchCategoriesFromFirestore: Fetching for user $userId');
+
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('data')
+          .doc('tasks')
+          .get();
+
+      if (!doc.exists) {
+        debugPrint('RealtimeSyncService.fetchCategoriesFromFirestore: No tasks doc in Firestore');
+        return null;
+      }
+
+      final data = doc.data();
+      if (data == null) {
+        debugPrint('RealtimeSyncService.fetchCategoriesFromFirestore: Tasks doc is empty');
+        return null;
+      }
+
+      final categoriesJson = data['categories'] as String?;
+      if (categoriesJson == null) {
+        debugPrint('RealtimeSyncService.fetchCategoriesFromFirestore: No categories field');
+        return null;
+      }
+
+      final List<dynamic> categoriesList = jsonDecode(categoriesJson);
+      debugPrint('RealtimeSyncService.fetchCategoriesFromFirestore: Found ${categoriesList.length} categories');
+
+      final List<String> categoriesStringList = [];
+      for (final item in categoriesList) {
+        if (item is Map) {
+          categoriesStringList.add(jsonEncode(item));
+        } else if (item is String) {
+          try {
+            jsonDecode(item);
+            categoriesStringList.add(item);
+          } catch (_) {}
+        }
+      }
+
+      return categoriesStringList;
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService.fetchCategoriesFromFirestore',
+        error: 'Failed to fetch categories from Firestore: $e',
+        stackTrace: stackTrace.toString(),
+      );
+      return null;
+    }
+  }
 
   /// Check if user is logged in
   bool get isLoggedIn => _userId != null;

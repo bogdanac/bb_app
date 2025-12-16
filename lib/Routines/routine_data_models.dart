@@ -28,19 +28,33 @@ class Routine {
     'activeDays': activeDays.toList(),
   };
 
-  static Routine fromJson(Map<String, dynamic> json) => Routine(
-    id: json['id'],
-    title: json['title'],
-    items: (json['items'] as List)
-        .map((item) => RoutineItem.fromJson(item))
-        .toList(),
-    reminderEnabled: json['reminderEnabled'] ?? false,
-    reminderHour: json['reminderHour'] ?? 8,
-    reminderMinute: json['reminderMinute'] ?? 0,
-    activeDays: json['activeDays'] != null 
-        ? Set<int>.from(json['activeDays']) 
-        : {1, 2, 3, 4, 5, 6, 7},
-  );
+  static Routine fromJson(Map<String, dynamic> json) {
+    // Parse scheduledTime if present (format: "HH:MM")
+    int reminderHour = json['reminderHour'] ?? 8;
+    int reminderMinute = json['reminderMinute'] ?? 0;
+    if (json['scheduledTime'] != null) {
+      final parts = (json['scheduledTime'] as String).split(':');
+      if (parts.length == 2) {
+        reminderHour = int.tryParse(parts[0]) ?? 8;
+        reminderMinute = int.tryParse(parts[1]) ?? 0;
+      }
+    }
+
+    return Routine(
+      id: json['id'],
+      title: json['title'],
+      items: (json['items'] as List)
+          .map((item) => RoutineItem.fromJson(item))
+          .toList(),
+      // Support both 'reminderEnabled' and 'notificationEnabled' for backwards compatibility
+      reminderEnabled: json['reminderEnabled'] ?? json['notificationEnabled'] ?? false,
+      reminderHour: reminderHour,
+      reminderMinute: reminderMinute,
+      activeDays: json['activeDays'] != null
+          ? Set<int>.from(json['activeDays'])
+          : {1, 2, 3, 4, 5, 6, 7},
+    );
+  }
 
   String getActiveDaysText() {
     final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -95,8 +109,9 @@ class RoutineItem {
   static RoutineItem fromJson(Map<String, dynamic> json) {
     return RoutineItem(
       id: json['id'],
-      text: json['text'],
-      isCompleted: json['isCompleted'],
+      // Support both 'text' and 'title' for backwards compatibility with backup data
+      text: json['text'] ?? json['title'] ?? '',
+      isCompleted: json['isCompleted'] ?? false,
       isSkipped: json['isSkipped'] ?? false,
       isPostponed: json['isPostponed'] ?? false,
       energyLevel: json['energyLevel'],

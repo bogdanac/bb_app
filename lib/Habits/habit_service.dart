@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'habit_data_models.dart';
 import '../Services/firebase_backup_service.dart';
@@ -10,25 +11,42 @@ class HabitService {
 
   static final _realtimeSync = RealtimeSyncService();
 
-  /// Load all habits from SharedPreferences
+  /// Load all habits from SharedPreferences (or Firestore on web)
   static Future<List<Habit>> loadHabits() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> habitsJson;
-    try {
-      habitsJson = prefs.getStringList(_habitsKey) ?? [];
-    } catch (e, stackTrace) {
-      await ErrorLogger.logError(
-        source: 'HabitService.loadHabits',
-        error: 'Habits data type mismatch, clearing corrupted data: $e',
-        stackTrace: stackTrace.toString(),
-      );
-      await prefs.remove(_habitsKey);
-      habitsJson = [];
+    List<String> habitsJson = [];
+
+    // On web, try to load from Firestore first since SharedPreferences doesn't persist
+    if (kIsWeb) {
+      debugPrint('HabitService.loadHabits: WEB - trying Firestore first...');
+      final firestoreHabits = await _realtimeSync.fetchHabitsFromFirestore();
+      if (firestoreHabits != null && firestoreHabits.isNotEmpty) {
+        debugPrint('HabitService.loadHabits: WEB - got ${firestoreHabits.length} habits from Firestore');
+        habitsJson = firestoreHabits;
+      }
     }
 
-    return habitsJson
+    // Fallback to SharedPreferences (always used on mobile, fallback on web)
+    if (habitsJson.isEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      try {
+        habitsJson = prefs.getStringList(_habitsKey) ?? [];
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'HabitService.loadHabits',
+          error: 'Habits data type mismatch, clearing corrupted data: $e',
+          stackTrace: stackTrace.toString(),
+        );
+        await prefs.remove(_habitsKey);
+        habitsJson = [];
+      }
+    }
+
+    final habits = habitsJson
         .map((json) => Habit.fromJson(jsonDecode(json)))
         .toList();
+
+    debugPrint('HabitService.loadHabits: Loaded ${habits.length} habits');
+    return habits;
   }
 
   /// Save habits to SharedPreferences

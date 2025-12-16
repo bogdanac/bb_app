@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../tasks_data_models.dart';
 import '../../shared/error_logger.dart';
@@ -13,27 +14,42 @@ class TaskRepository {
 
   final _realtimeSync = RealtimeSyncService();
 
-  /// Load tasks from SharedPreferences
+  /// Load tasks from SharedPreferences (or Firestore on web)
   Future<List<Task>> loadTasks() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      List<String> tasksJson;
-      try {
-        tasksJson = prefs.getStringList('tasks') ?? [];
-      } catch (e, stackTrace) {
-        await ErrorLogger.logError(
-          source: 'TaskRepository.loadTasks',
-          error: 'Tasks data type mismatch, clearing corrupted data: $e',
-          stackTrace: stackTrace.toString(),
-        );
-        await prefs.remove('tasks');
-        tasksJson = [];
+      List<String> tasksJson = [];
+
+      // On web, try to load from Firestore first since SharedPreferences doesn't persist
+      if (kIsWeb) {
+        debugPrint('TaskRepository.loadTasks: WEB - trying Firestore first...');
+        final firestoreTasks = await _realtimeSync.fetchTasksFromFirestore();
+        if (firestoreTasks != null && firestoreTasks.isNotEmpty) {
+          debugPrint('TaskRepository.loadTasks: WEB - got ${firestoreTasks.length} tasks from Firestore');
+          tasksJson = firestoreTasks;
+        }
+      }
+
+      // Fallback to SharedPreferences (always used on mobile, fallback on web)
+      if (tasksJson.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        try {
+          tasksJson = prefs.getStringList('tasks') ?? [];
+        } catch (e, stackTrace) {
+          await ErrorLogger.logError(
+            source: 'TaskRepository.loadTasks',
+            error: 'Tasks data type mismatch, clearing corrupted data: $e',
+            stackTrace: stackTrace.toString(),
+          );
+          await prefs.remove('tasks');
+          tasksJson = [];
+        }
       }
 
       final tasks = tasksJson
           .map((json) => Task.fromJson(jsonDecode(json)))
           .toList();
 
+      debugPrint('TaskRepository.loadTasks: Loaded ${tasks.length} tasks');
       return tasks;
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
@@ -73,30 +89,47 @@ class TaskRepository {
     }
   }
 
-  /// Load categories from SharedPreferences
+  /// Load categories from SharedPreferences (or Firestore on web)
   Future<List<TaskCategory>> loadCategories() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      List<String> categoriesJson;
-      try {
-        categoriesJson = prefs.getStringList('task_categories') ?? [];
-      } catch (e, stackTrace) {
-        await ErrorLogger.logError(
-          source: 'TaskRepository.loadCategories',
-          error: 'Task categories data type mismatch, clearing corrupted data: $e',
-          stackTrace: stackTrace.toString(),
-        );
-        await prefs.remove('task_categories');
-        categoriesJson = [];
+      List<String> categoriesJson = [];
+
+      // On web, try to load from Firestore first since SharedPreferences doesn't persist
+      if (kIsWeb) {
+        debugPrint('TaskRepository.loadCategories: WEB - trying Firestore first...');
+        final firestoreCategories = await _realtimeSync.fetchCategoriesFromFirestore();
+        if (firestoreCategories != null && firestoreCategories.isNotEmpty) {
+          debugPrint('TaskRepository.loadCategories: WEB - got ${firestoreCategories.length} categories from Firestore');
+          categoriesJson = firestoreCategories;
+        }
+      }
+
+      // Fallback to SharedPreferences (always used on mobile, fallback on web)
+      if (categoriesJson.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        try {
+          categoriesJson = prefs.getStringList('task_categories') ?? [];
+        } catch (e, stackTrace) {
+          await ErrorLogger.logError(
+            source: 'TaskRepository.loadCategories',
+            error: 'Task categories data type mismatch, clearing corrupted data: $e',
+            stackTrace: stackTrace.toString(),
+          );
+          await prefs.remove('task_categories');
+          categoriesJson = [];
+        }
       }
 
       if (categoriesJson.isEmpty) {
         return [];
       }
 
-      return categoriesJson
+      final categories = categoriesJson
           .map((json) => TaskCategory.fromJson(jsonDecode(json)))
           .toList();
+
+      debugPrint('TaskRepository.loadCategories: Loaded ${categories.length} categories');
+      return categories;
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'TaskRepository.loadCategories',
@@ -107,7 +140,7 @@ class TaskRepository {
     }
   }
 
-  /// Save categories to SharedPreferences
+  /// Save categories to SharedPreferences and sync to Firestore
   Future<void> saveCategories(List<TaskCategory> categories) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -115,6 +148,15 @@ class TaskRepository {
           .map((category) => jsonEncode(category.toJson()))
           .toList();
       await prefs.setStringList('task_categories', categoriesJson);
+
+      // Sync to Firestore real-time collection (non-blocking)
+      _realtimeSync.syncCategories(jsonEncode(categoriesJson)).catchError((e, stackTrace) async {
+        await ErrorLogger.logError(
+          source: 'TaskRepository.saveCategories',
+          error: 'Real-time sync failed: $e',
+          stackTrace: stackTrace.toString(),
+        );
+      });
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'TaskRepository.saveCategories',

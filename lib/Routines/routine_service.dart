@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bb_app/Routines/routine_data_models.dart';
 import '../Notifications/centralized_notification_manager.dart';
@@ -25,30 +26,77 @@ class RoutineService {
     return TimezoneUtils.getEffectiveDateString();
   }
 
-  /// Load all routines from SharedPreferences
+  /// Load all routines from SharedPreferences (with Firestore fallback)
   static Future<List<Routine>> loadRoutines() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> routinesJson;
-    try {
-      routinesJson = prefs.getStringList(_routinesKey) ?? [];
-    } catch (e) {
-      await ErrorLogger.logError(
-        source: 'RoutineService.getRoutines',
-        error: 'Warning: Routines data type mismatch, clearing corrupted data: $e',
-        stackTrace: '',
-      );
+    List<String> routinesJson = [];
+
+    // On web, try Firestore first since SharedPreferences doesn't persist
+    if (kIsWeb) {
+      debugPrint('RoutineService.loadRoutines: WEB - trying Firestore first...');
+      final firestoreRoutines = await _realtimeSync.fetchRoutinesFromFirestore();
+      if (firestoreRoutines != null && firestoreRoutines.isNotEmpty) {
+        debugPrint('RoutineService.loadRoutines: WEB - got ${firestoreRoutines.length} routines from Firestore');
+        routinesJson = firestoreRoutines;
+      }
+    }
+
+    // Try SharedPreferences (primary for mobile)
+    if (routinesJson.isEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      try {
+        routinesJson = prefs.getStringList(_routinesKey) ?? [];
+      } catch (e) {
+        await ErrorLogger.logError(
+          source: 'RoutineService.loadRoutines',
+          error: 'Warning: Routines data type mismatch, clearing corrupted data: $e',
+          stackTrace: '',
+        );
         await prefs.remove(_routinesKey);
         routinesJson = [];
+      }
+    }
+
+    // On mobile: if SharedPreferences is empty, try Firestore as recovery
+    if (routinesJson.isEmpty && !kIsWeb) {
+      debugPrint('RoutineService.loadRoutines: MOBILE - local empty, trying Firestore recovery...');
+      final firestoreRoutines = await _realtimeSync.fetchRoutinesFromFirestore();
+      if (firestoreRoutines != null && firestoreRoutines.isNotEmpty) {
+        debugPrint('RoutineService.loadRoutines: MOBILE - recovered ${firestoreRoutines.length} routines from Firestore');
+        routinesJson = firestoreRoutines;
+        // Save recovered routines to SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList(_routinesKey, routinesJson);
+      }
     }
 
     if (routinesJson.isEmpty) {
-      // Return empty list - user creates their own routines
+      debugPrint('RoutineService.loadRoutines: No routines found');
       return [];
     }
 
-    return routinesJson
-        .map((json) => Routine.fromJson(jsonDecode(json)))
-        .toList();
+    // Parse each routine individually, skipping corrupted ones
+    final routines = <Routine>[];
+    debugPrint('RoutineService.loadRoutines: Parsing ${routinesJson.length} routines...');
+    for (int i = 0; i < routinesJson.length; i++) {
+      final json = routinesJson[i];
+      try {
+        final decoded = jsonDecode(json);
+        debugPrint('RoutineService.loadRoutines: Routine $i decoded, title=${decoded['title']}');
+        final routine = Routine.fromJson(decoded);
+        debugPrint('RoutineService.loadRoutines: Routine $i parsed successfully: ${routine.title}');
+        routines.add(routine);
+      } catch (e, stackTrace) {
+        debugPrint('RoutineService.loadRoutines: ERROR parsing routine $i: $e');
+        debugPrint('RoutineService.loadRoutines: Stack: $stackTrace');
+        await ErrorLogger.logError(
+          source: 'RoutineService.loadRoutines',
+          error: 'Skipping corrupted routine $i: $e, data: ${json.substring(0, json.length > 100 ? 100 : json.length)}',
+          stackTrace: stackTrace.toString(),
+        );
+      }
+    }
+    debugPrint('RoutineService.loadRoutines: Successfully parsed ${routines.length} routines');
+    return routines;
   }
 
   /// Save routines to SharedPreferences and update notifications
