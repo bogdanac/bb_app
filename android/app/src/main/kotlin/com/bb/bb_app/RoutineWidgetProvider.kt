@@ -21,6 +21,7 @@ class RoutineWidgetProvider : AppWidgetProvider() {
         const val ACTION_POSTPONE_STEP = "com.bb.bb_app.POSTPONE_STEP"
         const val ACTION_SKIP_STEP = "com.bb.bb_app.SKIP_STEP"
         const val ACTION_SKIP_ROUTINE = "com.bb.bb_app.SKIP_ROUTINE"
+        const val ACTION_REFRESH = "com.bb.bb_app.REFRESH_ROUTINE"
         
         private fun getTodayString(): String {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -87,6 +88,11 @@ class RoutineWidgetProvider : AppWidgetProvider() {
             }
             ACTION_SKIP_ROUTINE -> {
                 skipRoutine(context)
+                refreshAllWidgets(context)
+            }
+            ACTION_REFRESH -> {
+                // App requested widget refresh (e.g., after saving progress)
+                android.util.Log.d("RoutineSync", "🔄 Widget: Received REFRESH_ROUTINE from app")
                 refreshAllWidgets(context)
             }
         }

@@ -4,6 +4,7 @@ import '../theme/app_styles.dart';
 import 'habit_data_models.dart';
 import 'habit_service.dart';
 import '../shared/snackbar_utils.dart';
+import '../shared/confetti_celebration.dart';
 
 class HabitCard extends StatefulWidget {
   final VoidCallback onAllCompleted;
@@ -34,12 +35,21 @@ class _HabitCardState extends State<HabitCard> {
     });
   }
 
-  Future<void> _toggleHabit(Habit habit) async {
+  Future<void> _toggleHabit(Habit habit, Offset tapPosition) async {
+    // Show celebration immediately before async operation (if completing)
+    final wasCompletedBefore = habit.isCompletedToday();
+
     final result = await HabitService.toggleHabitCompletion(habit.id);
+
+    // Show celebration if habit was just completed (not uncompleted)
+    if (result['wasCompleted'] == true && !wasCompletedBefore && mounted) {
+      ConfettiCelebration.show(context, tapPosition);
+    }
+
     await _loadActiveHabits(); // Reload to get updated completion status
 
     // Check for cycle completion
-    if (result['cycleCompleted'] == true && result['habit'] != null) {
+    if (result['cycleCompleted'] == true && result['habit'] != null && mounted) {
       final completedHabit = result['habit'] as Habit;
       _showCycleCompletionDialog(completedHabit);
     }
@@ -183,9 +193,8 @@ class _HabitCardState extends State<HabitCard> {
             // Habits list
             ...uncompletedHabits.map((habit) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: InkWell(
-                  onTap: () => _toggleHabit(habit),
-                  borderRadius: AppStyles.borderRadiusSmall,
+              child: GestureDetector(
+                  onTapUp: (details) => _toggleHabit(habit, details.globalPosition),
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(

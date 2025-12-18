@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'Notifications/motion_alert_quick_setup.dart';
+import 'Notifications/centralized_notification_manager.dart';
 import 'Data/backup_screen.dart';
 import 'Routines/widget_color_settings_screen.dart';
 import 'WaterTracking/water_settings_screen.dart';
@@ -23,6 +24,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
   int _waterGoal = 1500; // Default water goal
   FoodTrackingResetFrequency _foodResetFrequency = FoodTrackingResetFrequency.monthly;
   int _foodTargetGoal = 80;
+  bool _menstrualTrackingEnabled = true; // Default enabled
 
   @override
   void initState() {
@@ -30,6 +32,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
     _loadWaterAmount();
     _loadWaterGoal();
     _loadFoodSettings();
+    _loadModuleSettings();
   }
 
   Future<void> _loadWaterAmount() async {
@@ -56,6 +59,24 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
     });
   }
 
+  Future<void> _loadModuleSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _menstrualTrackingEnabled = prefs.getBool('menstrual_tracking_enabled') ?? true;
+    });
+  }
+
+  Future<void> _setMenstrualTrackingEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('menstrual_tracking_enabled', enabled);
+    setState(() {
+      _menstrualTrackingEnabled = enabled;
+    });
+
+    // Reschedule notifications to apply the change
+    final notificationManager = CentralizedNotificationManager();
+    await notificationManager.forceRescheduleAll();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,6 +90,89 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+
+              // Active Modules Section
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  border: Border.all(
+                    color: AppColors.normalCardBackground,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.lightPink.withValues(alpha: 0.1),
+                              borderRadius: AppStyles.borderRadiusSmall,
+                            ),
+                            child: Icon(
+                              Icons.toggle_on_rounded,
+                              color: AppColors.lightPink,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'Active Modules',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Menstrual Tracking Toggle
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.favorite_rounded,
+                            color: AppColors.lightPink,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Menstrual Tracking',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  'Cycle predictions & notifications',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.greyText,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: _menstrualTrackingEnabled,
+                            activeThumbColor: AppColors.lightPink,
+                            onChanged: (value) => _setMenstrualTrackingEnabled(value),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
 
               // Energy Settings Section
               Container(

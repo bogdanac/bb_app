@@ -146,6 +146,17 @@ class CentralizedNotificationManager {
   Future<void> _scheduleCycleNotifications() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+
+      // Check if menstrual tracking is enabled
+      final menstrualTrackingEnabled = prefs.getBool('menstrual_tracking_enabled') ?? true;
+      if (!menstrualTrackingEnabled) {
+        // Cancel any existing cycle notifications
+        await _notificationService.flutterLocalNotificationsPlugin.cancel(1001);
+        await _notificationService.flutterLocalNotificationsPlugin.cancel(1002);
+        await _notificationService.flutterLocalNotificationsPlugin.cancel(1003);
+        return;
+      }
+
       final lastPeriodString = prefs.getString('last_period_start');
       final averageCycleLength = prefs.getInt('average_cycle_length') ?? 28;
 
@@ -156,6 +167,7 @@ class CentralizedNotificationManager {
         // Cancel existing notifications
         await _notificationService.flutterLocalNotificationsPlugin.cancel(1001);
         await _notificationService.flutterLocalNotificationsPlugin.cancel(1002);
+        await _notificationService.flutterLocalNotificationsPlugin.cancel(1003);
 
         // Schedule ovulation notification (day before ovulation)
         final ovulationDay = lastPeriodStart.add(Duration(days: (averageCycleLength / 2).round()));
@@ -173,8 +185,23 @@ class CentralizedNotificationManager {
           );
         }
 
-        // Schedule menstruation notification (day before expected period)
+        // Schedule menstruation notification (3 days before expected period)
         final nextPeriodDate = lastPeriodStart.add(Duration(days: averageCycleLength));
+        final threeDaysBeforeNotificationDate = nextPeriodDate.subtract(const Duration(days: 3));
+
+        if (threeDaysBeforeNotificationDate.isAfter(now)) {
+          await _notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
+            1003,
+            'Period in 3 Days 🩸',
+            'Switch to dark underwear. Eat more fat, less carbs to prepare for the longer fast.',
+            TimezoneUtils.forNotification(threeDaysBeforeNotificationDate),
+            NotificationService.getCycleNotificationDetails(),
+            uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          );
+        }
+
+        // Schedule menstruation notification (day before expected period)
         final menstruationNotificationDate = nextPeriodDate.subtract(const Duration(days: 1));
 
         if (menstruationNotificationDate.isAfter(now)) {

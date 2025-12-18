@@ -10,6 +10,7 @@ import android.widget.RemoteViews
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import androidx.core.app.NotificationManagerCompat
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -18,6 +19,12 @@ class WaterWidgetProvider : AppWidgetProvider() {
         private const val ACTION_ADD_WATER = "com.bb.bb_app.ADD_WATER"
         private const val DEFAULT_WATER_GOAL = 1500
         private const val DEFAULT_WATER_INCREMENT = 125
+
+        // Water notification IDs (must match Flutter's WaterNotificationService)
+        private const val NOTIFICATION_20_ID = 1001
+        private const val NOTIFICATION_40_ID = 1002
+        private const val NOTIFICATION_60_ID = 1003
+        private const val NOTIFICATION_80_ID = 1004
     }
 
     override fun onUpdate(
@@ -187,15 +194,50 @@ class WaterWidgetProvider : AppWidgetProvider() {
         }
 
         val newIntake = currentIntake + waterIncrement
-        
+
         // Save as Long to match Flutter's format
         prefs.edit()
             .putLong(correctKey, newIntake.toLong())
             .putString("flutter.last_water_reset_date", today)
             .apply()
-            
+
         android.util.Log.d("WaterWidget", "Water added: $currentIntake -> $newIntake (+${waterIncrement}ml)")
         android.util.Log.d("WaterWidget", "Saved to key: $correctKey")
+
+        // Cancel notifications for thresholds already met
+        cancelNotificationsForReachedThresholds(context, newIntake, waterGoal)
+    }
+
+    private fun cancelNotificationsForReachedThresholds(context: Context, currentIntake: Int, waterGoal: Int) {
+        val percentage = (currentIntake.toFloat() / waterGoal.toFloat() * 100).toInt()
+        val notificationManager = NotificationManagerCompat.from(context)
+
+        android.util.Log.d("WaterWidget", "Checking notifications to cancel: intake=$currentIntake, goal=$waterGoal, percentage=$percentage%")
+
+        if (percentage >= 20) {
+            notificationManager.cancel(NOTIFICATION_20_ID)
+            android.util.Log.d("WaterWidget", "Cancelled 20% notification")
+        }
+        if (percentage >= 40) {
+            notificationManager.cancel(NOTIFICATION_40_ID)
+            android.util.Log.d("WaterWidget", "Cancelled 40% notification")
+        }
+        if (percentage >= 60) {
+            notificationManager.cancel(NOTIFICATION_60_ID)
+            android.util.Log.d("WaterWidget", "Cancelled 60% notification")
+        }
+        if (percentage >= 80) {
+            notificationManager.cancel(NOTIFICATION_80_ID)
+            android.util.Log.d("WaterWidget", "Cancelled 80% notification")
+        }
+        if (percentage >= 100) {
+            // Cancel all water notifications
+            notificationManager.cancel(NOTIFICATION_20_ID)
+            notificationManager.cancel(NOTIFICATION_40_ID)
+            notificationManager.cancel(NOTIFICATION_60_ID)
+            notificationManager.cancel(NOTIFICATION_80_ID)
+            android.util.Log.d("WaterWidget", "Goal reached! Cancelled all water notifications")
+        }
     }
 
     private fun getCurrentWaterIntake(context: Context): Int {

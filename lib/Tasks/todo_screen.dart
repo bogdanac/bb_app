@@ -1239,9 +1239,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   Future<void> _handleRecurringTaskCompletion(Task task) async {
     try {
 
-    // Special handling for menstrual phase tasks:
-    // These should NOT auto-recalculate to avoid scheduling to past dates.
-    // User will manually recalculate when next period comes.
+    // Check if task has menstrual phase restriction
     final isMenstrualPhaseTask =
         task.recurrence!.types.contains(RecurrenceType.menstrualPhase) ||
         task.recurrence!.types.contains(RecurrenceType.follicularPhase) ||
@@ -1251,8 +1249,15 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         task.recurrence!.types.contains(RecurrenceType.menstrualStartDay) ||
         task.recurrence!.types.contains(RecurrenceType.ovulationPeakDay);
 
-    if (isMenstrualPhaseTask) {
-      // For menstrual phase tasks, clear scheduledDate and mark as completed.
+    // Check if task is ALSO a daily recurring task
+    final isAlsoDaily = task.recurrence!.types.contains(RecurrenceType.daily);
+
+    // Special handling for menstrual phase tasks that are NOT also daily:
+    // These should NOT auto-recalculate to avoid scheduling to past dates.
+    // User will manually recalculate when next period comes.
+    // BUT if it's daily + menstrual phase, it should renew for tomorrow during the phase.
+    if (isMenstrualPhaseTask && !isAlsoDaily) {
+      // For pure menstrual phase tasks, clear scheduledDate and mark as completed.
       // This prevents the broken getNextDueDate logic from scheduling to past dates.
       final updatedTask = Task(
         id: task.id,
@@ -1291,6 +1296,9 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       }
       return;
     }
+
+    // For daily + menstrual phase tasks: renew for tomorrow (like regular daily tasks)
+    // The menstrual phase filter will hide it when the phase ends
 
     // Get next due date for regular recurring tasks
     // For postponed tasks, we need to skip the current cycle to respect the postponement

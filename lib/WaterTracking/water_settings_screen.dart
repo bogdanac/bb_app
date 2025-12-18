@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import '../shared/time_picker_utils.dart';
@@ -45,6 +46,14 @@ class _WaterSettingsScreenState extends State<WaterSettingsScreen> {
 
     // Reschedule notifications with new settings
     await WaterNotificationService.scheduleNotifications(_settings);
+
+    // Check current intake and cancel notifications for thresholds already met
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now().toIso8601String().split('T')[0];
+    final currentIntake = prefs.getInt('water_$today') ?? 0;
+    if (currentIntake > 0) {
+      await WaterNotificationService.checkAndUpdateNotifications(currentIntake, _settings);
+    }
 
     if (mounted) {
       HapticFeedback.mediumImpact();

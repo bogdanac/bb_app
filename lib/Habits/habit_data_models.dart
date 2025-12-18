@@ -4,7 +4,8 @@ import 'package:intl/intl.dart';
 enum HabitDuration {
   oneWeek(7, '1 Week'),
   threeWeeks(21, '21 Days'),
-  threeMonths(90, '3 Months');
+  threeMonths(90, '3 Months'),
+  oneYear(365, '1 Year');
 
   final int days;
   final String label;
@@ -14,6 +15,55 @@ enum HabitDuration {
     return HabitDuration.values.firstWhere(
       (d) => d.days == days,
       orElse: () => HabitDuration.threeWeeks, // Default fallback
+    );
+  }
+}
+
+/// Represents a completed cycle in habit history
+class CycleHistory {
+  final int cycleNumber;
+  final DateTime startDate;
+  final DateTime endDate;
+  final int targetDays;
+  final int completedDays;
+  final List<String> completedDates; // All dates completed in this cycle
+  final DateTime completedAt; // When the cycle was marked as complete
+
+  CycleHistory({
+    required this.cycleNumber,
+    required this.startDate,
+    required this.endDate,
+    required this.targetDays,
+    required this.completedDays,
+    required this.completedDates,
+    required this.completedAt,
+  });
+
+  /// Get completion percentage for this cycle
+  double get completionRate => targetDays > 0 ? completedDays / targetDays : 0.0;
+
+  /// Check if cycle was fully completed (all days marked)
+  bool get isFullyCompleted => completedDays >= targetDays;
+
+  Map<String, dynamic> toJson() => {
+    'cycleNumber': cycleNumber,
+    'startDate': startDate.toIso8601String(),
+    'endDate': endDate.toIso8601String(),
+    'targetDays': targetDays,
+    'completedDays': completedDays,
+    'completedDates': completedDates,
+    'completedAt': completedAt.toIso8601String(),
+  };
+
+  static CycleHistory fromJson(Map<String, dynamic> json) {
+    return CycleHistory(
+      cycleNumber: json['cycleNumber'],
+      startDate: DateTime.parse(json['startDate']),
+      endDate: DateTime.parse(json['endDate']),
+      targetDays: json['targetDays'],
+      completedDays: json['completedDays'],
+      completedDates: List<String>.from(json['completedDates'] ?? []),
+      completedAt: DateTime.parse(json['completedAt']),
     );
   }
 }
@@ -29,6 +79,7 @@ class Habit {
   List<String> completedDates; // List of dates in 'yyyy-MM-dd' format
   int currentCycle; // Which cycle we're on
   bool isCompleted; // Has the habit cycle been fully completed
+  List<CycleHistory> cycleHistory; // History of all completed cycles
 
   Habit({
     required this.id,
@@ -40,9 +91,11 @@ class Habit {
     List<String>? completedDates,
     this.currentCycle = 1,
     this.isCompleted = false,
+    List<CycleHistory>? cycleHistory,
   }) : createdAt = createdAt ?? DateTime.now(),
        startDate = startDate ?? createdAt ?? DateTime.now(),
-       completedDates = completedDates ?? [];
+       completedDates = completedDates ?? [],
+       cycleHistory = cycleHistory ?? [];
 
   /// Get the HabitDuration enum for this habit
   HabitDuration get duration => HabitDuration.fromDays(cycleDurationDays);
@@ -147,8 +200,40 @@ class Habit {
   bool canContinueToNextCycle() {
     return getCurrentCycleProgress() >= cycleDurationDays;
   }
-  
+
+  /// Save current cycle to history before moving to next
+  void _saveCurrentCycleToHistory() {
+    final habitStart = DateTime(startDate.year, startDate.month, startDate.day);
+    final cycleStartDate = habitStart.add(Duration(days: (currentCycle - 1) * cycleDurationDays));
+    final cycleEndDate = cycleStartDate.add(Duration(days: cycleDurationDays - 1));
+
+    // Get completed dates for current cycle only
+    final currentCycleCompletedDates = <String>[];
+    for (int i = 0; i < cycleDurationDays; i++) {
+      final checkDate = cycleStartDate.add(Duration(days: i));
+      final checkDateString = DateFormat('yyyy-MM-dd').format(checkDate);
+      if (completedDates.contains(checkDateString)) {
+        currentCycleCompletedDates.add(checkDateString);
+      }
+    }
+
+    final history = CycleHistory(
+      cycleNumber: currentCycle,
+      startDate: cycleStartDate,
+      endDate: cycleEndDate,
+      targetDays: cycleDurationDays,
+      completedDays: currentCycleCompletedDates.length,
+      completedDates: currentCycleCompletedDates,
+      completedAt: DateTime.now(),
+    );
+
+    cycleHistory.add(history);
+  }
+
   void continueToNextCycle() {
+    // Save current cycle to history before moving on
+    _saveCurrentCycleToHistory();
+
     currentCycle++;
     // Reset completion dates for new cycle
     completedDates.clear();
@@ -181,6 +266,28 @@ class Habit {
     }
   }
 
+  /// Get total completed days across all cycles (including history)
+  int getTotalCompletedDaysAllCycles() {
+    int total = completedDates.length; // Current cycle
+    for (final cycle in cycleHistory) {
+      total += cycle.completedDays;
+    }
+    return total;
+  }
+
+  /// Get total number of completed cycles
+  int get totalCompletedCycles => cycleHistory.length;
+
+  /// Get average completion rate across all completed cycles
+  double get averageCycleCompletionRate {
+    if (cycleHistory.isEmpty) return 0.0;
+    double totalRate = 0;
+    for (final cycle in cycleHistory) {
+      totalRate += cycle.completionRate;
+    }
+    return totalRate / cycleHistory.length;
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
@@ -191,6 +298,7 @@ class Habit {
     'completedDates': completedDates,
     'currentCycle': currentCycle,
     'isCompleted': isCompleted,
+    'cycleHistory': cycleHistory.map((c) => c.toJson()).toList(),
   };
 
   static Habit fromJson(Map<String, dynamic> json) {
@@ -207,6 +315,9 @@ class Habit {
       completedDates: List<String>.from(json['completedDates'] ?? []),
       currentCycle: json['currentCycle'] ?? 1,
       isCompleted: json['isCompleted'] ?? false,
+      cycleHistory: (json['cycleHistory'] as List<dynamic>?)
+          ?.map((c) => CycleHistory.fromJson(c))
+          .toList() ?? [],
     );
   }
 }

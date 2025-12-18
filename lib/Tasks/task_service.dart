@@ -67,7 +67,7 @@ class TaskService {
 
         if (tasks[i].recurrence != null &&
             tasks[i].scheduledDate == null &&
-            !tasks[i].isPostponed &&
+            !tasks[i].isCompleted &&
             !isMenstrualTask) {  // Exclude menstrual tasks
           final updatedTask = await _recurrenceCalculator.calculateNextScheduledDate(tasks[i], prefs);
           if (updatedTask != null) {
@@ -166,7 +166,6 @@ class TaskService {
 
         if (tasks[i].recurrence != null &&
             tasks[i].scheduledDate == null &&
-            !tasks[i].isPostponed &&
             !tasks[i].isCompleted &&
             !isMenstrualTask) {
           final updatedTask = await _recurrenceCalculator.calculateNextScheduledDate(tasks[i], prefs);

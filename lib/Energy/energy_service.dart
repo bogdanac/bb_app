@@ -131,7 +131,7 @@ class EnergyService {
   }
 
   /// Apply time-based battery decay
-  /// Decays battery by ~5% per hour (~80% total over 16 waking hours)
+  /// Decay rate is calculated based on waking hours (100% / wakingHours)
   /// Call this when loading today's record to apply any pending decay
   /// Set [forceReload] to true when syncing with Android widget
   static Future<DailyEnergyRecord?> getTodayRecordWithDecay({bool forceReload = false}) async {
@@ -145,6 +145,7 @@ class EnergyService {
     if (json == null) return null;
 
     final record = DailyEnergyRecord.fromJson(jsonDecode(json));
+    final settings = await loadSettings();
 
     // Check last decay time
     final lastDecayKey = '${dateKey}_last_decay';
@@ -155,8 +156,8 @@ class EnergyService {
     if (lastDecayStr != null) {
       lastDecay = DateTime.parse(lastDecayStr);
     } else {
-      // First time - use record creation time or start of day
-      lastDecay = DateTime(now.year, now.month, now.day, 6, 0); // Assume 6 AM start
+      // First time - use wake hour from settings
+      lastDecay = DateTime(now.year, now.month, now.day, settings.wakeHour, 0);
     }
 
     // Calculate hours since last decay
@@ -167,8 +168,8 @@ class EnergyService {
       return record;
     }
 
-    // Calculate decay: ~5% per hour, max 15% per check to prevent extreme drops
-    final decayAmount = (hoursSinceLastDecay * 5.0).round().clamp(0, 15);
+    // Calculate decay: ~3% per hour, max 15% per check to prevent extreme drops
+    final decayAmount = (hoursSinceLastDecay * 3.0).round().clamp(0, 15);
 
     if (decayAmount > 0) {
       final newBattery = record.currentBattery - decayAmount;

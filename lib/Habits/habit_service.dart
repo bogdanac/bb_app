@@ -89,7 +89,7 @@ class HabitService {
   }
 
   /// Toggle habit completion for today
-  /// Returns a map with completion info: {'cycleCompleted': bool, 'habit': Habit?}
+  /// Returns a map with completion info: {'cycleCompleted': bool, 'habit': Habit?, 'wasCompleted': bool}
   static Future<Map<String, dynamic>> toggleHabitCompletion(String habitId) async {
     final habits = await loadHabits();
     final habitIndex = habits.indexWhere((h) => h.id == habitId);
@@ -97,11 +97,14 @@ class HabitService {
     if (habitIndex != -1) {
       final habit = habits[habitIndex];
       bool cycleCompleted = false;
+      bool wasCompleted = false;
 
       if (habit.isCompletedToday()) {
         habit.markUncompleted();
+        wasCompleted = false;
       } else {
         habit.markCompleted();
+        wasCompleted = true;
 
         // Check if this completion completed the cycle
         if (habit.getCurrentCycleProgress() >= habit.cycleDurationDays) {
@@ -114,12 +117,14 @@ class HabitService {
       return {
         'cycleCompleted': cycleCompleted,
         'habit': cycleCompleted ? habit : null,
+        'wasCompleted': wasCompleted,
       };
     }
 
     return {
       'cycleCompleted': false,
       'habit': null,
+      'wasCompleted': false,
     };
   }
 

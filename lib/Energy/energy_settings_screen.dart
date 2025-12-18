@@ -350,6 +350,99 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
               ),
             ),
 
+            const SizedBox(height: 12),
+
+            // Wake/Sleep Hours Card
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: AppStyles.borderRadiusLarge,
+                border: Border.all(
+                  color: AppColors.normalCardBackground,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.waterBlue.withValues(alpha: 0.1),
+                            borderRadius: AppStyles.borderRadiusSmall,
+                          ),
+                          child: Icon(
+                            Icons.schedule_rounded,
+                            color: AppColors.waterBlue,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Waking Hours',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                'Battery drains ~3%/hr (${_settings.wakingHours} waking hours)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.greyText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildHourPicker(
+                            label: 'Wake up',
+                            icon: Icons.wb_sunny_rounded,
+                            color: AppColors.yellow,
+                            value: _settings.wakeHour,
+                            onChanged: (hour) {
+                              setState(() {
+                                _settings = _settings.copyWith(wakeHour: hour);
+                              });
+                              _saveSettings();
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildHourPicker(
+                            label: 'Sleep',
+                            icon: Icons.nightlight_rounded,
+                            color: AppColors.purple,
+                            value: _settings.sleepHour,
+                            onChanged: (hour) {
+                              setState(() {
+                                _settings = _settings.copyWith(sleepHour: hour);
+                              });
+                              _saveSettings();
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             const SizedBox(height: 16),
 
             // Flow Points Settings Section Header
@@ -810,6 +903,68 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                   ],
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHourPicker({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required int value,
+    required ValueChanged<int> onChanged,
+  }) {
+    return InkWell(
+      onTap: () async {
+        final time = await showTimePicker(
+          context: context,
+          initialTime: TimeOfDay(hour: value, minute: 0),
+          builder: (context, child) {
+            return MediaQuery(
+              data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+              child: child!,
+            );
+          },
+        );
+        if (time != null) {
+          onChanged(time.hour);
+        }
+      },
+      borderRadius: AppStyles.borderRadiusSmall,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: AppStyles.borderRadiusSmall,
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.greyText,
+                  ),
+                ),
+                Text(
+                  '${value.toString().padLeft(2, '0')}:00',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

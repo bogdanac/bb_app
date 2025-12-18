@@ -17,6 +17,7 @@ import 'friends_tab_screen.dart';
 import 'cycle_calculation_utils.dart';
 import '../shared/snackbar_utils.dart';
 import '../Services/firebase_backup_service.dart';
+import '../Fasting/scheduled_fastings_service.dart';
 
 class CycleScreen extends StatefulWidget {
   const CycleScreen({super.key});
@@ -301,9 +302,22 @@ class _CycleScreenState extends State<CycleScreen> with TickerProviderStateMixin
     // Recalculate menstrual phase tasks with specific days
     await _recalculateMenstrualPhaseTasks();
 
+    // Recalculate fasting schedule if using menstrual-based scheduling
+    await _recalculateFastingScheduleIfNeeded();
+
     if (!mounted) return;
     final dateStr = _isSameDay(date, DateTime.now()) ? 'today' : 'on ${DateFormatUtils.formatShort(date)}';
     SnackBarUtils.showSuccess(context, 'Period started $dateStr! End it manually when finished.');
+  }
+
+  Future<void> _recalculateFastingScheduleIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final useMenstrualScheduling = prefs.getBool('fasting_use_menstrual_scheduling') ?? false;
+
+    if (useMenstrualScheduling) {
+      // Regenerate fasting schedule based on new period start date
+      await ScheduledFastingsService.regenerateSchedule();
+    }
   }
 
   Future<void> _endPeriodOnDate(DateTime date) async {

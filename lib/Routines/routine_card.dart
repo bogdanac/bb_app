@@ -9,6 +9,7 @@ import 'dart:async';
 import '../shared/snackbar_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../shared/error_logger.dart';
+import '../Energy/energy_service.dart';
 
 class RoutineCard extends StatefulWidget {
   final VoidCallback onCompleted;
@@ -120,7 +121,7 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
             item.isSkipped = false;
             item.isPostponed = false;
           }
-          
+
           // Clear old progress
           await RoutineProgressService.clearRoutineProgress(_currentRoutine!.id);
         }
@@ -186,11 +187,23 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       return;
     }
 
+    // Store step info before setState changes the index
+    final completedStep = _currentRoutine!.items[_currentStepIndex];
+    final energyLevel = completedStep.energyLevel ?? 0;
+
     setState(() {
       _currentRoutine!.items[_currentStepIndex].isCompleted = true;
       _currentRoutine!.items[_currentStepIndex].isSkipped = false; // Unmark as skipped if it was
       _moveToNextUnfinishedStep();
     });
+
+    // Track energy/flow points for completed step
+    await EnergyService.addRoutineStepEnergyConsumption(
+      stepId: completedStep.id,
+      stepTitle: completedStep.text,
+      energyLevel: energyLevel,
+      routineTitle: _currentRoutine!.title,
+    );
 
     // Save progress after each step
     await _saveProgress();
@@ -231,6 +244,22 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
 
     // Save progress after skipping
     await _saveProgress();
+
+    // Check if all steps are done (completed or permanently skipped, but not postponed)
+    if (_currentRoutine!.items.every((item) => item.isCompleted || item.isSkipped)) {
+      // Mark current routine as completed for today
+      final prefs = await SharedPreferences.getInstance();
+      final today = RoutineService.getEffectiveDate();
+      final completedKey = 'routine_completed_${_currentRoutine!.id}_$today';
+      await prefs.setBool(completedKey, true);
+
+      // Try to load the next routine automatically
+      final hasNextRoutine = await _loadNextRoutine();
+      // If no next routine available, hide the card
+      if (!hasNextRoutine) {
+        widget.onCompleted();
+      }
+    }
   }
 
   Future<void> _postponeCurrentStep() async {

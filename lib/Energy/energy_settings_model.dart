@@ -31,6 +31,10 @@ class EnergySettings {
   // Skip notification tracking
   final DateTime? pendingSkipNotification;  // Date when skip was auto-used, needs notification
 
+  // Sleep schedule settings
+  final int wakeHour;   // Hour user typically wakes up (0-23, default: 8)
+  final int sleepHour;  // Hour user typically goes to sleep (0-23, default: 22)
+
   const EnergySettings({
     this.minBattery = 5,        // Default: 5% on low energy days
     this.maxBattery = 120,      // Default: 120% on high energy days
@@ -44,6 +48,8 @@ class EnergySettings {
     this.skipDayMode = SkipDayMode.weekly,
     this.autoUseSkip = true,
     this.pendingSkipNotification,
+    this.wakeHour = 8,
+    this.sleepHour = 22,
   });
 
   Map<String, dynamic> toJson() => {
@@ -59,6 +65,8 @@ class EnergySettings {
     'skipDayMode': skipDayMode.name,
     'autoUseSkip': autoUseSkip,
     'pendingSkipNotification': pendingSkipNotification?.toIso8601String(),
+    'wakeHour': wakeHour,
+    'sleepHour': sleepHour,
   };
 
   static EnergySettings fromJson(Map<String, dynamic> json) {
@@ -92,6 +100,8 @@ class EnergySettings {
       pendingSkipNotification: json['pendingSkipNotification'] != null
           ? DateTime.parse(json['pendingSkipNotification'])
           : null,
+      wakeHour: json['wakeHour'] ?? 8,
+      sleepHour: json['sleepHour'] ?? 22,
     );
   }
 
@@ -111,6 +121,8 @@ class EnergySettings {
     bool clearLastSkipDate = false,
     bool clearLastStreakDate = false,
     bool clearPendingSkipNotification = false,
+    int? wakeHour,
+    int? sleepHour,
   }) {
     return EnergySettings(
       minBattery: minBattery ?? this.minBattery,
@@ -127,7 +139,19 @@ class EnergySettings {
       pendingSkipNotification: clearPendingSkipNotification
           ? null
           : (pendingSkipNotification ?? this.pendingSkipNotification),
+      wakeHour: wakeHour ?? this.wakeHour,
+      sleepHour: sleepHour ?? this.sleepHour,
     );
+  }
+
+  /// Get the number of waking hours based on wake and sleep settings
+  int get wakingHours {
+    if (sleepHour > wakeHour) {
+      return sleepHour - wakeHour;
+    } else {
+      // Handle overnight (e.g., wake at 22, sleep at 6)
+      return (24 - wakeHour) + sleepHour;
+    }
   }
 
   @override
@@ -146,7 +170,9 @@ class EnergySettings {
           lastStreakDate == other.lastStreakDate &&
           skipDayMode == other.skipDayMode &&
           autoUseSkip == other.autoUseSkip &&
-          pendingSkipNotification == other.pendingSkipNotification;
+          pendingSkipNotification == other.pendingSkipNotification &&
+          wakeHour == other.wakeHour &&
+          sleepHour == other.sleepHour;
 
   @override
   int get hashCode =>
@@ -161,7 +187,9 @@ class EnergySettings {
       lastStreakDate.hashCode ^
       skipDayMode.hashCode ^
       autoUseSkip.hashCode ^
-      pendingSkipNotification.hashCode;
+      pendingSkipNotification.hashCode ^
+      wakeHour.hashCode ^
+      sleepHour.hashCode;
 }
 
 /// Daily energy record for Body Battery & Flow tracking

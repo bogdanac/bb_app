@@ -3,36 +3,17 @@ import 'energy_settings_model.dart';
 /// Calculator for Flow Points system - converts energy levels to productivity points
 ///
 /// Flow Points Formula:
-/// - Draining tasks (negative energy): -5=10pts, -4=8pts, -3=6pts, -2=4pts, -1=2pts
-/// - Neutral tasks: 0=1pt
-/// - Charging tasks (positive energy): +1=2pts, +2=3pts, +3=4pts, +4=5pts, +5=6pts
+/// - 1 task = 1 flow point (regardless of energy level)
 ///
 /// Battery Formula:
 /// - Energy × 10% battery change
 /// - So -5 drains 50%, +5 charges 50%
 class FlowCalculator {
   /// Calculate flow points earned from an energy level (-5 to +5)
+  /// Each completed task gives 1 flow point
   static int calculateFlowPoints(int energyLevel) {
-    // Clamp energy level to valid range
-    final energy = energyLevel.clamp(-5, 5);
-
-    // Flow points formula:
-    // Draining tasks (negative): absolute value * 2
-    // -5 → 10, -4 → 8, -3 → 6, -2 → 4, -1 → 2
-    // Neutral: 0 → 1
-    // Charging tasks (positive): value + 1
-    // +1 → 2, +2 → 3, +3 → 4, +4 → 5, +5 → 6
-
-    if (energy < 0) {
-      // Draining tasks: |energy| * 2
-      return energy.abs() * 2;
-    } else if (energy == 0) {
-      // Neutral tasks: 1 point
-      return 1;
-    } else {
-      // Charging tasks: energy + 1
-      return energy + 1;
-    }
+    // 1 task = 1 flow point, regardless of energy level
+    return 1;
   }
 
   /// Calculate battery change percentage from energy level (-5 to +5)

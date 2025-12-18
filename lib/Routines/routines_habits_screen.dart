@@ -990,7 +990,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Cycle ${habit.currentCycle} • ${habit.getCurrentCycleProgress()}/21 days',
+                            'Cycle ${habit.currentCycle} • ${habit.getCurrentCycleProgress()}/${habit.cycleDurationDays} days',
                             style: TextStyle(
                               color: habit.isActive ? AppColors.orange : AppColors.greyText,
                               fontSize: 14,

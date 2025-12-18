@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'water_settings_model.dart';
 import 'dart:developer' as developer;
 import '../shared/timezone_utils.dart';
@@ -237,6 +238,14 @@ class WaterNotificationService {
       final settings = await WaterSettings.load();
       await scheduleNotifications(settings);
 
+      // Check current intake and cancel notifications for thresholds already met
+      final prefs = await SharedPreferences.getInstance();
+      final today = DateTime.now().toIso8601String().split('T')[0];
+      final currentIntake = prefs.getInt('water_$today') ?? 0;
+      if (currentIntake > 0) {
+        await checkAndUpdateNotifications(currentIntake, settings);
+      }
+
       developer.log('Water notification service initialized');
     } catch (e) {
       developer.log('Error initializing water notification service: $e');
@@ -248,6 +257,15 @@ class WaterNotificationService {
     try {
       final settings = await WaterSettings.load();
       await scheduleNotifications(settings);
+
+      // Check current intake and cancel notifications for thresholds already met
+      final prefs = await SharedPreferences.getInstance();
+      final today = DateTime.now().toIso8601String().split('T')[0];
+      final currentIntake = prefs.getInt('water_$today') ?? 0;
+      if (currentIntake > 0) {
+        await checkAndUpdateNotifications(currentIntake, settings);
+      }
+
       developer.log('Water notifications rescheduled for new day');
     } catch (e) {
       developer.log('Error rescheduling water notifications: $e');

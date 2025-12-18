@@ -3,6 +3,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import 'energy_calculator.dart';
 import 'energy_service.dart';
+import 'energy_settings_model.dart';
 import 'flow_calculator.dart';
 
 /// Morning Battery Prompt - Dialog shown on first app open to set starting battery
@@ -40,6 +41,7 @@ class _MorningBatteryPromptState extends State<MorningBatteryPrompt> {
   bool _isLoading = true;
   String _phase = '';
   int _cycleDay = 0;
+  EnergySettings _settings = const EnergySettings();
 
   @override
   void initState() {
@@ -49,6 +51,7 @@ class _MorningBatteryPromptState extends State<MorningBatteryPrompt> {
 
   Future<void> _loadSuggestion() async {
     try {
+      final settings = await EnergyService.loadSettings();
       final suggestion = await EnergyCalculator.calculateTodayBatterySuggestion();
       final phaseInfo = await EnergyCalculator.getCurrentPhaseInfo();
 
@@ -62,10 +65,11 @@ class _MorningBatteryPromptState extends State<MorningBatteryPrompt> {
       if (hourOfDay > 8) {
         final hoursLate = hourOfDay - 8;
         final decay = (hoursLate * 5).clamp(0, 50); // Max 50% decay
-        adjustedSuggestion = (suggestion - decay).clamp(5, 120);
+        adjustedSuggestion = (suggestion - decay).clamp(settings.minBattery, settings.maxBattery);
       }
 
       setState(() {
+        _settings = settings;
         _suggestedBattery = adjustedSuggestion;
         _selectedBattery = adjustedSuggestion;
         _phase = phaseInfo['phase'] ?? '';
@@ -244,10 +248,13 @@ class _MorningBatteryPromptState extends State<MorningBatteryPrompt> {
                 trackHeight: 8,
               ),
               child: Slider(
-                value: _selectedBattery.toDouble(),
-                min: 5,
-                max: 120,
-                divisions: 115,
+                value: _selectedBattery.toDouble().clamp(
+                  _settings.minBattery.toDouble(),
+                  _settings.maxBattery.toDouble(),
+                ),
+                min: _settings.minBattery.toDouble(),
+                max: _settings.maxBattery.toDouble(),
+                divisions: (_settings.maxBattery - _settings.minBattery).clamp(1, 200),
                 label: '$_selectedBattery%',
                 onChanged: (value) {
                   setState(() {

@@ -6,6 +6,7 @@ import '../theme/app_styles.dart';
 import 'task_card_utils.dart';
 import 'task_completion_animation.dart';
 import '../shared/date_format_utils.dart';
+import '../shared/confetti_celebration.dart';
 
 class TaskCard extends StatefulWidget {
   final Task task;
@@ -42,6 +43,19 @@ class _TaskCardState extends State<TaskCard> {
   bool _showDeleteConfirm = false;
   Timer? _holdTimer;
   Timer? _confirmTimer;
+
+  /// Check if recurrence has any menstrual phase types
+  bool _hasMenstrualPhaseRecurrence(TaskRecurrence? recurrence) {
+    if (recurrence == null) return false;
+    return recurrence.types.any((type) =>
+        type == RecurrenceType.menstrualPhase ||
+        type == RecurrenceType.follicularPhase ||
+        type == RecurrenceType.ovulationPhase ||
+        type == RecurrenceType.earlyLutealPhase ||
+        type == RecurrenceType.lateLutealPhase ||
+        type == RecurrenceType.menstrualStartDay ||
+        type == RecurrenceType.ovulationPeakDay);
+  }
 
   @override
   void dispose() {
@@ -120,13 +134,18 @@ class _TaskCardState extends State<TaskCard> {
     }
   }
 
-  void _handleCompletion() {
+  void _handleCompletion(Offset? tapPosition) {
     if (_isCompleting) return;
 
     // If task is already completed, toggle back immediately without animation
     if (widget.task.isCompleted) {
       widget.onToggleCompletion();
       return;
+    }
+
+    // Show confetti celebration at tap position
+    if (tapPosition != null && mounted) {
+      ConfettiCelebration.show(context, tapPosition);
     }
 
     // Start completion animation for uncompleted tasks
@@ -346,9 +365,12 @@ class _TaskCardState extends State<TaskCard> {
                                       widget.priorityColor ?? Colors.orange,
                                     ),
                                   // Overdue chip (for tasks scheduled in the past)
+                                  // Skip for: daily interval=1 tasks, and tasks with menstrual phase restrictions
+                                  // (menstrual phase tasks shouldn't count days outside the phase as overdue)
                                   if (widget.task.scheduledDate != null &&
                                       widget.task.scheduledDate!.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)) &&
-                                      !(widget.task.recurrence?.type == RecurrenceType.daily && widget.task.recurrence?.interval == 1))
+                                      !(widget.task.recurrence?.type == RecurrenceType.daily && widget.task.recurrence?.interval == 1) &&
+                                      !_hasMenstrualPhaseRecurrence(widget.task.recurrence))
                                     Builder(
                                       builder: (context) {
                                         final daysOverdue = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)
@@ -433,7 +455,7 @@ class _TaskCardState extends State<TaskCard> {
                       // Checkbox on the right
                       const SizedBox(width: 8),
                       GestureDetector(
-                        onTap: _handleCompletion,
+                        onTapUp: (details) => _handleCompletion(details.globalPosition),
                         behavior: HitTestBehavior.opaque,
                         child: Padding(
                           padding: const EdgeInsets.all(4.0),
@@ -441,7 +463,7 @@ class _TaskCardState extends State<TaskCard> {
                             scale: 1.2,
                             child: Checkbox(
                               value: widget.task.isCompleted,
-                              onChanged: (_) => _handleCompletion(),
+                              onChanged: (_) => _handleCompletion(null),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(4),
                               ),

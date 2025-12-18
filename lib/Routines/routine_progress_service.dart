@@ -133,9 +133,10 @@ class RoutineProgressService {
     await prefs.reload();
 
     final today = getEffectiveDate();  // Use effective date for consistency
+    final progressKey = '${_progressPrefix}${routineId}_$today';
 
     // Try routine-specific key first
-    var progressJson = prefs.getString('${_progressPrefix}${routineId}_$today');
+    var progressJson = prefs.getString(progressKey);
 
     // Fallback to legacy morning routine progress for backwards compatibility
     progressJson ??= prefs.getString('morning_routine_progress_$today');
@@ -143,10 +144,10 @@ class RoutineProgressService {
     if (progressJson == null) {
       return null;
     }
-    
+
     try {
       final progressData = jsonDecode(progressJson);
-      
+
       // Validate that progress is for today
       final lastUpdated = progressData['lastUpdated'];
       if (lastUpdated != null) {
@@ -158,7 +159,7 @@ class RoutineProgressService {
           }
         }
       }
-      
+
       return progressData;
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
@@ -175,12 +176,13 @@ class RoutineProgressService {
   static Future<void> clearRoutineProgress(String routineId) async {
     final prefs = await SharedPreferences.getInstance();
     final today = getEffectiveDate();  // Use effective date for consistency
-    
-    await prefs.remove('${_progressPrefix}${routineId}_$today');
-    
+    final progressKey = '${_progressPrefix}${routineId}_$today';
+
+    await prefs.remove(progressKey);
+
     // Also clear legacy morning routine progress for backwards compatibility
     await prefs.remove('morning_routine_progress_$today');
-    
+
     // Update widget
     await RoutineWidgetService.updateWidget();
   }
