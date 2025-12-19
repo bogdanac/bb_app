@@ -443,6 +443,67 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
               ),
             ),
 
+            const SizedBox(height: 12),
+
+            // Morning Prompt Toggle
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: AppStyles.borderRadiusLarge,
+                border: Border.all(
+                  color: AppColors.normalCardBackground,
+                ),
+              ),
+              child: SwitchListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                title: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.yellow.withValues(alpha: 0.1),
+                        borderRadius: AppStyles.borderRadiusSmall,
+                      ),
+                      child: Icon(
+                        Icons.wb_twilight_rounded,
+                        color: AppColors.yellow,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Morning Prompt',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(left: 44),
+                  child: Text(
+                    'Ask how charged you feel each morning',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.greyText,
+                    ),
+                  ),
+                ),
+                value: _settings.showMorningPrompt,
+                onChanged: (value) {
+                  setState(() {
+                    _settings = _settings.copyWith(showMorningPrompt: value);
+                  });
+                  _saveSettings();
+                },
+                activeTrackColor: AppColors.yellow.withValues(alpha: 0.5),
+                activeThumbColor: AppColors.yellow,
+              ),
+            ),
+
             const SizedBox(height: 16),
 
             // Flow Points Settings Section Header

@@ -9,14 +9,17 @@ import 'fasting_notifier.dart';
 import '../Notifications/notification_service.dart';
 import 'fasting_utils.dart';
 import 'fasting_phases.dart';
+import 'scheduled_fastings_service.dart';
 import '../shared/snackbar_utils.dart';
+import '../shared/date_picker_utils.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
 
 class FastingCard extends StatefulWidget {
   final VoidCallback? onHiddenForToday;
   final Function(bool)? onFastingStatusChanged;
-  
-  const FastingCard({super.key, this.onHiddenForToday, this.onFastingStatusChanged});
+  final VoidCallback? onTap;
+
+  const FastingCard({super.key, this.onHiddenForToday, this.onFastingStatusChanged, this.onTap});
 
   @override
   State<FastingCard> createState() => _FastingCardState();
@@ -30,6 +33,7 @@ class _FastingCardState extends State<FastingCard> {
   Timer? _timer;
   String currentFastType = '';
   String recommendedFast = '';
+  ScheduledFasting? _todayScheduledFast;
   final FastingNotifier _notifier = FastingNotifier();
   final NotificationService _notificationService = NotificationService();
   bool _hasLateLutealWarning = false;
@@ -59,9 +63,27 @@ class _FastingCardState extends State<FastingCard> {
   Future<void> _loadRecommendedFast() async {
     final recommended = await FastingUtils.getRecommendedFastType();
     debugPrint('[FastingCard] Recommended fast loaded: "$recommended"');
+
+    // Also load the scheduled fasting object for today
+    ScheduledFasting? todayFast;
+    if (recommended.isNotEmpty) {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final allFastings = await ScheduledFastingsService.getScheduledFastings();
+      todayFast = allFastings.cast<ScheduledFasting?>().firstWhere(
+        (f) => f != null &&
+               f.date.year == today.year &&
+               f.date.month == today.month &&
+               f.date.day == today.day &&
+               f.isEnabled,
+        orElse: () => null,
+      );
+    }
+
     if (mounted) {
       setState(() {
         recommendedFast = recommended;
+        _todayScheduledFast = todayFast;
       });
       debugPrint('[FastingCard] State updated with recommendedFast: "$recommendedFast"');
     }
@@ -122,6 +144,184 @@ class _FastingCardState extends State<FastingCard> {
 
     } catch (e) {
       _hasLateLutealWarning = false;
+    }
+  }
+
+  // Show options to postpone or cancel the scheduled fast
+  void _showFastOptionsSheet() {
+    if (_todayScheduledFast == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle bar
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.white54,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+
+            Text(
+              'Fast Options',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${_todayScheduledFast!.fastType} scheduled for today',
+              style: const TextStyle(fontSize: 13, color: AppColors.white54),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Postpone option
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.purple.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.schedule, color: AppColors.purple),
+              ),
+              title: const Text(
+                'Postpone Fast',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+              ),
+              subtitle: const Text(
+                'Reschedule to another day within the next 3 days',
+                style: TextStyle(color: AppColors.white54, fontSize: 12),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showPostponeDialog();
+              },
+            ),
+
+            const SizedBox(height: 8),
+
+            // Cancel option
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.red.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.cancel_outlined, color: AppColors.red),
+              ),
+              title: Text(
+                'Cancel Fast',
+                style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w500),
+              ),
+              subtitle: const Text(
+                'Skip this scheduled fast entirely',
+                style: TextStyle(color: AppColors.white54, fontSize: 12),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showCancelConfirmation();
+              },
+            ),
+
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Show date picker to postpone fast (up to 3 days)
+  Future<void> _showPostponeDialog() async {
+    if (_todayScheduledFast == null) return;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final maxDate = today.add(const Duration(days: 3));
+
+    final DateTime? newDate = await DatePickerUtils.showStyledDatePicker(
+      context: context,
+      initialDate: today.add(const Duration(days: 1)),
+      firstDate: today.add(const Duration(days: 1)), // Tomorrow at earliest
+      lastDate: maxDate, // Max 3 days from today
+    );
+
+    if (newDate != null && mounted) {
+      final updatedFasting = _todayScheduledFast!.copyWith(
+        date: newDate,
+        isAutoGenerated: false, // Mark as manually modified
+      );
+
+      await ScheduledFastingsService.updateScheduledFasting(updatedFasting);
+      await _loadFastingState(); // Reload to update UI
+
+      if (mounted) {
+        SnackBarUtils.showSuccess(
+          context,
+          'Fast postponed to ${updatedFasting.formattedDate}',
+        );
+        widget.onHiddenForToday?.call(); // Hide the card since no fast today anymore
+      }
+    }
+  }
+
+  // Show confirmation to cancel the fast
+  Future<void> _showCancelConfirmation() async {
+    if (_todayScheduledFast == null) return;
+
+    final shouldCancel = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text(
+          'Cancel Scheduled Fast?',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'This will disable the ${_todayScheduledFast!.fastType} scheduled for today. You can re-enable it from the Scheduled Fastings screen.',
+          style: const TextStyle(color: AppColors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep', style: TextStyle(color: AppColors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            child: const Text('Cancel Fast'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldCancel == true && mounted) {
+      final updatedFasting = _todayScheduledFast!.copyWith(isEnabled: false);
+      await ScheduledFastingsService.updateScheduledFasting(updatedFasting);
+      await _loadFastingState(); // Reload to update UI
+
+      if (mounted) {
+        SnackBarUtils.showError(context, 'Fast cancelled for today');
+        widget.onHiddenForToday?.call(); // Hide the card
+      }
     }
   }
 
@@ -223,13 +423,16 @@ class _FastingCardState extends State<FastingCard> {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8), // Reduced right padding for update button
-        decoration: BoxDecoration(
-          borderRadius: AppStyles.borderRadiusLarge,
-          color: AppColors.homeCardBackground, // Home card background
-        ),
-        child: Column(
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: AppStyles.borderRadiusLarge,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 8), // Reduced right padding for update button
+          decoration: BoxDecoration(
+            borderRadius: AppStyles.borderRadiusLarge,
+            color: AppColors.homeCardBackground, // Home card background
+          ),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Small late luteal phase warning
@@ -344,11 +547,11 @@ class _FastingCardState extends State<FastingCard> {
                         ],
                       ),
                     ),
-                    // Not Today button inline with Start button
-                    if (widget.onHiddenForToday != null) ...[
+                    // Options button (postpone/cancel) inline with Start button
+                    if (_todayScheduledFast != null) ...[
                       const SizedBox(width: 4),
                       OutlinedButton(
-                        onPressed: widget.onHiddenForToday,
+                        onPressed: _showFastOptionsSheet,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.white54,
                           side: const BorderSide(color: AppColors.white24),
@@ -358,7 +561,7 @@ class _FastingCardState extends State<FastingCard> {
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                           minimumSize: const Size(35, 35),
                         ),
-                        child: const Icon(Icons.update, size: 16),
+                        child: const Icon(Icons.more_horiz, size: 16),
                       ),
                     ],
                   ],
@@ -366,6 +569,7 @@ class _FastingCardState extends State<FastingCard> {
               ),
             ],
           ],
+        ),
         ),
       ),
     );

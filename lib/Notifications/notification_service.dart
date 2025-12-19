@@ -796,6 +796,89 @@ class NotificationService {
     }
   }
 
+  // Schedule 72h fast preparation reminder (3 days before)
+  Future<void> schedule72hPrepReminderNotification({
+    required DateTime fastDate,
+  }) async {
+    try {
+      final notificationId = _fastingProgressNotificationId + 11;
+
+      // Cancel existing reminder
+      await flutterLocalNotificationsPlugin.cancel(notificationId);
+
+      // Schedule 3 days before at 9 AM
+      final prepReminderTime = DateTime(
+        fastDate.year,
+        fastDate.month,
+        fastDate.day - 3,
+        9, // 9 AM
+        0,
+      );
+
+      final now = DateTime.now();
+      if (prepReminderTime.isBefore(now)) {
+        return;
+      }
+
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        notificationId,
+        '🧘 72h Fast in 3 Days',
+        'Time to start preparing! Begin 16:8 fasting, reduce carbs, and increase healthy fats. Tap for the full guide.',
+        TimezoneUtils.forNotification(prepReminderTime),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'fasting_prep_reminder',
+            'Fasting Prep Reminders',
+            channelDescription: 'Reminders to prepare for extended fasts',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+            color: Color(0xFFE91E63), // Pink
+            enableVibration: true,
+            playSound: true,
+            styleInformation: BigTextStyleInformation(
+              'Your 72-hour water fast is scheduled in 3 days. Start preparing now:\n\n'
+              '• Begin intermittent fasting (16:8)\n'
+              '• Reduce carbohydrates\n'
+              '• Increase healthy fats (avocado, olive oil, MCT)\n\n'
+              'This will shift your metabolism to fat-burning mode before the fast.',
+            ),
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'fasting_prep_reminder',
+      );
+
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.schedule72hPrepReminderNotification',
+        error: 'Error scheduling 72h prep reminder notification: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'fastDate': fastDate.toString()},
+      );
+    }
+  }
+
+  Future<void> cancel72hPrepReminderNotification() async {
+    try {
+      final notificationId = _fastingProgressNotificationId + 11;
+      await flutterLocalNotificationsPlugin.cancel(notificationId);
+
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService.cancel72hPrepReminderNotification',
+        error: 'Error cancelling 72h prep reminder notification: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }
+  }
+
   // Handle auto backup trigger from notification
 
   // Schedule daily food tracking reminder at 8 PM

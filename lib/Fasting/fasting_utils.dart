@@ -9,6 +9,8 @@ class FastingUtils {
   static const String monthlyFast = '36h monthly fast';
   static const String quarterlyFast = '48h quarterly fast';
   static const String waterFast = '3-day water fast';
+  // Cycle-adapted shorter fast (Dr. Mindy Pelz protocol)
+  static const String shortFast = '14h short fast';
 
   // List of all fast types for dropdowns
   static const List<String> fastTypes = [
@@ -16,6 +18,11 @@ class FastingUtils {
     monthlyFast,
     quarterlyFast,
     waterFast,
+  ];
+
+  // Cycle-adapted fast types (not shown in regular dropdowns)
+  static const List<String> cycleAdaptedFastTypes = [
+    shortFast,
   ];
   /// Format duration to readable string (e.g., "12h 30m")
   static String formatDuration(Duration duration) {
@@ -39,6 +46,10 @@ class FastingUtils {
       case '3-day water fast':
       case '3-days':
         return const Duration(days: 3);
+      // Cycle-adapted short fast
+      case '14h short fast':
+      case '14h':
+        return const Duration(hours: 14);
       default:
         return const Duration(hours: 24);
     }

@@ -342,4 +342,281 @@ void main() {
       expect(find.byIcon(Icons.check_circle), findsOneWidget);
     });
   });
+
+  group('RoutineCard - Skip (X) and Postpone (clock) Behavior', () {
+    setUp(() async {
+      setupFirebaseMocks();
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    testWidgets('skip button (X) permanently cancels step and moves to next', (WidgetTester tester) async {
+      final routines = [
+        Routine(
+          id: 'routine1',
+          title: 'Test Routine',
+          items: [
+            RoutineItem(id: '1', text: 'Step 1', isCompleted: false),
+            RoutineItem(id: '2', text: 'Step 2', isCompleted: false),
+            RoutineItem(id: '3', text: 'Step 3', isCompleted: false),
+          ],
+          activeDays: {1, 2, 3, 4, 5, 6, 7},
+        ),
+      ];
+
+      await RoutineService.saveRoutines(routines);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RoutineCard(
+              onCompleted: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Verify first step is showing
+      expect(find.text('Step 1'), findsOneWidget);
+
+      // Skip first step using X button (close icon)
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle();
+
+      // Should move to step 2
+      expect(find.text('Step 2'), findsOneWidget);
+    });
+
+    testWidgets('skipping last step completes routine', (WidgetTester tester) async {
+      final today = RoutineService.getEffectiveDate();
+
+      final routines = [
+        Routine(
+          id: 'routine1',
+          title: 'Test Routine',
+          items: [
+            RoutineItem(id: '1', text: 'Only Step', isCompleted: false),
+          ],
+          activeDays: {1, 2, 3, 4, 5, 6, 7},
+        ),
+      ];
+
+      await RoutineService.saveRoutines(routines);
+
+      bool completedCallbackCalled = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RoutineCard(
+              onCompleted: () {
+                completedCallbackCalled = true;
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Skip the only step
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+
+      // Routine should be marked completed
+      final prefs = await SharedPreferences.getInstance();
+      final isCompleted = prefs.getBool('routine_completed_routine1_$today') ?? false;
+      expect(isCompleted, isTrue);
+
+      // onCompleted should be called (no more routines)
+      expect(completedCallbackCalled, isTrue);
+    });
+
+    testWidgets('postpone button (clock) moves to next step', (WidgetTester tester) async {
+      final routines = [
+        Routine(
+          id: 'routine1',
+          title: 'Test Routine',
+          items: [
+            RoutineItem(id: '1', text: 'Step 1', isCompleted: false),
+            RoutineItem(id: '2', text: 'Step 2', isCompleted: false),
+          ],
+          activeDays: {1, 2, 3, 4, 5, 6, 7},
+        ),
+      ];
+
+      await RoutineService.saveRoutines(routines);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RoutineCard(
+              onCompleted: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Verify first step is showing
+      expect(find.text('Step 1'), findsOneWidget);
+
+      // Postpone first step using clock button (schedule icon)
+      await tester.tap(find.byIcon(Icons.schedule_rounded));
+      await tester.pumpAndSettle();
+
+      // Should move to step 2
+      expect(find.text('Step 2'), findsOneWidget);
+    });
+
+    testWidgets('postponed step comes back after completing other steps', (WidgetTester tester) async {
+      final routines = [
+        Routine(
+          id: 'routine1',
+          title: 'Test Routine',
+          items: [
+            RoutineItem(id: '1', text: 'Step 1', isCompleted: false),
+            RoutineItem(id: '2', text: 'Step 2', isCompleted: false),
+          ],
+          activeDays: {1, 2, 3, 4, 5, 6, 7},
+        ),
+      ];
+
+      await RoutineService.saveRoutines(routines);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RoutineCard(
+              onCompleted: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Postpone step 1
+      await tester.tap(find.byIcon(Icons.schedule_rounded));
+      await tester.pumpAndSettle();
+
+      // Should show step 2
+      expect(find.text('Step 2'), findsOneWidget);
+
+      // Complete step 2
+      await tester.tap(find.byIcon(Icons.check_rounded));
+      await tester.pumpAndSettle();
+
+      // Step 1 should come back (it was postponed, not skipped)
+      expect(find.text('Step 1'), findsOneWidget);
+    });
+  });
+
+  group('RoutineCard - Energy Callback', () {
+    setUp(() async {
+      setupFirebaseMocks();
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    testWidgets('onEnergyChanged callback is called when step is completed', (WidgetTester tester) async {
+      final routines = [
+        Routine(
+          id: 'routine1',
+          title: 'Test Routine',
+          items: [
+            RoutineItem(id: '1', text: 'Step with energy', isCompleted: false, energyLevel: 2),
+            RoutineItem(id: '2', text: 'Step 2', isCompleted: false),
+          ],
+          activeDays: {1, 2, 3, 4, 5, 6, 7},
+        ),
+      ];
+
+      await RoutineService.saveRoutines(routines);
+
+      bool energyCallbackCalled = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RoutineCard(
+              onCompleted: () {},
+              onEnergyChanged: () {
+                energyCallbackCalled = true;
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Complete step with energy
+      await tester.tap(find.byIcon(Icons.check_rounded));
+      await tester.pumpAndSettle();
+
+      // Energy callback should have been called
+      expect(energyCallbackCalled, isTrue);
+    });
+  });
+
+  group('RoutineCard - Multiple Routine Navigation', () {
+    setUp(() async {
+      setupFirebaseMocks();
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    testWidgets('skipping all steps in routine moves to next routine', (WidgetTester tester) async {
+      final today = RoutineService.getEffectiveDate();
+
+      final routines = [
+        Routine(
+          id: 'routine1',
+          title: 'First Routine',
+          items: [
+            RoutineItem(id: '1', text: 'First Step', isCompleted: false),
+          ],
+          activeDays: {1, 2, 3, 4, 5, 6, 7},
+        ),
+        Routine(
+          id: 'routine2',
+          title: 'Second Routine',
+          items: [
+            RoutineItem(id: '2', text: 'Second Step', isCompleted: false),
+          ],
+          activeDays: {1, 2, 3, 4, 5, 6, 7},
+        ),
+      ];
+
+      await RoutineService.saveRoutines(routines);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RoutineCard(
+              onCompleted: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Verify first routine is showing
+      expect(find.text('First Routine'), findsOneWidget);
+
+      // Skip the only step in first routine
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+
+      // First routine should be marked completed
+      final prefs = await SharedPreferences.getInstance();
+      final firstCompleted = prefs.getBool('routine_completed_routine1_$today') ?? false;
+      expect(firstCompleted, isTrue);
+
+      // Should now show second routine
+      expect(find.text('Second Routine'), findsOneWidget);
+    });
+  });
 }

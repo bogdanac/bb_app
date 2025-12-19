@@ -2,18 +2,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'fasting_utils.dart';
 import '../Services/firebase_backup_service.dart';
+import '../Notifications/notification_service.dart';
 
 class ScheduledFastingsService {
   static const String _scheduledFastingsKey = 'scheduled_fastings';
 
-  // Phase day offsets from period start (based on standard 28-day cycle)
-  static const Map<String, int> _phaseStartDays = {
-    'Menstrual Phase': 0,      // Days 1-5
-    'Follicular Phase': 5,     // Days 6-11
-    'Ovulation Window': 11,    // Days 12-16
-    'Early Luteal Phase': 16,  // Days 17-21
-    'Late Luteal Phase': 21,   // Days 22-28
-  };
+  // Dr. Pelz cycle-based fasting rules (when menstrual scheduling is enabled):
+  // - 36h monthly: Start Day 6-7 (follicular, estrogen rising)
+  // - 48h quarterly: Start Day 7 ONLY (max buffer from menstruation & ovulation)
+  // - 72h biannual: Start Day 7 ONLY (widest safety margin)
+  // - 24h weekly: Day 4-10 (follicular) OR Day 15-17 (early luteal) ONLY
+  // - After 48h/72h fast: Skip next weekly fast (recovery week, max 14h IF)
+  // - Avoid fasting: Days 1-3 (menstruation), Days 12-14 (ovulation peak), Day 20+ (late luteal)
 
   /// Get all scheduled fastings
   static Future<List<ScheduledFasting>> getScheduledFastings() async {
@@ -35,8 +35,36 @@ class ScheduledFastingsService {
     final jsonString = jsonEncode(fastings.map((f) => f.toJson()).toList());
     await prefs.setString(_scheduledFastingsKey, jsonString);
 
+    // Schedule 72h prep reminder for upcoming water fasts
+    await _schedule72hPrepReminders(fastings);
+
     // Backup to Firebase
     FirebaseBackupService.triggerBackup();
+  }
+
+  /// Schedule prep reminders for 72h water fasts (3 days before)
+  static Future<void> _schedule72hPrepReminders(List<ScheduledFasting> fastings) async {
+    final notificationService = NotificationService();
+    final now = DateTime.now();
+
+    // Find the next upcoming 72h water fast
+    final upcoming72hFasts = fastings
+        .where((f) =>
+            f.fastType == FastingUtils.waterFast &&
+            f.isEnabled &&
+            f.date.isAfter(now))
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    if (upcoming72hFasts.isNotEmpty) {
+      // Schedule prep reminder for the next 72h fast
+      await notificationService.schedule72hPrepReminderNotification(
+        fastDate: upcoming72hFasts.first.date,
+      );
+    } else {
+      // No upcoming 72h fasts, cancel any existing reminder
+      await notificationService.cancel72hPrepReminderNotification();
+    }
   }
 
   /// Generate default schedule based on preferred day and scheduling mode (fixed day or menstrual)
@@ -50,32 +78,19 @@ class ScheduledFastingsService {
     final preferredDay = prefs.getInt('preferred_fasting_day') ?? 5; // Default to Friday
     final preferredMonthlyDay = prefs.getInt('preferred_monthly_fasting_day') ?? 25; // Default to 25th
     final useMenstrualScheduling = prefs.getBool('fasting_use_menstrual_scheduling') ?? false;
-    final menstrualPhase = prefs.getString('fasting_menstrual_phase') ?? 'Late Luteal Phase';
-    final menstrualPhaseDay = prefs.getInt('fasting_menstrual_phase_day') ?? 1;
 
+    // If menstrual scheduling is enabled, use Dr. Pelz's cycle-based protocol
+    if (useMenstrualScheduling) {
+      return await _generateCycleBasedSchedule(prefs, now, endDate, preferredDay);
+    }
+
+    // Otherwise use fixed-day scheduling (original logic)
     DateTime current = DateTime(now.year, now.month, now.day - 3); // Start from 3 days ago for grace period
     DateTime? lastFastEnd; // Track when the last fast ends
 
-    // For menstrual scheduling, calculate long fast dates based on cycle
-    List<DateTime> menstrualLongFastDates = [];
-    if (useMenstrualScheduling) {
-      menstrualLongFastDates = await _calculateMenstrualLongFastDates(
-        now, endDate, menstrualPhase, menstrualPhaseDay,
-      );
-    }
-
     while (current.isBefore(endDate)) {
       final isPreferredDay = current.weekday == preferredDay;
-
-      // For long fasts: either fixed day or menstrual-based
-      bool isLongFastDay;
-      if (useMenstrualScheduling) {
-        isLongFastDay = menstrualLongFastDates.any((d) =>
-          d.year == current.year && d.month == current.month && d.day == current.day
-        );
-      } else {
-        isLongFastDay = current.day == preferredMonthlyDay;
-      }
+      final isLongFastDay = current.day == preferredMonthlyDay;
 
       if (isPreferredDay || isLongFastDay) {
         // Check if we need to skip this date due to ongoing fast
@@ -86,7 +101,7 @@ class ScheduledFastingsService {
 
         final (fastType, shouldSkipPreferredDay) = _getSmartFastTypeForDate(
           current, isPreferredDay, isLongFastDay, schedule, preferredDay, preferredMonthlyDay,
-          useMenstrualScheduling: useMenstrualScheduling,
+          useMenstrualScheduling: false,
         );
 
         if (fastType.isNotEmpty) {
@@ -96,7 +111,7 @@ class ScheduledFastingsService {
             fastType: fastType,
             isEnabled: true,
             isAutoGenerated: true,
-            isEstimate: useMenstrualScheduling && isLongFastDay && !isPreferredDay,
+            isEstimate: false,
           );
 
           schedule.add(newFast);
@@ -123,55 +138,198 @@ class ScheduledFastingsService {
     return schedule;
   }
 
-  /// Calculate long fast dates based on menstrual cycle
-  static Future<List<DateTime>> _calculateMenstrualLongFastDates(
-    DateTime startDate,
+  /// Generate cycle-based schedule following Dr. Pelz's protocol
+  /// Rules:
+  /// - Long fasts (36h/48h/72h): Start on user-selected cycle day (default Day 7)
+  /// - Weekly 24h: Only on Days 4-10 (follicular) or Days 15-17 (early luteal)
+  /// - Skip weekly fast the week after a 48h or 72h fast (recovery)
+  /// - No fasting Days 1-3, 12-14, 20+
+  static Future<List<ScheduledFasting>> _generateCycleBasedSchedule(
+    SharedPreferences prefs,
+    DateTime now,
     DateTime endDate,
-    String phase,
-    int phaseDay,
+    int preferredWeekday,
   ) async {
-    final List<DateTime> dates = [];
-    final prefs = await SharedPreferences.getInstance();
+    final List<ScheduledFasting> schedule = [];
 
-    // Get last period start and average cycle length
+    // Get cycle data
     final lastPeriodStartStr = prefs.getString('last_period_start');
     final averageCycleLength = prefs.getInt('average_cycle_length') ?? 28;
+    final longFastCycleDay = prefs.getInt('fasting_long_fast_cycle_day') ?? 7; // Default Day 7
 
     if (lastPeriodStartStr == null) {
-      // No period data - fall back to estimating based on current date
-      return dates;
+      // No period data - fall back to fixed scheduling
+      return schedule;
     }
 
     final lastPeriodStart = DateTime.parse(lastPeriodStartStr);
-    final phaseOffset = _phaseStartDays[phase] ?? 0;
+    final startDate = DateTime(now.year, now.month, now.day - 3);
 
-    // Calculate the day within the cycle for the long fast
-    // phaseDay is 1-indexed (Day 1, Day 2, etc.)
-    final dayInCycle = phaseOffset + phaseDay; // e.g., Late Luteal (21) + Day 1 = Day 22
-
-    // Find periods that fall within our date range
+    // Find all cycle starts within our date range
+    List<DateTime> cycleStarts = [];
     DateTime periodStart = lastPeriodStart;
 
-    // Go back a few cycles to catch any that might fall in our range
+    // Go back to find cycles that might overlap with our range
     while (periodStart.isAfter(startDate.subtract(Duration(days: averageCycleLength)))) {
       periodStart = periodStart.subtract(Duration(days: averageCycleLength));
     }
 
-    // Now iterate forward through cycles
+    // Collect cycle starts
     while (periodStart.isBefore(endDate)) {
-      // Calculate the long fast date for this cycle
-      final longFastDate = periodStart.add(Duration(days: dayInCycle - 1)); // -1 because day 1 = 0 offset
-
-      if (longFastDate.isAfter(startDate.subtract(const Duration(days: 4))) &&
-          longFastDate.isBefore(endDate)) {
-        dates.add(DateTime(longFastDate.year, longFastDate.month, longFastDate.day));
+      if (periodStart.isAfter(startDate.subtract(Duration(days: averageCycleLength)))) {
+        cycleStarts.add(DateTime(periodStart.year, periodStart.month, periodStart.day));
       }
-
-      // Move to next cycle
       periodStart = periodStart.add(Duration(days: averageCycleLength));
     }
 
-    return dates;
+    // Track recovery weeks (skip weekly fast after 48h/72h)
+    Set<DateTime> recoveryWeekStarts = {};
+
+    // First pass: Schedule long fasts on user-selected cycle day
+    for (int i = 0; i < cycleStarts.length; i++) {
+      final cycleStart = cycleStarts[i];
+      final longFastDate = cycleStart.add(Duration(days: longFastCycleDay - 1)); // Convert to 0-indexed
+
+      if (longFastDate.isBefore(startDate) || longFastDate.isAfter(endDate)) continue;
+
+      // Determine long fast type based on timing
+      final String longFastType;
+      final month = longFastDate.month;
+
+      // 72h: January and September (twice per year)
+      if (month == 1 || month == 9) {
+        longFastType = FastingUtils.waterFast;
+        // Add recovery week after 72h fast
+        final recoveryWeekStart = longFastDate.add(const Duration(days: 7));
+        recoveryWeekStarts.add(DateTime(recoveryWeekStart.year, recoveryWeekStart.month, recoveryWeekStart.day));
+      }
+      // 48h: Quarterly (April, July, October) - months that aren't 72h months
+      else if (month == 4 || month == 7 || month == 10) {
+        longFastType = FastingUtils.quarterlyFast;
+        // Add recovery week after 48h fast
+        final recoveryWeekStart = longFastDate.add(const Duration(days: 7));
+        recoveryWeekStarts.add(DateTime(recoveryWeekStart.year, recoveryWeekStart.month, recoveryWeekStart.day));
+      }
+      // 36h: All other months
+      else {
+        longFastType = FastingUtils.monthlyFast;
+      }
+
+      schedule.add(ScheduledFasting(
+        id: '${longFastDate.millisecondsSinceEpoch}',
+        date: longFastDate,
+        fastType: longFastType,
+        isEnabled: true,
+        isAutoGenerated: true,
+        isEstimate: true, // Cycle-based dates are estimates
+        notes: 'Day $longFastCycleDay of cycle - ${_getLongFastName(longFastType)}',
+      ));
+    }
+
+    // Second pass: Schedule weekly fasts on safe days
+    // Safe days: 4-10 (follicular) or 15-17 (early luteal)
+    DateTime current = startDate;
+    while (current.isBefore(endDate)) {
+      // Check if this is the preferred weekday
+      if (current.weekday == preferredWeekday) {
+        // Find which cycle this date belongs to
+        final cycleDay = _getCycleDayForDate(current, cycleStarts, averageCycleLength);
+
+        if (cycleDay != null) {
+          // Check if this is a safe day for 24h fast
+          final isSafeFollicular = cycleDay >= 4 && cycleDay <= 10;
+          final isSafeEarlyLuteal = cycleDay >= 15 && cycleDay <= 17;
+
+          // Check if we're in a recovery week
+          final isRecoveryWeek = _isInRecoveryWeek(current, recoveryWeekStarts);
+
+          // Check if there's already a long fast scheduled within 3 days
+          final hasNearbyLongFast = schedule.any((f) =>
+            f.fastType != FastingUtils.weeklyFast &&
+            (f.date.difference(current).inDays.abs() <= 3)
+          );
+
+          if ((isSafeFollicular || isSafeEarlyLuteal) && !isRecoveryWeek && !hasNearbyLongFast) {
+            schedule.add(ScheduledFasting(
+              id: '${current.millisecondsSinceEpoch}',
+              date: current,
+              fastType: FastingUtils.weeklyFast,
+              isEnabled: true,
+              isAutoGenerated: true,
+              isEstimate: true,
+              notes: isSafeFollicular
+                  ? 'Day $cycleDay - Follicular phase (safe for 24h)'
+                  : 'Day $cycleDay - Early luteal (safe for 24h)',
+            ));
+          }
+          // If not safe but is preferred day, use shorter 14h fast
+          else if (cycleDay >= 12 && cycleDay <= 14) {
+            // Ovulation window - use 14h short fast instead
+            schedule.add(ScheduledFasting(
+              id: '${current.millisecondsSinceEpoch}',
+              date: current,
+              fastType: FastingUtils.shortFast,
+              isEnabled: true,
+              isAutoGenerated: true,
+              isEstimate: true,
+              notes: 'Day $cycleDay - Ovulation window (14h short fast)',
+            ));
+          }
+          // Late luteal or menstrual - skip or use very short fast
+          // Days 1-3 or 20+ are avoided entirely
+        }
+      }
+      current = current.add(const Duration(days: 1));
+    }
+
+    // Sort by date
+    schedule.sort((a, b) => a.date.compareTo(b.date));
+
+    await saveScheduledFastings(schedule);
+    return schedule;
+  }
+
+  /// Get the cycle day for a given date
+  static int? _getCycleDayForDate(DateTime date, List<DateTime> cycleStarts, int cycleLength) {
+    for (int i = cycleStarts.length - 1; i >= 0; i--) {
+      if (date.isAfter(cycleStarts[i]) || _isSameDay(date, cycleStarts[i])) {
+        final daysSinceCycleStart = date.difference(cycleStarts[i]).inDays;
+        if (daysSinceCycleStart < cycleLength) {
+          return daysSinceCycleStart + 1; // Day 1 = first day of period
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Check if date is within a recovery week
+  static bool _isInRecoveryWeek(DateTime date, Set<DateTime> recoveryWeekStarts) {
+    for (final weekStart in recoveryWeekStarts) {
+      final weekEnd = weekStart.add(const Duration(days: 7));
+      if ((date.isAfter(weekStart) || _isSameDay(date, weekStart)) && date.isBefore(weekEnd)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Check if two dates are the same day
+  static bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  /// Get human-readable name for long fast type
+  static String _getLongFastName(String fastType) {
+    switch (fastType) {
+      case '36h monthly fast':
+        return 'monthly fat burner';
+      case '48h quarterly fast':
+        return 'quarterly dopamine reset';
+      case '3-day water fast':
+        return 'biannual immune reset';
+      default:
+        return 'extended fast';
+    }
   }
 
   /// Smart scheduling logic for a specific date - returns (fastType, shouldSkipPreferredDay)
@@ -392,6 +550,9 @@ class ScheduledFasting {
         return '48h';
       case '3-day water fast':
         return '3-Day';
+      // Cycle-adapted short fast
+      case '14h short fast':
+        return '14h';
       default:
         return fastType;
     }

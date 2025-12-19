@@ -347,6 +347,15 @@ class EnergyService {
     return newRecord;
   }
 
+  /// Set the decay start time for today
+  /// Called when user confirms morning prompt to start decay from that moment
+  static Future<void> setDecayStartTime(DateTime startTime) async {
+    final prefs = await SharedPreferences.getInstance();
+    final dateKey = _getTodayKey();
+    final lastDecayKey = '${dateKey}_last_decay';
+    await prefs.setString(lastDecayKey, startTime.toIso8601String());
+  }
+
   // ========================
   // HISTORY MANAGEMENT
   // ========================

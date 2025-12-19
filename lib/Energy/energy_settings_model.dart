@@ -35,6 +35,9 @@ class EnergySettings {
   final int wakeHour;   // Hour user typically wakes up (0-23, default: 8)
   final int sleepHour;  // Hour user typically goes to sleep (0-23, default: 22)
 
+  // UI settings
+  final bool showMorningPrompt;  // Show morning battery prompt dialog (default: true)
+
   const EnergySettings({
     this.minBattery = 5,        // Default: 5% on low energy days
     this.maxBattery = 120,      // Default: 120% on high energy days
@@ -50,6 +53,7 @@ class EnergySettings {
     this.pendingSkipNotification,
     this.wakeHour = 8,
     this.sleepHour = 22,
+    this.showMorningPrompt = true,
   });
 
   Map<String, dynamic> toJson() => {
@@ -67,6 +71,7 @@ class EnergySettings {
     'pendingSkipNotification': pendingSkipNotification?.toIso8601String(),
     'wakeHour': wakeHour,
     'sleepHour': sleepHour,
+    'showMorningPrompt': showMorningPrompt,
   };
 
   static EnergySettings fromJson(Map<String, dynamic> json) {
@@ -102,6 +107,7 @@ class EnergySettings {
           : null,
       wakeHour: json['wakeHour'] ?? 8,
       sleepHour: json['sleepHour'] ?? 22,
+      showMorningPrompt: json['showMorningPrompt'] ?? true,
     );
   }
 
@@ -123,6 +129,7 @@ class EnergySettings {
     bool clearPendingSkipNotification = false,
     int? wakeHour,
     int? sleepHour,
+    bool? showMorningPrompt,
   }) {
     return EnergySettings(
       minBattery: minBattery ?? this.minBattery,
@@ -141,6 +148,7 @@ class EnergySettings {
           : (pendingSkipNotification ?? this.pendingSkipNotification),
       wakeHour: wakeHour ?? this.wakeHour,
       sleepHour: sleepHour ?? this.sleepHour,
+      showMorningPrompt: showMorningPrompt ?? this.showMorningPrompt,
     );
   }
 
@@ -172,7 +180,8 @@ class EnergySettings {
           autoUseSkip == other.autoUseSkip &&
           pendingSkipNotification == other.pendingSkipNotification &&
           wakeHour == other.wakeHour &&
-          sleepHour == other.sleepHour;
+          sleepHour == other.sleepHour &&
+          showMorningPrompt == other.showMorningPrompt;
 
   @override
   int get hashCode =>
@@ -189,7 +198,8 @@ class EnergySettings {
       autoUseSkip.hashCode ^
       pendingSkipNotification.hashCode ^
       wakeHour.hashCode ^
-      sleepHour.hashCode;
+      sleepHour.hashCode ^
+      showMorningPrompt.hashCode;
 }
 
 /// Daily energy record for Body Battery & Flow tracking

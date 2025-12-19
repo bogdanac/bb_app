@@ -16,10 +16,11 @@ class BatteryFlowHomeCard extends StatefulWidget {
   const BatteryFlowHomeCard({super.key});
 
   @override
-  State<BatteryFlowHomeCard> createState() => _BatteryFlowHomeCardState();
+  State<BatteryFlowHomeCard> createState() => BatteryFlowHomeCardState();
 }
 
-class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
+/// Public state class so external code can call refresh()
+class BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _controller;
   late Animation<double> _expandAnimation;
@@ -99,6 +100,11 @@ class _BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
     } else {
       _controller.reverse();
     }
+  }
+
+  /// Public method to refresh the card data (called when energy changes externally)
+  Future<void> refresh() async {
+    await _loadData();
   }
 
   Future<void> _loadData() async {

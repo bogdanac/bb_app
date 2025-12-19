@@ -240,6 +240,15 @@ class Habit {
     isCompleted = false;
   }
 
+  /// Restart current cycle without saving to history
+  /// Use this when user wants to start fresh without recording the failed attempt
+  void restartCurrentCycle(DateTime newStartDate) {
+    // Don't save to history - just clear progress
+    completedDates.clear();
+    startDate = newStartDate;
+    isCompleted = false;
+  }
+
   int getTotalCompletedDays() {
     return completedDates.length;
   }

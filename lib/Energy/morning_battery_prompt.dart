@@ -15,6 +15,17 @@ class MorningBatteryPrompt extends StatefulWidget {
 
   /// Show the morning battery prompt
   static Future<void> show(BuildContext context) async {
+    // Check if morning prompt is enabled
+    final settings = await EnergyService.loadSettings();
+    if (!settings.showMorningPrompt) {
+      // Auto-initialize with suggested battery if prompt is disabled
+      final today = await EnergyService.getTodayRecord();
+      if (today == null) {
+        await EnergyCalculator.initializeToday();
+      }
+      return;
+    }
+
     // Check if already set today
     final today = await EnergyService.getTodayRecord();
     if (today != null) {
@@ -56,15 +67,15 @@ class _MorningBatteryPromptState extends State<MorningBatteryPrompt> {
       final phaseInfo = await EnergyCalculator.getCurrentPhaseInfo();
 
       // Adjust suggestion based on time of day
-      // Battery decays ~5% per hour, so if it's later in the day, reduce suggestion
+      // Battery decays ~3% per hour, so if it's later in the day, reduce suggestion
       final now = DateTime.now();
       final hourOfDay = now.hour;
 
-      // Assume "morning" baseline is 8 AM - if later, apply decay
+      // Use wake hour from settings - if later, apply decay
       int adjustedSuggestion = suggestion;
-      if (hourOfDay > 8) {
-        final hoursLate = hourOfDay - 8;
-        final decay = (hoursLate * 5).clamp(0, 50); // Max 50% decay
+      if (hourOfDay > settings.wakeHour) {
+        final hoursLate = hourOfDay - settings.wakeHour;
+        final decay = (hoursLate * 3).clamp(0, 50); // Max 50% decay, 3%/hr
         adjustedSuggestion = (suggestion - decay).clamp(settings.minBattery, settings.maxBattery);
       }
 
@@ -97,6 +108,21 @@ class _MorningBatteryPromptState extends State<MorningBatteryPrompt> {
         menstrualPhase: _phase,
         cycleDayNumber: _cycleDay,
       );
+
+      // Set decay start time:
+      // - If before configured wake hour: start decay from NOW (woke up early)
+      // - If after configured wake hour: start decay from wake hour (missed time already accounted in suggestion)
+      final now = DateTime.now();
+      final settings = await EnergyService.loadSettings();
+      DateTime decayStartTime;
+      if (now.hour < settings.wakeHour) {
+        // Woke up early - start decay from now
+        decayStartTime = now;
+      } else {
+        // After wake hour - start decay from configured wake time
+        decayStartTime = DateTime(now.year, now.month, now.day, settings.wakeHour, 0);
+      }
+      await EnergyService.setDecayStartTime(decayStartTime);
 
       if (!mounted) return;
       Navigator.of(context).pop();

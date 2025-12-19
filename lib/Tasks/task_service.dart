@@ -59,16 +59,20 @@ class TaskService {
       final todayDate = DateTime(today.year, today.month, today.day);
 
       for (int i = 0; i < tasks.length; i++) {
-        // Case 1: New recurring tasks without scheduledDate
+        // Case 1: Recurring tasks that need scheduling
+        // - Tasks without scheduledDate need initial scheduling
+        // - Tasks with past scheduledDate need rescheduling to today/future
         // IMPORTANT: Skip menstrual tasks - they should NOT be auto-scheduled
-        // Menstrual tasks with scheduledDate==null and isPostponed==false were intentionally skipped
         final isMenstrualTask = tasks[i].recurrence != null &&
             _isMenstrualCycleTask(tasks[i].recurrence!);
 
+        final needsScheduling = tasks[i].scheduledDate == null ||
+            tasks[i].scheduledDate!.isBefore(todayDate);
+
         if (tasks[i].recurrence != null &&
-            tasks[i].scheduledDate == null &&
+            needsScheduling &&
             !tasks[i].isCompleted &&
-            !isMenstrualTask) {  // Exclude menstrual tasks
+            !isMenstrualTask) {
           final updatedTask = await _recurrenceCalculator.calculateNextScheduledDate(tasks[i], prefs);
           if (updatedTask != null) {
             tasks[i] = updatedTask;
@@ -158,14 +162,22 @@ class TaskService {
     bool skipWidgetUpdate = false,
   }) async {
     try {
-      // Auto-schedule recurring tasks without scheduledDate (same logic as loadTasks)
+      // Auto-schedule recurring tasks that need scheduling (same logic as loadTasks)
+      // - Tasks without scheduledDate need initial scheduling
+      // - Tasks with past scheduledDate need rescheduling to today/future
       final prefs = await SharedPreferences.getInstance();
+      final today = DateTime.now();
+      final todayDate = DateTime(today.year, today.month, today.day);
+
       for (int i = 0; i < tasks.length; i++) {
         final isMenstrualTask = tasks[i].recurrence != null &&
             _isMenstrualCycleTask(tasks[i].recurrence!);
 
+        final needsScheduling = tasks[i].scheduledDate == null ||
+            tasks[i].scheduledDate!.isBefore(todayDate);
+
         if (tasks[i].recurrence != null &&
-            tasks[i].scheduledDate == null &&
+            needsScheduling &&
             !tasks[i].isCompleted &&
             !isMenstrualTask) {
           final updatedTask = await _recurrenceCalculator.calculateNextScheduledDate(tasks[i], prefs);
@@ -344,6 +356,10 @@ class TaskService {
   /// Skip to next occurrence (for recurring tasks)
   Future<Task?> skipToNextOccurrence(Task task) async {
     try {
+      // IMPORTANT: Cancel the existing notification FIRST before any updates
+      // This ensures recurring notifications are properly cancelled
+      await cancelTaskNotification(task);
+
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
 
@@ -430,6 +446,10 @@ class TaskService {
   /// Postpone a task to tomorrow
   Future<void> postponeTaskToTomorrow(Task task) async {
     try {
+      // IMPORTANT: Cancel the existing notification FIRST before any updates
+      // This ensures recurring notifications are properly cancelled
+      await cancelTaskNotification(task);
+
       final now = DateTime.now();
       final tomorrow = DateTime(now.year, now.month, now.day + 1);
 

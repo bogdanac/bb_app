@@ -6,6 +6,8 @@ import 'scheduled_fastings_service.dart';
 import 'fasting_utils.dart';
 import '../shared/date_picker_utils.dart';
 import '../shared/snackbar_utils.dart';
+import 'extended_fast_guide_screen.dart';
+import 'fasting_guide_screen.dart';
 
 class ScheduledFastingsScreen extends StatefulWidget {
   const ScheduledFastingsScreen({super.key});
@@ -19,6 +21,8 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
   bool _isLoading = true;
   int _preferredFastingDay = 5; // Default to Friday (1=Monday, 7=Sunday)
   int _preferredMonthlyFastingDay = 25; // Default to 25th (1-31)
+  bool _useMenstrualScheduling = false;
+  int _longFastCycleDay = 7; // Default to Day 7 (Dr. Pelz recommendation)
 
   @override
   void initState() {
@@ -26,6 +30,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
     _loadScheduledFastings();
     _loadPreferredFastingDay();
     _loadPreferredMonthlyFastingDay();
+    _loadMenstrualSettings();
   }
 
   Future<void> _loadScheduledFastings() async {
@@ -72,6 +77,14 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
     });
   }
 
+  Future<void> _loadMenstrualSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _useMenstrualScheduling = prefs.getBool('fasting_use_menstrual_scheduling') ?? false;
+      _longFastCycleDay = prefs.getInt('fasting_long_fast_cycle_day') ?? 7;
+    });
+  }
+
   void _openFastingPreferencesScreen() async {
     final result = await Navigator.push<bool>(
       context,
@@ -86,6 +99,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
     if (result == true && mounted) {
       await _loadPreferredFastingDay();
       await _loadPreferredMonthlyFastingDay();
+      await _loadMenstrualSettings();
       await _loadScheduledFastings();
     }
   }
@@ -111,49 +125,214 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
     }
   }
 
-  Future<void> _regenerateSchedule() async {
-    final shouldRegenerate = await showDialog<bool>(
+  void _showFastingInfoSheet() {
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.dialogBackground,
-        title: const Text(
-          'Fix Overlapping Fasts',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'This will regenerate all auto-scheduled fasts to fix overlapping issues. Your manually added fasts will be preserved.\n\nContinue?',
-          style: TextStyle(color: AppColors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.white54)),
+      backgroundColor: AppColors.dialogBackground,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => SingleChildScrollView(
+          controller: scrollController,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle bar
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: AppColors.white54,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // Title
+              const Row(
+                children: [
+                  Icon(Icons.auto_awesome, color: AppColors.coral, size: 24),
+                  SizedBox(width: 10),
+                  Text(
+                    'How Your Fasts Are Scheduled',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+              const Text(
+                'Based on Dr. Mindy Pelz\'s fasting protocols',
+                style: TextStyle(fontSize: 13, color: AppColors.white54, fontStyle: FontStyle.italic),
+              ),
+
+              const SizedBox(height: 20),
+
+              // 24h Weekly
+              _buildFastInfoCard(
+                icon: Icons.calendar_today_rounded,
+                color: AppColors.orange,
+                title: '24-Hour Weekly Fast',
+                subtitle: 'Every week on your chosen day',
+                description: 'A foundational fast for metabolic flexibility and fat adaptation. Builds your fasting muscle.',
+              ),
+
+              const SizedBox(height: 12),
+
+              // 36h Monthly
+              _buildFastInfoCard(
+                icon: Icons.local_fire_department_rounded,
+                color: AppColors.coral,
+                title: '36-Hour Monthly Fast',
+                subtitle: 'Once per month • "Fat Burner"',
+                description: 'Effective for unsticking weight loss and burning stubborn fat. Long enough for stored energy use and metabolic signaling.',
+              ),
+
+              const SizedBox(height: 12),
+
+              // 48h Quarterly
+              _buildFastInfoCard(
+                icon: Icons.psychology_rounded,
+                color: AppColors.purple,
+                title: '48-Hour Quarterly Fast',
+                subtitle: 'Every 3 months • "Dopamine Reset"',
+                description: 'After ~48 hours without food, your dopamine system "reboots", improving motivation and reward signaling.',
+              ),
+
+              const SizedBox(height: 12),
+
+              // 72h Semi-annually
+              _buildFastInfoCard(
+                icon: Icons.healing_rounded,
+                color: AppColors.pink,
+                title: '72-Hour Fast (3-Day)',
+                subtitle: 'Twice per year • "Immune Reset"',
+                description: 'Triggers stem-cell activation and immune system renewal. Only needed occasionally — Dr. Pelz suggests once or twice per year.',
+              ),
+
+              const SizedBox(height: 20),
+
+              // Note about scheduling
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.dialogCardBackground,
+                  borderRadius: AppStyles.borderRadiusMedium,
+                  border: Border.all(color: AppColors.greyText.withValues(alpha: 0.3)),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.lightbulb_outline, color: AppColors.orange, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Scheduling Logic',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      '• Longer fasts are scheduled on your chosen day (fixed or cycle-based)\n'
+                      '• January & September: 72h water fasts\n'
+                      '• Quarterly months (Apr, Jul, Oct): 48h fasts\n'
+                      '• Other months: 36h monthly fasts\n'
+                      '• Weekly fasts are skipped when covered by longer fasts',
+                      style: TextStyle(fontSize: 12, color: AppColors.white70, height: 1.5),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.coral),
-            child: const Text('Fix Schedule'),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFastInfoCard({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required String description,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: AppStyles.borderRadiusMedium,
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.2),
+              borderRadius: AppStyles.borderRadiusSmall,
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.white54,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.white70,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
-
-    if (shouldRegenerate == true) {
-      setState(() => _isLoading = true);
-      try {
-        await ScheduledFastingsService.regenerateSchedule();
-        await _loadScheduledFastings();
-        
-        if (mounted) {
-          SnackBarUtils.showSuccess(context, '✅ Schedule fixed! Overlapping fasts have been resolved.');
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          SnackBarUtils.showError(context, 'Error fixing schedule: $e');
-        }
-      }
-    }
   }
 
   Future<void> _showRescheduleDialog(ScheduledFasting fasting) async {
@@ -185,7 +364,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
 
   Future<void> _showFastTypeDialog(ScheduledFasting fasting) async {
     final List<String> fastTypes = [
-      '24h weekly wast',
+      '24h weekly fast',
       '36h monthly fast', 
       '48h quarterly fast',
       '3-day water fast',
@@ -282,9 +461,20 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
     final updatedFasting = fasting.copyWith(
       isEnabled: !fasting.isEnabled,
     );
-    
+
     await ScheduledFastingsService.updateScheduledFasting(updatedFasting);
     await _loadScheduledFastings();
+  }
+
+  void _openFastingGuide(String fastType) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => fastType == FastingUtils.waterFast
+            ? const ExtendedFastGuideScreen()
+            : FastingGuideScreen(fastType: fastType),
+      ),
+    );
   }
 
   Widget _buildFastingCard(ScheduledFasting fasting) {
@@ -484,7 +674,26 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                         ),
                       ),
                     ),
-                    
+
+                    const SizedBox(width: 12),
+
+                    // Guide button
+                    InkWell(
+                      onTap: () => _openFastingGuide(fasting.fastType),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.pink.withValues(alpha: 0.15),
+                          borderRadius: AppStyles.borderRadiusSmall,
+                        ),
+                        child: const Icon(
+                          Icons.menu_book_rounded,
+                          size: 18,
+                          color: AppColors.pink,
+                        ),
+                      ),
+                    ),
+
                     const Spacer(),
                     
                     // Delete button
@@ -515,7 +724,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
 
   Color _getFastTypeColor(String fastType) {
     switch (fastType) {
-      case '24h weekly wast':
+      case '24h weekly fast':
         return AppColors.coral;
       case '36h monthly fast':
         return AppColors.orange;
@@ -523,6 +732,9 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
         return AppColors.purple;
       case '3-day water fast':
         return AppColors.pink;
+      // Cycle-adapted short fast
+      case '14h short fast':
+        return AppColors.yellow;
       default:
         return AppColors.coral;
     }
@@ -544,9 +756,9 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
             tooltip: 'Fasting Preferences',
           ),
           IconButton(
-            onPressed: _regenerateSchedule,
-            icon: const Icon(Icons.auto_fix_high),
-            tooltip: 'Fix Overlapping Fasts',
+            onPressed: _showFastingInfoSheet,
+            icon: const Icon(Icons.info_outline_rounded),
+            tooltip: 'About Fasting Schedule',
           ),
         ],
       ),
@@ -633,12 +845,23 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          'Weekly: ${_getDayName(_preferredFastingDay)} • Monthly: $_preferredMonthlyFastingDay${_getOrdinalSuffix(_preferredMonthlyFastingDay)}',
+                                          _useMenstrualScheduling
+                                              ? 'Weekly: ${_getDayName(_preferredFastingDay)} • Long: Cycle Day $_longFastCycleDay'
+                                              : 'Weekly: ${_getDayName(_preferredFastingDay)} • Long: $_preferredMonthlyFastingDay${_getOrdinalSuffix(_preferredMonthlyFastingDay)} of month',
                                           style: const TextStyle(
-                                            fontSize: 14,
+                                            fontSize: 13,
                                             color: AppColors.white70,
                                           ),
                                         ),
+                                        if (_useMenstrualScheduling)
+                                          const Text(
+                                            'Cycle-based scheduling',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.pink,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
                                       ],
                                     ),
                                   ),
@@ -689,17 +912,14 @@ class _FastingPreferencesScreenState extends State<FastingPreferencesScreen> {
   late int _selectedWeeklyDay;
   late int _selectedMonthlyDay;
   late bool _useMenstrualScheduling;
-  late String _selectedMenstrualPhase;
-  late int _selectedPhaseDay;
+  late int _selectedLongFastCycleDay; // Day of cycle for long fasts (default: 7)
 
-  // Menstrual phases with their day ranges
-  static const Map<String, int> _phaseDayLimits = {
-    'Menstrual Phase': 5,
-    'Follicular Phase': 6,
-    'Ovulation Window': 5,
-    'Early Luteal Phase': 5,
-    'Late Luteal Phase': 7,
-  };
+  // Track initial values to detect changes
+  late int _initialWeeklyDay;
+  late int _initialMonthlyDay;
+  late bool _initialUseMenstrualScheduling;
+  late int _initialLongFastCycleDay;
+  bool _initialValuesLoaded = false;
 
   @override
   void initState() {
@@ -708,8 +928,7 @@ class _FastingPreferencesScreenState extends State<FastingPreferencesScreen> {
     _selectedMonthlyDay = widget.initialMonthlyDay;
     // Default to fixed day scheduling (not menstrual-based)
     _useMenstrualScheduling = false;
-    _selectedMenstrualPhase = 'Late Luteal Phase';
-    _selectedPhaseDay = 1;
+    _selectedLongFastCycleDay = 7; // Default: Day 7 (Dr. Pelz recommendation)
     _loadMenstrualSettings();
   }
 
@@ -717,9 +936,23 @@ class _FastingPreferencesScreenState extends State<FastingPreferencesScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _useMenstrualScheduling = prefs.getBool('fasting_use_menstrual_scheduling') ?? false;
-      _selectedMenstrualPhase = prefs.getString('fasting_menstrual_phase') ?? 'Late Luteal Phase';
-      _selectedPhaseDay = prefs.getInt('fasting_menstrual_phase_day') ?? 1;
+      _selectedLongFastCycleDay = prefs.getInt('fasting_long_fast_cycle_day') ?? 7;
+
+      // Store initial values to detect changes
+      _initialWeeklyDay = _selectedWeeklyDay;
+      _initialMonthlyDay = _selectedMonthlyDay;
+      _initialUseMenstrualScheduling = _useMenstrualScheduling;
+      _initialLongFastCycleDay = _selectedLongFastCycleDay;
+      _initialValuesLoaded = true;
     });
+  }
+
+  bool get _hasChanges {
+    if (!_initialValuesLoaded) return false;
+    return _selectedWeeklyDay != _initialWeeklyDay ||
+        _selectedMonthlyDay != _initialMonthlyDay ||
+        _useMenstrualScheduling != _initialUseMenstrualScheduling ||
+        _selectedLongFastCycleDay != _initialLongFastCycleDay;
   }
 
   Future<void> _savePreferences() async {
@@ -728,8 +961,7 @@ class _FastingPreferencesScreenState extends State<FastingPreferencesScreen> {
     await prefs.setInt('preferred_fasting_day', _selectedWeeklyDay);
     await prefs.setInt('preferred_monthly_fasting_day', _selectedMonthlyDay);
     await prefs.setBool('fasting_use_menstrual_scheduling', _useMenstrualScheduling);
-    await prefs.setString('fasting_menstrual_phase', _selectedMenstrualPhase);
-    await prefs.setInt('fasting_menstrual_phase_day', _selectedPhaseDay);
+    await prefs.setInt('fasting_long_fast_cycle_day', _selectedLongFastCycleDay);
 
     // Regenerate schedule with new settings
     await ScheduledFastingsService.regenerateSchedule();
@@ -793,6 +1025,75 @@ class _FastingPreferencesScreenState extends State<FastingPreferencesScreen> {
               _buildMenstrualPhaseSelector()
             else
               _buildFixedDaySelector(),
+
+            // Show recalculate prompt when preferences changed
+            if (_hasChanges) ...[
+              const SizedBox(height: 24),
+              _buildRecalculatePrompt(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecalculatePrompt() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusMedium),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: AppStyles.borderRadiusMedium,
+          gradient: LinearGradient(
+            colors: [
+              AppColors.coral.withValues(alpha: 0.2),
+              AppColors.orange.withValues(alpha: 0.1),
+            ],
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.auto_fix_high_rounded, color: AppColors.coral, size: 20),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Preferences Changed',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Your fasting schedule will be recalculated with these new settings when you save.',
+              style: TextStyle(fontSize: 13, color: AppColors.white70),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _savePreferences,
+                icon: const Icon(Icons.check_rounded, size: 18),
+                label: const Text('Save & Recalculate Schedule'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.coral,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: AppStyles.borderRadiusSmall,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1144,8 +1445,10 @@ class _FastingPreferencesScreenState extends State<FastingPreferencesScreen> {
               style: const TextStyle(fontSize: 13, color: AppColors.white70),
             ),
             const SizedBox(height: 12),
+            // 31 days in 7 columns = 5 rows. Each cell ~36px + 6px spacing = ~42px per row
+            // 5 rows * 42 = 210, plus some padding = 220
             SizedBox(
-              height: 200,
+              height: 220,
               child: GridView.builder(
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -1162,7 +1465,7 @@ class _FastingPreferencesScreenState extends State<FastingPreferencesScreen> {
                     onTap: () {
                       setState(() {
                         _selectedMonthlyDay = dayNumber;
-                                              });
+                      });
                     },
                     behavior: HitTestBehavior.opaque,
                     child: Container(
@@ -1195,10 +1498,13 @@ class _FastingPreferencesScreenState extends State<FastingPreferencesScreen> {
   }
 
   Widget _buildMenstrualPhaseSelector() {
-    final maxDays = _phaseDayLimits[_selectedMenstrualPhase] ?? 5;
-    // Ensure selected day doesn't exceed max for current phase
-    if (_selectedPhaseDay > maxDays) {
-      _selectedPhaseDay = maxDays;
+    // Get phase name for the selected cycle day
+    String getPhaseName(int cycleDay) {
+      if (cycleDay <= 5) return 'Menstrual Phase';
+      if (cycleDay <= 11) return 'Follicular Phase';
+      if (cycleDay <= 16) return 'Ovulation Window';
+      if (cycleDay <= 21) return 'Early Luteal Phase';
+      return 'Late Luteal Phase';
     }
 
     return Card(
@@ -1219,7 +1525,7 @@ class _FastingPreferencesScreenState extends State<FastingPreferencesScreen> {
                 const Icon(Icons.favorite_rounded, color: AppColors.pink, size: 20),
                 const SizedBox(width: 8),
                 const Text(
-                  'Menstrual Phase & Day',
+                  'Cycle Day for Long Fasts',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -1230,103 +1536,114 @@ class _FastingPreferencesScreenState extends State<FastingPreferencesScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Long fasts will be scheduled on a specific day of the selected menstrual phase. Dates will be estimated and recalculated when you start a new period.',
+              'Choose which day of your cycle to schedule long fasts (36h, 48h, 72h). Day 7 is recommended by Dr. Pelz for optimal hormonal balance.',
               style: TextStyle(fontSize: 12, color: AppColors.white70),
             ),
             const SizedBox(height: 16),
 
-            // Phase selector
+            // Current selection display
+            Text(
+              'Currently set to: Day $_selectedLongFastCycleDay (${getPhaseName(_selectedLongFastCycleDay)})',
+              style: const TextStyle(fontSize: 13, color: AppColors.white70),
+            ),
+            const SizedBox(height: 12),
+
+            // Cycle day selector - Days 1-14 (follicular half is safest for long fasts)
             const Text(
-              'Select Phase:',
+              'Select Cycle Day:',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.white70),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _phaseDayLimits.keys.map((phase) {
-                final isSelected = phase == _selectedMenstrualPhase;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedMenstrualPhase = phase;
-                      // Reset day if it exceeds new phase limit
-                      final newMax = _phaseDayLimits[phase] ?? 5;
-                      if (_selectedPhaseDay > newMax) {
-                        _selectedPhaseDay = 1;
-                      }
-                                          });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColors.pink : AppColors.dialogBackground,
-                      borderRadius: AppStyles.borderRadiusSmall,
-                      border: Border.all(
-                        color: isSelected ? AppColors.pink : AppColors.greyText.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Text(
-                      phase,
-                      style: TextStyle(
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? Colors.white : AppColors.white70,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
 
-            const SizedBox(height: 16),
+            // Show days 4-10 as recommended (follicular phase safe zone)
+            SizedBox(
+              height: 180,
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  childAspectRatio: 1,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 6,
+                ),
+                itemCount: 14, // Show days 1-14 (days 15+ not recommended for long fasts)
+                itemBuilder: (context, index) {
+                  final dayNumber = index + 1;
+                  final isSelected = dayNumber == _selectedLongFastCycleDay;
+                  final isRecommended = dayNumber >= 6 && dayNumber <= 8; // Days 6-8 optimal
+                  final isSafe = dayNumber >= 4 && dayNumber <= 10; // Days 4-10 safe
 
-            // Day within phase selector
-            Text(
-              'Select Day within $_selectedMenstrualPhase:',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.white70),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: List.generate(maxDays, (index) {
-                final dayNumber = index + 1;
-                final isSelected = dayNumber == _selectedPhaseDay;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedPhaseDay = dayNumber;
-                                          });
-                  },
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColors.pink : AppColors.dialogBackground,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(
-                        color: isSelected ? AppColors.pink : AppColors.greyText.withValues(alpha: 0.3),
+                  Color getBorderColor() {
+                    if (isSelected) return AppColors.pink;
+                    if (isRecommended) return AppColors.successGreen.withValues(alpha: 0.5);
+                    if (isSafe) return AppColors.purple.withValues(alpha: 0.3);
+                    return AppColors.greyText.withValues(alpha: 0.2);
+                  }
+
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedLongFastCycleDay = dayNumber;
+                      });
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.pink
+                            : (isRecommended ? AppColors.successGreen.withValues(alpha: 0.15) : AppColors.dialogBackground),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: getBorderColor(), width: isSelected ? 2 : 1),
                       ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Day $dayNumber',
-                        style: TextStyle(
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          color: Colors.white,
-                          fontSize: 10,
+                      child: Center(
+                        child: Text(
+                          '$dayNumber',
+                          style: TextStyle(
+                            fontWeight: isSelected || isRecommended ? FontWeight.bold : FontWeight.normal,
+                            color: isSelected ? Colors.white : (isRecommended ? AppColors.successGreen : AppColors.white70),
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ),
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Legend
+            Row(
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: AppColors.successGreen.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(3),
+                    border: Border.all(color: AppColors.successGreen.withValues(alpha: 0.5)),
                   ),
-                );
-              }),
+                ),
+                const SizedBox(width: 6),
+                const Text('Recommended (6-8)', style: TextStyle(fontSize: 11, color: AppColors.white54)),
+                const SizedBox(width: 16),
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: AppColors.dialogBackground,
+                    borderRadius: BorderRadius.circular(3),
+                    border: Border.all(color: AppColors.purple.withValues(alpha: 0.3)),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Text('Safe (4-10)', style: TextStyle(fontSize: 11, color: AppColors.white54)),
+              ],
             ),
 
             const SizedBox(height: 16),
 
-            // Info box about estimates
+            // Info box
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -1340,7 +1657,7 @@ class _FastingPreferencesScreenState extends State<FastingPreferencesScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Scheduled for Day $_selectedPhaseDay of $_selectedMenstrualPhase. Dates will show as estimates until your next period starts.',
+                      'Long fasts scheduled for Day $_selectedLongFastCycleDay of each cycle. Dates recalculate when you start a new period.',
                       style: const TextStyle(fontSize: 11, color: AppColors.white70),
                     ),
                   ),

@@ -37,7 +37,26 @@
       "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" log --oneline -5)",
       "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff HEAD~2..HEAD~1 -- lib/Tasks)",
       "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" show 4f3a7e2 --stat)",
-      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff 4f3a7e2~1..4f3a7e2 -- lib/Tasks/repositories/task_repository.dart)"
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff 4f3a7e2~1..4f3a7e2 -- lib/Tasks/repositories/task_repository.dart)",
+      "Bash(dir \"c:\\Dev\\Projects\\bb_app\\lib\\Routines\")",
+      "Bash(Select-String -Pattern \"FAILED|Expected|Actual|reason|\\[E\\]\")",
+      "Bash(dart analyze:*)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" show 65b1542~1:android/app/src/main/res/layout/battery_flow_widget.xml)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" log --oneline -20 -- lib/Tasks/repositories/task_repository.dart)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" show HEAD:lib/Routines/routines_habits_screen.dart)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" show HEAD:lib/Routines/routine_service.dart)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" show HEAD:lib/Routines/routine_card.dart)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff --staged -- lib/main.dart)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" checkout HEAD -- lib/main.dart)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" checkout HEAD -- lib/Routines/routines_habits_screen.dart)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" reset HEAD -- lib/Routines/manual_routine_restore.dart)",
+      "Bash(del \"C:\\Dev\\Projects\\bb_app\\lib\\Routines\\manual_routine_restore.dart\")",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" checkout HEAD -- lib/Routines/routine_recovery_helper.dart)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" status --short)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" add lib/Routines/routine_service.dart)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff --staged --stat)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" show 4ec2e8b --stat)",
+      "Bash(git -C \"C:\\Dev\\Projects\\bb_app\" diff --stat lib/Routines/routine_service.dart lib/Services/realtime_sync_service.dart)"
     ]
   },
   "outputStyle": "default"

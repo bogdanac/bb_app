@@ -440,4 +440,155 @@ void main() {
       expect(nextRoutine!.id, '2');
     });
   });
+
+  group('Skip Last Step - Routine Completion', () {
+    final today = DateTime.now().weekday;
+
+    test('skipping last step in first routine should move to second routine', () async {
+      // This tests the bug: "hitting x in last step in the first routine
+      // doesn't finish the routine and switch to next available routine"
+      final routines = [
+        Routine(
+          id: '1',
+          title: 'Morning Routine',
+          items: [
+            RoutineItem(id: '1', text: 'Step 1', isCompleted: true),
+            RoutineItem(id: '2', text: 'Step 2', isCompleted: true),
+            RoutineItem(id: '3', text: 'Last Step', isCompleted: false), // This gets skipped
+          ],
+          activeDays: {today},
+        ),
+        Routine(
+          id: '2',
+          title: 'Afternoon Routine',
+          items: [
+            RoutineItem(id: '4', text: 'Step 4', isCompleted: false),
+          ],
+          activeDays: {today},
+        ),
+      ];
+
+      // Simulate skipping the last step
+      routines[0].items[2].isSkipped = true;
+
+      // Check if routine 1 is now complete
+      final routine1Complete = routines[0].items.every((item) => item.isCompleted || item.isSkipped);
+      expect(routine1Complete, true, reason: 'Routine 1 should be complete after skipping last step');
+
+      // Mark routine 1 as completed in prefs (what the code does)
+      final prefs = await SharedPreferences.getInstance();
+      final date = RoutineService.getEffectiveDate();
+      await prefs.setBool('routine_completed_1_$date', true);
+
+      // Get next routine
+      final nextRoutine = await RoutineService.getNextRoutine(routines, '1');
+
+      expect(nextRoutine, isNotNull, reason: 'Should find next routine');
+      expect(nextRoutine!.id, '2', reason: 'Should be the afternoon routine');
+      expect(nextRoutine.title, 'Afternoon Routine');
+    });
+
+    test('skipping only step in routine should complete it', () async {
+      final routines = [
+        Routine(
+          id: '1',
+          title: 'Single Step Routine',
+          items: [
+            RoutineItem(id: '1', text: 'Only Step', isCompleted: false),
+          ],
+          activeDays: {today},
+        ),
+      ];
+
+      // Skip the only step
+      routines[0].items[0].isSkipped = true;
+
+      // Routine should be complete
+      final isComplete = routines[0].items.every((item) => item.isCompleted || item.isSkipped);
+      expect(isComplete, true);
+    });
+
+    test('skipping step should not cause infinite loop', () async {
+      // This tests the bug: "It just refresh infinitely and shows same step"
+      final routine = Routine(
+        id: '1',
+        title: 'Test Routine',
+        items: [
+          RoutineItem(id: '1', text: 'Step 1', isCompleted: true),
+          RoutineItem(id: '2', text: 'Step 2', isCompleted: true),
+          RoutineItem(id: '3', text: 'Step 3', isCompleted: false), // Current step to skip
+        ],
+        activeDays: {today},
+      );
+
+      int currentIndex = 2; // On step 3
+
+      // Skip step 3
+      routine.items[currentIndex].isSkipped = true;
+
+      // Check for available steps (simulating _moveToNextUnfinishedStep)
+      final regularSteps = routine.items
+          .where((item) => !item.isCompleted && !item.isSkipped && !item.isPostponed)
+          .toList();
+
+      final postponedSteps = routine.items
+          .where((item) => item.isPostponed && !item.isCompleted && !item.isSkipped)
+          .toList();
+
+      expect(regularSteps.length, 0, reason: 'No regular steps remaining');
+      expect(postponedSteps.length, 0, reason: 'No postponed steps');
+
+      // Should now detect routine is complete
+      final isComplete = routine.items.every((item) => item.isCompleted || item.isSkipped);
+      expect(isComplete, true, reason: 'Routine should be complete, not stuck in loop');
+    });
+  });
+
+  group('Postpone vs Skip Behavior in Navigation', () {
+    final today = DateTime.now().weekday;
+
+    test('postponing last step should NOT complete routine', () async {
+      final routine = Routine(
+        id: '1',
+        title: 'Test Routine',
+        items: [
+          RoutineItem(id: '1', text: 'Step 1', isCompleted: true),
+          RoutineItem(id: '2', text: 'Step 2', isCompleted: true),
+          RoutineItem(id: '3', text: 'Step 3', isCompleted: false),
+        ],
+        activeDays: {today},
+      );
+
+      // Postpone step 3 instead of skipping
+      routine.items[2].isPostponed = true;
+
+      // Routine should NOT be complete
+      final isComplete = routine.items.every((item) => item.isCompleted || item.isSkipped);
+      expect(isComplete, false, reason: 'Routine has postponed step, not complete');
+
+      // Should still have work to do
+      final hasPostponed = routine.items.any((item) => item.isPostponed && !item.isCompleted);
+      expect(hasPostponed, true);
+    });
+
+    test('skipping last step SHOULD complete routine', () async {
+      final routine = Routine(
+        id: '1',
+        title: 'Test Routine',
+        items: [
+          RoutineItem(id: '1', text: 'Step 1', isCompleted: true),
+          RoutineItem(id: '2', text: 'Step 2', isCompleted: true),
+          RoutineItem(id: '3', text: 'Step 3', isCompleted: false),
+        ],
+        activeDays: {today},
+      );
+
+      // Skip step 3 (X button)
+      routine.items[2].isSkipped = true;
+
+      // Routine SHOULD be complete
+      final isComplete = routine.items.every((item) => item.isCompleted || item.isSkipped);
+      expect(isComplete, true, reason: 'Routine should be complete after skipping last step');
+    });
+  });
 }

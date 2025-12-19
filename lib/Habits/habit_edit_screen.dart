@@ -197,13 +197,11 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
 
   Future<void> _restartCurrentCycle() async {
     if (widget.habit != null) {
-      // Clear all completed dates to restart the cycle
-      widget.habit!.completedDates.clear();
-
-      // Update startDate to today to reset the calendar
+      // Restart cycle without saving to history
       final now = DateTime.now();
-      widget.habit!.startDate = DateTime(now.year, now.month, now.day);
-      _startDate = widget.habit!.startDate;
+      final newStartDate = DateTime(now.year, now.month, now.day);
+      widget.habit!.restartCurrentCycle(newStartDate);
+      _startDate = newStartDate;
 
       // Save the updated habit
       await HabitService.updateHabit(widget.habit!);
@@ -975,11 +973,11 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
                 ),
               ),
             const SizedBox(height: 8),
-            // Calendar preview for new habits or habits without progress
-            if (widget.habit == null || widget.habit!.completedDates.isEmpty)
+            // Calendar preview for new habits only
+            if (widget.habit == null)
               _buildCycleCalendar(isPreview: true),
-            // Progress section for existing habits with progress
-            if (widget.habit != null && widget.habit!.completedDates.isNotEmpty) ...[
+            // Progress section for existing habits (even with no progress yet)
+            if (widget.habit != null) ...[
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(12),

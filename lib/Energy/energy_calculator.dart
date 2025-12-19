@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:shared_preferences/shared_preferences.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
 import 'energy_settings_model.dart';
@@ -143,32 +145,38 @@ class EnergyCalculator {
     }
   }
 
-  /// Calculate battery percentage based on cycle day (5-120%)
+  /// Calculate battery percentage based on cycle day using cosine curve
+  /// - Day 1 (period start): minBattery
+  /// - Ovulation (~cycle/2): maxBattery (peak)
+  /// - Last day: back to minBattery
   static int _calculateBatteryForCycleDay(
     int cycleDay,
     int averageCycleLength,
     EnergySettings settings,
   ) {
-    // Same logic as flow goals, but for battery percentage
-    const ovulationDay = 14; // Peak high battery
-    final lastLutealDay = averageCycleLength; // Peak low battery
-    final totalSpan = lastLutealDay - ovulationDay;
+    // Ovulation is approximately at the midpoint of the cycle
+    final ovulationDay = averageCycleLength ~/ 2;
 
-    // Battery range
-    final batteryRange = settings.maxBattery - settings.minBattery;
+    // Calculate using cosine curve
+    // We want: day 1 = min, ovulation = max, last day = min
+    // Shift the cosine so peak is at ovulation day
+    // cos(0) = 1, cos(π) = -1, cos(2π) = 1
+    // We need to map: day 1 -> π (trough), ovulation -> 0 (peak), last day -> π (trough)
 
-    if (cycleDay <= ovulationDay) {
-      // Before or at ovulation: battery increases towards peak
-      final progressToOvulation = cycleDay / ovulationDay;
-      final baseBattery = settings.minBattery + (batteryRange * 0.4); // Start at 40% of range
-      final bonus = batteryRange * 0.6 * progressToOvulation; // Add up to 60% more
-      return (baseBattery + bonus).round().clamp(settings.minBattery, settings.maxBattery);
-    } else {
-      // After ovulation: battery decreases towards late luteal
-      final progressToLutealEnd = (cycleDay - ovulationDay) / totalSpan;
-      final battery = settings.maxBattery - (batteryRange * progressToLutealEnd);
-      return battery.round().clamp(settings.minBattery, settings.maxBattery);
-    }
+    // Calculate angle: map cycle day to angle where ovulation = 0 (peak of cosine)
+    // Day 1 should map to -π, ovulation to 0, last day to π
+    final double angle = (cycleDay - ovulationDay) / ovulationDay * math.pi;
+
+    // Cosine gives us -1 to 1, we need to map to minBattery to maxBattery
+    // cos(0) = 1 (peak at ovulation), cos(±π) = -1 (trough at day 1 and last day)
+    final double cosValue = math.cos(angle);
+
+    // Map from [-1, 1] to [minBattery, maxBattery]
+    final double mid = (settings.minBattery + settings.maxBattery) / 2;
+    final double amplitude = (settings.maxBattery - settings.minBattery) / 2;
+    final double battery = mid + (amplitude * cosValue);
+
+    return battery.round().clamp(settings.minBattery, settings.maxBattery);
   }
 
   /// Get current phase info for display

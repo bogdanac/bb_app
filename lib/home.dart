@@ -28,7 +28,9 @@ import 'package:flutter/services.dart';
 
 // HOME SCREEN
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final void Function(int)? onNavigateToTab;
+
+  const HomeScreen({super.key, this.onNavigateToTab});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -56,6 +58,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Key to access CalendarEventsCard for refresh
   final GlobalKey _calendarEventsKey = GlobalKey();
+
+  // Key to access BatteryFlowHomeCard for refresh
+  final GlobalKey<BatteryFlowHomeCardState> _batteryFlowCardKey = GlobalKey<BatteryFlowHomeCardState>();
 
   @override
   void initState() {
@@ -629,7 +634,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(height: 4), // Consistent spacing
 
               // Battery & Flow Card
-              const BatteryFlowHomeCard(),
+              BatteryFlowHomeCard(key: _batteryFlowCardKey),
               const SizedBox(height: 4), // Consistent spacing
 
               // Calendar Events Card
@@ -645,6 +650,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       _isFastingInProgress = isFasting;
                     });
                   },
+                  onTap: () => widget.onNavigateToTab?.call(0), // Navigate to Fasting tab (index 0)
                 ),
                 const SizedBox(height: 4), // Consistent spacing
               ],
@@ -677,6 +683,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 RoutineCard(
                   key: _routineCardKey,
                   onCompleted: _onRoutineCompleted,
+                  onEnergyChanged: () {
+                    // Refresh the Battery & Flow card when energy changes
+                    _batteryFlowCardKey.currentState?.refresh();
+                  },
                 ),
                 const SizedBox(height: 4), // Consistent spacing
               ],

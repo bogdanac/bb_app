@@ -19,6 +19,8 @@ import '../MenstrualCycle/menstrual_cycle_utils.dart';
 import '../shared/error_logger.dart';
 import 'package:flutter/services.dart';
 import 'start_fast_dialog.dart';
+import 'extended_fast_guide_screen.dart';
+import 'fasting_guide_screen.dart';
 
 class FastingScreen extends StatefulWidget {
   const FastingScreen({super.key});
@@ -1578,6 +1580,35 @@ class _FastingScreenState extends State<FastingScreen>
                             ),
                           ),
                         ),
+
+                        // Fast Guide button (show for all fast types)
+                        if (recommendedFast.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: TextButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => recommendedFast == FastingUtils.waterFast
+                                        ? const ExtendedFastGuideScreen()
+                                        : FastingGuideScreen(fastType: recommendedFast),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.menu_book_rounded, size: 18),
+                              label: Text(recommendedFast == FastingUtils.waterFast
+                                  ? 'View 72h Fast Guide'
+                                  : 'View Fasting Guide'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: recommendedFast == FastingUtils.waterFast
+                                    ? AppColors.pink
+                                    : AppColors.purple,
+                              ),
+                            ),
+                          ),
+                        ],
 
                         // Postpone button
                         if (showPostponeButton) ...[

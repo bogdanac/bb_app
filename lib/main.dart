@@ -607,10 +607,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
   int _selectedIndex = 2; // Always start with Home (index 2)
   late AnimationController _animationController;
 
-  final List<Widget> _screens = [
+  List<Widget> get _screens => [
     const FastingScreen(),
     const CycleScreen(),
-    const HomeScreen(),
+    HomeScreen(onNavigateToTab: _onItemTapped),
     const TodoScreen(),
     const RoutinesHabitsScreen(),
   ];

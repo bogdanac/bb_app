@@ -22,6 +22,18 @@ class TaskPriorityService {
         ? tasks
         : tasks.where((task) => !task.isCompleted).toList();
 
+    // If showing only completed tasks, sort by completion date (newest first)
+    // Don't use priority scoring for completed tasks view
+    if (includeCompleted && availableTasks.every((t) => t.isCompleted)) {
+      availableTasks.sort((a, b) {
+        if (a.completedAt == null && b.completedAt == null) return 0;
+        if (a.completedAt == null) return 1;
+        if (b.completedAt == null) return -1;
+        return b.completedAt!.compareTo(a.completedAt!); // Newest first
+      });
+      return availableTasks.take(maxTasks).toList();
+    }
+
     // Pre-calculate priority scores for all tasks
     final taskScores = <Task, int>{};
     for (final task in availableTasks) {

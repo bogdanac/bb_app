@@ -13,10 +13,12 @@ import '../Energy/energy_service.dart';
 
 class RoutineCard extends StatefulWidget {
   final VoidCallback onCompleted;
+  final VoidCallback? onEnergyChanged;
 
   const RoutineCard({
     super.key,
     required this.onCompleted,
+    this.onEnergyChanged,
   });
 
   @override
@@ -204,6 +206,9 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       energyLevel: energyLevel,
       routineTitle: _currentRoutine!.title,
     );
+
+    // Notify that energy changed so home card can refresh
+    widget.onEnergyChanged?.call();
 
     // Save progress after each step
     await _saveProgress();
@@ -581,62 +586,6 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                           ),
                         ),
                       ],
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              // No current step available but not all completed - show postponed steps
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.2),
-                  borderRadius: AppStyles.borderRadiusSmall,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.orange),
-                        SizedBox(width: 8),
-                        Text('You have postponed steps remaining:'),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    ...(_currentRoutine!.items
-                        .where((item) => item.isPostponed)
-                        .map((item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.skip_next, size: 16, color: AppColors.greyText),
-                              const SizedBox(width: 8),
-                              Expanded(child: Text(item.text, style: const TextStyle(color: AppColors.greyText))),
-                            ],
-                          ),
-                        ))),
-                    const SizedBox(height: 8),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          // Reset all skipped steps so they can be retaken
-                          for (var item in _currentRoutine!.items) {
-                            if (item.isSkipped) {
-                              item.isSkipped = false;
-                            }
-                          }
-                          // Find the next unfinished step
-                          _moveToNextUnfinishedStep();
-                        });
-                        _saveProgress();
-                      },
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: const Text('Do Skipped Steps'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
-                      ),
                     ),
                   ],
                 ),

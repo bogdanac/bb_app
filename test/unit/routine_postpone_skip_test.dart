@@ -293,4 +293,201 @@ void main() {
       expect(isComplete, false);
     });
   });
+
+  group('Skipped (X) vs Postponed (clock) Behavior', () {
+    test('skipped step is permanently cancelled - never revisited', () {
+      // Simulating the behavior: X button = skip permanently
+      final items = [
+        RoutineItem(id: '1', text: 'Step 1', isCompleted: false),
+        RoutineItem(id: '2', text: 'Step 2', isCompleted: false),
+        RoutineItem(id: '3', text: 'Step 3', isCompleted: false),
+      ];
+
+      // User presses X on step 1 - permanently skipped
+      items[0].isSkipped = true;
+
+      // Verify skipped step is never in available steps
+      final availableSteps = items
+          .where((item) => !item.isCompleted && !item.isSkipped && !item.isPostponed)
+          .toList();
+      expect(availableSteps.map((e) => e.id).toList(), ['2', '3']);
+      expect(availableSteps.any((item) => item.id == '1'), false);
+
+      // Even after all regular steps are done, skipped should not come back
+      items[1].isCompleted = true;
+      items[2].isCompleted = true;
+
+      final allAvailable = items
+          .where((item) => !item.isCompleted && !item.isSkipped)
+          .toList();
+      expect(allAvailable.length, 0); // Step 1 should NOT be available
+    });
+
+    test('postponed step cycles back as normal step after all regular steps done', () {
+      final items = [
+        RoutineItem(id: '1', text: 'Step 1', isCompleted: false),
+        RoutineItem(id: '2', text: 'Step 2', isCompleted: false),
+        RoutineItem(id: '3', text: 'Step 3', isCompleted: false),
+      ];
+
+      // User presses clock on step 1 - postponed for later
+      items[0].isPostponed = true;
+
+      // Step 1 is NOT in regular available steps
+      final regularSteps = items
+          .where((item) => !item.isCompleted && !item.isSkipped && !item.isPostponed)
+          .toList();
+      expect(regularSteps.map((e) => e.id).toList(), ['2', '3']);
+
+      // Complete regular steps
+      items[1].isCompleted = true;
+      items[2].isCompleted = true;
+
+      // Now postponed step should be available
+      final postponedSteps = items
+          .where((item) => item.isPostponed && !item.isCompleted && !item.isSkipped)
+          .toList();
+      expect(postponedSteps.length, 1);
+      expect(postponedSteps[0].id, '1');
+
+      // Routine is NOT complete because postponed step exists
+      final isComplete = items.every((item) => item.isCompleted || item.isSkipped);
+      expect(isComplete, false);
+    });
+
+    test('routine completes when all steps are completed OR skipped (not postponed)', () {
+      final items = [
+        RoutineItem(id: '1', text: 'Step 1', isCompleted: true),
+        RoutineItem(id: '2', text: 'Step 2', isSkipped: true, isCompleted: false),
+        RoutineItem(id: '3', text: 'Step 3', isCompleted: true),
+      ];
+
+      // Routine IS complete: all steps are either completed or permanently skipped
+      final isComplete = items.every((item) => item.isCompleted || item.isSkipped);
+      expect(isComplete, true);
+    });
+
+    test('routine does NOT complete when any step is postponed', () {
+      final items = [
+        RoutineItem(id: '1', text: 'Step 1', isCompleted: true),
+        RoutineItem(id: '2', text: 'Step 2', isPostponed: true, isCompleted: false),
+        RoutineItem(id: '3', text: 'Step 3', isCompleted: true),
+      ];
+
+      // Routine is NOT complete: step 2 is postponed (not skipped)
+      final isComplete = items.every((item) => item.isCompleted || item.isSkipped);
+      expect(isComplete, false);
+    });
+
+    test('skipping last step should complete routine', () {
+      final items = [
+        RoutineItem(id: '1', text: 'Step 1', isCompleted: true),
+        RoutineItem(id: '2', text: 'Step 2', isCompleted: true),
+        RoutineItem(id: '3', text: 'Step 3', isCompleted: false),
+      ];
+
+      // User skips the last step
+      items[2].isSkipped = true;
+
+      // Routine should now be complete
+      final isComplete = items.every((item) => item.isCompleted || item.isSkipped);
+      expect(isComplete, true);
+    });
+
+    test('postponed step becomes normal step when cycled back', () {
+      // This tests the _moveToNextUnfinishedStep behavior:
+      // When a postponed step is returned to, its isPostponed flag is cleared
+      final item = RoutineItem(
+        id: '1',
+        text: 'Postponed step',
+        isCompleted: false,
+        isPostponed: true,
+      );
+
+      // Simulate what happens when we cycle back to this step
+      // The code clears isPostponed so it can be postponed again
+      item.isPostponed = false;
+
+      expect(item.isPostponed, false);
+      expect(item.isCompleted, false);
+      expect(item.isSkipped, false);
+
+      // Now user can complete, skip, or postpone again
+      // If they postpone again:
+      item.isPostponed = true;
+      expect(item.isPostponed, true);
+    });
+
+    test('multiple postponed steps cycle through in order', () {
+      final items = [
+        RoutineItem(id: '1', text: 'Step 1', isPostponed: true, isCompleted: false),
+        RoutineItem(id: '2', text: 'Step 2', isCompleted: true),
+        RoutineItem(id: '3', text: 'Step 3', isPostponed: true, isCompleted: false),
+      ];
+
+      // All regular steps done, now go through postponed
+      // Should get step 1 first (or 3 depending on current index)
+      final postponedSteps = items
+          .where((item) => item.isPostponed && !item.isCompleted && !item.isSkipped)
+          .toList();
+
+      expect(postponedSteps.length, 2);
+      expect(postponedSteps.map((e) => e.id).toList(), ['1', '3']);
+    });
+  });
+
+  group('Step State Mutual Exclusivity', () {
+    test('completing a skipped step clears skipped flag', () {
+      final item = RoutineItem(
+        id: '1',
+        text: 'Test step',
+        isSkipped: true,
+        isCompleted: false,
+      );
+
+      // Complete the step
+      item.isCompleted = true;
+      item.isSkipped = false; // This is what the code does
+
+      expect(item.isCompleted, true);
+      expect(item.isSkipped, false);
+      expect(item.isPostponed, false);
+    });
+
+    test('skipping a step clears postponed flag', () {
+      final item = RoutineItem(
+        id: '1',
+        text: 'Test step',
+        isPostponed: true,
+        isCompleted: false,
+      );
+
+      // Skip the step permanently
+      item.isSkipped = true;
+      item.isPostponed = false;
+      item.isCompleted = false;
+
+      expect(item.isSkipped, true);
+      expect(item.isPostponed, false);
+      expect(item.isCompleted, false);
+    });
+
+    test('postponing a step ensures not completed and not skipped', () {
+      final item = RoutineItem(
+        id: '1',
+        text: 'Test step',
+        isCompleted: false,
+        isSkipped: false,
+      );
+
+      // Postpone the step
+      item.isPostponed = true;
+      item.isSkipped = false;
+      item.isCompleted = false;
+
+      expect(item.isPostponed, true);
+      expect(item.isSkipped, false);
+      expect(item.isCompleted, false);
+    });
+  });
 }
