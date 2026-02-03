@@ -22,6 +22,8 @@ import 'Auth/auth_wrapper.dart';
 import 'Auth/login_screen.dart';
 import 'shared/error_logger.dart';
 import 'Routines/routine_recovery_helper.dart';
+import 'Timers/timers_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:math';
 import 'dart:async';
@@ -606,16 +608,52 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
   int _selectedIndex = 2; // Always start with Home (index 2)
   late AnimationController _animationController;
+  bool _timersModuleEnabled = false;
 
-  List<Widget> get _screens => [
-    const FastingScreen(),
-    const CycleScreen(),
-    HomeScreen(onNavigateToTab: _onItemTapped),
-    const TodoScreen(),
-    const RoutinesHabitsScreen(),
-  ];
-
-// Custom navbar implementation below - no need for _navItems
+  List<_TabConfig> get _tabConfigs {
+    final configs = <_TabConfig>[
+      _TabConfig(
+        screen: const FastingScreen(),
+        icon: Icons.local_fire_department,
+        label: 'Fasting',
+        color: AppColors.yellow,
+      ),
+      _TabConfig(
+        screen: const CycleScreen(),
+        icon: Icons.local_florist_rounded,
+        label: 'Cycle',
+        color: AppColors.red,
+      ),
+      _TabConfig(
+        screen: HomeScreen(onNavigateToTab: _onItemTapped),
+        icon: Icons.home_rounded,
+        label: 'Home',
+        color: AppColors.pink,
+        isHome: true,
+      ),
+      _TabConfig(
+        screen: const TodoScreen(),
+        icon: Icons.task_alt_rounded,
+        label: 'Tasks',
+        color: AppColors.coral,
+      ),
+      _TabConfig(
+        screen: const RoutinesHabitsScreen(),
+        icon: Icons.auto_awesome_rounded,
+        label: 'Routines',
+        color: AppColors.orange,
+      ),
+    ];
+    if (_timersModuleEnabled) {
+      configs.add(_TabConfig(
+        screen: const TimersScreen(),
+        icon: Icons.timer_rounded,
+        label: 'Timers',
+        color: AppColors.purple,
+      ));
+    }
+    return configs;
+  }
 
   @override
   void initState() {
@@ -625,8 +663,23 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+    _loadModuleSettings();
     _checkForWidgetIntent();
     _checkNotificationPermissions();
+  }
+
+  Future<void> _loadModuleSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final timersEnabled = prefs.getBool('timers_module_enabled') ?? false;
+    if (mounted) {
+      setState(() {
+        _timersModuleEnabled = timersEnabled;
+        if (_selectedIndex >= _tabConfigs.length) {
+          final homeIndex = _tabConfigs.indexWhere((c) => c.isHome);
+          _selectedIndex = homeIndex >= 0 ? homeIndex : 2;
+        }
+      });
+    }
   }
 
   void _checkNotificationPermissions() async {
@@ -719,11 +772,16 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
             SideNavigation(
               selectedIndex: _selectedIndex,
               onItemTapped: _onItemTapped,
+              items: _tabConfigs.map((c) => SideNavItem(
+                icon: c.icon,
+                label: c.label,
+                color: c.color,
+              )).toList(),
             ),
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
-                child: _screens[_selectedIndex],
+                child: _tabConfigs[_selectedIndex].screen,
               ),
             ),
           ],
@@ -731,14 +789,16 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
       );
     }
 
+    final tabs = _tabConfigs;
+
     // Mobile/tablet layout with bottom navigation
     return Scaffold(
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
-        child: _screens[_selectedIndex],
+        child: tabs[_selectedIndex].screen,
       ),
       bottomNavigationBar: Container(
-        height: 70 + MediaQuery.of(context).padding.bottom, // Increased from 60 to 70
+        height: 70 + MediaQuery.of(context).padding.bottom,
         decoration: BoxDecoration(
           color: AppColors.appBackground,
           boxShadow: [
@@ -753,37 +813,30 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
           padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(5, (index) {
-            final colors = [
-              AppColors.yellow,        // Fasting - yellow
-              AppColors.red,    // Menstrual - red
-              AppColors.pink,          // Home - pink
-              AppColors.coral,         // Tasks - coral
-              AppColors.orange,        // Routines - orange
-            ];
-
+            children: List.generate(tabs.length, (index) {
+            final tab = tabs[index];
             final isSelected = _selectedIndex == index;
 
             return GestureDetector(
               onTap: () => _onItemTapped(index),
               child: Container(
-                width: 56, // Increased from 50 to 56
-                height: 56, // Increased from 50 to 56
-                margin: const EdgeInsets.symmetric(vertical: 7), // Increased margin slightly
+                width: tabs.length > 5 ? 48 : 56,
+                height: tabs.length > 5 ? 48 : 56,
+                margin: const EdgeInsets.symmetric(vertical: 7),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? colors[index].withValues(alpha: 0.25) // More visible when selected
-                      : colors[index].withValues(alpha: 0.08), // Subtle when not selected
+                      ? tab.color.withValues(alpha: 0.25)
+                      : tab.color.withValues(alpha: 0.08),
                   borderRadius: AppStyles.borderRadiusXLarge,
                   border: isSelected
-                    ? Border.all(color: colors[index].withValues(alpha: 0.6), width: 1.5)
-                    : Border.all(color: colors[index].withValues(alpha: 0.6), width: 0.5)
+                    ? Border.all(color: tab.color.withValues(alpha: 0.6), width: 1.5)
+                    : Border.all(color: tab.color.withValues(alpha: 0.6), width: 0.5)
                 ),
                 child: Center(
                   child: Icon(
-                    [Icons.local_fire_department, Icons.local_florist_rounded, Icons.home_rounded, Icons.task_alt_rounded, Icons.auto_awesome_rounded][index],
-                    color: colors[index].withValues(alpha: 0.7),
-                    size: isSelected ? 33 : 30,
+                    tab.icon,
+                    color: tab.color.withValues(alpha: 0.7),
+                    size: isSelected ? (tabs.length > 5 ? 28 : 33) : (tabs.length > 5 ? 25 : 30),
                   ),
                 ),
               ),
@@ -794,6 +847,22 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
       ),
     );
   }
+}
+
+class _TabConfig {
+  final Widget screen;
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool isHome;
+
+  const _TabConfig({
+    required this.screen,
+    required this.icon,
+    required this.label,
+    required this.color,
+    this.isHome = false,
+  });
 }
 
 // Custom clipper for hexagon shape

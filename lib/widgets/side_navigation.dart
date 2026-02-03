@@ -1,15 +1,29 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
+class SideNavItem {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const SideNavItem({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+}
+
 /// Side navigation bar for desktop/tablet layouts
 class SideNavigation extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onItemTapped;
+  final List<SideNavItem> items;
 
   const SideNavigation({
     super.key,
     required this.selectedIndex,
     required this.onItemTapped,
+    required this.items,
   });
 
   @override
@@ -28,41 +42,15 @@ class SideNavigation extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 60),
-          // Navigation items
-          _buildNavItem(
-            icon: Icons.restaurant,
-            label: 'Fasting',
-            index: 0,
-            color: AppColors.yellow,
-          ),
-          const SizedBox(height: 12),
-          _buildNavItem(
-            icon: Icons.favorite,
-            label: 'Cycle',
-            index: 1,
-            color: AppColors.red,
-          ),
-          const SizedBox(height: 12),
-          _buildNavItem(
-            icon: Icons.home,
-            label: 'Home',
-            index: 2,
-            color: AppColors.pink,
-          ),
-          const SizedBox(height: 12),
-          _buildNavItem(
-            icon: Icons.check_circle,
-            label: 'Tasks',
-            index: 3,
-            color: AppColors.coral,
-          ),
-          const SizedBox(height: 12),
-          _buildNavItem(
-            icon: Icons.repeat,
-            label: 'Routines',
-            index: 4,
-            color: AppColors.orange,
-          ),
+          ...items.asMap().entries.map((entry) => Padding(
+            padding: EdgeInsets.only(bottom: entry.key < items.length - 1 ? 12 : 0),
+            child: _buildNavItem(
+              icon: entry.value.icon,
+              label: entry.value.label,
+              index: entry.key,
+              color: entry.value.color,
+            ),
+          )),
         ],
       ),
     );

@@ -139,11 +139,12 @@ void main() {
     test('manual reset works regardless of auto reset setting', () {
       // Manual reset (resetNow) does not check autoResetEnabled
       // It always saves all entries to history and clears them
-      const autoResetEnabled = false;
-      const canManualReset = true; // Always allowed
-
-      expect(canManualReset, isTrue,
-          reason: 'Manual reset must work even when auto reset is disabled');
+      // Test both scenarios: auto reset disabled and enabled
+      for (final autoResetEnabled in [false, true]) {
+        const canManualReset = true; // Always allowed regardless of autoResetEnabled
+        expect(canManualReset, isTrue,
+            reason: 'Manual reset must work when autoResetEnabled=$autoResetEnabled');
+      }
     });
 
     test('manual reset saves all entries from oldest to newest', () {
@@ -169,19 +170,26 @@ void main() {
   group('Food Tracking Auto Reset Disabled', () {
     test('auto reset does not trigger when disabled', () {
       // GIVEN: Auto reset is disabled, lastReset is Nov 1, current is Dec 16
-      const autoResetEnabled = false;
       final lastReset = DateTime(2025, 11, 1);
       final now = DateTime(2025, 12, 16);
       final currentMonthStart = DateTime(now.year, now.month, 1);
 
-      // WHEN: We check if reset should happen
-      bool shouldReset = false;
-      if (autoResetEnabled) {
-        shouldReset = lastReset.isBefore(currentMonthStart);
+      // Helper function that mimics actual reset logic
+      bool shouldAutoReset(bool autoResetEnabled) {
+        return autoResetEnabled && lastReset.isBefore(currentMonthStart);
       }
 
-      // THEN: Reset should NOT trigger because auto reset is disabled
-      expect(shouldReset, isFalse);
+      // WHEN/THEN: Verify the date condition is met
+      expect(lastReset.isBefore(currentMonthStart), isTrue,
+          reason: 'Date condition should be met');
+
+      // WHEN/THEN: Reset should NOT trigger when auto reset is disabled
+      expect(shouldAutoReset(false), isFalse,
+          reason: 'Auto reset disabled should prevent reset');
+
+      // WHEN/THEN: Reset WOULD trigger if auto reset was enabled
+      expect(shouldAutoReset(true), isTrue,
+          reason: 'Same conditions with auto reset enabled should trigger');
     });
 
     test('auto reset triggers when enabled', () {

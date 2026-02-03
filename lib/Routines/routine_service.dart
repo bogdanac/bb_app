@@ -98,7 +98,7 @@ class RoutineService {
     final progressData = <String, String>{};
     final today = getEffectiveDate();
     for (final routine in routines) {
-      final progressKey = '${_routineProgressPrefix}${routine.id}_$today';
+      final progressKey = '$_routineProgressPrefix${routine.id}_$today';
       final progressJson = prefs.getString(progressKey);
       if (progressJson != null) {
         progressData[progressKey] = progressJson;

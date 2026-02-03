@@ -55,6 +55,7 @@ class BackupService {
       'habits': {},
       'food_tracking': {},
       'water_tracking': {},
+      'timers': {},
       'notifications': {},
       'settings': {},
       'app_preferences': {},
@@ -84,6 +85,8 @@ class BackupService {
         backupData['food_tracking'][key] = value;
       } else if (key.startsWith('water_') || key.contains('water') || key == 'last_water_reset_date') {
         backupData['water_tracking'][key] = value;
+      } else if (key.startsWith('timer_')) {
+        backupData['timers'][key] = value;
       } else if (key.contains('notification') || key.contains('alarm') || key.contains('reminder') || key.endsWith('_enabled') || key.endsWith('_hour') || key.endsWith('_minute')) {
         backupData['notifications'][key] = value;
       } else if (key.contains('settings') || key.contains('config') || key == 'last_auto_backup' || key == 'last_backup' || key == 'backup_overdue_threshold' || key == 'last_manual_backup' || key == 'last_cloud_share') {
@@ -262,7 +265,7 @@ class BackupService {
       List<String> errors = [];
 
       // Restore each category
-      for (String category in ['fasting', 'menstrual_cycle', 'friends', 'tasks', 'task_categories', 'routines', 'habits', 'food_tracking', 'water_tracking', 'notifications', 'settings', 'app_preferences']) {
+      for (String category in ['fasting', 'menstrual_cycle', 'friends', 'tasks', 'task_categories', 'routines', 'habits', 'food_tracking', 'water_tracking', 'timers', 'notifications', 'settings', 'app_preferences']) {
         if (backupData.containsKey(category)) {
           final categoryData = backupData[category] as Map<String, dynamic>;
           for (String key in categoryData.keys) {
@@ -602,7 +605,7 @@ class BackupService {
       int totalItems = 0;
       final categories = <String, int>{};
 
-      for (String category in ['fasting', 'menstrual_cycle', 'friends', 'tasks', 'task_categories', 'routines', 'food_tracking', 'water_tracking', 'notifications', 'settings', 'app_preferences']) {
+      for (String category in ['fasting', 'menstrual_cycle', 'friends', 'tasks', 'task_categories', 'routines', 'food_tracking', 'water_tracking', 'timers', 'notifications', 'settings', 'app_preferences']) {
         final categoryData = Map<String, dynamic>.from(backupData[category] ?? {});
         final count = categoryData.keys.length;
         categories[category] = count;
