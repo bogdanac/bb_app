@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tasks_data_models.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
@@ -280,7 +281,11 @@ class TaskService {
         TaskCategory(id: '3', name: 'Research', color: const Color(0xFF9C27B0), order: 2),
         TaskCategory(id: '4', name: 'Travel', color: const Color(0xFFFF9800), order: 3),
       ];
-      await saveCategories(defaultCategories);
+      // On web, only save to local SharedPreferences - don't sync to Firestore
+      // to avoid overwriting real categories that haven't synced from mobile yet
+      if (!kIsWeb) {
+        await saveCategories(defaultCategories);
+      }
       return defaultCategories;
     }
 

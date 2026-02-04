@@ -20,7 +20,6 @@ import 'Services/realtime_sync_service.dart';
 import 'FoodTracking/food_tracking_service.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_styles.dart';
-import 'widgets/side_navigation.dart';
 import 'Auth/auth_wrapper.dart';
 import 'Auth/login_screen.dart';
 import 'shared/error_logger.dart';
@@ -35,80 +34,15 @@ import 'package:flutter/foundation.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
+  // Initialize Firebase first (other services depend on it)
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    await ErrorLogger.logError(
-      source: 'main.initializeFirebase',
-      error: 'Firebase initialized successfully',
-      stackTrace: '',
-    );
   } catch (e, stackTrace) {
-    await ErrorLogger.logError(
+    ErrorLogger.logError(
       source: 'main.initializeFirebase',
       error: 'Firebase initialization failed (app will continue without cloud backup): $e',
-      stackTrace: stackTrace.toString(),
-    );
-  }
-
-  // Initialize Firebase Backup Service
-  try {
-    await FirebaseBackupService().initialize();
-  } catch (e, stackTrace) {
-    await ErrorLogger.logError(
-      source: 'main.initializeFirebaseBackupService',
-      error: 'Firebase Backup Service initialization failed: $e',
-      stackTrace: stackTrace.toString(),
-    );
-  }
-
-  // Initialize Real-time Sync Service
-  try {
-    await RealtimeSyncService().initialize();
-    await ErrorLogger.logError(
-      source: 'main.initializeRealtimeSyncService',
-      error: 'Real-time Sync Service initialized successfully',
-      stackTrace: '',
-    );
-  } catch (e, stackTrace) {
-    await ErrorLogger.logError(
-      source: 'main.initializeRealtimeSyncService',
-      error: 'Real-time Sync Service initialization failed: $e',
-      stackTrace: stackTrace.toString(),
-    );
-  }
-
-  // AUTO-RECOVERY: Check for corrupted routines and recover from Firestore
-  try {
-    final isRoutinesCorrupted = await RoutineRecoveryHelper.areRoutinesCorrupted();
-    if (isRoutinesCorrupted) {
-      await ErrorLogger.logError(
-        source: 'main.routineRecoveryCheck',
-        error: 'Corrupted routines detected, attempting recovery...',
-        stackTrace: '',
-      );
-
-      final recovered = await RoutineRecoveryHelper.recoverRoutinesFromFirestore();
-      if (recovered) {
-        await ErrorLogger.logError(
-          source: 'main.routineRecoveryCheck',
-          error: 'Routines successfully recovered from Firestore!',
-          stackTrace: '',
-        );
-      } else {
-        await ErrorLogger.logError(
-          source: 'main.routineRecoveryCheck',
-          error: 'Routine recovery failed - no backup found in Firestore',
-          stackTrace: '',
-        );
-      }
-    }
-  } catch (e, stackTrace) {
-    await ErrorLogger.logError(
-      source: 'main.routineRecoveryCheck',
-      error: 'Routine recovery check failed: $e',
       stackTrace: stackTrace.toString(),
     );
   }
@@ -118,7 +52,47 @@ void main() async {
     NotificationListenerService.reset();
   }
 
+  // Launch UI immediately - remaining services initialize in parallel in background
   runApp(const BBetterApp());
+
+  // Run remaining initializations in parallel (non-blocking, after UI is up)
+  Future.wait([
+    // Firebase Backup Service
+    FirebaseBackupService().initialize().catchError((e, stackTrace) {
+      ErrorLogger.logError(
+        source: 'main.initializeFirebaseBackupService',
+        error: 'Firebase Backup Service initialization failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }),
+    // Real-time Sync Service
+    RealtimeSyncService().initialize().catchError((e, stackTrace) {
+      ErrorLogger.logError(
+        source: 'main.initializeRealtimeSyncService',
+        error: 'Real-time Sync Service initialization failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }),
+    // Routine recovery check
+    RoutineRecoveryHelper.areRoutinesCorrupted().then((isCorrupted) async {
+      if (isCorrupted) {
+        final recovered = await RoutineRecoveryHelper.recoverRoutinesFromFirestore();
+        ErrorLogger.logError(
+          source: 'main.routineRecoveryCheck',
+          error: recovered
+              ? 'Routines successfully recovered from Firestore!'
+              : 'Routine recovery failed - no backup found in Firestore',
+          stackTrace: '',
+        );
+      }
+    }).catchError((e, stackTrace) {
+      ErrorLogger.logError(
+        source: 'main.routineRecoveryCheck',
+        error: 'Routine recovery check failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }),
+  ]);
 }
 
 class BBetterApp extends StatelessWidget {
@@ -313,7 +287,7 @@ class _LauncherScreenState extends State<LauncherScreen>
         hasWidgetIntent = await TaskWidgetService.checkForWidgetIntent();
         hasTaskListIntent = await TaskWidgetService.checkForTaskListIntent();
       } catch (e, stackTrace) {
-        await ErrorLogger.logError(
+        ErrorLogger.logError(
           source: 'LauncherScreen.checkWidgetIntent',
           error: 'Error checking widget intent: $e',
           stackTrace: stackTrace.toString(),
@@ -327,52 +301,51 @@ class _LauncherScreenState extends State<LauncherScreen>
         );
         return;
       }
-      
-      // Emergency failsafe - navigate to main screen after maximum 15 seconds regardless of what happens
-      _emergencyTimer = Timer(const Duration(seconds: 15), () {
+
+      // Emergency failsafe - navigate after 8 seconds max
+      _emergencyTimer = Timer(const Duration(seconds: 8), () {
         if (mounted && Navigator.of(context).canPop() == false) {
-          if (kDebugMode) {
-          }
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const MainScreen()),
           );
         }
       });
 
-      // Start background animation
+      // Start initialization immediately (runs in parallel with animations)
+      final initFuture = _initializeApp().timeout(
+        const Duration(seconds: 6),
+        onTimeout: () {},
+      ).catchError((error, stackTrace) {
+        ErrorLogger.logError(
+          source: 'LauncherScreen.initializeApp',
+          error: 'App initialization error: $error',
+          stackTrace: stackTrace.toString(),
+        );
+      });
+
+      // Run animations concurrently with initialization
       if (mounted) _backgroundController.forward();
 
-      // Start logo animation
-      await Future.delayed(const Duration(milliseconds: 300));
+      await Future.delayed(const Duration(milliseconds: 200));
       if (mounted) _logoController.forward();
 
-      // Start text animation
-      await Future.delayed(const Duration(milliseconds: 800));
+      await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) _textController.forward();
 
-      // Initialize notifications and navigate with timeout protection
-      await Future.delayed(const Duration(milliseconds: 1200));
-      if (mounted) {
-        // Wrap entire initialization in a timeout
-        await _initializeApp().timeout(Duration(seconds: 10)).catchError((error, stackTrace) async {
-          await ErrorLogger.logError(
-            source: 'LauncherScreen.initializeApp',
-            error: 'App initialization error: $error',
-            stackTrace: stackTrace.toString(),
-          );
-        });
-      }
+      // Wait for both: minimum display time (800ms total) AND init to complete
+      await Future.wait([
+        Future.delayed(const Duration(milliseconds: 600)), // remaining time (200+500+600 = 1300ms total)
+        initFuture,
+      ]);
 
-      // Navigate to main screen (reduced delay since native splash handles initial display)
-      await Future.delayed(const Duration(milliseconds: 200));
+      // Navigate to main screen
       if (mounted && Navigator.of(context).canPop() == false) {
-        // Cancel emergency timer since we're navigating normally
         _emergencyTimer?.cancel();
-        
+
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => const MainScreen(),
-            transitionDuration: const Duration(milliseconds: 800),
+            transitionDuration: const Duration(milliseconds: 500),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               return FadeTransition(
                 opacity: animation,
@@ -391,16 +364,14 @@ class _LauncherScreenState extends State<LauncherScreen>
           ),
         );
       } else {
-        // Cancel emergency timer if we can't navigate (shouldn't happen)
         _emergencyTimer?.cancel();
       }
     } catch (e, stackTrace) {
-      await ErrorLogger.logError(
+      ErrorLogger.logError(
         source: 'LauncherScreen.startAnimationSequence',
         error: 'Error in animation sequence: $e',
         stackTrace: stackTrace.toString(),
       );
-      // Fallback to main screen
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const MainScreen()),
@@ -611,85 +582,102 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
   int _selectedIndex = 0;
   late AnimationController _animationController;
   Map<String, bool> _moduleStates = {};
-  String _navPosition = 'bottom';
+  List<String> _primaryTabs = [];
+  List<String> _secondaryTabsOrder = [];
 
-  List<_TabConfig> get _tabConfigs {
+  // Map of all possible module configs
+  Map<String, _TabConfig> get _allModuleConfigs => {
+    AppCustomizationService.moduleFasting: _TabConfig(
+      screen: const FastingScreen(),
+      icon: Icons.local_fire_department,
+      label: 'Fasting',
+      color: AppColors.yellow,
+      moduleKey: AppCustomizationService.moduleFasting,
+    ),
+    AppCustomizationService.moduleMenstrual: _TabConfig(
+      screen: const MenstrualCycleScreen(),
+      icon: Icons.local_florist_rounded,
+      label: 'Cycle',
+      color: AppColors.red,
+      moduleKey: AppCustomizationService.moduleMenstrual,
+    ),
+    AppCustomizationService.moduleFriends: _TabConfig(
+      screen: const FriendsScreen(),
+      icon: Icons.people_rounded,
+      label: 'Friends',
+      color: AppColors.successGreen,
+      moduleKey: AppCustomizationService.moduleFriends,
+    ),
+    AppCustomizationService.moduleTasks: _TabConfig(
+      screen: const TodoScreen(),
+      icon: Icons.task_alt_rounded,
+      label: 'Tasks',
+      color: AppColors.coral,
+      moduleKey: AppCustomizationService.moduleTasks,
+    ),
+    AppCustomizationService.moduleRoutines: _TabConfig(
+      screen: const RoutinesScreen(),
+      icon: Icons.auto_awesome_rounded,
+      label: 'Routines',
+      color: AppColors.orange,
+      moduleKey: AppCustomizationService.moduleRoutines,
+    ),
+    AppCustomizationService.moduleHabits: _TabConfig(
+      screen: const HabitsScreen(),
+      icon: Icons.track_changes_rounded,
+      label: 'Habits',
+      color: AppColors.pastelGreen,
+      moduleKey: AppCustomizationService.moduleHabits,
+    ),
+    AppCustomizationService.moduleTimers: _TabConfig(
+      screen: const TimersScreen(),
+      icon: Icons.timer_rounded,
+      label: 'Timers',
+      color: AppColors.purple,
+      moduleKey: AppCustomizationService.moduleTimers,
+    ),
+  };
+
+  // Primary tabs (appear on bottom nav): ordered primary tabs + Home
+  List<_TabConfig> get _primaryTabConfigs {
     final configs = <_TabConfig>[];
+    final allConfigs = _allModuleConfigs;
 
-    // Left-of-Home tabs
-    if (_moduleStates[AppCustomizationService.moduleFasting] == true) {
-      configs.add(_TabConfig(
-        screen: const FastingScreen(),
-        icon: Icons.local_fire_department,
-        label: 'Fasting',
-        color: AppColors.yellow,
-        moduleKey: AppCustomizationService.moduleFasting,
-      ));
-    }
-    if (_moduleStates[AppCustomizationService.moduleMenstrual] == true) {
-      configs.add(_TabConfig(
-        screen: const MenstrualCycleScreen(),
-        icon: Icons.local_florist_rounded,
-        label: 'Cycle',
-        color: AppColors.red,
-        moduleKey: AppCustomizationService.moduleMenstrual,
-      ));
-    }
-    if (_moduleStates[AppCustomizationService.moduleFriends] == true) {
-      configs.add(_TabConfig(
-        screen: const FriendsScreen(),
-        icon: Icons.people_rounded,
-        label: 'Friends',
-        color: AppColors.successGreen,
-        moduleKey: AppCustomizationService.moduleFriends,
-      ));
+    // Add primary tabs in order
+    for (final moduleKey in _primaryTabs) {
+      if (_moduleStates[moduleKey] == true && allConfigs.containsKey(moduleKey)) {
+        configs.add(allConfigs[moduleKey]!);
+      }
     }
 
-    // Home (always present)
-    configs.add(_TabConfig(
-      screen: HomeScreen(onNavigateToModule: _navigateToModule),
+    // Always add Home in the middle (after first half of primary tabs)
+    final midpoint = (configs.length / 2).ceil();
+    configs.insert(midpoint, _TabConfig(
+      screen: HomeScreen(
+        onNavigateToModule: _navigateToModule,
+        onReloadSettings: reloadCustomizationSettings,
+      ),
       icon: Icons.home_rounded,
       label: 'Home',
       color: AppColors.pink,
       isHome: true,
     ));
 
-    // Right-of-Home tabs
-    if (_moduleStates[AppCustomizationService.moduleTasks] == true) {
-      configs.add(_TabConfig(
-        screen: const TodoScreen(),
-        icon: Icons.task_alt_rounded,
-        label: 'Tasks',
-        color: AppColors.coral,
-        moduleKey: AppCustomizationService.moduleTasks,
-      ));
-    }
-    if (_moduleStates[AppCustomizationService.moduleRoutines] == true) {
-      configs.add(_TabConfig(
-        screen: const RoutinesScreen(),
-        icon: Icons.auto_awesome_rounded,
-        label: 'Routines',
-        color: AppColors.orange,
-        moduleKey: AppCustomizationService.moduleRoutines,
-      ));
-    }
-    if (_moduleStates[AppCustomizationService.moduleHabits] == true) {
-      configs.add(_TabConfig(
-        screen: const HabitsScreen(),
-        icon: Icons.track_changes_rounded,
-        label: 'Habits',
-        color: AppColors.pastelGreen,
-        moduleKey: AppCustomizationService.moduleHabits,
-      ));
-    }
-    if (_moduleStates[AppCustomizationService.moduleTimers] == true) {
-      configs.add(_TabConfig(
-        screen: const TimersScreen(),
-        icon: Icons.timer_rounded,
-        label: 'Timers',
-        color: AppColors.purple,
-        moduleKey: AppCustomizationService.moduleTimers,
-      ));
+    return configs;
+  }
+
+  // Secondary tabs (appear in drawer): enabled but not primary
+  List<_TabConfig> get _secondaryTabConfigs {
+    final configs = <_TabConfig>[];
+    final allConfigs = _allModuleConfigs;
+
+    // Use saved order for secondary tabs
+    for (final moduleKey in _secondaryTabsOrder) {
+      if (_moduleStates[moduleKey] == true &&
+          !_primaryTabs.contains(moduleKey) &&
+          allConfigs.containsKey(moduleKey)) {
+        configs.add(allConfigs[moduleKey]!);
+      }
     }
 
     return configs;
@@ -705,7 +693,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
     );
     _loadCustomizationSettings().then((_) {
       if (mounted) {
-        final homeIndex = _tabConfigs.indexWhere((c) => c.isHome);
+        final homeIndex = _primaryTabConfigs.indexWhere((c) => c.isHome);
         if (homeIndex >= 0 && _selectedIndex != homeIndex) {
           setState(() {
             _selectedIndex = homeIndex;
@@ -721,15 +709,17 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
     await AppCustomizationService.migrateFromLegacyKeys();
 
     final moduleStates = await AppCustomizationService.loadAllModuleStates();
-    final navPosition = await AppCustomizationService.getNavPosition();
+    final primaryTabs = await AppCustomizationService.loadPrimaryTabs();
+    final secondaryTabsOrder = await AppCustomizationService.loadSecondaryTabsOrder();
 
     if (mounted) {
       setState(() {
         _moduleStates = moduleStates;
-        _navPosition = navPosition;
+        _primaryTabs = primaryTabs;
+        _secondaryTabsOrder = secondaryTabsOrder;
 
         // Clamp selected index if current tab no longer exists
-        final tabs = _tabConfigs;
+        final tabs = _primaryTabConfigs;
         if (_selectedIndex >= tabs.length) {
           _selectedIndex = tabs.indexWhere((c) => c.isHome);
           if (_selectedIndex < 0) _selectedIndex = 0;
@@ -739,15 +729,21 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
   }
 
   int? _getTabIndexByModuleKey(String moduleKey) {
-    final index = _tabConfigs.indexWhere((c) => c.moduleKey == moduleKey);
+    final index = _primaryTabConfigs.indexWhere((c) => c.moduleKey == moduleKey);
     return index >= 0 ? index : null;
   }
 
   void _navigateToModule(String moduleKey) {
+    // Check if module is in primary tabs (bottom nav)
     final index = _getTabIndexByModuleKey(moduleKey);
     if (index != null) {
       _onItemTapped(index);
+      return;
     }
+
+    // If not in primary tabs, check secondary tabs (drawer)
+    // For now, just try to navigate to it if it exists
+    // In future, we could show a message or open the drawer
   }
 
   Future<void> reloadCustomizationSettings() async {
@@ -840,66 +836,104 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
 
   @override
   Widget build(BuildContext context) {
-    final tabs = _tabConfigs;
-    if (tabs.isEmpty) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    final primaryTabs = _primaryTabConfigs;
+    final secondaryTabs = _secondaryTabConfigs;
 
-    final safeIndex = _selectedIndex.clamp(0, tabs.length - 1);
-
-    // Determine effective nav position
-    if (_navPosition == 'left') {
-      return _buildSideNavLayout(tabs, safeIndex, isLeft: true);
-    } else if (_navPosition == 'right') {
-      return _buildSideNavLayout(tabs, safeIndex, isLeft: false);
-    } else {
-      // 'bottom' — but desktop (>=1024px) still uses side nav
-      final isDesktop = MediaQuery.of(context).size.width >= 1024;
-      if (isDesktop) {
-        return _buildSideNavLayout(tabs, safeIndex, isLeft: true);
-      }
-      return _buildBottomNavLayout(tabs, safeIndex);
+    if (primaryTabs.isEmpty) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-  }
 
-  Widget _buildSideNavLayout(List<_TabConfig> tabs, int safeIndex, {required bool isLeft}) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
-
-    final sideNav = SideNavigation(
-      selectedIndex: safeIndex,
-      onItemTapped: _onItemTapped,
-      items: tabs.map((c) => SideNavItem(
-        icon: c.icon,
-        label: c.label,
-        color: c.color,
-      )).toList(),
-      isRightSide: !isLeft,
-      compact: isMobile,
-    );
+    final safeIndex = _selectedIndex.clamp(0, primaryTabs.length - 1);
 
     return Scaffold(
-      body: SafeArea(
-        child: Row(
+      drawer: secondaryTabs.isNotEmpty ? _buildDrawer(secondaryTabs) : null,
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: primaryTabs[safeIndex].screen,
+      ),
+      bottomNavigationBar: _buildBottomNav(primaryTabs, safeIndex, hasDrawer: secondaryTabs.isNotEmpty),
+    );
+  }
+
+  Widget _buildDrawer(List<_TabConfig> secondaryTabs) {
+    return Drawer(
+      backgroundColor: AppColors.grey900,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (isLeft) sideNav,
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: tabs[safeIndex].screen,
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'More Modules',
+                    style: TextStyle(
+                      color: AppColors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${secondaryTabs.length} additional features',
+                    style: const TextStyle(
+                      color: AppColors.grey300,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
               ),
             ),
-            if (!isLeft) sideNav,
+            Divider(color: AppColors.grey700, thickness: 1),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: secondaryTabs.length,
+                itemBuilder: (context, index) {
+                  final tab = secondaryTabs[index];
+                  return ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: tab.color.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(tab.icon, color: tab.color, size: 24),
+                    ),
+                    title: Text(
+                      tab.label,
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    onTap: () {
+                      // Navigate by finding which screen this is
+                      // For now, we'll show a message since secondary tabs aren't in bottom nav
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${tab.label} is in the drawer. Add it to Primary Tabs for quick access.'),
+                          backgroundColor: AppColors.grey800,
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBottomNavLayout(List<_TabConfig> tabs, int safeIndex) {
-    return Scaffold(
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: tabs[safeIndex].screen,
-      ),
-      bottomNavigationBar: Container(
+  Widget _buildBottomNav(List<_TabConfig> tabs, int safeIndex, {required bool hasDrawer}) {
+    return Container(
         height: 70 + MediaQuery.of(context).padding.bottom,
         decoration: BoxDecoration(
           color: AppColors.appBackground,
@@ -946,7 +980,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
             }),
           ),
         ),
-      ),
     );
   }
 }

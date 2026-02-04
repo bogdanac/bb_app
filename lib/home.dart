@@ -30,8 +30,14 @@ import 'package:flutter/services.dart';
 class HomeScreen extends StatefulWidget {
   final void Function(int)? onNavigateToTab;
   final void Function(String moduleKey)? onNavigateToModule;
+  final Future<void> Function()? onReloadSettings;
 
-  const HomeScreen({super.key, this.onNavigateToTab, this.onNavigateToModule});
+  const HomeScreen({
+    super.key,
+    this.onNavigateToTab,
+    this.onNavigateToModule,
+    this.onReloadSettings,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -669,9 +675,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       MaterialPageRoute(
         builder: (context) => const HomeSettingsScreen(),
       ),
-    ).then((_) {
+    ).then((_) async {
       // Reload card settings when returning from settings
       _loadCardSettings();
+      // Reload main screen navigation settings (primary/secondary tabs)
+      await widget.onReloadSettings?.call();
     });
   }
 

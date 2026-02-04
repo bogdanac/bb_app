@@ -7,7 +7,7 @@ import 'FoodTracking/food_tracking_settings_screen.dart';
 import 'Energy/energy_settings_screen.dart';
 import 'Settings/modules_screen.dart';
 import 'Settings/home_cards_screen.dart';
-import 'Settings/nav_position_screen.dart';
+import 'Settings/primary_tabs_screen.dart';
 import 'shared/error_logs_screen.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_styles.dart';
@@ -212,7 +212,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
 
               const SizedBox(height: 16),
 
-              // Navigation Style Section
+              // Primary Tabs Section
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
@@ -226,7 +226,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const NavPositionScreen(),
+                        builder: (context) => const PrimaryTabsScreen(),
                       ),
                     );
                   },
@@ -242,7 +242,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                             borderRadius: AppStyles.borderRadiusSmall,
                           ),
                           child: const Icon(
-                            Icons.swap_vert_rounded,
+                            Icons.reorder_rounded,
                             color: AppColors.purple,
                             size: 20,
                           ),
@@ -253,7 +253,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Navigation Style',
+                                'Primary Tabs',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w500,
@@ -261,7 +261,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                               ),
                               SizedBox(height: 4),
                               Text(
-                                'Bottom, left, or right navigation bar',
+                                'Choose which modules appear on bottom nav',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: AppColors.greyText,

@@ -233,7 +233,8 @@ class RealtimeSyncService {
   }
 
   Future<void> syncTasks(String tasksJson) async {
-    if (!_syncEnabled || _userId == null || _isRestoringTasks) return;
+    final userId = _userId ?? _auth.currentUser?.uid;
+    if (!_syncEnabled || userId == null || _isRestoringTasks) return;
 
     // SAFETY: Never sync empty tasks data - this prevents data loss
     try {
@@ -252,7 +253,7 @@ class RealtimeSyncService {
 
       await _firestore
           .collection('users')
-          .doc(_userId)
+          .doc(userId)
           .collection('data')
           .doc('tasks')
           .set({
@@ -278,7 +279,8 @@ class RealtimeSyncService {
 
   /// Sync categories to Firestore (stored in the same 'tasks' document)
   Future<void> syncCategories(String categoriesJson) async {
-    if (!_syncEnabled || _userId == null) return;
+    final userId = _userId ?? _auth.currentUser?.uid;
+    if (!_syncEnabled || userId == null) return;
 
     // SAFETY: Allow empty categories (user might delete all custom categories)
     try {
@@ -287,7 +289,7 @@ class RealtimeSyncService {
       // Use update to preserve existing 'tasks' field
       await _firestore
           .collection('users')
-          .doc(_userId)
+          .doc(userId)
           .collection('data')
           .doc('tasks')
           .set({
@@ -418,7 +420,8 @@ class RealtimeSyncService {
   }
 
   Future<void> syncRoutines(String routinesJson, Map<String, String> progressData) async {
-    if (!_syncEnabled || _userId == null || _isRestoringRoutines) return;
+    final userId = _userId ?? _auth.currentUser?.uid;
+    if (!_syncEnabled || userId == null || _isRestoringRoutines) return;
 
     // SAFETY: Never sync empty routines data - this prevents data loss
     try {
@@ -437,7 +440,7 @@ class RealtimeSyncService {
 
       await _firestore
           .collection('users')
-          .doc(_userId)
+          .doc(userId)
           .collection('data')
           .doc('routines')
           .set({
@@ -603,7 +606,8 @@ class RealtimeSyncService {
   }
 
   Future<void> syncHabits(String habitsJson) async {
-    if (!_syncEnabled || _userId == null || _isRestoringHabits) return;
+    final userId = _userId ?? _auth.currentUser?.uid;
+    if (!_syncEnabled || userId == null || _isRestoringHabits) return;
 
     // SAFETY: Never sync empty habits data - this prevents data loss
     try {
@@ -622,7 +626,7 @@ class RealtimeSyncService {
 
       await _firestore
           .collection('users')
-          .doc(_userId)
+          .doc(userId)
           .collection('data')
           .doc('habits')
           .set({
@@ -745,14 +749,15 @@ class RealtimeSyncService {
   }
 
   Future<void> syncEnergy(Map<String, String> energyData) async {
-    if (!_syncEnabled || _userId == null || _isRestoringEnergy) return;
+    final userId = _userId ?? _auth.currentUser?.uid;
+    if (!_syncEnabled || userId == null || _isRestoringEnergy) return;
 
     try {
       _lastSyncTimestamps['energy'] = DateTime.now().millisecondsSinceEpoch;
 
       await _firestore
           .collection('users')
-          .doc(_userId)
+          .doc(userId)
           .collection('data')
           .doc('energy')
           .set({

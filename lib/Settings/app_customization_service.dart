@@ -34,8 +34,15 @@ class AppCustomizationService {
   static const String cardDailyTasks = 'card_daily_tasks_visible';
 
   // ============= Other Keys =============
-  static const String navPositionKey = 'nav_position';
   static const String cardOrderKey = 'home_card_order';
+  static const String primaryTabsKey = 'primary_tabs_list';
+  static const String secondaryTabsKey = 'secondary_tabs_list';
+
+  // Deprecated (kept for reference, no longer used)
+  // static const String navPositionKey = 'nav_position';
+
+  // ============= Constants =============
+  static const int maxPrimaryTabs = 5; // Including Home tab
 
   // Legacy key for backward compatibility
   static const String legacyTimersKey = 'timers_module_enabled';
@@ -311,21 +318,85 @@ class AppCustomizationService {
     await prefs.setStringList(cardOrderKey, order);
   }
 
-  // ============= Navigation Position =============
+  // ============= Primary Tabs Management =============
 
-  /// Get navigation bar position ('bottom', 'left', or 'right')
-  static Future<String> getNavPosition() async {
+  /// Load primary tabs list (module keys that appear on bottom nav)
+  /// Returns list of module keys. Home is always primary but not in this list.
+  static Future<List<String>> loadPrimaryTabs() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(navPositionKey) ?? 'bottom';
+    final savedList = prefs.getStringList(primaryTabsKey);
+
+    if (savedList != null && savedList.isNotEmpty) {
+      return savedList;
+    }
+
+    // Default: first 4 enabled modules are primary (to leave room for Home + 4 = 5 total)
+    final enabledModules = await getEnabledModuleKeys();
+    return enabledModules.take(maxPrimaryTabs - 1).toList();
   }
 
-  /// Set navigation bar position
-  static Future<void> setNavPosition(String position) async {
-    if (!['bottom', 'left', 'right'].contains(position)) {
-      throw ArgumentError('Invalid nav position: $position');
+  /// Save primary tabs list
+  static Future<void> savePrimaryTabs(List<String> moduleKeys) async {
+    if (moduleKeys.length > maxPrimaryTabs - 1) {
+      throw ArgumentError('Cannot have more than ${maxPrimaryTabs - 1} primary tabs (Home is always primary)');
     }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(navPositionKey, position);
+    await prefs.setStringList(primaryTabsKey, moduleKeys);
+  }
+
+  /// Check if a module is marked as primary
+  static Future<bool> isModulePrimary(String moduleKey) async {
+    final primaryTabs = await loadPrimaryTabs();
+    return primaryTabs.contains(moduleKey);
+  }
+
+  /// Get modules that should appear in drawer (enabled but not primary)
+  static Future<List<String>> getSecondaryModuleKeys() async {
+    final enabledModules = await getEnabledModuleKeys();
+    final primaryTabs = await loadPrimaryTabs();
+    return enabledModules.where((key) => !primaryTabs.contains(key)).toList();
+  }
+
+  // ============= Secondary Tabs Management =============
+
+  /// Load secondary tabs order (module keys that appear in drawer)
+  /// Returns ordered list of secondary module keys
+  static Future<List<String>> loadSecondaryTabsOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedList = prefs.getStringList(secondaryTabsKey);
+
+    // Get actual secondary modules (enabled but not primary)
+    final secondaryModules = await getSecondaryModuleKeys();
+
+    if (savedList != null && savedList.isNotEmpty) {
+      // Merge saved order with current secondary modules
+      final result = <String>[];
+
+      // Add saved items that are still secondary
+      for (final key in savedList) {
+        if (secondaryModules.contains(key)) {
+          result.add(key);
+        }
+      }
+
+      // Add any new secondary modules not in saved order
+      for (final key in secondaryModules) {
+        if (!result.contains(key)) {
+          result.add(key);
+        }
+      }
+
+      return result;
+    }
+
+    // Default: return secondary modules in default order
+    return secondaryModules;
+  }
+
+  /// Save secondary tabs order
+  static Future<void> saveSecondaryTabsOrder(List<String> moduleKeys) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(secondaryTabsKey, moduleKeys);
   }
 
   // ============= Bulk Operations =============

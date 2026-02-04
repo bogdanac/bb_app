@@ -49,6 +49,17 @@ class TaskRepository {
           .map((json) => Task.fromJson(jsonDecode(json)))
           .toList();
 
+      // On mobile, ensure tasks are synced to Firestore for web access
+      if (!kIsWeb && tasks.isNotEmpty) {
+        _realtimeSync.syncTasks(jsonEncode(tasksJson)).catchError((e, stackTrace) {
+          ErrorLogger.logError(
+            source: 'TaskRepository.loadTasks',
+            error: 'Background sync of tasks failed: $e',
+            stackTrace: stackTrace.toString(),
+          );
+        });
+      }
+
       debugPrint('TaskRepository.loadTasks: Loaded ${tasks.length} tasks');
       return tasks;
     } catch (e, stackTrace) {
@@ -127,6 +138,17 @@ class TaskRepository {
       final categories = categoriesJson
           .map((json) => TaskCategory.fromJson(jsonDecode(json)))
           .toList();
+
+      // On mobile, ensure categories are synced to Firestore for web access
+      if (!kIsWeb && categories.isNotEmpty) {
+        _realtimeSync.syncCategories(jsonEncode(categoriesJson)).catchError((e, stackTrace) {
+          ErrorLogger.logError(
+            source: 'TaskRepository.loadCategories',
+            error: 'Background sync of categories failed: $e',
+            stackTrace: stackTrace.toString(),
+          );
+        });
+      }
 
       debugPrint('TaskRepository.loadCategories: Loaded ${categories.length} categories');
       return categories;
