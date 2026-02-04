@@ -19,7 +19,7 @@ import 'shared/snackbar_utils.dart';
 import 'shared/error_logger.dart';
 import 'package:bb_app/Notifications/centralized_notification_manager.dart';
 import 'package:bb_app/FoodTracking/food_tracking_card.dart';
-import 'package:bb_app/home_settings_screen.dart';
+import 'package:bb_app/Settings/settings_screen.dart';
 import 'package:bb_app/Data/backup_service.dart';
 import 'package:bb_app/shared/widget_update_service.dart';
 import 'package:bb_app/Energy/battery_flow_home_card.dart';
@@ -31,12 +31,14 @@ class HomeScreen extends StatefulWidget {
   final void Function(int)? onNavigateToTab;
   final void Function(String moduleKey)? onNavigateToModule;
   final Future<void> Function()? onReloadSettings;
+  final VoidCallback? onOpenDrawer;
 
   const HomeScreen({
     super.key,
     this.onNavigateToTab,
     this.onNavigateToModule,
     this.onReloadSettings,
+    this.onOpenDrawer,
   });
 
   @override
@@ -673,7 +675,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => const HomeSettingsScreen(),
+        builder: (context) => const SettingsScreen(),
       ),
     ).then((_) async {
       // Reload card settings when returning from settings
@@ -687,6 +689,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('bbetter',
             style: TextStyle(fontWeight: FontWeight.w500)),
         backgroundColor: AppColors.transparent,
@@ -728,14 +731,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 tooltip: 'Quick Backup - Tap to backup your data now',
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: IconButton(
-              icon: const Icon(Icons.settings_outlined),
-              onPressed: _openSettings,
-              tooltip: 'Settings',
+          // Menu button on mobile (opens drawer with secondary tabs + settings)
+          if (widget.onOpenDrawer != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: IconButton(
+                icon: const Icon(Icons.menu_rounded),
+                onPressed: widget.onOpenDrawer,
+                tooltip: 'Menu',
+              ),
             ),
-          ),
+          // Settings button on desktop (no drawer, direct access)
+          if (widget.onOpenDrawer == null)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: _openSettings,
+                tooltip: 'Settings',
+              ),
+            ),
         ],
       ),
       body: RefreshIndicator(

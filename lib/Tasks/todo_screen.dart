@@ -28,6 +28,7 @@ class TodoScreen extends StatefulWidget {
   final bool enableRefresh; // Whether to enable pull-to-refresh
   final VoidCallback? onTasksChanged; // Callback when tasks are modified
   final bool? initialShowAllTasks; // Initial state for menstrual cycle filtering
+  final VoidCallback? onOpenDrawer;
 
   const TodoScreen({
     super.key,
@@ -36,6 +37,7 @@ class TodoScreen extends StatefulWidget {
     this.enableRefresh = true,
     this.onTasksChanged,
     this.initialShowAllTasks,
+    this.onOpenDrawer,
   });
 
   @override
@@ -1880,6 +1882,9 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     if (_isLoading) {
       return Scaffold(
         appBar: widget.showFilters ? AppBar(
+          leading: widget.onOpenDrawer != null
+              ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
+              : null,
           title: const Text('Tasks'),
           backgroundColor: Colors.transparent,
         ) : null,
@@ -1893,6 +1898,9 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   Widget _buildMainScaffold(List<Task> prioritizedTasks) {
     return Scaffold(
       appBar: widget.showFilters ? AppBar(
+        leading: widget.onOpenDrawer != null
+            ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
+            : null,
         title: _isSearching
             ? TextField(
                 controller: _searchController,

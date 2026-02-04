@@ -27,6 +27,7 @@ class AppColors {
   // Special cases where blue/green are necessary
   static const Color waterBlue = Color(0xFF4A90E2);       // Only for water drop icon
   static const Color success = Color(0xFF4CAF50);         // Standard green for success
+  static const Color teal = Color(0xFF26A69A);            // Teal for habits module
   
   // Green variations (for success states only - darker but fully saturated)
   static const Color pastelGreen = Color(0xFF2E7D32);     // Much darker vibrant green, fully opaque

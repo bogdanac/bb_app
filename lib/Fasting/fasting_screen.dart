@@ -23,7 +23,8 @@ import 'extended_fast_guide_screen.dart';
 import 'fasting_guide_screen.dart';
 
 class FastingScreen extends StatefulWidget {
-  const FastingScreen({super.key});
+  final VoidCallback? onOpenDrawer;
+  const FastingScreen({super.key, this.onOpenDrawer});
 
   @override
   State<FastingScreen> createState() => _FastingScreenState();
@@ -1385,6 +1386,9 @@ class _FastingScreenState extends State<FastingScreen>
 
     return Scaffold(
       appBar: AppBar(
+        leading: widget.onOpenDrawer != null
+            ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
+            : null,
         title: const Text('Fasting'),
         backgroundColor: AppColors.transparent,
         actions: [
@@ -1430,7 +1434,10 @@ class _FastingScreenState extends State<FastingScreen>
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1823,6 +1830,8 @@ class _FastingScreenState extends State<FastingScreen>
               ),
             ),
           ],
+        ),
+      ),
         ),
       ),
     );

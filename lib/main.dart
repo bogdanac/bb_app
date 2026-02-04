@@ -25,6 +25,7 @@ import 'Auth/login_screen.dart';
 import 'shared/error_logger.dart';
 import 'Routines/routine_recovery_helper.dart';
 import 'Timers/timers_screen.dart';
+import 'Settings/settings_screen.dart';
 import 'dart:io';
 import 'dart:math';
 import 'dart:async';
@@ -581,56 +582,59 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
   int _selectedIndex = 0;
   late AnimationController _animationController;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   Map<String, bool> _moduleStates = {};
   List<String> _primaryTabs = [];
   List<String> _secondaryTabsOrder = [];
 
+  void _openDrawer() => _scaffoldKey.currentState?.openDrawer();
+
   // Map of all possible module configs
   Map<String, _TabConfig> get _allModuleConfigs => {
     AppCustomizationService.moduleFasting: _TabConfig(
-      screen: const FastingScreen(),
+      screen: FastingScreen(onOpenDrawer: _openDrawer),
       icon: Icons.local_fire_department,
       label: 'Fasting',
-      color: AppColors.yellow,
+      color: AppColors.successGreen,
       moduleKey: AppCustomizationService.moduleFasting,
     ),
     AppCustomizationService.moduleMenstrual: _TabConfig(
-      screen: const MenstrualCycleScreen(),
+      screen: MenstrualCycleScreen(onOpenDrawer: _openDrawer),
       icon: Icons.local_florist_rounded,
       label: 'Cycle',
       color: AppColors.red,
       moduleKey: AppCustomizationService.moduleMenstrual,
     ),
     AppCustomizationService.moduleFriends: _TabConfig(
-      screen: const FriendsScreen(),
+      screen: FriendsScreen(onOpenDrawer: _openDrawer),
       icon: Icons.people_rounded,
       label: 'Friends',
-      color: AppColors.successGreen,
+      color: AppColors.lightPurple,
       moduleKey: AppCustomizationService.moduleFriends,
     ),
     AppCustomizationService.moduleTasks: _TabConfig(
-      screen: const TodoScreen(),
+      screen: TodoScreen(onOpenDrawer: _openDrawer),
       icon: Icons.task_alt_rounded,
       label: 'Tasks',
       color: AppColors.coral,
       moduleKey: AppCustomizationService.moduleTasks,
     ),
     AppCustomizationService.moduleRoutines: _TabConfig(
-      screen: const RoutinesScreen(),
+      screen: RoutinesScreen(onOpenDrawer: _openDrawer),
       icon: Icons.auto_awesome_rounded,
       label: 'Routines',
       color: AppColors.orange,
       moduleKey: AppCustomizationService.moduleRoutines,
     ),
     AppCustomizationService.moduleHabits: _TabConfig(
-      screen: const HabitsScreen(),
+      screen: HabitsScreen(onOpenDrawer: _openDrawer),
       icon: Icons.track_changes_rounded,
       label: 'Habits',
-      color: AppColors.pastelGreen,
+      color: AppColors.yellow,
       moduleKey: AppCustomizationService.moduleHabits,
     ),
     AppCustomizationService.moduleTimers: _TabConfig(
-      screen: const TimersScreen(),
+      screen: TimersScreen(onOpenDrawer: _openDrawer),
       icon: Icons.timer_rounded,
       label: 'Timers',
       color: AppColors.purple,
@@ -656,6 +660,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
       screen: HomeScreen(
         onNavigateToModule: _navigateToModule,
         onReloadSettings: reloadCustomizationSettings,
+        onOpenDrawer: _openDrawer,
       ),
       icon: Icons.home_rounded,
       label: 'Home',
@@ -681,6 +686,47 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
     }
 
     return configs;
+  }
+
+  // All enabled tabs (for desktop side nav): Home first, then primary + secondary
+  List<_TabConfig> get _allEnabledTabConfigs {
+    final configs = <_TabConfig>[];
+    final allConfigs = _allModuleConfigs;
+
+    // Add Home first
+    configs.add(_TabConfig(
+      screen: HomeScreen(
+        onNavigateToModule: _navigateToModule,
+        onReloadSettings: reloadCustomizationSettings,
+        onOpenDrawer: _openDrawer,
+      ),
+      icon: Icons.home_rounded,
+      label: 'Home',
+      color: AppColors.pink,
+      isHome: true,
+    ));
+
+    // Add all primary tabs in order
+    for (final moduleKey in _primaryTabs) {
+      if (_moduleStates[moduleKey] == true && allConfigs.containsKey(moduleKey)) {
+        configs.add(allConfigs[moduleKey]!);
+      }
+    }
+
+    // Add all secondary tabs
+    for (final moduleKey in _secondaryTabsOrder) {
+      if (_moduleStates[moduleKey] == true &&
+          !_primaryTabs.contains(moduleKey) &&
+          allConfigs.containsKey(moduleKey)) {
+        configs.add(allConfigs[moduleKey]!);
+      }
+    }
+
+    return configs;
+  }
+
+  bool _isDesktop(BuildContext context) {
+    return MediaQuery.of(context).size.width >= 1024;
   }
 
   @override
@@ -729,21 +775,22 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
   }
 
   int? _getTabIndexByModuleKey(String moduleKey) {
+    // For desktop, search in all enabled tabs
+    if (_isDesktop(context)) {
+      final index = _allEnabledTabConfigs.indexWhere((c) => c.moduleKey == moduleKey);
+      return index >= 0 ? index : null;
+    }
+
+    // For mobile, search in primary tabs
     final index = _primaryTabConfigs.indexWhere((c) => c.moduleKey == moduleKey);
     return index >= 0 ? index : null;
   }
 
   void _navigateToModule(String moduleKey) {
-    // Check if module is in primary tabs (bottom nav)
     final index = _getTabIndexByModuleKey(moduleKey);
     if (index != null) {
       _onItemTapped(index);
-      return;
     }
-
-    // If not in primary tabs, check secondary tabs (drawer)
-    // For now, just try to navigate to it if it exists
-    // In future, we could show a message or open the drawer
   }
 
   Future<void> reloadCustomizationSettings() async {
@@ -836,22 +883,214 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
 
   @override
   Widget build(BuildContext context) {
-    final primaryTabs = _primaryTabConfigs;
-    final secondaryTabs = _secondaryTabConfigs;
+    final isDesktop = _isDesktop(context);
 
-    if (primaryTabs.isEmpty) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (isDesktop) {
+      // Desktop: Show all enabled modules in side nav
+      final allTabs = _allEnabledTabConfigs;
+      if (allTabs.isEmpty) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      final safeIndex = _selectedIndex.clamp(0, allTabs.length - 1);
+      return _buildDesktopLayout(allTabs, safeIndex);
+    } else {
+      // Mobile: Show primary tabs in bottom nav, secondary in drawer
+      final primaryTabs = _primaryTabConfigs;
+      final secondaryTabs = _secondaryTabConfigs;
+      if (primaryTabs.isEmpty) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      final safeIndex = _selectedIndex.clamp(0, primaryTabs.length - 1);
+      return _buildMobileLayout(primaryTabs, secondaryTabs, safeIndex);
     }
+  }
 
-    final safeIndex = _selectedIndex.clamp(0, primaryTabs.length - 1);
-
+  Widget _buildMobileLayout(List<_TabConfig> primaryTabs, List<_TabConfig> secondaryTabs, int safeIndex) {
     return Scaffold(
-      drawer: secondaryTabs.isNotEmpty ? _buildDrawer(secondaryTabs) : null,
+      key: _scaffoldKey,
+      drawer: _buildDrawer(secondaryTabs), // Always show drawer (Settings is always accessible)
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
         child: primaryTabs[safeIndex].screen,
       ),
-      bottomNavigationBar: _buildBottomNav(primaryTabs, safeIndex, hasDrawer: secondaryTabs.isNotEmpty),
+      bottomNavigationBar: _buildBottomNav(primaryTabs, safeIndex, hasDrawer: true), // Always show menu icon
+    );
+  }
+
+  Widget _buildDesktopLayout(List<_TabConfig> allTabs, int safeIndex) {
+    return Scaffold(
+      body: Row(
+        children: [
+          // Left side navigation
+          _buildSideNav(allTabs, safeIndex),
+          // Main content
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: allTabs[safeIndex].screen,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSideNav(List<_TabConfig> tabs, int safeIndex) {
+    return Container(
+      width: 240,
+      decoration: BoxDecoration(
+        color: AppColors.grey900,
+        border: Border(
+          right: BorderSide(
+            color: AppColors.grey700,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          // App header
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    image: const DecorationImage(
+                      image: AssetImage('assets/icon/ic_launcher.png'),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'bbetter',
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(color: AppColors.grey700, thickness: 1, height: 1),
+
+          // Navigation items
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: tabs.length,
+              itemBuilder: (context, index) {
+                final tab = tabs[index];
+                final isSelected = safeIndex == index;
+                return _buildSideNavItem(
+                  tab: tab,
+                  isSelected: isSelected,
+                  onTap: () => _onItemTapped(index),
+                );
+              },
+            ),
+          ),
+
+          // Settings at bottom
+          Divider(color: AppColors.grey700, thickness: 1, height: 1),
+          _buildSideNavItem(
+            tab: _TabConfig(
+              screen: const SettingsScreen(),
+              icon: Icons.settings_rounded,
+              label: 'Settings',
+              color: AppColors.grey300,
+            ),
+            isSelected: false,
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(
+                builder: (context) => const SettingsScreen(),
+              )).then((_) async {
+                await reloadCustomizationSettings();
+              });
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSideNavItem({
+    required _TabConfig tab,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: isSelected ? tab.color.withValues(alpha: 0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: isSelected
+            ? Border.all(color: tab.color.withValues(alpha: 0.3), width: 1)
+            : null,
+          boxShadow: isSelected ? [
+            BoxShadow(
+              color: tab.color.withValues(alpha: 0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ] : null,
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          hoverColor: tab.color.withValues(alpha: 0.08),
+          splashColor: tab.color.withValues(alpha: 0.15),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: tab.color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(
+                    tab.icon,
+                    color: tab.color,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    tab.label,
+                    style: TextStyle(
+                      color: isSelected ? AppColors.white : AppColors.grey200,
+                      fontSize: 15,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+                if (isSelected)
+                  Container(
+                    width: 4,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: tab.color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -864,23 +1103,26 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
           children: [
             Padding(
               padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      image: const DecorationImage(
+                        image: AssetImage('assets/icon/ic_launcher.png'),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   const Text(
-                    'More Modules',
+                    'bbetter',
                     style: TextStyle(
                       color: AppColors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${secondaryTabs.length} additional features',
-                    style: const TextStyle(
-                      color: AppColors.grey300,
-                      fontSize: 14,
                     ),
                   ),
                 ],
@@ -888,42 +1130,90 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
             ),
             Divider(color: AppColors.grey700, thickness: 1),
             Expanded(
-              child: ListView.builder(
+              child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: secondaryTabs.length,
-                itemBuilder: (context, index) {
-                  final tab = secondaryTabs[index];
-                  return ListTile(
+                children: [
+                  // Secondary module tabs
+                  if (secondaryTabs.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 8, 20, 4),
+                      child: Text(
+                        'MORE MODULES',
+                        style: TextStyle(
+                          color: AppColors.grey300,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                    ...secondaryTabs.map((tab) => ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: tab.color.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(tab.icon, color: tab.color, size: 24),
+                      ),
+                      title: Text(
+                        tab.label,
+                        style: const TextStyle(
+                          color: AppColors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(
+                          builder: (context) => tab.screen,
+                        ));
+                      },
+                    )),
+                    const SizedBox(height: 8),
+                    Divider(color: AppColors.grey700, thickness: 1),
+                  ],
+                  // Settings section
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 8, 20, 4),
+                    child: Text(
+                      'SETTINGS',
+                      style: TextStyle(
+                        color: AppColors.grey300,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                  ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: tab.color.withValues(alpha: 0.2),
+                        color: AppColors.grey300.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Icon(tab.icon, color: tab.color, size: 24),
+                      child: const Icon(Icons.settings_rounded, color: AppColors.grey300, size: 24),
                     ),
-                    title: Text(
-                      tab.label,
-                      style: const TextStyle(
+                    title: const Text(
+                      'Settings',
+                      style: TextStyle(
                         color: AppColors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     onTap: () {
-                      // Navigate by finding which screen this is
-                      // For now, we'll show a message since secondary tabs aren't in bottom nav
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('${tab.label} is in the drawer. Add it to Primary Tabs for quick access.'),
-                          backgroundColor: AppColors.grey800,
-                          duration: const Duration(seconds: 3),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (context) => const SettingsScreen(),
+                      )).then((_) async {
+                        await reloadCustomizationSettings();
+                      });
                     },
-                  );
-                },
+                  ),
+                ],
               ),
             ),
           ],

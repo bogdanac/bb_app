@@ -10,7 +10,8 @@ import 'add_activity_dialog.dart';
 import 'activity_detail_screen.dart';
 
 class TimersScreen extends StatefulWidget {
-  const TimersScreen({super.key});
+  final VoidCallback? onOpenDrawer;
+  const TimersScreen({super.key, this.onOpenDrawer});
 
   @override
   State<TimersScreen> createState() => _TimersScreenState();
@@ -23,9 +24,9 @@ class _TimersScreenState extends State<TimersScreen>
   bool _isLoading = true;
 
   // --- Productivity tab state ---
-  bool _isCountdownMode = true;
+  bool _isCountdownMode = false;
   String? _selectedActivityId;
-  int _countdownMinutes = 25;
+  int _countdownMinutes = 0;
   int _workMinutes = 25;
   int _breakMinutes = 5;
   Duration _remainingTime = Duration.zero;
@@ -209,7 +210,7 @@ class _TimersScreenState extends State<TimersScreen>
     _timer?.cancel();
     _isRunning = false;
     _saveActiveTimerState();
-    _updateProductivityNotification();
+    TimerNotificationHelper.cancelTimerNotification();
     setState(() {});
   }
 
@@ -386,6 +387,15 @@ class _TimersScreenState extends State<TimersScreen>
     setState(() {});
   }
 
+  void _reorderActivities(int oldIndex, int newIndex) {
+    setState(() {
+      if (newIndex > oldIndex) newIndex--;
+      final item = _activities.removeAt(oldIndex);
+      _activities.insert(newIndex, item);
+    });
+    TimerService.saveActivities(_activities);
+  }
+
   // --- Duration editing ---
 
   Future<void> _editDuration({
@@ -473,9 +483,11 @@ class _TimersScreenState extends State<TimersScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: widget.onOpenDrawer != null
+            ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
+            : null,
         title: const Text('Timers'),
         backgroundColor: Colors.transparent,
-        automaticallyImplyLeading: false,
         actions: [
           if (_tabController.index == 1)
             IconButton(
@@ -497,15 +509,20 @@ class _TimersScreenState extends State<TimersScreen>
           ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildProductivityTab(),
-                _buildActivitiesTab(),
-              ],
-            ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildProductivityTab(),
+                    _buildActivitiesTab(),
+                  ],
+                ),
+        ),
+      ),
     );
   }
 
@@ -534,39 +551,6 @@ class _TimersScreenState extends State<TimersScreen>
                         ? null
                         : () {
                             setState(() {
-                              _isCountdownMode = true;
-                              _remainingTime =
-                                  Duration(minutes: _countdownMinutes);
-                            });
-                          },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: _isCountdownMode
-                            ? AppColors.purple.withValues(alpha: 0.2)
-                            : Colors.transparent,
-                        borderRadius: AppStyles.borderRadiusMedium,
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Countdown',
-                          style: TextStyle(
-                            color: _isCountdownMode
-                                ? AppColors.purple
-                                : AppColors.grey200,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _productivityTimerActive
-                        ? null
-                        : () {
-                            setState(() {
                               _isCountdownMode = false;
                               _remainingTime =
                                   Duration(minutes: _workMinutes);
@@ -585,6 +569,39 @@ class _TimersScreenState extends State<TimersScreen>
                           'Pomodoro',
                           style: TextStyle(
                             color: !_isCountdownMode
+                                ? AppColors.purple
+                                : AppColors.grey200,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _productivityTimerActive
+                        ? null
+                        : () {
+                            setState(() {
+                              _isCountdownMode = true;
+                              _remainingTime =
+                                  Duration(minutes: _countdownMinutes);
+                            });
+                          },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _isCountdownMode
+                            ? AppColors.purple.withValues(alpha: 0.2)
+                            : Colors.transparent,
+                        borderRadius: AppStyles.borderRadiusMedium,
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Countdown',
+                          style: TextStyle(
+                            color: _isCountdownMode
                                 ? AppColors.purple
                                 : AppColors.grey200,
                             fontWeight: FontWeight.w600,
@@ -856,9 +873,20 @@ class _TimersScreenState extends State<TimersScreen>
       );
     }
 
-    return ListView.builder(
+    return ReorderableListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _activities.length,
+      onReorder: _reorderActivities,
+      buildDefaultDragHandles: false,
+      proxyDecorator: (child, index, animation) {
+        return Material(
+          color: Colors.transparent,
+          elevation: 4,
+          shadowColor: Colors.black26,
+          borderRadius: AppStyles.borderRadiusMedium,
+          child: child,
+        );
+      },
       itemBuilder: (context, index) {
         final activity = _activities[index];
         final isRunning = _runningActivityId == activity.id;
@@ -909,6 +937,12 @@ class _TimersScreenState extends State<TimersScreen>
             decoration: AppStyles.cardDecoration(),
             child: Row(
               children: [
+                ReorderableDragStartListener(
+                  index: index,
+                  child: Icon(Icons.drag_handle,
+                      color: AppColors.grey300, size: 20),
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

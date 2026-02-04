@@ -18,7 +18,8 @@ import 'package:bb_app/Services/firebase_backup_service.dart';
 import 'package:bb_app/Fasting/scheduled_fastings_service.dart';
 
 class MenstrualCycleScreen extends StatefulWidget {
-  const MenstrualCycleScreen({super.key});
+  final VoidCallback? onOpenDrawer;
+  const MenstrualCycleScreen({super.key, this.onOpenDrawer});
 
   @override
   State<MenstrualCycleScreen> createState() => _MenstrualCycleScreenState();
@@ -521,6 +522,9 @@ class _MenstrualCycleScreenState extends State<MenstrualCycleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: widget.onOpenDrawer != null
+            ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
+            : null,
         title: const Text('Menstrual Cycle'),
         backgroundColor: AppColors.transparent,
         actions: [
@@ -559,19 +563,24 @@ class _MenstrualCycleScreenState extends State<MenstrualCycleScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildCurrentPhaseCard(),
-            const SizedBox(height: 12),
-            _buildCalendarCard(),
-            const SizedBox(height: 12),
-            _buildActionButtons(),
-            if (_selectedDate != null) const SizedBox(height: 16),
-            _buildStatisticsCard(),
-          ],
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCurrentPhaseCard(),
+                const SizedBox(height: 12),
+                _buildCalendarCard(),
+                const SizedBox(height: 12),
+                _buildActionButtons(),
+                if (_selectedDate != null) const SizedBox(height: 16),
+                _buildStatisticsCard(),
+              ],
+            ),
+          ),
         ),
       ),
     );

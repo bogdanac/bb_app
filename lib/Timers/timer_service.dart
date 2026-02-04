@@ -170,7 +170,7 @@ class TimerService {
 
   static Future<int> getCountdownMinutes() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_countdownKey) ?? 25;
+    return prefs.getInt(_countdownKey) ?? 0;
   }
 
   static Future<void> setCountdownMinutes(int minutes) async {

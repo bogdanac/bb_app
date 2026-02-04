@@ -13,7 +13,8 @@ import 'package:bb_app/Routines/routine_widget_service.dart';
 import 'package:bb_app/Notifications/notification_service.dart';
 
 class RoutinesScreen extends StatefulWidget {
-  const RoutinesScreen({super.key});
+  final VoidCallback? onOpenDrawer;
+  const RoutinesScreen({super.key, this.onOpenDrawer});
 
   @override
   State<RoutinesScreen> createState() => _RoutinesScreenState();
@@ -262,9 +263,14 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final drawerLeading = widget.onOpenDrawer != null
+        ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
+        : null;
+
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
+          leading: drawerLeading,
           title: const Text('Routines'),
           backgroundColor: Colors.transparent,
         ),
@@ -274,6 +280,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: drawerLeading,
         title: const Text('Routines'),
         backgroundColor: Colors.transparent,
         actions: [
@@ -295,9 +302,14 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: _buildRoutinesContent(),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: RefreshIndicator(
+            onRefresh: _loadData,
+            child: _buildRoutinesContent(),
+          ),
+        ),
       ),
     );
   }

@@ -1,1 +1,73 @@
-{"firestore":{"rules":"firestore.rules"},"hosting":{"site":"bbetter-app","public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"],"rewrites":[{"source":"**","destination":"/index.html"}],"headers":[{"source":"**/*.@(jpg|jpeg|gif|png|svg|webp|js|css|eot|otf|ttf|ttc|woff|woff2|font.css)","headers":[{"key":"Cache-Control","value":"max-age=604800"}]},{"source":"**/*.@(json|xml|txt)","headers":[{"key":"Cache-Control","value":"max-age=3600"}]}]},"flutter":{"platforms":{"dart":{"lib/firebase_options.dart":{"projectId":"b-bapp-n0ke4x","configurations":{"android":"1:323501498472:android:154d48832acd8a46559bdd","web":"1:323501498472:web:284b0ab2e820f4ee559bdd"}}},"android":{"default":{"projectId":"b-bapp-n0ke4x","appId":"1:323501498472:android:154d48832acd8a46559bdd","fileOutput":"android/app/google-services.json"}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "site": "bbetter-app",
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**/*.@(jpg|jpeg|gif|png|svg|webp|js|css|eot|otf|ttf|ttc|woff|woff2|font.css)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=604800"
+          }
+        ]
+      },
+      {
+        "source": "manifest.json",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "max-age=3600"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(xml|txt)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=3600"
+          }
+        ]
+      }
+    ]
+  },
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "b-bapp-n0ke4x",
+          "configurations": {
+            "android": "1:323501498472:android:154d48832acd8a46559bdd",
+            "web": "1:323501498472:web:284b0ab2e820f4ee559bdd"
+          }
+        }
+      },
+      "android": {
+        "default": {
+          "projectId": "b-bapp-n0ke4x",
+          "appId": "1:323501498472:android:154d48832acd8a46559bdd",
+          "fileOutput": "android/app/google-services.json"
+        }
+      }
+    }
+  }
+}

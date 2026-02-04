@@ -144,11 +144,14 @@ class _HomeCardsScreenState extends State<HomeCardsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         child: Row(
           children: [
-            // Drag handle
-            Icon(
-              Icons.drag_handle_rounded,
-              color: AppColors.greyText.withValues(alpha: 0.5),
-              size: 20,
+            // Drag handle - interactive
+            ReorderableDragStartListener(
+              index: index,
+              child: Icon(
+                Icons.drag_handle_rounded,
+                color: AppColors.greyText.withValues(alpha: 0.5),
+                size: 20,
+              ),
             ),
             const SizedBox(width: 8),
             // Icon
@@ -197,6 +200,7 @@ class _HomeCardsScreenState extends State<HomeCardsScreen> {
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             // Switch
             Switch(
               value: isEnabled,
