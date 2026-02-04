@@ -4,8 +4,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'Fasting/fasting_screen.dart';
-import 'MenstrualCycle/cycle_tracking_screen.dart';
-import 'Routines/routines_habits_screen.dart';
+import 'MenstrualCycle/menstrual_cycle_screen.dart';
+import 'MenstrualCycle/friends_screen.dart';
+import 'Routines/routines_screen.dart';
+import 'Habits/habits_screen.dart';
+import 'Settings/app_customization_service.dart';
 import 'Tasks/todo_screen.dart';
 import 'Tasks/task_widget_service.dart';
 import 'home.dart';
@@ -23,7 +26,6 @@ import 'Auth/login_screen.dart';
 import 'shared/error_logger.dart';
 import 'Routines/routine_recovery_helper.dart';
 import 'Timers/timers_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:math';
 import 'dart:async';
@@ -606,52 +608,90 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
-  int _selectedIndex = 2; // Always start with Home (index 2)
+  int _selectedIndex = 0;
   late AnimationController _animationController;
-  bool _timersModuleEnabled = false;
+  Map<String, bool> _moduleStates = {};
+  String _navPosition = 'bottom';
 
   List<_TabConfig> get _tabConfigs {
-    final configs = <_TabConfig>[
-      _TabConfig(
+    final configs = <_TabConfig>[];
+
+    // Left-of-Home tabs
+    if (_moduleStates[AppCustomizationService.moduleFasting] == true) {
+      configs.add(_TabConfig(
         screen: const FastingScreen(),
         icon: Icons.local_fire_department,
         label: 'Fasting',
         color: AppColors.yellow,
-      ),
-      _TabConfig(
-        screen: const CycleScreen(),
+        moduleKey: AppCustomizationService.moduleFasting,
+      ));
+    }
+    if (_moduleStates[AppCustomizationService.moduleMenstrual] == true) {
+      configs.add(_TabConfig(
+        screen: const MenstrualCycleScreen(),
         icon: Icons.local_florist_rounded,
         label: 'Cycle',
         color: AppColors.red,
-      ),
-      _TabConfig(
-        screen: HomeScreen(onNavigateToTab: _onItemTapped),
-        icon: Icons.home_rounded,
-        label: 'Home',
-        color: AppColors.pink,
-        isHome: true,
-      ),
-      _TabConfig(
+        moduleKey: AppCustomizationService.moduleMenstrual,
+      ));
+    }
+    if (_moduleStates[AppCustomizationService.moduleFriends] == true) {
+      configs.add(_TabConfig(
+        screen: const FriendsScreen(),
+        icon: Icons.people_rounded,
+        label: 'Friends',
+        color: AppColors.successGreen,
+        moduleKey: AppCustomizationService.moduleFriends,
+      ));
+    }
+
+    // Home (always present)
+    configs.add(_TabConfig(
+      screen: HomeScreen(onNavigateToModule: _navigateToModule),
+      icon: Icons.home_rounded,
+      label: 'Home',
+      color: AppColors.pink,
+      isHome: true,
+    ));
+
+    // Right-of-Home tabs
+    if (_moduleStates[AppCustomizationService.moduleTasks] == true) {
+      configs.add(_TabConfig(
         screen: const TodoScreen(),
         icon: Icons.task_alt_rounded,
         label: 'Tasks',
         color: AppColors.coral,
-      ),
-      _TabConfig(
-        screen: const RoutinesHabitsScreen(),
+        moduleKey: AppCustomizationService.moduleTasks,
+      ));
+    }
+    if (_moduleStates[AppCustomizationService.moduleRoutines] == true) {
+      configs.add(_TabConfig(
+        screen: const RoutinesScreen(),
         icon: Icons.auto_awesome_rounded,
         label: 'Routines',
         color: AppColors.orange,
-      ),
-    ];
-    if (_timersModuleEnabled) {
+        moduleKey: AppCustomizationService.moduleRoutines,
+      ));
+    }
+    if (_moduleStates[AppCustomizationService.moduleHabits] == true) {
+      configs.add(_TabConfig(
+        screen: const HabitsScreen(),
+        icon: Icons.track_changes_rounded,
+        label: 'Habits',
+        color: AppColors.pastelGreen,
+        moduleKey: AppCustomizationService.moduleHabits,
+      ));
+    }
+    if (_moduleStates[AppCustomizationService.moduleTimers] == true) {
       configs.add(_TabConfig(
         screen: const TimersScreen(),
         icon: Icons.timer_rounded,
         label: 'Timers',
         color: AppColors.purple,
+        moduleKey: AppCustomizationService.moduleTimers,
       ));
     }
+
     return configs;
   }
 
@@ -663,23 +703,55 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    _loadModuleSettings();
+    _loadCustomizationSettings().then((_) {
+      if (mounted) {
+        final homeIndex = _tabConfigs.indexWhere((c) => c.isHome);
+        if (homeIndex >= 0 && _selectedIndex != homeIndex) {
+          setState(() {
+            _selectedIndex = homeIndex;
+          });
+        }
+      }
+    });
     _checkForWidgetIntent();
     _checkNotificationPermissions();
   }
 
-  Future<void> _loadModuleSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final timersEnabled = prefs.getBool('timers_module_enabled') ?? false;
+  Future<void> _loadCustomizationSettings() async {
+    await AppCustomizationService.migrateFromLegacyKeys();
+
+    final moduleStates = await AppCustomizationService.loadAllModuleStates();
+    final navPosition = await AppCustomizationService.getNavPosition();
+
     if (mounted) {
       setState(() {
-        _timersModuleEnabled = timersEnabled;
-        if (_selectedIndex >= _tabConfigs.length) {
-          final homeIndex = _tabConfigs.indexWhere((c) => c.isHome);
-          _selectedIndex = homeIndex >= 0 ? homeIndex : 2;
+        _moduleStates = moduleStates;
+        _navPosition = navPosition;
+
+        // Clamp selected index if current tab no longer exists
+        final tabs = _tabConfigs;
+        if (_selectedIndex >= tabs.length) {
+          _selectedIndex = tabs.indexWhere((c) => c.isHome);
+          if (_selectedIndex < 0) _selectedIndex = 0;
         }
       });
     }
+  }
+
+  int? _getTabIndexByModuleKey(String moduleKey) {
+    final index = _tabConfigs.indexWhere((c) => c.moduleKey == moduleKey);
+    return index >= 0 ? index : null;
+  }
+
+  void _navigateToModule(String moduleKey) {
+    final index = _getTabIndexByModuleKey(moduleKey);
+    if (index != null) {
+      _onItemTapped(index);
+    }
+  }
+
+  Future<void> reloadCustomizationSettings() async {
+    await _loadCustomizationSettings();
   }
 
   void _checkNotificationPermissions() async {
@@ -702,14 +774,20 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
 
         if (hasTaskListIntent && mounted) {
           // Task List Widget clicked - just navigate to tasks screen, no dialog
-          setState(() {
-            _selectedIndex = 3; // Tasks screen
-          });
+          final tasksIndex = _getTabIndexByModuleKey(AppCustomizationService.moduleTasks);
+          if (tasksIndex != null) {
+            setState(() {
+              _selectedIndex = tasksIndex;
+            });
+          }
         } else if (hasWidgetIntent && mounted) {
           // Add Task Widget clicked - navigate to tasks screen and show dialog
-          setState(() {
-            _selectedIndex = 3; // Tasks screen
-          });
+          final tasksIndex = _getTabIndexByModuleKey(AppCustomizationService.moduleTasks);
+          if (tasksIndex != null) {
+            setState(() {
+              _selectedIndex = tasksIndex;
+            });
+          }
           // Small delay to ensure navigation completes
           await Future.delayed(const Duration(milliseconds: 300));
           if (mounted) {
@@ -762,40 +840,64 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width >= 1024;
+    final tabs = _tabConfigs;
+    if (tabs.isEmpty) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    if (isDesktop) {
-      // Desktop layout with side navigation
-      return Scaffold(
-        body: Row(
+    final safeIndex = _selectedIndex.clamp(0, tabs.length - 1);
+
+    // Determine effective nav position
+    if (_navPosition == 'left') {
+      return _buildSideNavLayout(tabs, safeIndex, isLeft: true);
+    } else if (_navPosition == 'right') {
+      return _buildSideNavLayout(tabs, safeIndex, isLeft: false);
+    } else {
+      // 'bottom' — but desktop (>=1024px) still uses side nav
+      final isDesktop = MediaQuery.of(context).size.width >= 1024;
+      if (isDesktop) {
+        return _buildSideNavLayout(tabs, safeIndex, isLeft: true);
+      }
+      return _buildBottomNavLayout(tabs, safeIndex);
+    }
+  }
+
+  Widget _buildSideNavLayout(List<_TabConfig> tabs, int safeIndex, {required bool isLeft}) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
+    final sideNav = SideNavigation(
+      selectedIndex: safeIndex,
+      onItemTapped: _onItemTapped,
+      items: tabs.map((c) => SideNavItem(
+        icon: c.icon,
+        label: c.label,
+        color: c.color,
+      )).toList(),
+      isRightSide: !isLeft,
+      compact: isMobile,
+    );
+
+    return Scaffold(
+      body: SafeArea(
+        child: Row(
           children: [
-            SideNavigation(
-              selectedIndex: _selectedIndex,
-              onItemTapped: _onItemTapped,
-              items: _tabConfigs.map((c) => SideNavItem(
-                icon: c.icon,
-                label: c.label,
-                color: c.color,
-              )).toList(),
-            ),
+            if (isLeft) sideNav,
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
-                child: _tabConfigs[_selectedIndex].screen,
+                child: tabs[safeIndex].screen,
               ),
             ),
+            if (!isLeft) sideNav,
           ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
-    final tabs = _tabConfigs;
-
-    // Mobile/tablet layout with bottom navigation
+  Widget _buildBottomNavLayout(List<_TabConfig> tabs, int safeIndex) {
     return Scaffold(
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
-        child: tabs[_selectedIndex].screen,
+        child: tabs[safeIndex].screen,
       ),
       bottomNavigationBar: Container(
         height: 70 + MediaQuery.of(context).padding.bottom,
@@ -814,34 +916,34 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: List.generate(tabs.length, (index) {
-            final tab = tabs[index];
-            final isSelected = _selectedIndex == index;
+              final tab = tabs[index];
+              final isSelected = safeIndex == index;
 
-            return GestureDetector(
-              onTap: () => _onItemTapped(index),
-              child: Container(
-                width: tabs.length > 5 ? 48 : 56,
-                height: tabs.length > 5 ? 48 : 56,
-                margin: const EdgeInsets.symmetric(vertical: 7),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? tab.color.withValues(alpha: 0.25)
-                      : tab.color.withValues(alpha: 0.08),
-                  borderRadius: AppStyles.borderRadiusXLarge,
-                  border: isSelected
-                    ? Border.all(color: tab.color.withValues(alpha: 0.6), width: 1.5)
-                    : Border.all(color: tab.color.withValues(alpha: 0.6), width: 0.5)
-                ),
-                child: Center(
-                  child: Icon(
-                    tab.icon,
-                    color: tab.color.withValues(alpha: 0.7),
-                    size: isSelected ? (tabs.length > 5 ? 28 : 33) : (tabs.length > 5 ? 25 : 30),
+              return GestureDetector(
+                onTap: () => _onItemTapped(index),
+                child: Container(
+                  width: tabs.length > 5 ? 48 : 56,
+                  height: tabs.length > 5 ? 48 : 56,
+                  margin: const EdgeInsets.symmetric(vertical: 7),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? tab.color.withValues(alpha: 0.25)
+                        : tab.color.withValues(alpha: 0.08),
+                    borderRadius: AppStyles.borderRadiusXLarge,
+                    border: isSelected
+                      ? Border.all(color: tab.color.withValues(alpha: 0.6), width: 1.5)
+                      : Border.all(color: tab.color.withValues(alpha: 0.6), width: 0.5),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      tab.icon,
+                      color: tab.color.withValues(alpha: 0.7),
+                      size: isSelected ? (tabs.length > 5 ? 28 : 33) : (tabs.length > 5 ? 25 : 30),
+                    ),
                   ),
                 ),
-              ),
-            );
-          }),
+              );
+            }),
           ),
         ),
       ),
@@ -855,6 +957,7 @@ class _TabConfig {
   final String label;
   final Color color;
   final bool isHome;
+  final String? moduleKey;
 
   const _TabConfig({
     required this.screen,
@@ -862,6 +965,7 @@ class _TabConfig {
     required this.label,
     required this.color,
     this.isHome = false,
+    this.moduleKey,
   });
 }
 

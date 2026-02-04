@@ -13,45 +13,62 @@ class SideNavItem {
   });
 }
 
-/// Side navigation bar for desktop/tablet layouts
+/// Side navigation bar for desktop/tablet layouts.
+/// Supports left/right positioning and compact mode for mobile.
 class SideNavigation extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onItemTapped;
   final List<SideNavItem> items;
+  final bool isRightSide;
+  final bool compact;
 
   const SideNavigation({
     super.key,
     required this.selectedIndex,
     required this.onItemTapped,
     required this.items,
+    this.isRightSide = false,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 200,
+      width: compact ? 72 : 200,
       decoration: BoxDecoration(
         color: AppColors.grey900,
         border: Border(
-          right: BorderSide(
-            color: AppColors.grey700,
-            width: 1,
-          ),
+          right: isRightSide
+              ? BorderSide.none
+              : BorderSide(color: AppColors.grey700, width: 1),
+          left: isRightSide
+              ? BorderSide(color: AppColors.grey700, width: 1)
+              : BorderSide.none,
         ),
       ),
-      child: Column(
-        children: [
-          const SizedBox(height: 60),
-          ...items.asMap().entries.map((entry) => Padding(
-            padding: EdgeInsets.only(bottom: entry.key < items.length - 1 ? 12 : 0),
-            child: _buildNavItem(
-              icon: entry.value.icon,
-              label: entry.value.label,
-              index: entry.key,
-              color: entry.value.color,
-            ),
-          )),
-        ],
+      child: SafeArea(
+        right: isRightSide,
+        left: !isRightSide,
+        child: Column(
+          children: [
+            const SizedBox(height: 60),
+            ...items.asMap().entries.map((entry) => Padding(
+              padding: EdgeInsets.only(bottom: entry.key < items.length - 1 ? 12 : 0),
+              child: compact
+                  ? _buildCompactNavItem(
+                      icon: entry.value.icon,
+                      index: entry.key,
+                      color: entry.value.color,
+                    )
+                  : _buildNavItem(
+                      icon: entry.value.icon,
+                      label: entry.value.label,
+                      index: entry.key,
+                      color: entry.value.color,
+                    ),
+            )),
+          ],
+        ),
       ),
     );
   }
@@ -93,6 +110,36 @@ class SideNavigation extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactNavItem({
+    required IconData icon,
+    required int index,
+    required Color color,
+  }) {
+    final bool isSelected = selectedIndex == index;
+
+    return InkWell(
+      onTap: () => onItemTapped(index),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withAlpha(51) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: isSelected
+              ? Border.all(color: color, width: 2)
+              : null,
+        ),
+        child: Center(
+          child: Icon(
+            icon,
+            color: isSelected ? color : AppColors.grey200,
+            size: 24,
+          ),
         ),
       ),
     );

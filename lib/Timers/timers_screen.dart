@@ -28,7 +28,7 @@ class _TimersScreenState extends State<TimersScreen>
   int _countdownMinutes = 25;
   int _workMinutes = 25;
   int _breakMinutes = 5;
-  Duration _remainingTime = const Duration(minutes: 25);
+  Duration _remainingTime = Duration.zero;
   bool _isRunning = false;
   bool _isPomodoroBreak = false;
   int _pomodoroCount = 0;

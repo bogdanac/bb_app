@@ -6,6 +6,8 @@ import 'WaterTracking/water_settings_screen.dart';
 import 'FoodTracking/food_tracking_settings_screen.dart';
 import 'Energy/energy_settings_screen.dart';
 import 'Settings/modules_screen.dart';
+import 'Settings/home_cards_screen.dart';
+import 'Settings/nav_position_screen.dart';
 import 'shared/error_logs_screen.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_styles.dart';
@@ -111,7 +113,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Active Modules',
+                                'App Features',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w500,
@@ -120,6 +122,146 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
                               SizedBox(height: 4),
                               Text(
                                 'Enable or disable app features',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.greyText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.greyText,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Home Page Cards Section
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  border: Border.all(
+                    color: AppColors.normalCardBackground,
+                  ),
+                ),
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const HomeCardsScreen(),
+                      ),
+                    );
+                  },
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.pink.withValues(alpha: 0.1),
+                            borderRadius: AppStyles.borderRadiusSmall,
+                          ),
+                          child: const Icon(
+                            Icons.dashboard_customize_rounded,
+                            color: AppColors.pink,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Home Page Cards',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Choose which cards appear on Home',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.greyText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.greyText,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Navigation Style Section
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  border: Border.all(
+                    color: AppColors.normalCardBackground,
+                  ),
+                ),
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const NavPositionScreen(),
+                      ),
+                    );
+                  },
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.purple.withValues(alpha: 0.1),
+                            borderRadius: AppStyles.borderRadiusSmall,
+                          ),
+                          child: const Icon(
+                            Icons.swap_vert_rounded,
+                            color: AppColors.purple,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Navigation Style',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Bottom, left, or right navigation bar',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: AppColors.greyText,

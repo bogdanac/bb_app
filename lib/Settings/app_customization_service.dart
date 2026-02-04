@@ -1,0 +1,384 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../theme/app_colors.dart';
+import '../Notifications/centralized_notification_manager.dart';
+
+/// Central service for managing all app customization preferences:
+/// - Module toggles (tab visibility)
+/// - Home card visibility and ordering
+/// - Navigation bar position
+class AppCustomizationService {
+  static final AppCustomizationService _instance =
+      AppCustomizationService._internal();
+  factory AppCustomizationService() => _instance;
+  AppCustomizationService._internal();
+
+  // ============= Module Keys =============
+  static const String moduleFasting = 'module_fasting_enabled';
+  static const String moduleMenstrual = 'module_menstrual_enabled';
+  static const String moduleFriends = 'module_friends_enabled';
+  static const String moduleTasks = 'module_tasks_enabled';
+  static const String moduleRoutines = 'module_routines_enabled';
+  static const String moduleHabits = 'module_habits_enabled';
+  static const String moduleTimers = 'module_timers_enabled';
+
+  // ============= Card Keys =============
+  static const String cardMenstrual = 'card_menstrual_visible';
+  static const String cardBatteryFlow = 'card_battery_flow_visible';
+  static const String cardCalendar = 'card_calendar_visible';
+  static const String cardFasting = 'card_fasting_visible';
+  static const String cardFoodTracking = 'card_food_tracking_visible';
+  static const String cardWaterTracking = 'card_water_tracking_visible';
+  static const String cardHabits = 'card_habits_visible';
+  static const String cardRoutines = 'card_routines_visible';
+  static const String cardDailyTasks = 'card_daily_tasks_visible';
+
+  // ============= Other Keys =============
+  static const String navPositionKey = 'nav_position';
+  static const String cardOrderKey = 'home_card_order';
+
+  // Legacy key for backward compatibility
+  static const String legacyTimersKey = 'timers_module_enabled';
+  static const String legacyMenstrualNotificationsKey =
+      'menstrual_tracking_enabled';
+
+  // ============= Card-to-Module Dependencies =============
+  static const Map<String, String?> cardModuleDependency = {
+    cardMenstrual: moduleMenstrual,
+    cardFasting: moduleFasting,
+    cardHabits: moduleHabits,
+    cardRoutines: moduleRoutines,
+    cardDailyTasks: moduleTasks,
+    cardBatteryFlow: null,
+    cardCalendar: null,
+    cardFoodTracking: null,
+    cardWaterTracking: null,
+  };
+
+  // ============= Default Card Order =============
+  static const List<String> defaultCardOrder = [
+    cardMenstrual,
+    cardBatteryFlow,
+    cardCalendar,
+    cardFasting,
+    cardFoodTracking,
+    cardWaterTracking,
+    cardHabits,
+    cardRoutines,
+    cardDailyTasks,
+  ];
+
+  // ============= Module Metadata =============
+  static const List<ModuleInfo> allModules = [
+    ModuleInfo(
+      key: moduleFasting,
+      label: 'Fasting',
+      description: 'Track fasts with cycle-based scheduling',
+      icon: Icons.local_fire_department,
+      color: AppColors.yellow,
+      canBeDisabled: true,
+    ),
+    ModuleInfo(
+      key: moduleMenstrual,
+      label: 'Menstrual Cycle',
+      description: 'Period tracking, ovulation, and cycle insights',
+      icon: Icons.local_florist_rounded,
+      color: AppColors.red,
+      canBeDisabled: true,
+    ),
+    ModuleInfo(
+      key: moduleFriends,
+      label: 'Friends',
+      description: 'Circle of friends with friendship battery tracking',
+      icon: Icons.people_rounded,
+      color: AppColors.successGreen,
+      canBeDisabled: true,
+    ),
+    ModuleInfo(
+      key: moduleTasks,
+      label: 'Tasks',
+      description: 'Daily task management with categories',
+      icon: Icons.task_alt_rounded,
+      color: AppColors.coral,
+      canBeDisabled: true,
+    ),
+    ModuleInfo(
+      key: moduleRoutines,
+      label: 'Routines',
+      description: 'Multi-step routines with progress tracking',
+      icon: Icons.auto_awesome_rounded,
+      color: AppColors.orange,
+      canBeDisabled: true,
+    ),
+    ModuleInfo(
+      key: moduleHabits,
+      label: 'Habits',
+      description: 'Cycle-based habit tracking with streaks',
+      icon: Icons.track_changes_rounded,
+      color: AppColors.pastelGreen,
+      canBeDisabled: true,
+    ),
+    ModuleInfo(
+      key: moduleTimers,
+      label: 'Timers',
+      description: 'Countdown, Pomodoro & activity time tracking',
+      icon: Icons.timer_rounded,
+      color: AppColors.purple,
+      canBeDisabled: true,
+    ),
+  ];
+
+  // ============= Card Metadata =============
+  static const List<CardInfo> allCards = [
+    CardInfo(
+      key: cardMenstrual,
+      label: 'Menstrual Cycle',
+      description: 'Current cycle phase and predictions',
+      icon: Icons.local_florist_rounded,
+      color: AppColors.red,
+      dependsOnModule: moduleMenstrual,
+    ),
+    CardInfo(
+      key: cardBatteryFlow,
+      label: 'Battery & Flow',
+      description: 'Energy and flow tracking',
+      icon: Icons.bolt_rounded,
+      color: AppColors.coral,
+      dependsOnModule: null,
+    ),
+    CardInfo(
+      key: cardCalendar,
+      label: 'Calendar Events',
+      description: 'Upcoming calendar events',
+      icon: Icons.event_rounded,
+      color: AppColors.lightPink,
+      dependsOnModule: null,
+    ),
+    CardInfo(
+      key: cardFasting,
+      label: 'Fasting',
+      description: 'Active or scheduled fasts',
+      icon: Icons.local_fire_department,
+      color: AppColors.yellow,
+      dependsOnModule: moduleFasting,
+    ),
+    CardInfo(
+      key: cardFoodTracking,
+      label: 'Food Tracking',
+      description: 'Daily food log and target percentage',
+      icon: Icons.restaurant_rounded,
+      color: AppColors.pastelGreen,
+      dependsOnModule: null,
+    ),
+    CardInfo(
+      key: cardWaterTracking,
+      label: 'Water Tracking',
+      description: 'Daily water intake goal',
+      icon: Icons.water_drop_rounded,
+      color: AppColors.waterBlue,
+      dependsOnModule: null,
+    ),
+    CardInfo(
+      key: cardHabits,
+      label: 'Habits',
+      description: 'Uncompleted habits for today',
+      icon: Icons.track_changes_rounded,
+      color: AppColors.pastelGreen,
+      dependsOnModule: moduleHabits,
+    ),
+    CardInfo(
+      key: cardRoutines,
+      label: 'Routines',
+      description: 'Scheduled routines for today',
+      icon: Icons.auto_awesome_rounded,
+      color: AppColors.orange,
+      dependsOnModule: moduleRoutines,
+    ),
+    CardInfo(
+      key: cardDailyTasks,
+      label: 'Daily Tasks',
+      description: 'Your task list',
+      icon: Icons.task_alt_rounded,
+      color: AppColors.coral,
+      dependsOnModule: moduleTasks,
+    ),
+  ];
+
+  // ============= Migration =============
+
+  /// Migrate from legacy keys to new standardized keys
+  static Future<void> migrateFromLegacyKeys() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Migrate timers_module_enabled -> module_timers_enabled
+    if (prefs.containsKey(legacyTimersKey) &&
+        !prefs.containsKey(moduleTimers)) {
+      final value = prefs.getBool(legacyTimersKey) ?? false;
+      await prefs.setBool(moduleTimers, value);
+    }
+  }
+
+  // ============= Module Management =============
+
+  /// Load all module states
+  static Future<Map<String, bool>> loadAllModuleStates() async {
+    final prefs = await SharedPreferences.getInstance();
+    return {
+      for (var module in allModules)
+        module.key: prefs.getBool(module.key) ?? (module.key == moduleTimers ? false : true),
+    };
+  }
+
+  /// Check if a specific module is enabled
+  static Future<bool> isModuleEnabled(String moduleKey) async {
+    final prefs = await SharedPreferences.getInstance();
+    // Timers defaults to false, all others default to true
+    return prefs.getBool(moduleKey) ?? (moduleKey == moduleTimers ? false : true);
+  }
+
+  /// Enable or disable a module
+  static Future<void> setModuleEnabled(String moduleKey, bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(moduleKey, enabled);
+
+    // Backward compatibility: menstrual module toggle also controls notifications
+    if (moduleKey == moduleMenstrual) {
+      await prefs.setBool(legacyMenstrualNotificationsKey, enabled);
+      // Reschedule notifications
+      final notificationManager = CentralizedNotificationManager();
+      await notificationManager.forceRescheduleAll();
+    }
+  }
+
+  // ============= Card Visibility Management =============
+
+  /// Load all card visibility states
+  static Future<Map<String, bool>> loadAllCardStates() async {
+    final prefs = await SharedPreferences.getInstance();
+    return {
+      for (var card in allCards)
+        card.key: prefs.getBool(card.key) ?? true,
+    };
+  }
+
+  /// Check if a specific card is set to visible (ignores module dependency)
+  static Future<bool> isCardVisible(String cardKey) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(cardKey) ?? true;
+  }
+
+  /// Set card visibility
+  static Future<void> setCardVisible(String cardKey, bool visible) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(cardKey, visible);
+  }
+
+  /// Check if a card should be shown (considers both toggle AND module dependency)
+  static Future<bool> isCardEffectivelyVisible(String cardKey) async {
+    final cardVisible = await isCardVisible(cardKey);
+    if (!cardVisible) return false;
+
+    // Check module dependency
+    final moduleKey = cardModuleDependency[cardKey];
+    if (moduleKey == null) return true;
+
+    return await isModuleEnabled(moduleKey);
+  }
+
+  // ============= Card Ordering =============
+
+  /// Load card display order
+  static Future<List<String>> loadCardOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final orderList = prefs.getStringList(cardOrderKey);
+    if (orderList == null || orderList.isEmpty) {
+      return List.from(defaultCardOrder);
+    }
+
+    // Merge with default order to handle new cards
+    final result = List<String>.from(orderList);
+    for (var cardKey in defaultCardOrder) {
+      if (!result.contains(cardKey)) {
+        result.add(cardKey);
+      }
+    }
+    return result;
+  }
+
+  /// Save card display order
+  static Future<void> saveCardOrder(List<String> order) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(cardOrderKey, order);
+  }
+
+  // ============= Navigation Position =============
+
+  /// Get navigation bar position ('bottom', 'left', or 'right')
+  static Future<String> getNavPosition() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(navPositionKey) ?? 'bottom';
+  }
+
+  /// Set navigation bar position
+  static Future<void> setNavPosition(String position) async {
+    if (!['bottom', 'left', 'right'].contains(position)) {
+      throw ArgumentError('Invalid nav position: $position');
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(navPositionKey, position);
+  }
+
+  // ============= Bulk Operations =============
+
+  /// Get list of enabled module keys
+  static Future<List<String>> getEnabledModuleKeys() async {
+    final states = await loadAllModuleStates();
+    return states.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toList();
+  }
+}
+
+// ============= Data Classes =============
+
+/// Metadata for a toggleable module/feature
+class ModuleInfo {
+  final String key;
+  final String label;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final bool canBeDisabled;
+
+  const ModuleInfo({
+    required this.key,
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.canBeDisabled,
+  });
+}
+
+/// Metadata for a home page card
+class CardInfo {
+  final String key;
+  final String label;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final String? dependsOnModule;
+
+  const CardInfo({
+    required this.key,
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.dependsOnModule,
+  });
+
+  /// Whether this card requires a module to be enabled
+  bool get hasModuleDependency => dependsOnModule != null;
+}

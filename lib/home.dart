@@ -1,7 +1,7 @@
-import 'package:bb_app/MenstrualCycle/cycle_tracking_screen.dart';
 import 'package:flutter/material.dart';
 import 'theme/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'Settings/app_customization_service.dart';
 import 'shared/date_format_utils.dart';
 import 'package:bb_app/Calendar/events_card.dart';
 import 'package:bb_app/MenstrualCycle/menstrual_cycle_card.dart';
@@ -29,8 +29,9 @@ import 'package:flutter/services.dart';
 // HOME SCREEN
 class HomeScreen extends StatefulWidget {
   final void Function(int)? onNavigateToTab;
+  final void Function(String moduleKey)? onNavigateToModule;
 
-  const HomeScreen({super.key, this.onNavigateToTab});
+  const HomeScreen({super.key, this.onNavigateToTab, this.onNavigateToModule});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -46,6 +47,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isDisposed = false;
   Timer? _waterSyncTimer;
   bool _backupOverdue = false;
+  Map<String, bool> _cardVisibility = {};
+  List<String> _cardOrder = [];
 
   // Method channel for communicating with Android widget
   static const platform = MethodChannel('com.bb.bb_app/water_widget');
@@ -69,6 +72,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _initializeData();
     _checkBackupStatus();
     _startWaterSyncTimer();
+    _loadCardSettings();
   }
 
   @override
@@ -544,13 +548,131 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
 
 
+  Future<void> _loadCardSettings() async {
+    final cardStates = await AppCustomizationService.loadAllCardStates();
+    final moduleStates = await AppCustomizationService.loadAllModuleStates();
+    final cardOrder = await AppCustomizationService.loadCardOrder();
+
+    // Compute effective visibility: card toggle AND module dependency
+    final effectiveVisibility = <String, bool>{};
+    for (final entry in cardStates.entries) {
+      final moduleKey = AppCustomizationService.cardModuleDependency[entry.key];
+      final moduleEnabled = moduleKey == null || (moduleStates[moduleKey] ?? true);
+      effectiveVisibility[entry.key] = entry.value && moduleEnabled;
+    }
+
+    if (mounted) {
+      setState(() {
+        _cardVisibility = effectiveVisibility;
+        _cardOrder = cardOrder;
+      });
+    }
+  }
+
+  bool _isCardVisible(String cardKey) {
+    return _cardVisibility[cardKey] ?? true;
+  }
+
+  List<Widget> _buildOrderedCards() {
+    // Map card keys to their widget builders
+    final cardBuilders = <String, Widget? Function()>{
+      AppCustomizationService.cardMenstrual: () {
+        if (!_isCardVisible(AppCustomizationService.cardMenstrual)) return null;
+        return MenstrualCycleCard(
+          key: _menstrualCycleKey,
+          onTap: () {
+            widget.onNavigateToModule?.call(AppCustomizationService.moduleMenstrual);
+          },
+        );
+      },
+      AppCustomizationService.cardBatteryFlow: () {
+        if (!_isCardVisible(AppCustomizationService.cardBatteryFlow)) return null;
+        return BatteryFlowHomeCard(key: _batteryFlowCardKey);
+      },
+      AppCustomizationService.cardCalendar: () {
+        if (!_isCardVisible(AppCustomizationService.cardCalendar)) return null;
+        return CalendarEventsCard(key: _calendarEventsKey);
+      },
+      AppCustomizationService.cardFasting: () {
+        if (!_isCardVisible(AppCustomizationService.cardFasting)) return null;
+        if (!showFastingSection) return null;
+        return FastingCard(
+          onHiddenForToday: _onFastingHiddenForToday,
+          onFastingStatusChanged: (bool isFasting) {
+            setState(() {
+              _isFastingInProgress = isFasting;
+            });
+          },
+          onTap: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleFasting),
+        );
+      },
+      AppCustomizationService.cardFoodTracking: () {
+        if (!_isCardVisible(AppCustomizationService.cardFoodTracking)) return null;
+        if (_isFastingInProgress) return null;
+        return const FoodTrackingCard();
+      },
+      AppCustomizationService.cardWaterTracking: () {
+        if (!_isCardVisible(AppCustomizationService.cardWaterTracking)) return null;
+        if (!_shouldShowWaterTracking) return null;
+        return WaterTrackingCard(
+          waterIntake: waterIntake,
+          onWaterAdded: _onWaterAdded,
+        );
+      },
+      AppCustomizationService.cardHabits: () {
+        if (!_isCardVisible(AppCustomizationService.cardHabits)) return null;
+        if (!showHabitCard) return null;
+        return HabitCard(
+          onAllCompleted: _onAllHabitsCompleted,
+        );
+      },
+      AppCustomizationService.cardRoutines: () {
+        if (!_isCardVisible(AppCustomizationService.cardRoutines)) return null;
+        if (!showRoutine) return null;
+        return RoutineCard(
+          key: _routineCardKey,
+          onCompleted: _onRoutineCompleted,
+          onEnergyChanged: () {
+            _batteryFlowCardKey.currentState?.refresh();
+          },
+        );
+      },
+      AppCustomizationService.cardDailyTasks: () {
+        if (!_isCardVisible(AppCustomizationService.cardDailyTasks)) return null;
+        return const DailyTasksCard();
+      },
+    };
+
+    final widgets = <Widget>[];
+    for (final cardKey in _cardOrder) {
+      final builder = cardBuilders[cardKey];
+      if (builder != null) {
+        final widget = builder();
+        if (widget != null) {
+          widgets.add(widget);
+          widgets.add(const SizedBox(height: 4));
+        }
+      }
+    }
+
+    // Remove trailing spacing
+    if (widgets.isNotEmpty && widgets.last is SizedBox) {
+      widgets.removeLast();
+    }
+
+    return widgets;
+  }
+
   void _openSettings() {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => const HomeSettingsScreen(),
       ),
-    );
+    ).then((_) {
+      // Reload card settings when returning from settings
+      _loadCardSettings();
+    });
   }
 
   @override
@@ -619,81 +741,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-              // Menstrual Cycle Card
-              MenstrualCycleCard(
-                key: _menstrualCycleKey,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CycleScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 4), // Consistent spacing
-
-              // Battery & Flow Card
-              BatteryFlowHomeCard(key: _batteryFlowCardKey),
-              const SizedBox(height: 4), // Consistent spacing
-
-              // Calendar Events Card
-              CalendarEventsCard(key: _calendarEventsKey),
-              const SizedBox(height: 4), // Consistent spacing
-
-              // Fasting Section (conditional)
-              if (showFastingSection) ...[
-                FastingCard(
-                  onHiddenForToday: _onFastingHiddenForToday,
-                  onFastingStatusChanged: (bool isFasting) {
-                    setState(() {
-                      _isFastingInProgress = isFasting;
-                    });
-                  },
-                  onTap: () => widget.onNavigateToTab?.call(0), // Navigate to Fasting tab (index 0)
-                ),
-                const SizedBox(height: 4), // Consistent spacing
-              ],
-
-              // Food Tracking Section (hidden during fasting)
-              if (!_isFastingInProgress) ...[
-                const FoodTrackingCard(),
-                const SizedBox(height: 4), // Consistent spacing
-              ],
-
-              // Water Tracking Section (conditional)
-              if (_shouldShowWaterTracking) ...[
-                WaterTrackingCard(
-                  waterIntake: waterIntake,
-                  onWaterAdded: _onWaterAdded,
-                ),
-                const SizedBox(height: 4), // Consistent spacing
-              ],
-
-              // Habit Card Section (conditional)
-              if (showHabitCard) ...[
-                HabitCard(
-                  onAllCompleted: _onAllHabitsCompleted,
-                ),
-                const SizedBox(height: 4), // Consistent spacing
-              ],
-
-              // Routine Section (conditional)
-              if (showRoutine) ...[
-                RoutineCard(
-                  key: _routineCardKey,
-                  onCompleted: _onRoutineCompleted,
-                  onEnergyChanged: () {
-                    // Refresh the Battery & Flow card when energy changes
-                    _batteryFlowCardKey.currentState?.refresh();
-                  },
-                ),
-                const SizedBox(height: 4), // Consistent spacing
-              ],
-
-              // Daily Tasks Section
-              const DailyTasksCard(),
-
+                  ..._buildOrderedCards(),
                 ],
               ),
             ),
