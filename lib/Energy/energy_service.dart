@@ -120,6 +120,33 @@ class EnergyService {
     await _addEnergyEntry(entry);
   }
 
+  /// Add energy consumption for completed timer session
+  /// Uses duration-based formula: 1 point per 25 min, ±5% battery per 25 min
+  /// batteryPer25Min: -5 (draining), 0 (neutral), or +5 (recharging)
+  /// Respects the trackTimerEnergy setting - if disabled, does nothing
+  static Future<void> addTimerSessionEnergyConsumption({
+    required String sessionId,
+    required String activityName,
+    required int batteryPer25Min,
+    required int durationMinutes,
+  }) async {
+    // Check if timer energy tracking is enabled
+    final settings = await loadSettings();
+    if (!settings.trackTimerEnergy) {
+      return; // Timer energy tracking is disabled
+    }
+
+    final entry = EnergyConsumptionEntry(
+      id: sessionId,
+      title: activityName,
+      energyLevel: batteryPer25Min, // Used for display, actual calculation uses duration
+      completedAt: DateTime.now(),
+      sourceType: EnergySourceType.timerSession,
+      durationMinutes: durationMinutes,
+    );
+    await _addEnergyEntry(entry);
+  }
+
   /// Manually adjust battery (for quick buttons)
   static Future<void> adjustBattery(int batteryChange) async {
     final today = await getTodayRecord();
@@ -131,7 +158,7 @@ class EnergyService {
   }
 
   /// Apply time-based battery decay
-  /// Decay rate is calculated based on waking hours (100% / wakingHours)
+  /// Decay rate: ~3% per hour, but ONLY during waking hours
   /// Call this when loading today's record to apply any pending decay
   /// Set [forceReload] to true when syncing with Android widget
   static Future<DailyEnergyRecord?> getTodayRecordWithDecay({bool forceReload = false}) async {
@@ -152,24 +179,46 @@ class EnergyService {
     final lastDecayStr = prefs.getString(lastDecayKey);
     final now = DateTime.now();
 
+    // Calculate wake and sleep times for today
+    final wakeTime = DateTime(now.year, now.month, now.day, settings.wakeHour, settings.wakeMinute);
+    final sleepTime = DateTime(now.year, now.month, now.day, settings.sleepHour, settings.sleepMinute);
+
+    // If current time is before wake time, no decay (sleeping)
+    if (now.isBefore(wakeTime)) {
+      return record;
+    }
+
     DateTime lastDecay;
     if (lastDecayStr != null) {
       lastDecay = DateTime.parse(lastDecayStr);
     } else {
-      // First time - use wake hour from settings
-      lastDecay = DateTime(now.year, now.month, now.day, settings.wakeHour, 0);
+      // First time - use wake time from settings
+      lastDecay = wakeTime;
     }
 
-    // Calculate hours since last decay
-    final hoursSinceLastDecay = now.difference(lastDecay).inMinutes / 60.0;
+    // Ensure lastDecay is not before wake time (no decay during sleep)
+    if (lastDecay.isBefore(wakeTime)) {
+      lastDecay = wakeTime;
+    }
 
-    // Only apply decay if at least 15 minutes have passed
-    if (hoursSinceLastDecay < 0.25) {
+    // Calculate effective end time for decay (cap at sleep time)
+    final effectiveEndTime = now.isAfter(sleepTime) ? sleepTime : now;
+
+    // If lastDecay is after effectiveEndTime, no decay needed
+    if (lastDecay.isAfter(effectiveEndTime) || lastDecay.isAtSameMomentAs(effectiveEndTime)) {
       return record;
     }
 
-    // Calculate decay: ~3% per hour, max 15% per check to prevent extreme drops
-    final decayAmount = (hoursSinceLastDecay * 3.0).round().clamp(0, 15);
+    // Calculate waking hours between lastDecay and effectiveEndTime
+    final wakingHoursSinceLastDecay = effectiveEndTime.difference(lastDecay).inMinutes / 60.0;
+
+    // Only apply decay if at least 15 minutes have passed
+    if (wakingHoursSinceLastDecay < 0.25) {
+      return record;
+    }
+
+    // Calculate decay: ~3% per hour of waking time, max 15% per check
+    final decayAmount = (wakingHoursSinceLastDecay * 3.0).round().clamp(0, 15);
 
     if (decayAmount > 0) {
       final newBattery = record.currentBattery - decayAmount;
@@ -409,9 +458,23 @@ class EnergyService {
 
     final updatedEntries = [...today.entries, entry];
 
-    // Calculate new battery and flow
-    final batteryChange = FlowCalculator.calculateBatteryChange(entry.energyLevel);
-    final flowPointsEarned = FlowCalculator.calculateFlowPoints(entry.energyLevel);
+    // Calculate new battery and flow based on source type
+    int batteryChange;
+    int flowPointsEarned;
+
+    if (entry.sourceType == EnergySourceType.timerSession && entry.durationMinutes != null) {
+      // Timer sessions: duration-based formula
+      // 1 point per 25 min, ±5% battery per 25 min
+      batteryChange = FlowCalculator.calculateTimerSessionBatteryChange(
+        entry.energyLevel, // This is batteryPer25Min: -5, 0, or +5
+        entry.durationMinutes!,
+      );
+      flowPointsEarned = FlowCalculator.calculateTimerSessionFlowPoints(entry.durationMinutes!);
+    } else {
+      // Tasks and routine steps: standard formula
+      batteryChange = FlowCalculator.calculateBatteryChange(entry.energyLevel);
+      flowPointsEarned = FlowCalculator.calculateFlowPoints(entry.energyLevel);
+    }
 
     final newBattery = today.currentBattery + batteryChange;
     final newFlowPoints = today.flowPoints + flowPointsEarned;
@@ -477,22 +540,41 @@ class EnergyService {
   /// Returns true if a skip was auto-used
   static Future<bool> checkStreakAtDayEnd(DateTime previousDay) async {
     final settings = await loadSettings();
-    final previousRecord = await getRecordForDate(previousDay);
 
-    // If no record for previous day, treat as goal not met
-    final goalMetPreviousDay = previousRecord?.isGoalMet ?? false;
+    // Normalize date to midnight
+    final checkDate = DateTime(previousDay.year, previousDay.month, previousDay.day);
 
-    if (goalMetPreviousDay) {
-      // Goal was met, streak continues normally
+    // Skip if we've already checked this date
+    if (settings.lastStreakCheckDate != null) {
+      final lastCheck = DateTime(
+        settings.lastStreakCheckDate!.year,
+        settings.lastStreakCheckDate!.month,
+        settings.lastStreakCheckDate!.day,
+      );
+      if (!checkDate.isAfter(lastCheck)) {
+        return false; // Already checked this date or earlier
+      }
+    }
+
+    final previousRecord = await getRecordForDate(checkDate);
+
+    // If no record for this day, treat as goal not met
+    final goalMetOnDate = previousRecord?.isGoalMet ?? false;
+
+    if (goalMetOnDate) {
+      // Goal was met, streak continues normally - update last check date
+      await saveSettings(settings.copyWith(
+        lastStreakCheckDate: checkDate,
+      ));
       return false;
     }
 
     // Goal was NOT met - check if we can use a skip
     final result = FlowCalculator.calculateStreakAtDayEnd(
-      goalMetToday: goalMetPreviousDay,
+      goalMetToday: goalMetOnDate,
       currentStreak: settings.currentStreak,
       lastSkipDate: settings.lastSkipDate,
-      today: previousDay,
+      today: checkDate,
       skipDayMode: settings.skipDayMode,
       autoUseSkip: settings.autoUseSkip,
     );
@@ -500,14 +582,23 @@ class EnergyService {
     if (result.skipUsed) {
       // Save that we used a skip and mark for notification
       await saveSettings(settings.copyWith(
-        lastSkipDate: previousDay,
-        pendingSkipNotification: previousDay,
+        lastSkipDate: checkDate,
+        pendingSkipNotification: checkDate,
+        lastStreakCheckDate: checkDate,
       ));
       return true;
     } else if (result.streakBroken) {
-      // Streak is broken
+      // Streak is broken - save the lost streak count for notification
+      final lostStreakCount = settings.currentStreak;
       await saveSettings(settings.copyWith(
         currentStreak: 0,
+        pendingStreakLostNotification: lostStreakCount > 0 ? checkDate : null,
+        lastStreakCheckDate: checkDate,
+      ));
+    } else {
+      // No streak to break, just update last check date
+      await saveSettings(settings.copyWith(
+        lastStreakCheckDate: checkDate,
       ));
     }
     return false;
@@ -521,6 +612,18 @@ class EnergyService {
       final skipDate = settings.pendingSkipNotification;
       await saveSettings(settings.copyWith(clearPendingSkipNotification: true));
       return skipDate;
+    }
+    return null;
+  }
+
+  /// Check if there's a pending streak lost notification and clear it
+  /// Returns the date the streak was lost if there's a pending notification
+  static Future<DateTime?> checkAndClearStreakLostNotification() async {
+    final settings = await loadSettings();
+    if (settings.pendingStreakLostNotification != null) {
+      final lostDate = settings.pendingStreakLostNotification;
+      await saveSettings(settings.copyWith(clearPendingStreakLostNotification: true));
+      return lostDate;
     }
     return null;
   }

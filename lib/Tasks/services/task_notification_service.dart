@@ -174,7 +174,38 @@ class TaskNotificationService {
       await ensureNotificationServiceInitialized();
 
       final now = DateTime.now();
+      final todayDate = DateTime(now.year, now.month, now.day);
       DateTime scheduledDate = task.reminderTime!;
+
+      // Check if task has a future startDate - don't schedule notifications yet
+      if (task.recurrence?.startDate != null) {
+        final startDateOnly = DateTime(
+          task.recurrence!.startDate!.year,
+          task.recurrence!.startDate!.month,
+          task.recurrence!.startDate!.day,
+        );
+        if (startDateOnly.isAfter(todayDate)) {
+          // Task hasn't started yet - find the correct first reminder time
+          final nextReminderTime = _getNextReminderTime(task, now);
+          if (nextReminderTime != null) {
+            scheduledDate = nextReminderTime;
+          } else {
+            return; // No valid reminder time found
+          }
+        }
+      }
+
+      // Check if task has passed its endDate - don't schedule notifications
+      if (task.recurrence?.endDate != null) {
+        final endDateOnly = DateTime(
+          task.recurrence!.endDate!.year,
+          task.recurrence!.endDate!.month,
+          task.recurrence!.endDate!.day,
+        );
+        if (todayDate.isAfter(endDateOnly)) {
+          return; // Task has ended
+        }
+      }
 
       // For recurring tasks, ensure we always schedule for a future time
       if (task.recurrence != null) {

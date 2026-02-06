@@ -10,6 +10,7 @@ import '../shared/snackbar_utils.dart';
 import 'task_service.dart';
 import 'task_builder.dart';
 import '../shared/error_logger.dart';
+import '../Settings/app_customization_service.dart';
 
 class TaskEditScreen extends StatefulWidget {
   final Task? task;
@@ -44,6 +45,8 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   bool _showSaved = false;
   Task? _currentTask; // Track the current task to prevent duplicates
   int _energyLevel = -1; // Energy level of the task (-5 to +5, default -1 = slightly draining)
+  bool _isCompleted = false; // Track completion status for app bar checkbox
+  bool _energyModuleEnabled = true;
 
   @override
   void initState() {
@@ -59,6 +62,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
       _isImportant = task.isImportant;
       _recurrence = task.recurrence;
       _energyLevel = task.energyLevel;
+      _isCompleted = task.isCompleted;
     } else if (widget.initialCategoryIds != null) {
       // Pre-fill categories for new tasks
       _selectedCategoryIds = List.from(widget.initialCategoryIds!);
@@ -66,6 +70,14 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
 
     // Add listeners for auto-save
     _titleController.addListener(_onFieldChanged);
+    _loadEnergyModuleState();
+  }
+
+  Future<void> _loadEnergyModuleState() async {
+    final enabled = await AppCustomizationService.isModuleEnabled(AppCustomizationService.moduleEnergy);
+    if (mounted) {
+      setState(() => _energyModuleEnabled = enabled);
+    }
   }
 
   @override
@@ -86,6 +98,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
       _isImportant = task.isImportant;
       _recurrence = task.recurrence;
       _energyLevel = task.energyLevel;
+      _isCompleted = task.isCompleted;
       _currentTask = task;
       _hasUnsavedChanges = false;
       _showSaved = false;
@@ -133,7 +146,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         recurrence: _recurrence,
         hasUserModifiedScheduledDate: _hasUserModifiedScheduledDate,
         currentTask: _currentTask,
-        preserveCompletionStatus: true,
+        isCompleted: _isCompleted,
         energyLevel: _energyLevel,
       );
 
@@ -247,7 +260,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
         recurrence: _recurrence,
         hasUserModifiedScheduledDate: _hasUserModifiedScheduledDate,
         currentTask: _currentTask,
-        preserveCompletionStatus: false,
+        isCompleted: false, // Skip action resets completion
         energyLevel: _energyLevel,
       );
 
@@ -327,7 +340,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 recurrence: _recurrence,
                 hasUserModifiedScheduledDate: _hasUserModifiedScheduledDate,
                 currentTask: _currentTask,
-                preserveCompletionStatus: true,
+                isCompleted: _isCompleted,
                 energyLevel: _energyLevel,
               );
 
@@ -361,6 +374,19 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
           title: Text(widget.task == null ? 'Add Task' : 'Edit Task'),
           backgroundColor: isInDialog ? AppColors.dialogBackground : Colors.transparent,
         actions: [
+          // Completion checkbox (only for existing tasks with a title)
+          if (widget.task != null && _titleController.text.trim().isNotEmpty)
+            IconButton(
+              onPressed: () {
+                setState(() => _isCompleted = !_isCompleted);
+                _onFieldChanged();
+              },
+              icon: Icon(
+                _isCompleted ? Icons.check_circle_rounded : Icons.circle_outlined,
+                color: _isCompleted ? AppColors.successGreen : AppColors.greyText,
+              ),
+              tooltip: _isCompleted ? 'Mark incomplete' : 'Mark complete',
+            ),
           if (_hasUnsavedChanges)
             Container(
               margin: const EdgeInsets.only(right: 16),
@@ -510,7 +536,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
 
             // Skip Task Section (ONLY FOR RECURRING TASKS)
             if (_recurrence != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Container(
                 decoration: BoxDecoration(
                   color: _titleController.text.trim().isEmpty
@@ -563,16 +589,28 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                               Builder(
                                 builder: (context) {
                                   final nextDate = _calculateNextOccurrenceDate();
-                                  final isMenstrualTask = _recurrence!.types.any((type) => [
+                                  final menstrualTypes = [
                                     RecurrenceType.menstrualPhase,
                                     RecurrenceType.follicularPhase,
                                     RecurrenceType.ovulationPhase,
                                     RecurrenceType.earlyLutealPhase,
                                     RecurrenceType.lateLutealPhase
-                                  ].contains(type));
+                                  ];
+                                  final scheduleTypes = [
+                                    RecurrenceType.daily,
+                                    RecurrenceType.weekly,
+                                    RecurrenceType.monthly,
+                                    RecurrenceType.yearly,
+                                  ];
 
+                                  final hasMenstrualTypes = _recurrence!.types.any((type) => menstrualTypes.contains(type));
+                                  final hasScheduleTypes = _recurrence!.types.any((type) => scheduleTypes.contains(type));
+
+                                  // For tasks with BOTH menstrual and schedule types (e.g., weekly + menstrual phase),
+                                  // show next date since they have predictable occurrences
                                   String description;
-                                  if (isMenstrualTask) {
+                                  if (hasMenstrualTypes && !hasScheduleTypes) {
+                                    // Menstrual-only task (no weekly/daily/monthly)
                                     description = 'Put on hold until next appropriate phase';
                                   } else if (nextDate != null) {
                                     final dateStr = DateFormatUtils.formatFullDate(nextDate);
@@ -608,12 +646,12 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
             ],
 
             // Deadline Section (only for non-recurring tasks)
             if (_recurrence == null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Container(
               decoration: BoxDecoration(
                 color: AppColors.dialogBackground.withValues(alpha: 0.08),
@@ -693,7 +731,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                 ),
               ),
             ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
             ],
 
             // Reminder Time Section (only for non-recurring tasks)
@@ -779,7 +817,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
             ),
 
             // Only add spacing if reminder section was shown
-            if (_recurrence == null) const SizedBox(height: 12),
+            if (_recurrence == null) const SizedBox(height: 8),
 
             // Priority Section
             Container(
@@ -855,7 +893,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
             // Task Title Section
             TextField(
@@ -882,7 +920,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               ),
               style: const TextStyle(fontSize: 16),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
             // Categories Section
             if (widget.categories.isNotEmpty) ...[
@@ -934,7 +972,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
             ],
 
             // Recurrence Section
@@ -1020,75 +1058,77 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
               ),
             ),
 
-            const SizedBox(height: 16),
+            if (_energyModuleEnabled) ...[
+              const SizedBox(height: 10),
 
-            // Energy Level Section (-5 to +5 scale) - Compact version
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                borderRadius: AppStyles.borderRadiusLarge,
-                border: Border.all(
-                  color: _energyLevel != -1
-                      ? _getEnergyColor(_energyLevel).withValues(alpha: 0.3)
-                      : AppColors.greyText,
+              // Energy Level Section (-5 to +5 scale) - Compact version
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.dialogBackground.withValues(alpha: 0.08),
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  border: Border.all(
+                    color: _energyLevel != -1
+                        ? _getEnergyColor(_energyLevel).withValues(alpha: 0.3)
+                        : AppColors.greyText,
+                  ),
                 ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(
-                  children: [
-                    Icon(
-                      _energyLevel < 0 ? Icons.battery_3_bar_rounded : Icons.battery_charging_full_rounded,
-                      color: _energyLevel != -1
-                          ? _getEnergyColor(_energyLevel)
-                          : AppColors.greyText,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              activeTrackColor: _getEnergyColor(_energyLevel),
-                              inactiveTrackColor: AppColors.greyText.withValues(alpha: 0.2),
-                              thumbColor: _getEnergyColor(_energyLevel),
-                              overlayColor: _getEnergyColor(_energyLevel).withValues(alpha: 0.2),
-                              trackHeight: 4,
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                            ),
-                            child: Slider(
-                              value: _energyLevel.toDouble(),
-                              min: -5,
-                              max: 5,
-                              divisions: 10,
-                              onChanged: (value) {
-                                setState(() => _energyLevel = value.round());
-                                _onFieldChanged();
-                              },
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.only(left: 12),
-                            child: Text(
-                              _getEnergyDescription(_energyLevel),
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: _energyLevel != -1 ? _getEnergyColor(_energyLevel) : AppColors.greyText,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _energyLevel < 0 ? Icons.battery_3_bar_rounded : Icons.battery_charging_full_rounded,
+                        color: _energyLevel != -1
+                            ? _getEnergyColor(_energyLevel)
+                            : AppColors.greyText,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                activeTrackColor: _getEnergyColor(_energyLevel),
+                                inactiveTrackColor: AppColors.greyText.withValues(alpha: 0.2),
+                                thumbColor: _getEnergyColor(_energyLevel),
+                                overlayColor: _getEnergyColor(_energyLevel).withValues(alpha: 0.2),
+                                trackHeight: 4,
+                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                              ),
+                              child: Slider(
+                                value: _energyLevel.toDouble(),
+                                min: -5,
+                                max: 5,
+                                divisions: 10,
+                                onChanged: (value) {
+                                  setState(() => _energyLevel = value.round());
+                                  _onFieldChanged();
+                                },
                               ),
                             ),
-                          ),
-                        ],
+                            Padding(
+                              padding: const EdgeInsets.only(left: 12),
+                              child: Text(
+                                _getEnergyDescription(_energyLevel),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: _energyLevel != -1 ? _getEnergyColor(_energyLevel) : AppColors.greyText,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
+            ],
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
           ],
         ),
         ),

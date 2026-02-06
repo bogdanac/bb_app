@@ -4,6 +4,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../shared/timezone_utils.dart';
 import '../Routines/routine_service.dart';
 import '../Tasks/task_service.dart';
+import '../MenstrualCycle/friend_notification_service.dart';
+import '../Settings/app_customization_service.dart';
 import 'notification_service.dart';
 import '../shared/error_logger.dart';
 
@@ -55,6 +57,12 @@ class CentralizedNotificationManager {
 
       // 4. Schedule food tracking reminder
       await _scheduleFoodTrackingNotifications();
+
+      // 5. Schedule friend notifications (low battery and birthday reminders)
+      await _scheduleFriendNotifications();
+
+      // 6. Schedule end of day review notification
+      await _scheduleEndOfDayReviewNotification();
 
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
@@ -169,8 +177,15 @@ class CentralizedNotificationManager {
         await _notificationService.flutterLocalNotificationsPlugin.cancel(1002);
         await _notificationService.flutterLocalNotificationsPlugin.cancel(1003);
 
-        // Schedule ovulation notification (day before ovulation)
-        final ovulationDay = lastPeriodStart.add(Duration(days: (averageCycleLength / 2).round()));
+        // Calculate the NEXT period date (could be multiple cycles from lastPeriodStart)
+        // Keep adding cycle lengths until we find a date in the future
+        var nextPeriodDate = lastPeriodStart.add(Duration(days: averageCycleLength));
+        while (nextPeriodDate.isBefore(now) || nextPeriodDate.difference(now).inDays < 0) {
+          nextPeriodDate = nextPeriodDate.add(Duration(days: averageCycleLength));
+        }
+
+        // Schedule ovulation notification (day before ovulation, which is ~cycle/2 days before next period)
+        final ovulationDay = nextPeriodDate.subtract(Duration(days: (averageCycleLength / 2).round()));
         final ovulationNotificationDate = ovulationDay.subtract(const Duration(days: 1));
 
         if (ovulationNotificationDate.isAfter(now)) {
@@ -186,7 +201,6 @@ class CentralizedNotificationManager {
         }
 
         // Schedule menstruation notification (3 days before expected period)
-        final nextPeriodDate = lastPeriodStart.add(Duration(days: averageCycleLength));
         final threeDaysBeforeNotificationDate = nextPeriodDate.subtract(const Duration(days: 3));
 
         if (threeDaysBeforeNotificationDate.isAfter(now)) {
@@ -244,6 +258,62 @@ class CentralizedNotificationManager {
       await ErrorLogger.logError(
         source: 'CentralizedNotificationManager._scheduleFoodTrackingNotifications',
         error: 'Error scheduling food tracking reminder: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }
+  }
+
+  /// Schedule friend notifications (low battery and birthday reminders)
+  Future<void> _scheduleFriendNotifications() async {
+    try {
+      final friendNotificationService = FriendNotificationService();
+      await friendNotificationService.scheduleAllFriendNotifications();
+      // Also check for low battery immediately on startup
+      await friendNotificationService.checkLowBatteryNotifications();
+
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'CentralizedNotificationManager._scheduleFriendNotifications',
+        error: 'Error scheduling friend notifications: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }
+  }
+
+  /// Schedule end of day review notification
+  Future<void> _scheduleEndOfDayReviewNotification() async {
+    try {
+      final enabled = await AppCustomizationService.isEndOfDayReviewEnabled();
+
+      // Cancel existing notification (ID 9000)
+      await _notificationService.flutterLocalNotificationsPlugin.cancel(9000);
+
+      if (!enabled) return;
+
+      final (hour, minute) = await AppCustomizationService.getEndOfDayReviewTime();
+      final now = DateTime.now();
+      var scheduledDate = DateTime(now.year, now.month, now.day, hour, minute);
+
+      if (scheduledDate.isBefore(now)) {
+        scheduledDate = scheduledDate.add(const Duration(days: 1));
+      }
+
+      await _notificationService.flutterLocalNotificationsPlugin.zonedSchedule(
+        9000, // Unique ID for end of day review
+        'Daily Review',
+        'Your day at a glance - tap to see your summary',
+        TimezoneUtils.forNotification(scheduledDate),
+        NotificationService.getEndOfDayReviewNotificationDetails(),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time, // Repeat daily
+        payload: 'end_of_day_review',
+      );
+
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'CentralizedNotificationManager._scheduleEndOfDayReviewNotification',
+        error: 'Error scheduling end of day review notification: $e',
         stackTrace: stackTrace.toString(),
       );
     }

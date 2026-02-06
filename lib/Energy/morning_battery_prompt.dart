@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../Settings/app_customization_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import 'energy_calculator.dart';
@@ -6,15 +7,54 @@ import 'energy_service.dart';
 import 'energy_settings_model.dart';
 import 'flow_calculator.dart';
 
+/// Pre-loaded data for morning battery prompt to avoid lag
+class MorningPromptData {
+  final EnergySettings settings;
+  final int suggestedBattery;
+  final String phase;
+  final int cycleDay;
+  final int flowGoal;
+
+  const MorningPromptData({
+    required this.settings,
+    required this.suggestedBattery,
+    required this.phase,
+    required this.cycleDay,
+    required this.flowGoal,
+  });
+}
+
 /// Morning Battery Prompt - Dialog shown on first app open to set starting battery
 class MorningBatteryPrompt extends StatefulWidget {
-  const MorningBatteryPrompt({super.key});
+  final MorningPromptData? preloadedData;
+
+  const MorningBatteryPrompt({super.key, this.preloadedData});
 
   @override
   State<MorningBatteryPrompt> createState() => _MorningBatteryPromptState();
 
   /// Show the morning battery prompt
-  static Future<void> show(BuildContext context) async {
+  /// Returns true if a record was initialized, false otherwise
+  static Future<bool> show(BuildContext context) async {
+    // Only show if energy module is enabled
+    final energyEnabled = await AppCustomizationService.isModuleEnabled(
+      AppCustomizationService.moduleEnergy,
+    );
+    if (!energyEnabled) return false;
+
+    final now = DateTime.now();
+
+    // Only show morning prompt between 5am and 11am
+    if (now.hour < 5 || now.hour >= 11) {
+      // Outside morning window - auto-initialize without prompt
+      final today = await EnergyService.getTodayRecord();
+      if (today == null) {
+        await EnergyCalculator.initializeToday();
+        return true;
+      }
+      return false;
+    }
+
     // Check if morning prompt is enabled
     final settings = await EnergyService.loadSettings();
     if (!settings.showMorningPrompt) {
@@ -22,27 +62,65 @@ class MorningBatteryPrompt extends StatefulWidget {
       final today = await EnergyService.getTodayRecord();
       if (today == null) {
         await EnergyCalculator.initializeToday();
+        return true;
       }
-      return;
+      return false;
     }
 
     // Check if already set today
     final today = await EnergyService.getTodayRecord();
     if (today != null) {
       // Already initialized today
-      return;
+      return false;
     }
 
-    if (!context.mounted) return;
+    // Pre-load all data before showing dialog to prevent lag
+    final suggestion = await EnergyCalculator.calculateTodayBatterySuggestion();
+    final phaseInfo = await EnergyCalculator.getCurrentPhaseInfo();
+    final flowGoal = await EnergyCalculator.calculateTodayGoal();
+
+    // Calculate wake time in minutes since midnight
+    final wakeTimeMinutes = settings.wakeHour * 60 + settings.wakeMinute;
+    final currentTimeMinutes = now.hour * 60 + now.minute;
+
+    // Apply decay for time passed since wake time
+    int adjustedSuggestion = suggestion;
+    if (currentTimeMinutes > wakeTimeMinutes) {
+      final minutesLate = currentTimeMinutes - wakeTimeMinutes;
+      final hoursLate = minutesLate / 60.0;
+      final decay = (hoursLate * 3).round().clamp(0, 50); // Max 50% decay, 3%/hr
+      adjustedSuggestion = (suggestion - decay).clamp(settings.minBattery, settings.maxBattery);
+    }
+
+    final preloadedData = MorningPromptData(
+      settings: settings,
+      suggestedBattery: adjustedSuggestion,
+      phase: phaseInfo['phase'] ?? '',
+      cycleDay: phaseInfo['cycleDay'] ?? 0,
+      flowGoal: flowGoal,
+    );
+
+    if (!context.mounted) return false;
 
     // Use rootNavigator to ensure dialog shows above all other routes
     // and can be dismissed properly regardless of nested navigators
-    await showDialog(
+    final wasConfirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
       useRootNavigator: true,
-      builder: (dialogContext) => const MorningBatteryPrompt(),
+      builder: (dialogContext) => MorningBatteryPrompt(preloadedData: preloadedData),
     );
+
+    // If dialog was dismissed (closed with X or barrier tap), auto-initialize
+    if (wasConfirmed != true) {
+      final stillNoRecord = await EnergyService.getTodayRecord();
+      if (stillNoRecord == null) {
+        await EnergyCalculator.initializeToday();
+        return true;
+      }
+    }
+
+    return wasConfirmed == true;
   }
 }
 
@@ -52,42 +130,64 @@ class _MorningBatteryPromptState extends State<MorningBatteryPrompt> {
   bool _isLoading = true;
   String _phase = '';
   int _cycleDay = 0;
+  int _flowGoal = 10;
   EnergySettings _settings = const EnergySettings();
 
   @override
   void initState() {
     super.initState();
-    _loadSuggestion();
+    _initializeData();
   }
 
-  Future<void> _loadSuggestion() async {
+  void _initializeData() {
+    // Use preloaded data if available (no async needed - instant UI)
+    if (widget.preloadedData != null) {
+      final data = widget.preloadedData!;
+      _settings = data.settings;
+      _suggestedBattery = data.suggestedBattery;
+      _selectedBattery = data.suggestedBattery;
+      _phase = data.phase;
+      _cycleDay = data.cycleDay;
+      _flowGoal = data.flowGoal;
+      _isLoading = false;
+    } else {
+      // Fallback to loading (shouldn't happen with new flow)
+      _loadSuggestionFallback();
+    }
+  }
+
+  Future<void> _loadSuggestionFallback() async {
     try {
       final settings = await EnergyService.loadSettings();
       final suggestion = await EnergyCalculator.calculateTodayBatterySuggestion();
       final phaseInfo = await EnergyCalculator.getCurrentPhaseInfo();
+      final flowGoal = await EnergyCalculator.calculateTodayGoal();
 
       // Adjust suggestion based on time of day
-      // Battery decays ~3% per hour, so if it's later in the day, reduce suggestion
       final now = DateTime.now();
-      final hourOfDay = now.hour;
+      final wakeTimeMinutes = settings.wakeHour * 60 + settings.wakeMinute;
+      final currentTimeMinutes = now.hour * 60 + now.minute;
 
-      // Use wake hour from settings - if later, apply decay
       int adjustedSuggestion = suggestion;
-      if (hourOfDay > settings.wakeHour) {
-        final hoursLate = hourOfDay - settings.wakeHour;
-        final decay = (hoursLate * 3).clamp(0, 50); // Max 50% decay, 3%/hr
+      if (currentTimeMinutes > wakeTimeMinutes) {
+        final minutesLate = currentTimeMinutes - wakeTimeMinutes;
+        final hoursLate = minutesLate / 60.0;
+        final decay = (hoursLate * 3).round().clamp(0, 50);
         adjustedSuggestion = (suggestion - decay).clamp(settings.minBattery, settings.maxBattery);
       }
 
+      if (!mounted) return;
       setState(() {
         _settings = settings;
         _suggestedBattery = adjustedSuggestion;
         _selectedBattery = adjustedSuggestion;
         _phase = phaseInfo['phase'] ?? '';
         _cycleDay = phaseInfo['cycleDay'] ?? 0;
+        _flowGoal = flowGoal;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _suggestedBattery = 100;
         _selectedBattery = 100;
@@ -98,38 +198,39 @@ class _MorningBatteryPromptState extends State<MorningBatteryPrompt> {
 
   Future<void> _confirm() async {
     try {
-      // Get flow goal
-      final flowGoal = await EnergyCalculator.calculateTodayGoal();
-
-      // Initialize today's record
+      // Initialize today's record using preloaded data
       await EnergyService.initializeTodayRecord(
         startingBattery: _selectedBattery,
-        flowGoal: flowGoal,
+        flowGoal: _flowGoal,
         menstrualPhase: _phase,
         cycleDayNumber: _cycleDay,
       );
 
       // Set decay start time:
-      // - If before configured wake hour: start decay from NOW (woke up early)
-      // - If after configured wake hour: start decay from wake hour (missed time already accounted in suggestion)
+      // - If before configured wake time: start decay from NOW (woke up early)
+      // - If after configured wake time: start decay from NOW (decay already accounted in suggestion)
       final now = DateTime.now();
-      final settings = await EnergyService.loadSettings();
+
+      // Calculate wake time in minutes since midnight
+      final wakeTimeMinutes = _settings.wakeHour * 60 + _settings.wakeMinute;
+      final currentTimeMinutes = now.hour * 60 + now.minute;
+
       DateTime decayStartTime;
-      if (now.hour < settings.wakeHour) {
+      if (currentTimeMinutes < wakeTimeMinutes) {
         // Woke up early - start decay from now
         decayStartTime = now;
       } else {
-        // After wake hour - start decay from configured wake time
-        decayStartTime = DateTime(now.year, now.month, now.day, settings.wakeHour, 0);
+        // After wake time - start decay from now since suggestion already includes decay
+        decayStartTime = now;
       }
       await EnergyService.setDecayStartTime(decayStartTime);
 
       if (!mounted) return;
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true); // Return true to indicate confirmed
     } catch (e) {
       // Handle error
       if (!mounted) return;
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(false);
     }
   }
 

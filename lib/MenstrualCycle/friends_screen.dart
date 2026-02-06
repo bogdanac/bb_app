@@ -21,7 +21,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         leading: widget.onOpenDrawer != null
             ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
             : null,
-        title: const Text('Circle of Friends'),
+        title: const Text('Social'),
         backgroundColor: AppColors.transparent,
       ),
       body: Center(

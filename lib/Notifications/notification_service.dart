@@ -5,6 +5,9 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import '../Tasks/task_service.dart';
+import '../Tasks/task_edit_screen.dart';
+import '../EndOfDayReview/end_of_day_review_screen.dart';
+import '../main.dart' show navigatorKey;
 import '../shared/timezone_utils.dart';
 import '../shared/error_logger.dart';
 
@@ -63,8 +66,8 @@ class NotificationService {
       await flutterLocalNotificationsPlugin.initialize(
         initializationSettings,
         onDidReceiveNotificationResponse: (NotificationResponse response) {
-          // Handle notification tap
-          _handleNotificationTap(response.payload);
+          // Handle notification tap with action ID
+          _handleNotificationTap(response.payload, actionId: response.actionId);
         },
       );
 
@@ -128,16 +131,27 @@ class NotificationService {
     }
   }
 
-  void _handleNotificationTap(String? payload) {
+  void _handleNotificationTap(String? payload, {String? actionId}) {
     if (payload == null) return;
 
 
     // Handle different notification types
     if (payload.startsWith('task_reminder_')) {
-      // Task reminder notification tapped - need to reschedule if recurring
+      // Task reminder notification tapped
       final taskId = payload.substring('task_reminder_'.length);
+
+      // Handle action buttons
+      if (actionId == 'postpone_1h') {
+        _handleTaskPostpone1Hour(taskId);
+        return;
+      } else if (actionId == 'postpone_tomorrow') {
+        _handleTaskPostponeTomorrow(taskId);
+        return;
+      }
+
+      // Main notification tap - open task edit screen
       _handleTaskReminderTriggered(taskId);
-      // You can add navigation logic here if needed
+      _navigateToTaskEdit(taskId);
     } else if (payload == 'morning_routine') {
       // Morning routine notification tapped
     } else if (payload.startsWith('routine_reminder_')) {
@@ -162,6 +176,139 @@ class NotificationService {
       // Cloud backup reminder notification tapped
     } else if (payload == 'food_tracking_reminder') {
       // Food tracking reminder notification tapped
+    } else if (payload == 'end_of_day_review') {
+      // End of day review notification tapped
+      _navigateToEndOfDayReview();
+    }
+  }
+
+  /// Navigate to task edit screen when notification is tapped
+  Future<void> _navigateToTaskEdit(String taskId) async {
+    try {
+      // Get the task and categories from TaskService
+      final taskService = TaskService();
+      final tasks = await taskService.loadTasks();
+      final categories = await taskService.loadCategories();
+      final task = tasks.firstWhere(
+        (t) => t.id == taskId,
+        orElse: () => throw Exception('Task not found'),
+      );
+
+      // Use global navigator key to navigate
+      final navigator = navigatorKey.currentState;
+      if (navigator != null) {
+        navigator.push(
+          MaterialPageRoute(
+            builder: (context) => TaskEditScreen(
+              task: task,
+              categories: categories,
+              onSave: (updatedTask, {bool isAutoSave = false}) async {
+                // Update the task in the list
+                final allTasks = await taskService.loadTasks();
+                final index = allTasks.indexWhere((t) => t.id == updatedTask.id);
+                if (index != -1) {
+                  allTasks[index] = updatedTask;
+                  await taskService.saveTasks(allTasks);
+                }
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService._navigateToTaskEdit',
+        error: 'Error navigating to task: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskId': taskId},
+      );
+    }
+  }
+
+  /// Navigate to end of day review screen when notification is tapped
+  Future<void> _navigateToEndOfDayReview() async {
+    try {
+      final navigator = navigatorKey.currentState;
+      if (navigator != null) {
+        navigator.push(
+          MaterialPageRoute(
+            builder: (context) => const EndOfDayReviewScreen(),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService._navigateToEndOfDayReview',
+        error: 'Error navigating to end of day review: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }
+  }
+
+  /// Handle postpone 1 hour action from notification
+  Future<void> _handleTaskPostpone1Hour(String taskId) async {
+    try {
+      final taskService = TaskService();
+      final tasks = await taskService.loadTasks();
+      final taskIndex = tasks.indexWhere((t) => t.id == taskId);
+
+      if (taskIndex == -1) return;
+
+      final task = tasks[taskIndex];
+
+      // Calculate new reminder time (1 hour from now)
+      final newReminderTime = DateTime.now().add(const Duration(hours: 1));
+
+      // Update the task with new reminder time
+      final updatedTask = task.copyWith(
+        reminderTime: newReminderTime,
+        isPostponed: true,
+      );
+
+      // Save the updated task
+      tasks[taskIndex] = updatedTask;
+      await taskService.saveTasks(tasks);
+
+      // Cancel old notification and schedule new one
+      await cancelTaskNotification(taskId);
+      await scheduleTaskNotification(
+        taskId,
+        task.title,
+        newReminderTime,
+        isRecurring: false, // One-time for postponed
+      );
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService._handleTaskPostpone1Hour',
+        error: 'Error postponing task 1 hour: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskId': taskId},
+      );
+    }
+  }
+
+  /// Handle postpone tomorrow action from notification
+  Future<void> _handleTaskPostponeTomorrow(String taskId) async {
+    try {
+      final taskService = TaskService();
+      final tasks = await taskService.loadTasks();
+      final task = tasks.firstWhere(
+        (t) => t.id == taskId,
+        orElse: () => throw Exception('Task not found'),
+      );
+
+      // Use TaskService's postpone to tomorrow method
+      await taskService.postponeTaskToTomorrow(task);
+
+      // Cancel current notification (TaskService will reschedule)
+      await cancelTaskNotification(taskId);
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService._handleTaskPostponeTomorrow',
+        error: 'Error postponing task to tomorrow: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskId': taskId},
+      );
     }
   }
 
@@ -255,6 +402,20 @@ class NotificationService {
             color: Color(0xFFF98834), // Orange
             enableVibration: true,
             playSound: true,
+            actions: [
+              AndroidNotificationAction(
+                'postpone_1h',
+                '+1 Hour',
+                showsUserInterface: false,
+                cancelNotification: true,
+              ),
+              AndroidNotificationAction(
+                'postpone_tomorrow',
+                'Tomorrow',
+                showsUserInterface: false,
+                cancelNotification: true,
+              ),
+            ],
           ),
           iOS: DarwinNotificationDetails(
             presentAlert: true,
@@ -372,6 +533,28 @@ class NotificationService {
         channelDescription: 'Important menstrual cycle reminders',
         importance: Importance.high,
         priority: Priority.high,
+      ),
+    );
+  }
+
+  /// Get notification details for end of day review
+  static NotificationDetails getEndOfDayReviewNotificationDetails() {
+    return const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'end_of_day_review',
+        'Daily Review',
+        channelDescription: 'End of day summary notifications',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+        color: Color(0xFF9C27B0), // Purple
+        enableVibration: true,
+        playSound: true,
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
       ),
     );
   }
@@ -940,16 +1123,31 @@ class NotificationService {
       // because each notification is scheduled as a specific one-time event
       final now = DateTime.now();
 
-      for (int dayOffset = 0; dayOffset < 7; dayOffset++) {
+      // Schedule a repeating daily notification at 8 PM as primary method
+      var todayReminder = DateTime(now.year, now.month, now.day, 20, 0);
+      if (todayReminder.isBefore(now)) {
+        todayReminder = todayReminder.add(const Duration(days: 1));
+      }
+
+      // Primary: Repeating notification at 8 PM daily
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        7770,
+        '🍽️ Food Tracking Time',
+        'Don\'t forget to log what you ate today! Tap to track your meals.',
+        TimezoneUtils.forNotification(todayReminder),
+        notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time, // Repeat daily at 8 PM
+        payload: 'food_tracking_reminder',
+      );
+
+      // Backup: Schedule individual notifications for next 7 days (more reliable on some devices)
+      for (int dayOffset = 1; dayOffset < 7; dayOffset++) {
         final targetDate = now.add(Duration(days: dayOffset));
         var reminderTime = DateTime(targetDate.year, targetDate.month, targetDate.day, 20, 0); // 8:00 PM
 
-        // Skip if this time has already passed
-        if (reminderTime.isBefore(now)) {
-          continue;
-        }
-
-        final notificationId = 7770 + dayOffset; // Use IDs 7770-7776 for 7 days
+        final notificationId = 7770 + dayOffset; // Use IDs 7771-7776 for backup
 
         await flutterLocalNotificationsPlugin.zonedSchedule(
           notificationId,

@@ -323,10 +323,20 @@ class FoodTrackingService {
     final history = historyJson.map((json) => Map<String, dynamic>.from(
         Map<String, dynamic>.from(jsonDecode(json)))).toList();
 
-    // Add new record at beginning (most recent first)
-    history.insert(0, periodRecord);
+    // Check for duplicates - don't add if same period label already exists
+    final existingIndex = history.indexWhere((h) =>
+        h['periodLabel'] == periodRecord['periodLabel'] &&
+        h['frequency'] == periodRecord['frequency']);
 
-    // Keep only last 12 periods (months or weeks)
+    if (existingIndex >= 0) {
+      // Update existing record instead of duplicating
+      history[existingIndex] = periodRecord;
+    } else {
+      // Add new record at beginning (most recent first)
+      history.insert(0, periodRecord);
+    }
+
+    // Keep only last 12 timeframes (months or weeks)
     if (history.length > 12) {
       history.removeRange(12, history.length);
     }

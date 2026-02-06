@@ -1,13 +1,18 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import '../shared/snackbar_utils.dart';
+import '../Energy/energy_service.dart';
 import 'timer_data_models.dart';
 import 'timer_service.dart';
 import 'timer_notification_helper.dart';
 import 'add_activity_dialog.dart';
+import 'edit_activity_dialog.dart';
 import 'activity_detail_screen.dart';
+import 'timer_global_history_screen.dart';
+import 'productivity_assistant.dart';
 
 class TimersScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
@@ -37,6 +42,14 @@ class _TimersScreenState extends State<TimersScreen>
   DateTime? _sessionStartTime;
   Duration _accumulatedWorkTime = Duration.zero;
   bool _productivityTimerActive = false;
+  bool _autoFlowMode = false; // Auto-continue without breaks
+  bool _isInFlowState = false; // Currently in flow (past initial work time)
+  Duration _flowExtraTime = Duration.zero; // Time beyond the work period
+  Set<int> _reachedMilestones = {}; // Track which milestones we've celebrated (in minutes)
+
+  // Flow stats
+  int _longestFlowSession = 0;
+  int _totalFlowTime = 0;
 
   // --- Activities tab state ---
   String? _runningActivityId;
@@ -70,7 +83,13 @@ class _TimersScreenState extends State<TimersScreen>
     _countdownMinutes = await TimerService.getCountdownMinutes();
     _workMinutes = await TimerService.getPomodoroWorkMinutes();
     _breakMinutes = await TimerService.getPomodoroBreakMinutes();
+    _autoFlowMode = await TimerService.getAutoFlowMode();
     _remainingTime = Duration(minutes: _isCountdownMode ? _countdownMinutes : _workMinutes);
+
+    // Load flow stats
+    final flowStats = await TimerService.getFlowStats();
+    _longestFlowSession = flowStats['longestSession'] ?? 0;
+    _totalFlowTime = flowStats['totalTime'] ?? 0;
 
     await _restoreActiveTimer();
 
@@ -95,6 +114,8 @@ class _TimersScreenState extends State<TimersScreen>
         'accumulatedWorkSeconds': _accumulatedWorkTime.inSeconds,
         'isPomodoroBreak': _isPomodoroBreak,
         'pomodoroCount': _pomodoroCount,
+        'isInFlowState': _isInFlowState,
+        'flowExtraSeconds': _flowExtraTime.inSeconds,
         'savedAt': DateTime.now().toIso8601String(),
       });
     } else if (_runningActivityId != null) {
@@ -122,6 +143,8 @@ class _TimersScreenState extends State<TimersScreen>
         _isCountdownMode = state['mode'] == 'countdown';
         _isPomodoroBreak = state['isPomodoroBreak'] ?? false;
         _pomodoroCount = state['pomodoroCount'] ?? 0;
+        _isInFlowState = state['isInFlowState'] ?? false;
+        _flowExtraTime = Duration(seconds: state['flowExtraSeconds'] ?? 0);
         _accumulatedWorkTime =
             Duration(seconds: state['accumulatedWorkSeconds'] ?? 0);
         _sessionStartTime = state['startedAt'] != null
@@ -131,23 +154,31 @@ class _TimersScreenState extends State<TimersScreen>
         final savedRemaining = Duration(seconds: state['remainingSeconds'] ?? 0);
 
         if (state['wasRunning'] == true) {
-          final adjusted = savedRemaining - timeSinceSave;
-          if (adjusted.inSeconds <= 0) {
-            // Timer would have completed while away
-            if (!_isPomodoroBreak) {
-              _accumulatedWorkTime += savedRemaining;
-            }
-            _saveProductivitySession();
-            await TimerService.clearActiveTimerState();
-            _resetProductivityTimer();
-            return;
-          }
-          _remainingTime = adjusted;
-          if (!_isPomodoroBreak) {
+          if (_isInFlowState) {
+            // Restore flow state - add time since save
+            _flowExtraTime += timeSinceSave;
             _accumulatedWorkTime += timeSinceSave;
+            _productivityTimerActive = true;
+            _startFlowTicker();
+          } else {
+            final adjusted = savedRemaining - timeSinceSave;
+            if (adjusted.inSeconds <= 0) {
+              // Timer would have completed while away
+              if (!_isPomodoroBreak) {
+                _accumulatedWorkTime += savedRemaining;
+              }
+              _saveProductivitySession();
+              await TimerService.clearActiveTimerState();
+              _resetProductivityTimer();
+              return;
+            }
+            _remainingTime = adjusted;
+            if (!_isPomodoroBreak) {
+              _accumulatedWorkTime += timeSinceSave;
+            }
+            _productivityTimerActive = true;
+            _startProductivityTicker();
           }
-          _productivityTimerActive = true;
-          _startProductivityTicker();
         } else {
           _remainingTime = savedRemaining;
           _productivityTimerActive = true;
@@ -214,7 +245,7 @@ class _TimersScreenState extends State<TimersScreen>
     setState(() {});
   }
 
-  void _resetProductivityTimer() {
+  Future<void> _resetProductivityTimer() async {
     _timer?.cancel();
     _isRunning = false;
     _isPomodoroBreak = false;
@@ -222,11 +253,14 @@ class _TimersScreenState extends State<TimersScreen>
     _pomodoroCount = 0;
     _accumulatedWorkTime = Duration.zero;
     _sessionStartTime = null;
+    _isInFlowState = false;
+    _flowExtraTime = Duration.zero;
+    _reachedMilestones = {};
     _remainingTime = Duration(
         minutes: _isCountdownMode ? _countdownMinutes : _workMinutes);
-    TimerService.clearActiveTimerState();
-    TimerNotificationHelper.cancelTimerNotification();
-    setState(() {});
+    await TimerService.clearActiveTimerState();
+    await TimerNotificationHelper.cancelTimerNotification();
+    if (mounted) setState(() {});
   }
 
   void _onProductivityTimerComplete() {
@@ -245,25 +279,319 @@ class _TimersScreenState extends State<TimersScreen>
     } else {
       // Pomodoro mode
       if (_isPomodoroBreak) {
-        // Break over → start work
-        _isPomodoroBreak = false;
-        _pomodoroCount++;
-        _remainingTime = Duration(minutes: _workMinutes);
-        _startProductivityTicker();
-        _updateProductivityNotification();
+        // Break over → show dialog to let user choose
+        _isRunning = false;
+        setState(() {});
+        _showBreakCompleteDialog();
       } else {
-        // Work over → save session, start break
-        _saveProductivitySession();
-        _isPomodoroBreak = true;
-        _remainingTime = Duration(minutes: _breakMinutes);
-        _startProductivityTicker();
-        _updateProductivityNotification();
-        if (mounted) {
-          SnackBarUtils.showInfo(context, 'Break time!');
+        // Work over
+        if (_autoFlowMode) {
+          // Auto-flow mode: continue counting UP
+          _isInFlowState = true;
+          _flowExtraTime = Duration.zero;
+          _pomodoroCount++;
+          _startFlowTicker();
+          _updateProductivityNotification();
+          // Haptic feedback for entering flow state
+          HapticFeedback.heavyImpact();
+          if (mounted) {
+            SnackBarUtils.showSuccess(context, 'Flow mode activated!');
+          }
+        } else {
+          // Normal mode: save session and show dialog
+          _saveProductivitySession();
+          _isRunning = false;
+          setState(() {});
+          _showPomodoroCompleteDialog();
         }
       }
     }
     setState(() {});
+  }
+
+  // Flow milestones (in minutes of total accumulated work time)
+  static const List<int> _flowMilestones = [50, 75, 100, 120, 150, 180];
+
+  void _startFlowTicker() {
+    _timer?.cancel();
+    _isRunning = true;
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {
+        _flowExtraTime += const Duration(seconds: 1);
+        _accumulatedWorkTime += const Duration(seconds: 1);
+      });
+
+      // Check for milestone celebrations
+      final totalMinutes = _accumulatedWorkTime.inMinutes;
+      for (final milestone in _flowMilestones) {
+        if (totalMinutes >= milestone && !_reachedMilestones.contains(milestone)) {
+          _reachedMilestones.add(milestone);
+          _showMilestoneCelebration(milestone);
+          break; // Only show one milestone at a time
+        }
+      }
+
+      if (_flowExtraTime.inSeconds % 30 == 0) {
+        _updateProductivityNotification();
+      }
+    });
+  }
+
+  void _showMilestoneCelebration(int minutes) {
+    if (!mounted) return;
+
+    // Haptic feedback for milestone
+    HapticFeedback.mediumImpact();
+
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+    final timeStr = hours > 0 ? '${hours}h ${mins}m' : '${mins}m';
+
+    String title;
+    String message;
+    int owlExcitement; // 1-3 scale
+
+    if (minutes >= 120) {
+      title = 'LEGENDARY!';
+      message = '$timeStr of pure focus! You\'re unstoppable!';
+      owlExcitement = 3;
+    } else if (minutes >= 100) {
+      title = 'INCREDIBLE!';
+      message = '$timeStr milestone! You\'re a focus master!';
+      owlExcitement = 3;
+    } else if (minutes >= 75) {
+      title = 'AMAZING!';
+      message = '$timeStr of deep work! Keep the flow going!';
+      owlExcitement = 2;
+    } else {
+      title = 'AWESOME!';
+      message = '$timeStr focused! You\'re in the zone!';
+      owlExcitement = 1;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => FlowMilestoneDialog(
+        title: title,
+        message: message,
+        minutes: minutes,
+        excitementLevel: owlExcitement,
+        onContinue: () => Navigator.pop(context),
+      ),
+    );
+  }
+
+  void _pauseFlowTimer() {
+    _timer?.cancel();
+    _isRunning = false;
+    _saveActiveTimerState();
+    TimerNotificationHelper.cancelTimerNotification();
+    setState(() {});
+  }
+
+  void _resumeFlowTimer() {
+    _startFlowTicker();
+    _updateProductivityNotification();
+    _saveActiveTimerState();
+  }
+
+  void _stopFlowAndSave() async {
+    // Record flow stats before resetting
+    if (_isInFlowState && _accumulatedWorkTime.inMinutes > 0) {
+      await TimerService.recordFlowSession(_accumulatedWorkTime.inMinutes);
+      // Refresh stats
+      final flowStats = await TimerService.getFlowStats();
+      _longestFlowSession = flowStats['longestSession'] ?? 0;
+      _totalFlowTime = flowStats['totalTime'] ?? 0;
+    }
+
+    _saveProductivitySession();
+    _resetProductivityTimer();
+  }
+
+  void _showFlowModeHelp() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.dialogBackground,
+        title: Row(
+          children: [
+            Icon(Icons.local_fire_department_rounded, color: AppColors.orange),
+            const SizedBox(width: 8),
+            const Text('Flow Mode'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'When enabled, the timer automatically continues after your focus period ends.',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.greyText,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildFlowHelpItem(
+              Icons.timer_rounded,
+              'Auto-continue',
+              'No interruptions when you\'re in the zone',
+            ),
+            const SizedBox(height: 8),
+            _buildFlowHelpItem(
+              Icons.trending_up_rounded,
+              'Count up',
+              'See how long you\'ve been focused (+26:00, +27:00...)',
+            ),
+            const SizedBox(height: 8),
+            _buildFlowHelpItem(
+              Icons.pause_rounded,
+              'Pause anytime',
+              'Take a break without losing your session',
+            ),
+            const SizedBox(height: 8),
+            _buildFlowHelpItem(
+              Icons.check_circle_rounded,
+              'Finish when ready',
+              'Stop and save your extended session',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: AppStyles.textButtonStyle(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlowHelpItem(IconData icon, String title, String description) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: AppColors.orange, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.greyText,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showPomodoroCompleteDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PomodoroCompleteDialog(
+        completedPomodoros: _pomodoroCount + 1,
+        totalWorkTime: Duration(minutes: (_pomodoroCount + 1) * _workMinutes),
+        onTakeBreak: () {
+          _isPomodoroBreak = true;
+          _pomodoroCount++;
+          _remainingTime = Duration(minutes: _breakMinutes);
+          _startProductivityTicker();
+          _updateProductivityNotification();
+        },
+        onContinueFocus: () {
+          // Skip break and continue with another focus session
+          _isPomodoroBreak = false;
+          _pomodoroCount++;
+          _remainingTime = Duration(minutes: _workMinutes);
+          _startProductivityTicker();
+          _updateProductivityNotification();
+        },
+        onStop: () {
+          _resetProductivityTimer();
+        },
+      ),
+    );
+  }
+
+  void _showBreakCompleteDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.dialogBackground,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ProductivityAssistant(
+              state: AssistantState.encouraging,
+              message: "Break's over! Ready to focus?",
+              size: 100,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Break Complete',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.lime,
+              ),
+            ),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _isPomodoroBreak = false;
+                  _remainingTime = Duration(minutes: _workMinutes);
+                  _startProductivityTicker();
+                  _updateProductivityNotification();
+                },
+                icon: const Icon(Icons.bolt_rounded),
+                label: const Text('Start Focus'),
+                style: AppStyles.elevatedButtonStyle(
+                  backgroundColor: AppColors.purple,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _resetProductivityTimer();
+                },
+                style: AppStyles.textButtonStyle(),
+                child: Text(
+                  'Stop for now',
+                  style: TextStyle(color: AppColors.greyText),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   void _saveProductivitySession() {
@@ -281,6 +609,21 @@ class _TimersScreenState extends State<TimersScreen>
           : TimerSessionType.pomodoro,
     );
     TimerService.addSession(session);
+
+    // Track energy for timer session
+    final activity = _activities.firstWhere(
+      (a) => a.id == _selectedActivityId,
+      orElse: () => Activity(id: '', name: 'Unknown'),
+    );
+    if (activity.id.isNotEmpty) {
+      EnergyService.addTimerSessionEnergyConsumption(
+        sessionId: session.id,
+        activityName: activity.name,
+        batteryPer25Min: activity.batteryChangePer25Min,
+        durationMinutes: _accumulatedWorkTime.inMinutes,
+      );
+    }
+
     _accumulatedWorkTime = Duration.zero;
     _sessionStartTime = DateTime.now();
   }
@@ -291,13 +634,24 @@ class _TimersScreenState extends State<TimersScreen>
             .map((a) => a.name)
             .firstOrNull ??
         'Timer';
-    TimerNotificationHelper.showTimerNotification(
-      activityName: activityName,
-      remaining: _remainingTime,
-      isPomodoro: !_isCountdownMode,
-      isBreak: _isPomodoroBreak,
-      isPaused: !_isRunning,
-    );
+
+    if (_isInFlowState) {
+      // Use flow-specific notification
+      TimerNotificationHelper.showFlowNotification(
+        activityName: activityName,
+        flowExtra: _flowExtraTime,
+        totalTime: _accumulatedWorkTime,
+        isPaused: !_isRunning,
+      );
+    } else {
+      TimerNotificationHelper.showTimerNotification(
+        activityName: activityName,
+        remaining: _remainingTime,
+        isPomodoro: !_isCountdownMode,
+        isBreak: _isPomodoroBreak,
+        isPaused: !_isRunning,
+      );
+    }
   }
 
   // --- Activity timer (stopwatch) ---
@@ -343,6 +697,20 @@ class _TimersScreenState extends State<TimersScreen>
         type: TimerSessionType.activity,
       );
       TimerService.addSession(session);
+
+      // Track energy for activity timer
+      final activity = _activities.firstWhere(
+        (a) => a.id == _runningActivityId,
+        orElse: () => Activity(id: '', name: 'Unknown'),
+      );
+      if (activity.id.isNotEmpty) {
+        EnergyService.addTimerSessionEnergyConsumption(
+          sessionId: session.id,
+          activityName: activity.name,
+          batteryPer25Min: activity.batteryChangePer25Min,
+          durationMinutes: _activityElapsed.inMinutes,
+        );
+      }
     }
     _runningActivityId = null;
     _activityElapsed = Duration.zero;
@@ -385,6 +753,20 @@ class _TimersScreenState extends State<TimersScreen>
     await TimerService.deleteActivity(activityId);
     _activities = await TimerService.loadActivities();
     setState(() {});
+  }
+
+  Future<void> _editActivity(Activity activity) async {
+    await showDialog(
+      context: context,
+      builder: (_) => EditActivityDialog(
+        activity: activity,
+        onSave: (updated) async {
+          await TimerService.updateActivity(updated);
+          _activities = await TimerService.loadActivities();
+          setState(() {});
+        },
+      ),
+    );
   }
 
   void _reorderActivities(int oldIndex, int newIndex) {
@@ -483,13 +865,19 @@ class _TimersScreenState extends State<TimersScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: widget.onOpenDrawer != null
-            ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
-            : null,
+        automaticallyImplyLeading: false,
         title: const Text('Timers'),
         backgroundColor: Colors.transparent,
         actions: [
-          if (_tabController.index == 1)
+          if (_tabController.index == 1) ...[
+            IconButton(
+              icon: const Icon(Icons.history_rounded),
+              tooltip: 'All Activities History',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const TimerGlobalHistoryScreen()),
+              ),
+            ),
             IconButton(
               icon: const Icon(Icons.add),
               onPressed: () => showDialog(
@@ -497,12 +885,28 @@ class _TimersScreenState extends State<TimersScreen>
                 builder: (_) => AddActivityDialog(onAdd: _addActivity),
               ),
             ),
+          ],
+          if (widget.onOpenDrawer != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: IconButton(
+                icon: const Icon(Icons.menu_rounded, color: Colors.white),
+                onPressed: widget.onOpenDrawer,
+                tooltip: 'Menu',
+              ),
+            ),
         ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppColors.purple,
+          indicatorWeight: 3,
           labelColor: AppColors.purple,
+          labelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
           unselectedLabelColor: AppColors.grey200,
+          unselectedLabelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+          dividerColor: Colors.transparent,
+          splashFactory: NoSplash.splashFactory,
+          overlayColor: WidgetStateProperty.all(Colors.transparent),
           tabs: const [
             Tab(text: 'Productivity'),
             Tab(text: 'Activities'),
@@ -687,6 +1091,71 @@ class _TimersScreenState extends State<TimersScreen>
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            // Auto Flow Mode toggle
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  onTap: _productivityTimerActive
+                      ? null
+                      : () {
+                          setState(() {
+                            _autoFlowMode = !_autoFlowMode;
+                          });
+                          TimerService.setAutoFlowMode(_autoFlowMode);
+                        },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _autoFlowMode
+                          ? AppColors.yellow.withValues(alpha: 0.2)
+                          : AppColors.grey700.withValues(alpha: 0.3),
+                      borderRadius: AppStyles.borderRadiusMedium,
+                      border: Border.all(
+                        color: _autoFlowMode
+                            ? AppColors.yellow.withValues(alpha: 0.5)
+                            : AppColors.grey700.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.local_fire_department_rounded,
+                          size: 18,
+                          color: _autoFlowMode ? AppColors.orange : AppColors.grey300,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Flow Mode',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: _autoFlowMode ? AppColors.orange : AppColors.grey300,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          _autoFlowMode ? Icons.check_circle : Icons.circle_outlined,
+                          size: 16,
+                          color: _autoFlowMode ? AppColors.orange : AppColors.grey300,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _showFlowModeHelp,
+                  child: Icon(
+                    Icons.help_outline_rounded,
+                    size: 20,
+                    color: AppColors.grey300,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
           ] else ...[
             GestureDetector(
@@ -725,13 +1194,15 @@ class _TimersScreenState extends State<TimersScreen>
                   width: 220,
                   height: 220,
                   child: CircularProgressIndicator(
-                    value: progress.clamp(0.0, 1.0),
+                    value: _isInFlowState ? 1.0 : progress.clamp(0.0, 1.0),
                     strokeWidth: 8,
                     backgroundColor: AppColors.grey700,
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      _isPomodoroBreak
-                          ? AppColors.lime
-                          : AppColors.purple,
+                      _isInFlowState
+                          ? AppColors.yellow
+                          : _isPomodoroBreak
+                              ? AppColors.lime
+                              : AppColors.purple,
                     ),
                   ),
                 ),
@@ -739,23 +1210,52 @@ class _TimersScreenState extends State<TimersScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (!_isCountdownMode)
-                      Text(
-                        _isPomodoroBreak ? 'BREAK' : 'FOCUS #${_pomodoroCount + 1}',
-                        style: TextStyle(
-                          color: _isPomodoroBreak
-                              ? AppColors.lime
-                              : AppColors.purple,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_isInFlowState)
+                            Icon(
+                              Icons.local_fire_department_rounded,
+                              color: AppColors.orange,
+                              size: 16,
+                            ),
+                          if (_isInFlowState) const SizedBox(width: 4),
+                          Text(
+                            _isInFlowState
+                                ? 'IN THE FLOW'
+                                : _isPomodoroBreak
+                                    ? 'BREAK'
+                                    : 'FOCUS #${_pomodoroCount + 1}',
+                            style: TextStyle(
+                              color: _isInFlowState
+                                  ? AppColors.orange
+                                  : _isPomodoroBreak
+                                      ? AppColors.lime
+                                      : AppColors.purple,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     Text(
-                      _formatTimer(_remainingTime),
-                      style: const TextStyle(
+                      _isInFlowState
+                          ? '+${_formatTimer(_flowExtraTime)}'
+                          : _formatTimer(_remainingTime),
+                      style: TextStyle(
                         fontSize: 44,
                         fontWeight: FontWeight.bold,
+                        color: _isInFlowState ? AppColors.yellow : null,
                       ),
                     ),
+                    if (_isInFlowState)
+                      Text(
+                        'Total: ${_formatTimer(_accumulatedWorkTime)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.greyText,
+                        ),
+                      ),
                   ],
                 ),
               ],
@@ -769,25 +1269,37 @@ class _TimersScreenState extends State<TimersScreen>
             children: [
               if (_productivityTimerActive)
                 IconButton(
-                  onPressed: _resetProductivityTimer,
+                  onPressed: _isInFlowState
+                      ? _stopFlowAndSave
+                      : _resetProductivityTimer,
                   icon: const Icon(Icons.stop_rounded),
                   iconSize: 40,
-                  color: AppColors.grey200,
+                  color: _isInFlowState ? AppColors.orange : AppColors.grey200,
                 ),
               const SizedBox(width: 16),
               GestureDetector(
                 onTap: () {
-                  if (_isRunning) {
-                    _pauseProductivityTimer();
+                  if (_isInFlowState) {
+                    // Flow mode: pause/resume or finish
+                    if (_isRunning) {
+                      _pauseFlowTimer();
+                    } else {
+                      _resumeFlowTimer();
+                    }
                   } else {
-                    _startProductivityTimer();
+                    // Normal mode
+                    if (_isRunning) {
+                      _pauseProductivityTimer();
+                    } else {
+                      _startProductivityTimer();
+                    }
                   }
                 },
                 child: Container(
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    color: AppColors.purple,
+                    color: _isInFlowState ? AppColors.orange : AppColors.purple,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -799,10 +1311,139 @@ class _TimersScreenState extends State<TimersScreen>
                   ),
                 ),
               ),
+              // Finish button when in flow mode (paused)
+              if (_isInFlowState && !_isRunning) ...[
+                const SizedBox(width: 16),
+                IconButton(
+                  onPressed: _stopFlowAndSave,
+                  icon: const Icon(Icons.check_circle_rounded),
+                  iconSize: 40,
+                  color: AppColors.successGreen,
+                  tooltip: 'Finish session',
+                ),
+              ],
+            ],
+          ),
+
+          // Productivity assistant tip
+          if (_productivityTimerActive) ...[
+            const SizedBox(height: 24),
+            MiniProductivityAssistant(
+              state: _isInFlowState
+                  ? AssistantState.inFlow
+                  : _isPomodoroBreak
+                      ? AssistantState.resting
+                      : AssistantState.working,
+            ),
+          ],
+
+          // Flow stats (show when not running or in flow mode)
+          if (!_productivityTimerActive || _isInFlowState) ...[
+            const SizedBox(height: 24),
+            _buildFlowStats(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlowStats() {
+    if (_longestFlowSession == 0 && _totalFlowTime == 0) {
+      return const SizedBox.shrink();
+    }
+
+    String formatTime(int minutes) {
+      if (minutes >= 60) {
+        final h = minutes ~/ 60;
+        final m = minutes % 60;
+        return m > 0 ? '${h}h ${m}m' : '${h}h';
+      }
+      return '${minutes}m';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.yellow.withValues(alpha: 0.08),
+        borderRadius: AppStyles.borderRadiusMedium,
+        border: Border.all(
+          color: AppColors.yellow.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.local_fire_department_rounded,
+                color: AppColors.orange,
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Flow Stats',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.orange,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildFlowStatItem(
+                  icon: Icons.emoji_events_rounded,
+                  label: 'Longest Session',
+                  value: formatTime(_longestFlowSession),
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 40,
+                color: AppColors.yellow.withValues(alpha: 0.3),
+              ),
+              Expanded(
+                child: _buildFlowStatItem(
+                  icon: Icons.timer_rounded,
+                  label: 'Total Flow Time',
+                  value: formatTime(_totalFlowTime),
+                ),
+              ),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildFlowStatItem({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, color: AppColors.yellow, size: 22),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: AppColors.orange,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: AppColors.greyText,
+          ),
+        ),
+      ],
     );
   }
 
@@ -968,6 +1609,13 @@ class _TimersScreenState extends State<TimersScreen>
                         ),
                     ],
                   ),
+                ),
+                // Edit button
+                IconButton(
+                  onPressed: () => _editActivity(activity),
+                  icon: Icon(Icons.edit_outlined,
+                      color: AppColors.grey200, size: 20),
+                  tooltip: 'Edit',
                 ),
                 // Details button
                 IconButton(

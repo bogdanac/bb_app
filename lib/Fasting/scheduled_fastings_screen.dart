@@ -477,6 +477,135 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
     );
   }
 
+  void _showSchedulerDialog() {
+    int selectedMonths = 3;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.dialogBackground,
+          title: Row(
+            children: [
+              Icon(Icons.calendar_month_rounded, color: AppColors.coral, size: 24),
+              const SizedBox(width: 10),
+              const Text(
+                'Schedule Fasts',
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Generate fasting schedule for:',
+                style: TextStyle(color: AppColors.white70, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              // Month selection
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [3, 6, 9, 12].map((months) {
+                  final isSelected = selectedMonths == months;
+                  return GestureDetector(
+                    onTap: () => setDialogState(() => selectedMonths = months),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.coral : AppColors.dialogCardBackground,
+                        borderRadius: AppStyles.borderRadiusSmall,
+                        border: Border.all(
+                          color: isSelected ? AppColors.coral : AppColors.greyText.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        '$months months',
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : AppColors.white70,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.dialogCardBackground,
+                  borderRadius: AppStyles.borderRadiusSmall,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _useMenstrualScheduling
+                          ? 'Cycle-based scheduling'
+                          : 'Fixed-day scheduling',
+                      style: TextStyle(
+                        color: _useMenstrualScheduling ? AppColors.pink : AppColors.purple,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _useMenstrualScheduling
+                          ? 'Weekly fasts on ${_getDayName(_preferredFastingDay)}s (safe cycle days)\nLong fasts on Day $_longFastCycleDay of each cycle'
+                          : 'Weekly fasts on ${_getDayName(_preferredFastingDay)}s\nLong fasts on the $_preferredMonthlyFastingDay${_getOrdinalSuffix(_preferredMonthlyFastingDay)} of each month',
+                      style: const TextStyle(color: AppColors.white54, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.white54)),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _scheduleForMonths(selectedMonths);
+              },
+              icon: const Icon(Icons.auto_fix_high_rounded, size: 18),
+              label: const Text('Generate'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.coral,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _scheduleForMonths(int months) async {
+    setState(() => _isLoading = true);
+
+    try {
+      await ScheduledFastingsService.generateScheduleForMonths(months);
+      await _loadScheduledFastings();
+
+      if (mounted) {
+        SnackBarUtils.showSuccess(context, 'Generated fasting schedule for $months months');
+      }
+    } catch (e) {
+      if (mounted) {
+        SnackBarUtils.showError(context, 'Error generating schedule: $e');
+      }
+    }
+
+    setState(() => _isLoading = false);
+  }
+
   Widget _buildFastingCard(ScheduledFasting fasting) {
     final now = DateTime.now();
     final isToday = fasting.date.year == now.year && 
@@ -581,8 +710,11 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                 
                 const SizedBox(height: 16),
                 
-                // Action buttons
-                Row(
+                // Action buttons - using Wrap for better layout on narrow screens
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     // Enable/Disable toggle
                     InkWell(
@@ -590,7 +722,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: fasting.isEnabled 
+                          color: fasting.isEnabled
                               ? AppColors.successGreen.withValues(alpha: 0.15)
                               : AppColors.greyText.withValues(alpha: 0.15),
                           borderRadius: AppStyles.borderRadiusSmall,
@@ -616,9 +748,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                         ),
                       ),
                     ),
-                    
-                    const SizedBox(width: 12),
-                    
+
                     // Reschedule button
                     InkWell(
                       onTap: () => _showRescheduleDialog(fasting),
@@ -645,9 +775,7 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                         ),
                       ),
                     ),
-                    
-                    const SizedBox(width: 12),
-                    
+
                     // Change type button
                     InkWell(
                       onTap: () => _showFastTypeDialog(fasting),
@@ -675,8 +803,6 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                       ),
                     ),
 
-                    const SizedBox(width: 12),
-
                     // Guide button
                     InkWell(
                       onTap: () => _openFastingGuide(fasting.fastType),
@@ -694,8 +820,6 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
                       ),
                     ),
 
-                    const Spacer(),
-                    
                     // Delete button
                     InkWell(
                       onTap: () => _deleteFasting(fasting),
@@ -750,6 +874,11 @@ class _ScheduledFastingsScreenState extends State<ScheduledFastingsScreen> {
         elevation: 0,
         title: const Text('Scheduled Fastings'),
         actions: [
+          IconButton(
+            onPressed: _showSchedulerDialog,
+            icon: const Icon(Icons.calendar_month_rounded),
+            tooltip: 'Schedule Fasts',
+          ),
           IconButton(
             onPressed: _openFastingPreferencesScreen,
             icon: const Icon(Icons.settings),
@@ -1445,10 +1574,9 @@ class _FastingPreferencesScreenState extends State<FastingPreferencesScreen> {
               style: const TextStyle(fontSize: 13, color: AppColors.white70),
             ),
             const SizedBox(height: 12),
-            // 31 days in 7 columns = 5 rows. Each cell ~36px + 6px spacing = ~42px per row
-            // 5 rows * 42 = 210, plus some padding = 220
+            // 31 days in 7 columns = 5 rows
             SizedBox(
-              height: 220,
+              height: 250,
               child: GridView.builder(
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

@@ -1,9 +1,57 @@
 import 'package:flutter/material.dart';
 
-/// Type of meeting with a friend
+/// Type of interaction with a friend
 enum MeetingType {
-  intentional, // Planned meeting
-  casual, // Casual encounter
+  metInPerson, // Met face to face - full recharge
+  called, // Phone/video call - 75% recharge
+  texted, // Text/message - 50% recharge
+}
+
+extension MeetingTypeExtension on MeetingType {
+  String get label {
+    switch (this) {
+      case MeetingType.metInPerson:
+        return 'Met in person';
+      case MeetingType.called:
+        return 'Called';
+      case MeetingType.texted:
+        return 'Texted';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case MeetingType.metInPerson:
+        return Icons.people_rounded;
+      case MeetingType.called:
+        return Icons.call_rounded;
+      case MeetingType.texted:
+        return Icons.chat_rounded;
+    }
+  }
+
+  /// Battery boost for this meeting type (0.0 to 1.0)
+  double get batteryBoost {
+    switch (this) {
+      case MeetingType.metInPerson:
+        return 1.0; // Full recharge to 100%
+      case MeetingType.called:
+        return 0.75; // Recharge to 75%
+      case MeetingType.texted:
+        return 0.50; // Recharge to 50%
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case MeetingType.metInPerson:
+        return Colors.green;
+      case MeetingType.called:
+        return Colors.blue;
+      case MeetingType.texted:
+        return Colors.orange;
+    }
+  }
 }
 
 /// Represents a meeting record with a friend
@@ -46,6 +94,9 @@ class Friend {
   List<Meeting> meetings;
   bool isArchived;
   String? notes; // Personal notes about the friend
+  DateTime? birthday; // Optional birthday for reminders
+  bool notifyLowBattery; // Notify when battery drops below threshold
+  bool notifyBirthday; // Notify before birthday
 
   Friend({
     required this.id,
@@ -57,6 +108,9 @@ class Friend {
     List<Meeting>? meetings,
     this.isArchived = false,
     this.notes,
+    this.birthday,
+    this.notifyLowBattery = true,
+    this.notifyBirthday = true,
   }) : meetings = meetings ?? [];
 
   /// Calculate current battery level based on daily decay
@@ -89,13 +143,17 @@ class Friend {
   /// Get total number of meetings
   int get totalMeetings => meetings.length;
 
-  /// Get intentional meetings count
-  int get intentionalMeetings =>
-      meetings.where((m) => m.type == MeetingType.intentional).length;
+  /// Get in-person meetings count
+  int get inPersonMeetings =>
+      meetings.where((m) => m.type == MeetingType.metInPerson).length;
 
-  /// Get casual meetings count
-  int get casualMeetings =>
-      meetings.where((m) => m.type == MeetingType.casual).length;
+  /// Get call meetings count
+  int get callMeetings =>
+      meetings.where((m) => m.type == MeetingType.called).length;
+
+  /// Get text meetings count
+  int get textMeetings =>
+      meetings.where((m) => m.type == MeetingType.texted).length;
 
   /// Get last meeting date
   DateTime? get lastMeetingDate {
@@ -104,10 +162,10 @@ class Friend {
     return meetings.first.date;
   }
 
-  /// Add a meeting record
+  /// Add a meeting record with battery boost based on meeting type
   void addMeeting(Meeting meeting) {
     meetings.add(meeting);
-    updateBattery(1.0); // Recharge battery to 100%
+    updateBattery(meeting.type.batteryBoost);
   }
 
   /// Update battery level manually
@@ -116,10 +174,10 @@ class Friend {
     lastUpdated = DateTime.now();
   }
 
-  /// Refresh battery to current calculated value
+  /// Refresh battery to current calculated value (does not update lastUpdated)
   void refreshBattery() {
     battery = currentBattery;
-    lastUpdated = DateTime.now();
+    // Note: do NOT update lastUpdated here - it should only change when user presses heart button
   }
 
   /// Archive this friend
@@ -144,6 +202,9 @@ class Friend {
       'meetings': meetings.map((m) => m.toJson()).toList(),
       'isArchived': isArchived,
       'notes': notes,
+      'birthday': birthday?.toIso8601String(),
+      'notifyLowBattery': notifyLowBattery,
+      'notifyBirthday': notifyBirthday,
     };
   }
 
@@ -162,6 +223,9 @@ class Friend {
           [],
       isArchived: json['isArchived'] as bool? ?? false,
       notes: json['notes'] as String?,
+      birthday: json['birthday'] != null ? DateTime.parse(json['birthday'] as String) : null,
+      notifyLowBattery: json['notifyLowBattery'] as bool? ?? true,
+      notifyBirthday: json['notifyBirthday'] as bool? ?? true,
     );
   }
 
@@ -176,6 +240,9 @@ class Friend {
     List<Meeting>? meetings,
     bool? isArchived,
     String? notes,
+    DateTime? birthday,
+    bool? notifyLowBattery,
+    bool? notifyBirthday,
   }) {
     return Friend(
       id: id ?? this.id,
@@ -187,6 +254,9 @@ class Friend {
       meetings: meetings ?? this.meetings,
       isArchived: isArchived ?? this.isArchived,
       notes: notes ?? this.notes,
+      birthday: birthday ?? this.birthday,
+      notifyLowBattery: notifyLowBattery ?? this.notifyLowBattery,
+      notifyBirthday: notifyBirthday ?? this.notifyBirthday,
     );
   }
 }

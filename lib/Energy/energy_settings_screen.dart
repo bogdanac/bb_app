@@ -408,14 +408,18 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: _buildHourPicker(
+                          child: _buildTimePicker(
                             label: 'Wake up',
                             icon: Icons.wb_sunny_rounded,
                             color: AppColors.yellow,
-                            value: _settings.wakeHour,
-                            onChanged: (hour) {
+                            hour: _settings.wakeHour,
+                            minute: _settings.wakeMinute,
+                            onChanged: (hour, minute) {
                               setState(() {
-                                _settings = _settings.copyWith(wakeHour: hour);
+                                _settings = _settings.copyWith(
+                                  wakeHour: hour,
+                                  wakeMinute: minute,
+                                );
                               });
                               _saveSettings();
                             },
@@ -423,14 +427,18 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: _buildHourPicker(
+                          child: _buildTimePicker(
                             label: 'Sleep',
                             icon: Icons.nightlight_rounded,
                             color: AppColors.purple,
-                            value: _settings.sleepHour,
-                            onChanged: (hour) {
+                            hour: _settings.sleepHour,
+                            minute: _settings.sleepMinute,
+                            onChanged: (hour, minute) {
                               setState(() {
-                                _settings = _settings.copyWith(sleepHour: hour);
+                                _settings = _settings.copyWith(
+                                  sleepHour: hour,
+                                  sleepMinute: minute,
+                                );
                               });
                               _saveSettings();
                             },
@@ -501,6 +509,77 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                 },
                 activeTrackColor: AppColors.yellow.withValues(alpha: 0.5),
                 activeThumbColor: AppColors.yellow,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Timer Energy Tracking Toggle
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: AppStyles.borderRadiusLarge,
+                border: Border.all(
+                  color: AppColors.normalCardBackground,
+                ),
+              ),
+              child: SwitchListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                title: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.purple.withValues(alpha: 0.1),
+                        borderRadius: AppStyles.borderRadiusSmall,
+                      ),
+                      child: Icon(
+                        Icons.timer_rounded,
+                        color: AppColors.purple,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Timer Energy Tracking',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.help_outline_rounded,
+                        color: AppColors.greyText,
+                        size: 20,
+                      ),
+                      onPressed: () => _showTimerEnergyHelpDialog(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(left: 44),
+                  child: Text(
+                    'Timer sessions affect battery & flow points',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.greyText,
+                    ),
+                  ),
+                ),
+                value: _settings.trackTimerEnergy,
+                onChanged: (value) {
+                  setState(() {
+                    _settings = _settings.copyWith(trackTimerEnergy: value);
+                  });
+                  _saveSettings();
+                },
+                activeTrackColor: AppColors.purple.withValues(alpha: 0.5),
+                activeThumbColor: AppColors.purple,
               ),
             ),
 
@@ -816,17 +895,17 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _buildEnergyLevelRow('-5', 'Most draining → 10 pts, -50% battery', AppColors.coral),
-                    _buildEnergyLevelRow('-4', 'Very draining → 8 pts, -40% battery', AppColors.coral),
-                    _buildEnergyLevelRow('-3', 'Draining → 6 pts, -30% battery', AppColors.orange),
-                    _buildEnergyLevelRow('-2', 'Moderate drain → 4 pts, -20% battery', AppColors.orange),
-                    _buildEnergyLevelRow('-1', 'Slight drain → 2 pts, -10% battery', AppColors.yellow),
+                    _buildEnergyLevelRow('-5', 'Most draining → 1 pt, -25% battery', AppColors.coral),
+                    _buildEnergyLevelRow('-4', 'Very draining → 1 pt, -20% battery', AppColors.coral),
+                    _buildEnergyLevelRow('-3', 'Draining → 1 pt, -15% battery', AppColors.orange),
+                    _buildEnergyLevelRow('-2', 'Moderate drain → 1 pt, -10% battery', AppColors.orange),
+                    _buildEnergyLevelRow('-1', 'Slight drain → 1 pt, -5% battery', AppColors.yellow),
                     _buildEnergyLevelRow('0', 'Neutral → 1 pt, no change', AppColors.greyText),
-                    _buildEnergyLevelRow('+1', 'Slight charge → 2 pts, +10% battery', AppColors.yellow),
-                    _buildEnergyLevelRow('+2', 'Moderate charge → 3 pts, +20% battery', AppColors.lightGreen),
-                    _buildEnergyLevelRow('+3', 'Charging → 4 pts, +30% battery', AppColors.lightGreen),
-                    _buildEnergyLevelRow('+4', 'Very charging → 5 pts, +40% battery', AppColors.successGreen),
-                    _buildEnergyLevelRow('+5', 'Most charging → 6 pts, +50% battery', AppColors.successGreen),
+                    _buildEnergyLevelRow('+1', 'Slight charge → 1 pt, +5% battery', AppColors.yellow),
+                    _buildEnergyLevelRow('+2', 'Moderate charge → 1 pt, +10% battery', AppColors.lightGreen),
+                    _buildEnergyLevelRow('+3', 'Charging → 1 pt, +15% battery', AppColors.lightGreen),
+                    _buildEnergyLevelRow('+4', 'Very charging → 1 pt, +20% battery', AppColors.successGreen),
+                    _buildEnergyLevelRow('+5', 'Most charging → 1 pt, +25% battery', AppColors.successGreen),
                   ],
                 ),
               ),
@@ -917,7 +996,7 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Your current energy level. Starts each morning based on how rested you feel. Goes down when you do draining tasks, goes up with charging tasks.',
+                                'Your energy level. Tasks: energy × 5% change. Timer sessions: ±5% per 25 min (based on activity type).',
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: AppColors.greyText,
@@ -949,7 +1028,7 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Your productivity score. Earned by completing tasks. Harder tasks earn MORE points! Daily goal adapts to your cycle phase.',
+                                'Your productivity score. Tasks: 1 pt each. Timer sessions: 1 pt per 25 min. Daily goal adapts to your cycle phase.',
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: AppColors.greyText,
@@ -971,18 +1050,144 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
     );
   }
 
-  Widget _buildHourPicker({
+  void _showTimerEnergyHelpDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.dialogBackground,
+        title: Row(
+          children: [
+            Icon(Icons.timer_rounded, color: AppColors.purple),
+            const SizedBox(width: 8),
+            const Text('Timer Energy Tracking'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'When enabled, timer sessions contribute to your daily energy tracking.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.greyText,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildHelpSection(
+                icon: Icons.track_changes_rounded,
+                color: AppColors.purple,
+                title: 'Flow Points',
+                description: 'Earn 1 flow point for every 25 minutes of focused work.',
+              ),
+              const SizedBox(height: 12),
+              _buildHelpSection(
+                icon: Icons.battery_charging_full_rounded,
+                color: AppColors.successGreen,
+                title: 'Battery Impact',
+                description: 'Activities can be set as:\n'
+                    '• Recharging: +5% battery per 25 min\n'
+                    '• Neutral: No battery change\n'
+                    '• Draining: -5% battery per 25 min',
+              ),
+              const SizedBox(height: 12),
+              _buildHelpSection(
+                icon: Icons.edit_rounded,
+                color: AppColors.waterBlue,
+                title: 'Setting Activity Type',
+                description: 'Long-press an activity in the Timers tab to edit its energy mode.',
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.purple.withValues(alpha: 0.1),
+                  borderRadius: AppStyles.borderRadiusSmall,
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.lightbulb_outline_rounded, color: AppColors.purple, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Example: 50 min of a draining activity = 2 flow points and -10% battery',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.purple,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: AppStyles.textButtonStyle(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHelpSection({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String description,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.greyText,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimePicker({
     required String label,
     required IconData icon,
     required Color color,
-    required int value,
-    required ValueChanged<int> onChanged,
+    required int hour,
+    required int minute,
+    required void Function(int hour, int minute) onChanged,
   }) {
     return InkWell(
       onTap: () async {
         final time = await showTimePicker(
           context: context,
-          initialTime: TimeOfDay(hour: value, minute: 0),
+          initialTime: TimeOfDay(hour: hour, minute: minute),
           builder: (context, child) {
             return MediaQuery(
               data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
@@ -991,7 +1196,7 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
           },
         );
         if (time != null) {
-          onChanged(time.hour);
+          onChanged(time.hour, time.minute);
         }
       },
       borderRadius: AppStyles.borderRadiusSmall,
@@ -1018,7 +1223,7 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
                   ),
                 ),
                 Text(
-                  '${value.toString().padLeft(2, '0')}:00',
+                  '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,

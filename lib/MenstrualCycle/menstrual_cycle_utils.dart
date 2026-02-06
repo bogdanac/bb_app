@@ -52,70 +52,79 @@ class MenstrualCycleUtils {
     final lastPeriodDateOnly = DateTime(lastPeriodStart.year, lastPeriodStart.month, lastPeriodStart.day);
     final daysSinceLastPeriod = nowDate.difference(lastPeriodDateOnly).inDays;
     final daysUntilPeriod = averageCycleLength - daysSinceLastPeriod;
-    
-    
+
+    // Current cycle day (0-based as requested, where day 0 is period start day)
+    final cycleDay = daysSinceLastPeriod;
+    final cycleDayPrefix = "Day $cycleDay of $averageCycleLength";
 
     // Period expected today or overdue
     if (daysUntilPeriod < 0) {
       final daysOverdue = -daysUntilPeriod;
-      return _getLatePeriodMessage(daysOverdue);
+      return _getLatePeriodMessage(daysOverdue, cycleDay, averageCycleLength);
     } else if (daysUntilPeriod == 0) {
-      return "Period expected today! 🩸";
+      return "$cycleDayPrefix • Period expected today! 🩸";
     }
 
     // Pre-period warnings (1-5 days) with personalized messages
     if (daysUntilPeriod <= 5) {
       final messages = {
-        1: "Period expected tomorrow! Take care of yourself 💝",
-        2: "Period in 2 days. Rest and stay comfortable 🛋️",
-        3: "Period in 3 days. Listen to your body 🤗",
-        4: "Period in 4 days. Symptoms may begin, be gentle with yourself 😌",
-        5: "Period in 5 days. Stay hydrated and rest well 💧"
+        1: "$cycleDayPrefix • Period expected tomorrow! 💝",
+        2: "$cycleDayPrefix • Period in 2 days 🛋️",
+        3: "$cycleDayPrefix • Period in 3 days 🤗",
+        4: "$cycleDayPrefix • Period in 4 days 😌",
+        5: "$cycleDayPrefix • Period in 5 days 💧"
       };
-      return messages[daysUntilPeriod] ?? "$daysUntilPeriod days until period";
+      return messages[daysUntilPeriod] ?? "$cycleDayPrefix • $daysUntilPeriod days until period";
     }
 
-    // Current period info
-    if (isCurrentlyOnPeriod(lastPeriodStart, lastPeriodEnd)) {
-      final currentDay = now.difference(lastPeriodStart).inDays + 1;
-      return "Day $currentDay of period";
-    }
-
-    // Cycle day info with ovulation focus
+    // Cycle day info with phase-specific messages
     final daysSinceStart = now.difference(lastPeriodStart).inDays + 1;
+
+    // Menstrual phase (days 1-5) - rest and self-care
+    if (daysSinceStart <= 5) {
+      final menstrualMessages = [
+        "Rest and restore 🌙",
+        "Be gentle with yourself 💝",
+        "Take it easy today 🛋️",
+        "Self-care is essential 🧘",
+        "You're doing great 🤗"
+      ];
+      final msgIndex = daysSinceStart - 1; // 0-indexed for array
+      final message = msgIndex < menstrualMessages.length ? menstrualMessages[msgIndex] : "Menstrual phase";
+      return "$cycleDayPrefix • $message";
+    }
 
     // Follicular phase (days 6-11) - rebirth, spring, renewal messages
     if (daysSinceStart >= 6 && daysSinceStart <= 11) {
-      final follicularDay = daysSinceStart - 5; // Days 6-11 become 1-6 of follicular phase
-      final messages = {
-        1: "Day 1 of follicular phase - Fresh start, new energy 🌱",
-        2: "Day 2 of follicular phase - Rising like spring 🌸",
-        3: "Day 3 of follicular phase - Blossoming into your power 🌺",
-        4: "Day 4 of follicular phase - Rebirth and renewal 🦋",
-        5: "Day 5 of follicular phase - Full of vitality 🌟",
-        6: "Day 6 of follicular phase - Ready to conquer 💪"
-      };
-      return messages[follicularDay] ?? "Day $follicularDay of follicular phase";
+      final follicularMessages = [
+        "Fresh start, new energy 🌱",
+        "Rising like spring 🌸",
+        "Blossoming into your power 🌺",
+        "Rebirth and renewal 🦋",
+        "Full of vitality 🌟",
+        "Ready to conquer 💪"
+      ];
+      final follicularDay = daysSinceStart - 6; // 0-indexed for array
+      final message = follicularDay < follicularMessages.length ? follicularMessages[follicularDay] : "Follicular phase";
+      return "$cycleDayPrefix • $message";
     } else if (daysSinceStart <= 16) {
       final ovulationDay = 14;
       final daysToOvulation = ovulationDay - daysSinceStart;
 
       if (daysToOvulation == 0) {
-        return "Ovulation day! 🥚";
+        return "$cycleDayPrefix • Ovulation day! 🥚";
       } else if (daysToOvulation == 1) {
-        return "Ovulation tomorrow";
+        return "$cycleDayPrefix • Ovulation tomorrow";
       } else if (daysToOvulation == -1) {
-        return "Ovulation was yesterday";
-      } else if (daysSinceStart >= 12 && daysSinceStart <= 16) {
-        return "Ovulation window";
+        return "$cycleDayPrefix • Ovulation was yesterday";
       } else {
-        return "Ovulation window";
+        return "$cycleDayPrefix • Ovulation window";
       }
     } else {
       if (daysUntilPeriod <= 3) {
-        return "$daysUntilPeriod days until next period";
+        return "$cycleDayPrefix • $daysUntilPeriod days until next period";
       }
-      return "Totul e în regulă în mine și în lume.";
+      return "$cycleDayPrefix • Totul e în regulă în mine și în lume.";
     }
   }
 
@@ -249,17 +258,18 @@ class MenstrualCycleUtils {
     return 0;
   }
 
-  static String _getLatePeriodMessage(int daysOverdue) {
+  static String _getLatePeriodMessage(int daysOverdue, int cycleDay, int averageCycleLength) {
+    final cycleDayPrefix = "Day $cycleDay of $averageCycleLength";
     if (daysOverdue == 1) {
-      return "Period is 1 day late. This is completely normal, take care of yourself. 😌";
+      return "$cycleDayPrefix • Period is 1 day late. Take care of yourself 😌";
     } else if (daysOverdue <= 3) {
-      return "Period is $daysOverdue days late. Don't worry, your body responds to many factors. Rest and stay hydrated! 🤗";
+      return "$cycleDayPrefix • Period is $daysOverdue days late. Rest and stay hydrated! 🤗";
     } else if (daysOverdue <= 7) {
-      return "Period is $daysOverdue days late. Cycles can vary, have you had any changes in stress, sleep, or routine lately? 💝";
+      return "$cycleDayPrefix • Period is $daysOverdue days late. Cycles can vary 💝";
     } else if (daysOverdue <= 14) {
-      return "Period is $daysOverdue days late. While this can be normal, consider tracking any symptoms or changes 🌸";
+      return "$cycleDayPrefix • Period is $daysOverdue days late 🌸";
     } else {
-      return "Period is $daysOverdue days late. If you're concerned or experiencing other symptoms, it may be helpful to speak with a healthcare provider 💙";
+      return "$cycleDayPrefix • Period is $daysOverdue days late. Consider speaking with a healthcare provider 💙";
     }
   }
 

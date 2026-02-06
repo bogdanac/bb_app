@@ -30,13 +30,22 @@ class EnergySettings {
 
   // Skip notification tracking
   final DateTime? pendingSkipNotification;  // Date when skip was auto-used, needs notification
+  final DateTime? pendingStreakLostNotification;  // Date when streak was lost, needs notification
+
+  // Streak evaluation tracking
+  final DateTime? lastStreakCheckDate;  // Last date streak was evaluated (to catch missed days)
 
   // Sleep schedule settings
-  final int wakeHour;   // Hour user typically wakes up (0-23, default: 8)
-  final int sleepHour;  // Hour user typically goes to sleep (0-23, default: 22)
+  final int wakeHour;     // Hour user typically wakes up (0-23, default: 8)
+  final int wakeMinute;   // Minute user typically wakes up (0-59, default: 0)
+  final int sleepHour;    // Hour user typically goes to sleep (0-23, default: 22)
+  final int sleepMinute;  // Minute user typically goes to sleep (0-59, default: 0)
 
   // UI settings
   final bool showMorningPrompt;  // Show morning battery prompt dialog (default: true)
+
+  // Timer integration settings
+  final bool trackTimerEnergy;  // Track timer sessions for battery & flow (default: true)
 
   const EnergySettings({
     this.minBattery = 5,        // Default: 5% on low energy days
@@ -51,9 +60,14 @@ class EnergySettings {
     this.skipDayMode = SkipDayMode.weekly,
     this.autoUseSkip = true,
     this.pendingSkipNotification,
+    this.pendingStreakLostNotification,
+    this.lastStreakCheckDate,
     this.wakeHour = 8,
+    this.wakeMinute = 0,
     this.sleepHour = 22,
+    this.sleepMinute = 0,
     this.showMorningPrompt = true,
+    this.trackTimerEnergy = true,
   });
 
   Map<String, dynamic> toJson() => {
@@ -69,9 +83,14 @@ class EnergySettings {
     'skipDayMode': skipDayMode.name,
     'autoUseSkip': autoUseSkip,
     'pendingSkipNotification': pendingSkipNotification?.toIso8601String(),
+    'pendingStreakLostNotification': pendingStreakLostNotification?.toIso8601String(),
+    'lastStreakCheckDate': lastStreakCheckDate?.toIso8601String(),
     'wakeHour': wakeHour,
+    'wakeMinute': wakeMinute,
     'sleepHour': sleepHour,
+    'sleepMinute': sleepMinute,
     'showMorningPrompt': showMorningPrompt,
+    'trackTimerEnergy': trackTimerEnergy,
   };
 
   static EnergySettings fromJson(Map<String, dynamic> json) {
@@ -105,9 +124,18 @@ class EnergySettings {
       pendingSkipNotification: json['pendingSkipNotification'] != null
           ? DateTime.parse(json['pendingSkipNotification'])
           : null,
+      pendingStreakLostNotification: json['pendingStreakLostNotification'] != null
+          ? DateTime.parse(json['pendingStreakLostNotification'])
+          : null,
+      lastStreakCheckDate: json['lastStreakCheckDate'] != null
+          ? DateTime.parse(json['lastStreakCheckDate'])
+          : null,
       wakeHour: json['wakeHour'] ?? 8,
+      wakeMinute: json['wakeMinute'] ?? 0,
       sleepHour: json['sleepHour'] ?? 22,
+      sleepMinute: json['sleepMinute'] ?? 0,
       showMorningPrompt: json['showMorningPrompt'] ?? true,
+      trackTimerEnergy: json['trackTimerEnergy'] ?? true,
     );
   }
 
@@ -124,12 +152,18 @@ class EnergySettings {
     SkipDayMode? skipDayMode,
     bool? autoUseSkip,
     DateTime? pendingSkipNotification,
+    DateTime? pendingStreakLostNotification,
+    DateTime? lastStreakCheckDate,
     bool clearLastSkipDate = false,
     bool clearLastStreakDate = false,
     bool clearPendingSkipNotification = false,
+    bool clearPendingStreakLostNotification = false,
     int? wakeHour,
+    int? wakeMinute,
     int? sleepHour,
+    int? sleepMinute,
     bool? showMorningPrompt,
+    bool? trackTimerEnergy,
   }) {
     return EnergySettings(
       minBattery: minBattery ?? this.minBattery,
@@ -146,9 +180,16 @@ class EnergySettings {
       pendingSkipNotification: clearPendingSkipNotification
           ? null
           : (pendingSkipNotification ?? this.pendingSkipNotification),
+      pendingStreakLostNotification: clearPendingStreakLostNotification
+          ? null
+          : (pendingStreakLostNotification ?? this.pendingStreakLostNotification),
+      lastStreakCheckDate: lastStreakCheckDate ?? this.lastStreakCheckDate,
       wakeHour: wakeHour ?? this.wakeHour,
+      wakeMinute: wakeMinute ?? this.wakeMinute,
       sleepHour: sleepHour ?? this.sleepHour,
+      sleepMinute: sleepMinute ?? this.sleepMinute,
       showMorningPrompt: showMorningPrompt ?? this.showMorningPrompt,
+      trackTimerEnergy: trackTimerEnergy ?? this.trackTimerEnergy,
     );
   }
 
@@ -179,9 +220,14 @@ class EnergySettings {
           skipDayMode == other.skipDayMode &&
           autoUseSkip == other.autoUseSkip &&
           pendingSkipNotification == other.pendingSkipNotification &&
+          pendingStreakLostNotification == other.pendingStreakLostNotification &&
+          lastStreakCheckDate == other.lastStreakCheckDate &&
           wakeHour == other.wakeHour &&
+          wakeMinute == other.wakeMinute &&
           sleepHour == other.sleepHour &&
-          showMorningPrompt == other.showMorningPrompt;
+          sleepMinute == other.sleepMinute &&
+          showMorningPrompt == other.showMorningPrompt &&
+          trackTimerEnergy == other.trackTimerEnergy;
 
   @override
   int get hashCode =>
@@ -197,9 +243,14 @@ class EnergySettings {
       skipDayMode.hashCode ^
       autoUseSkip.hashCode ^
       pendingSkipNotification.hashCode ^
+      pendingStreakLostNotification.hashCode ^
+      lastStreakCheckDate.hashCode ^
       wakeHour.hashCode ^
+      wakeMinute.hashCode ^
       sleepHour.hashCode ^
-      showMorningPrompt.hashCode;
+      sleepMinute.hashCode ^
+      showMorningPrompt.hashCode ^
+      trackTimerEnergy.hashCode;
 }
 
 /// Daily energy record for Body Battery & Flow tracking
@@ -316,6 +367,7 @@ class EnergyConsumptionEntry {
   final int energyLevel;
   final DateTime completedAt;
   final EnergySourceType sourceType;
+  final int? durationMinutes; // For timer sessions: duration in minutes
 
   const EnergyConsumptionEntry({
     required this.id,
@@ -323,6 +375,7 @@ class EnergyConsumptionEntry {
     required this.energyLevel,
     required this.completedAt,
     required this.sourceType,
+    this.durationMinutes,
   });
 
   Map<String, dynamic> toJson() => {
@@ -331,6 +384,7 @@ class EnergyConsumptionEntry {
     'energyLevel': energyLevel,
     'completedAt': completedAt.toIso8601String(),
     'sourceType': sourceType.name,
+    if (durationMinutes != null) 'durationMinutes': durationMinutes,
   };
 
   static EnergyConsumptionEntry fromJson(Map<String, dynamic> json) => EnergyConsumptionEntry(
@@ -342,6 +396,7 @@ class EnergyConsumptionEntry {
       (e) => e.name == json['sourceType'],
       orElse: () => EnergySourceType.task,
     ),
+    durationMinutes: json['durationMinutes'],
   );
 }
 
@@ -349,6 +404,7 @@ class EnergyConsumptionEntry {
 enum EnergySourceType {
   task,
   routineStep,
+  timerSession,
 }
 
 /// Energy completion levels for color coding

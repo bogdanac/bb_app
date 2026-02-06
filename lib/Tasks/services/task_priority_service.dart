@@ -322,12 +322,38 @@ class TaskPriorityService {
           }
         }
 
-        // BODY BATTERY BOOST: Energy-based priority for today's recurring tasks
-        // Formula: 200 - (energyLevel + 5) × 18
-        // Range: -5 gets +200, +5 gets +20
+        // For tasks without distant reminders, add bonuses
         if (!hasDistantReminder) {
+          // BODY BATTERY BOOST: Energy-based priority for today's recurring tasks
+          // Formula: 200 - (energyLevel + 5) × 18
+          // Range: -5 gets +200, +5 gets +20
           score += 200 - ((task.energyLevel + 5) * 18);
+
+          // Add category priority for recurring tasks due today
+          score += _calculateCategoryScore(task.categoryIds, categories);
+
+          // Add important bonus for recurring tasks due today
+          if (task.isImportant) {
+            score += 100;
+          }
         }
+      }
+    }
+
+    // 5a. MENSTRUAL TASKS: Phase matches but not "due today" (e.g., phase+weekly, phase not matching weekly day)
+    // These tasks should still be visible when their phase matches, even if the weekly day doesn't
+    if (task.recurrence != null &&
+        _isMenstrualCycleTask(task.recurrence!) &&
+        !task.isDueToday() && // Not caught by section 5
+        !task.isPostponed &&
+        currentMenstrualPhase != null &&
+        _taskMatchesPhase(task.recurrence!, currentMenstrualPhase)) {
+      // Phase matches but task is not "due" (e.g., weekly day doesn't match)
+      // Give medium priority so it's visible but below tasks that are fully due
+      if (hasDistantReminder) {
+        score += 120;
+      } else {
+        score += 300; // Below fully-due tasks (700) but above unscheduled (400 minus bonuses)
       }
     }
 
@@ -437,7 +463,8 @@ class TaskPriorityService {
       }
     }
     // 5f. FUTURE SCHEDULED TASKS (non-recurring only, recurring handled in 4b)
-    else if (isExplicitlyScheduledFuture && !hasDistantReminder && task.recurrence == null) {
+    // Note: hasDistantReminder is irrelevant for future tasks - they should always be visible
+    else if (isExplicitlyScheduledFuture && task.recurrence == null) {
       final daysUntil = task.scheduledDate!.difference(today).inDays;
 
       // Tomorrow starts at +120, decreases by 5 each day
@@ -540,12 +567,13 @@ class TaskPriorityService {
   }
 
   /// Calculate category score by summing points for all categories
-  /// Priority 1 = 20 points, Priority 2 = 18 points, Priority 3 = 16 points, etc.
-  /// Each category's points are multiplied by 3
+  /// Uses the HIGHEST priority category (lowest order) as the primary factor
+  /// This ensures tasks are grouped by category within the same priority tier
   int _calculateCategoryScore(List<String> categoryIds, List<TaskCategory> categories) {
     if (categoryIds.isEmpty) return 0;
 
-    int totalScore = 0;
+    // Find the highest priority category (lowest order number)
+    int bestOrder = 999;
     for (final categoryId in categoryIds) {
       final category = categories.firstWhere(
         (cat) => cat.id == categoryId,
@@ -556,19 +584,18 @@ class TaskPriorityService {
           order: 999
         ),
       );
-
-      // Skip invalid categories
-      if (category.order == 999) continue;
-
-      // Calculate points: Priority 1 = 20, Priority 2 = 18, Priority 3 = 16, etc.
-      // Minimum of 2 points (when order >= 10)
-      int categoryPoints = math.max(2, 20 - (category.order * 2));
-
-      // Multiply by 3
-      totalScore += categoryPoints * 3;
+      if (category.order < bestOrder) {
+        bestOrder = category.order;
+      }
     }
 
-    return totalScore;
+    // Skip if no valid categories
+    if (bestOrder == 999) return 0;
+
+    // Calculate points: Priority 1 = 300, Priority 2 = 270, Priority 3 = 240, etc.
+    // This ensures category grouping overrides energy bonuses (max 200) and importance (100)
+    // Formula: (10 - order) * 30, minimum of 30 points
+    return math.max(30, (10 - bestOrder) * 30);
   }
 
   int _getCategoryImportance(List<String> categoryIds, List<TaskCategory> categories) {

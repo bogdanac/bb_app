@@ -1,5 +1,6 @@
 import 'package:bb_app/Habits/habit_edit_screen.dart';
 import 'package:bb_app/Habits/habit_statistics_screen.dart';
+import 'package:bb_app/Habits/habit_history_screen.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:bb_app/Habits/habit_data_models.dart';
@@ -119,6 +120,15 @@ class _HabitsScreenState extends State<HabitsScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => HabitStatisticsScreen(habits: _habits),
+      ),
+    );
+  }
+
+  void _viewHistory(Habit habit) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HabitHistoryScreen(habit: habit),
       ),
     );
   }
@@ -391,6 +401,41 @@ class _HabitsScreenState extends State<HabitsScreen> {
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // History button
+                      InkWell(
+                        onTap: () => _viewHistory(habit),
+                        borderRadius: AppStyles.borderRadiusMedium,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.normalCardBackground,
+                            borderRadius: AppStyles.borderRadiusMedium,
+                            border: Border.all(color: AppColors.grey300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.history_rounded,
+                                color: habit.cycleHistory.isNotEmpty ? AppColors.lightGreen : AppColors.greyText,
+                                size: 16,
+                              ),
+                              if (habit.cycleHistory.isNotEmpty) ...[
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${habit.cycleHistory.length}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.lightGreen,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       ),
                       const Spacer(),

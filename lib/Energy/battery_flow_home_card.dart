@@ -81,10 +81,17 @@ class BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // If it's a different day, check streak for previous day
+    // If it's a different day, check streak for all missed days
     if (_lastLoadDate != null && _lastLoadDate != today) {
-      // Check streak at end of previous day (uses skip if available)
-      await EnergyService.checkStreakAtDayEnd(_lastLoadDate!);
+      // Check streak for each day from _lastLoadDate up to yesterday
+      final yesterday = today.subtract(const Duration(days: 1));
+      var checkDate = _lastLoadDate!;
+
+      // Iterate through all days that need to be checked (inclusive of yesterday)
+      while (!checkDate.isAfter(yesterday)) {
+        await EnergyService.checkStreakAtDayEnd(checkDate);
+        checkDate = checkDate.add(const Duration(days: 1));
+      }
     }
 
     // Always reload data - this will also show morning prompt if needed
@@ -141,11 +148,17 @@ class BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
       });
     }
 
-    // Check for pending skip notification (shown after morning prompt)
+    // Check for pending notifications (shown after morning prompt)
     if (mounted && !_isShowingMorningPrompt) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (mounted) {
-          await SkipDayNotification.checkAndShow(context);
+          // First check for streak lost notification
+          final shownLostNotification = await StreakLostNotification.checkAndShow(context);
+
+          // Then check for skip notification (if streak wasn't lost)
+          if (!shownLostNotification && mounted) {
+            await SkipDayNotification.checkAndShow(context);
+          }
         }
       });
     }
@@ -155,6 +168,10 @@ class BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
   Future<void> _showMorningPromptSafely() async {
     // Guard against multiple calls
     if (_isShowingMorningPrompt || !mounted) return;
+
+    // Don't show morning prompt before 5am
+    final now = DateTime.now();
+    if (now.hour < 5) return;
 
     // Double-check we still need to show it
     final record = await EnergyService.getTodayRecord();
@@ -167,7 +184,7 @@ class BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
       _isShowingMorningPrompt = false;
     }
 
-    // Reload after prompt closes
+    // Reload after prompt closes - the prompt now auto-initializes if closed with X
     if (mounted) {
       final newRecord = await EnergyService.getTodayRecordWithDecay();
       if (mounted) {
@@ -357,9 +374,84 @@ class BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
       );
     }
 
-    // Don't show card if no data
+    // Handle case when no record exists
     if (_todayRecord == null || _settings == null) {
-      return const SizedBox.shrink();
+      final now = DateTime.now();
+      // Before 5am - show "night mode" card
+      if (now.hour < 5) {
+        return Card(
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: AppStyles.borderRadiusLarge,
+              color: AppColors.homeCardBackground,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.nightlight_rounded,
+                  color: AppColors.purple,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Get some rest! Your energy will reset after 5am.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.greyText,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      // After 5am but no record - this shouldn't happen normally
+      // but show a tap-to-start card just in case
+      return Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
+        child: InkWell(
+          onTap: () async {
+            await _showMorningPromptSafely();
+          },
+          borderRadius: AppStyles.borderRadiusLarge,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: AppStyles.borderRadiusLarge,
+              color: AppColors.homeCardBackground,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.battery_charging_full_rounded,
+                  color: AppColors.successGreen,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Tap to set your starting energy for today',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.greyText,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.greyText,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
 
     final battery = _todayRecord!.currentBattery;
@@ -660,19 +752,32 @@ class BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                     ],
                     // Skip day button - show when goal not met, streak > 0, and skip available
                     if (!_todayRecord!.isGoalMet && streak > 0 && _canUseSkip) ...[
-                      const SizedBox(height: 4),
-                      TextButton(
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
                         onPressed: _useSkipDay,
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.greyText,
-                          padding: const EdgeInsets.symmetric(vertical: 4),
+                        icon: Icon(
+                          Icons.shield_rounded,
+                          size: 16,
+                          color: AppColors.orange,
                         ),
-                        child: Text(
+                        label: Text(
                           'Skip day available',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.greyText.withValues(alpha: 0.7),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.orange,
                           ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.orange,
+                          side: BorderSide(
+                            color: AppColors.orange,
+                            width: 1.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: AppStyles.borderRadiusMedium,
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         ),
                       ),
                     ],

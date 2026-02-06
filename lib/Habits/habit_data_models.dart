@@ -77,6 +77,7 @@ class Habit {
   DateTime startDate; // When the habit tracking should start (can be future date)
   int cycleDurationDays; // Duration of each cycle (7, 21, or 90 days)
   List<String> completedDates; // List of dates in 'yyyy-MM-dd' format
+  List<String> forgivenessDates; // Days where streak is preserved despite not completing
   int currentCycle; // Which cycle we're on
   bool isCompleted; // Has the habit cycle been fully completed
   List<CycleHistory> cycleHistory; // History of all completed cycles
@@ -89,12 +90,14 @@ class Habit {
     DateTime? startDate,
     this.cycleDurationDays = 21, // Default to 21 days for backward compatibility
     List<String>? completedDates,
+    List<String>? forgivenessDates,
     this.currentCycle = 1,
     this.isCompleted = false,
     List<CycleHistory>? cycleHistory,
   }) : createdAt = createdAt ?? DateTime.now(),
        startDate = startDate ?? createdAt ?? DateTime.now(),
        completedDates = completedDates ?? [],
+       forgivenessDates = forgivenessDates ?? [],
        cycleHistory = cycleHistory ?? [];
 
   /// Get the HabitDuration enum for this habit
@@ -171,30 +174,96 @@ class Habit {
   }
   
   int getStreak() {
-    if (completedDates.isEmpty) return 0;
-    
+    if (completedDates.isEmpty && forgivenessDates.isEmpty) return 0;
+
     final today = DateTime.now();
     var currentDate = DateTime(today.year, today.month, today.day);
     var streak = 0;
-    
-    // Check if today is completed, if not start from yesterday
+
+    // Check if today is completed or forgiven, if not start from yesterday
     final todayString = DateFormat('yyyy-MM-dd').format(currentDate);
-    if (!completedDates.contains(todayString)) {
+    if (!completedDates.contains(todayString) && !forgivenessDates.contains(todayString)) {
       currentDate = currentDate.subtract(const Duration(days: 1));
     }
-    
-    // Count consecutive completed days working backwards
+
+    // Count consecutive completed/forgiven days working backwards
     while (true) {
       final dateString = DateFormat('yyyy-MM-dd').format(currentDate);
       if (completedDates.contains(dateString)) {
         streak++;
         currentDate = currentDate.subtract(const Duration(days: 1));
+      } else if (forgivenessDates.contains(dateString)) {
+        // Forgiveness day - streak continues but doesn't add to count
+        currentDate = currentDate.subtract(const Duration(days: 1));
       } else {
         break;
       }
     }
-    
+
     return streak;
+  }
+
+  /// Get the number of consecutive days missed (not completed and not forgiven)
+  /// Returns 0 if today is completed/forgiven, or habit hasn't started
+  int getConsecutiveMissedDays() {
+    if (!hasStarted() || !isActive) return 0;
+
+    final today = DateTime.now();
+    var currentDate = DateTime(today.year, today.month, today.day);
+    var missedDays = 0;
+
+    // Check backwards from today (or yesterday if today isn't over yet)
+    // Start from yesterday since today is still in progress
+    currentDate = currentDate.subtract(const Duration(days: 1));
+
+    // Count consecutive missed days
+    while (true) {
+      final dateString = DateFormat('yyyy-MM-dd').format(currentDate);
+
+      // Don't count days before habit started
+      final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
+      if (currentDate.isBefore(startDateOnly)) break;
+
+      if (!completedDates.contains(dateString) && !forgivenessDates.contains(dateString)) {
+        missedDays++;
+        currentDate = currentDate.subtract(const Duration(days: 1));
+      } else {
+        break; // Found a completed or forgiven day
+      }
+    }
+
+    return missedDays;
+  }
+
+  /// Grant a forgiveness day for yesterday (or a specific date)
+  void grantForgivenessDay([DateTime? date]) {
+    final targetDate = date ?? DateTime.now().subtract(const Duration(days: 1));
+    final dateString = DateFormat('yyyy-MM-dd').format(targetDate);
+
+    if (!forgivenessDates.contains(dateString) && !completedDates.contains(dateString)) {
+      forgivenessDates.add(dateString);
+    }
+  }
+
+  /// Grant forgiveness for the last N missed days
+  void grantForgivenessForMissedDays(int days) {
+    final today = DateTime.now();
+    var currentDate = DateTime(today.year, today.month, today.day).subtract(const Duration(days: 1));
+    var grantedDays = 0;
+
+    while (grantedDays < days) {
+      final dateString = DateFormat('yyyy-MM-dd').format(currentDate);
+
+      // Don't grant for days before habit started
+      final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
+      if (currentDate.isBefore(startDateOnly)) break;
+
+      if (!completedDates.contains(dateString) && !forgivenessDates.contains(dateString)) {
+        forgivenessDates.add(dateString);
+        grantedDays++;
+      }
+      currentDate = currentDate.subtract(const Duration(days: 1));
+    }
   }
   
   bool canContinueToNextCycle() {
@@ -305,6 +374,7 @@ class Habit {
     'startDate': startDate.toIso8601String(),
     'cycleDurationDays': cycleDurationDays,
     'completedDates': completedDates,
+    'forgivenessDates': forgivenessDates,
     'currentCycle': currentCycle,
     'isCompleted': isCompleted,
     'cycleHistory': cycleHistory.map((c) => c.toJson()).toList(),
@@ -322,6 +392,7 @@ class Habit {
       // For backward compatibility: default to 21 days if not present
       cycleDurationDays: json['cycleDurationDays'] ?? 21,
       completedDates: List<String>.from(json['completedDates'] ?? []),
+      forgivenessDates: List<String>.from(json['forgivenessDates'] ?? []),
       currentCycle: json['currentCycle'] ?? 1,
       isCompleted: json['isCompleted'] ?? false,
       cycleHistory: (json['cycleHistory'] as List<dynamic>?)

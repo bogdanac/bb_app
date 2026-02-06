@@ -25,6 +25,7 @@ import 'Auth/login_screen.dart';
 import 'shared/error_logger.dart';
 import 'Routines/routine_recovery_helper.dart';
 import 'Timers/timers_screen.dart';
+import 'Chores/chores_screen.dart';
 import 'Settings/settings_screen.dart';
 import 'dart:io';
 import 'dart:math';
@@ -96,12 +97,16 @@ void main() async {
   ]);
 }
 
+/// Global navigator key for navigation from notification service
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 class BBetterApp extends StatelessWidget {
   const BBetterApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'BB',
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -608,7 +613,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
     AppCustomizationService.moduleFriends: _TabConfig(
       screen: FriendsScreen(onOpenDrawer: _openDrawer),
       icon: Icons.people_rounded,
-      label: 'Friends',
+      label: 'Social',
       color: AppColors.lightPurple,
       moduleKey: AppCustomizationService.moduleFriends,
     ),
@@ -639,6 +644,13 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
       label: 'Timers',
       color: AppColors.purple,
       moduleKey: AppCustomizationService.moduleTimers,
+    ),
+    AppCustomizationService.moduleChores: _TabConfig(
+      screen: ChoresScreen(onOpenDrawer: _openDrawer),
+      icon: Icons.cleaning_services_rounded,
+      label: 'Chores',
+      color: AppColors.waterBlue,
+      moduleKey: AppCustomizationService.moduleChores,
     ),
   };
 
@@ -1096,6 +1108,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
 
   Widget _buildDrawer(List<_TabConfig> secondaryTabs) {
     return Drawer(
+      width: 260,
       backgroundColor: AppColors.grey900,
       child: SafeArea(
         child: Column(

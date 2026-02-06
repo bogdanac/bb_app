@@ -164,6 +164,146 @@ class SkipDayNotification extends StatelessWidget {
   }
 }
 
+/// Streak Lost Notification - Dialog shown when streak was broken
+class StreakLostNotification extends StatelessWidget {
+  final DateTime lostDate;
+
+  const StreakLostNotification({
+    super.key,
+    required this.lostDate,
+  });
+
+  /// Check and show streak lost notification if needed
+  /// Returns true if notification was shown
+  static Future<bool> checkAndShow(BuildContext context) async {
+    final lostDate = await EnergyService.checkAndClearStreakLostNotification();
+    if (lostDate == null) return false;
+
+    if (!context.mounted) return false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => StreakLostNotification(lostDate: lostDate),
+    );
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFormat = DateFormat('EEEE, MMM d');
+    final formattedDate = dateFormat.format(lostDate);
+
+    return Dialog(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.coral.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.heart_broken_rounded,
+                color: AppColors.coral,
+                size: 48,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Title
+            const Text(
+              'Streak Lost',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Description
+            Text(
+              'Your streak ended on $formattedDate because the flow goal was not met.',
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.greyText,
+              ),
+              textAlign: TextAlign.center,
+            ),
+
+            const SizedBox(height: 20),
+
+            // Encouragement
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.purple.withValues(alpha: 0.1),
+                borderRadius: AppStyles.borderRadiusMedium,
+                border: Border.all(
+                  color: AppColors.purple.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.rocket_launch_rounded,
+                    color: AppColors.purple,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      "Let's start a new streak today!",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.purple,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Close button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.purple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: AppStyles.borderRadiusMedium,
+                  ),
+                ),
+                child: const Text(
+                  "Let's Go!",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Skip Day Settings Dialog - Configure skip day behavior
 class SkipDaySettingsDialog extends StatefulWidget {
   final EnergySettings settings;

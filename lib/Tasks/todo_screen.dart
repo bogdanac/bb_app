@@ -21,6 +21,7 @@ import '../Energy/energy_service.dart';
 import '../Energy/energy_calculator.dart';
 import '../Energy/energy_celebrations.dart';
 import '../Energy/flow_calculator.dart';
+import '../Settings/app_customization_service.dart';
 
 class TodoScreen extends StatefulWidget {
   final bool showFilters;
@@ -49,12 +50,14 @@ class _AnimatedTaskRandomizer extends StatefulWidget {
   final Function(Task) onTaskSelected;
   final VoidCallback onCancel;
   final List<TaskCategory> categories;
+  final bool energyModuleEnabled;
 
   const _AnimatedTaskRandomizer({
     required this.tasks,
     required this.onTaskSelected,
     required this.onCancel,
     required this.categories,
+    this.energyModuleEnabled = true,
   });
 
   @override
@@ -391,64 +394,66 @@ class _AnimatedTaskRandomizerState extends State<_AnimatedTaskRandomizer>
                       )),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  // Energy filter
-                  Text(
-                    'Max energy level (optional):',
-                    style: TextStyle(fontSize: 12, color: AppColors.greyText),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: [
-                      FilterChip(
-                        label: const Text('Any', style: TextStyle(fontSize: 12)),
-                        selected: _maxEnergyFilter == null,
-                        onSelected: (selected) {
-                          setState(() {
-                            _maxEnergyFilter = null;
-                          });
-                        },
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      ...List.generate(5, (index) {
-                        final level = index + 1;
-                        return FilterChip(
-                          avatar: Icon(
-                            Icons.bolt_rounded,
-                            size: 14,
-                            color: _maxEnergyFilter == level
-                                ? Colors.white
-                                : _getEnergyColor(level),
-                          ),
-                          label: Text(
-                            '$level',
-                            style: TextStyle(
-                              color: _maxEnergyFilter == level
-                                  ? Colors.white
-                                  : null,
-                              fontSize: 12,
-                            ),
-                          ),
-                          selected: _maxEnergyFilter == level,
-                          selectedColor: _getEnergyColor(level),
-                          backgroundColor: Colors.transparent,
-                          side: BorderSide(
-                            color: _getEnergyColor(level).withValues(alpha: 0.5),
-                          ),
+                  if (widget.energyModuleEnabled) ...[
+                    const SizedBox(height: 12),
+                    // Energy filter
+                    Text(
+                      'Max energy level (optional):',
+                      style: TextStyle(fontSize: 12, color: AppColors.greyText),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: [
+                        FilterChip(
+                          label: const Text('Any', style: TextStyle(fontSize: 12)),
+                          selected: _maxEnergyFilter == null,
                           onSelected: (selected) {
                             setState(() {
-                              _maxEnergyFilter = selected ? level : null;
+                              _maxEnergyFilter = null;
                             });
                           },
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           visualDensity: VisualDensity.compact,
-                        );
-                      }),
-                    ],
-                  ),
+                        ),
+                        ...List.generate(5, (index) {
+                          final level = index + 1;
+                          return FilterChip(
+                            avatar: Icon(
+                              Icons.bolt_rounded,
+                              size: 14,
+                              color: _maxEnergyFilter == level
+                                  ? Colors.white
+                                  : _getEnergyColor(level),
+                            ),
+                            label: Text(
+                              '$level',
+                              style: TextStyle(
+                                color: _maxEnergyFilter == level
+                                    ? Colors.white
+                                    : null,
+                                fontSize: 12,
+                              ),
+                            ),
+                            selected: _maxEnergyFilter == level,
+                            selectedColor: _getEnergyColor(level),
+                            backgroundColor: Colors.transparent,
+                            side: BorderSide(
+                              color: _getEnergyColor(level).withValues(alpha: 0.5),
+                            ),
+                            onSelected: (selected) {
+                              setState(() {
+                                _maxEnergyFilter = selected ? level : null;
+                              });
+                            },
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                          );
+                        }),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -804,6 +809,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   final TaskService _taskService = TaskService();
+  bool _energyModuleEnabled = true;
 
   @override
   void initState() {
@@ -816,6 +822,14 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     _taskService.addTaskChangeListener(_onTasksChanged);
 
     _loadData();
+    _loadEnergyModuleState();
+  }
+
+  Future<void> _loadEnergyModuleState() async {
+    final enabled = await AppCustomizationService.isModuleEnabled(AppCustomizationService.moduleEnergy);
+    if (mounted) {
+      setState(() => _energyModuleEnabled = enabled);
+    }
   }
 
   @override
@@ -1169,6 +1183,9 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
   /// Track energy consumption when task completion state changes
   Future<void> _trackEnergyForTask(Task task, bool isCompleting) async {
+    // Skip energy tracking if module is disabled
+    if (!_energyModuleEnabled) return;
+
     try {
       // Initialize today's record if not exists
       await EnergyCalculator.initializeToday();
@@ -1251,14 +1268,18 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         task.recurrence!.types.contains(RecurrenceType.menstrualStartDay) ||
         task.recurrence!.types.contains(RecurrenceType.ovulationPeakDay);
 
-    // Check if task is ALSO a daily recurring task
-    final isAlsoDaily = task.recurrence!.types.contains(RecurrenceType.daily);
+    // Check if task also has schedule-based recurrence (daily, weekly, monthly, yearly)
+    final hasScheduleRecurrence =
+        task.recurrence!.types.contains(RecurrenceType.daily) ||
+        task.recurrence!.types.contains(RecurrenceType.weekly) ||
+        task.recurrence!.types.contains(RecurrenceType.monthly) ||
+        task.recurrence!.types.contains(RecurrenceType.yearly);
 
-    // Special handling for menstrual phase tasks that are NOT also daily:
+    // Special handling for PURE menstrual phase tasks (no schedule-based recurrence):
     // These should NOT auto-recalculate to avoid scheduling to past dates.
     // User will manually recalculate when next period comes.
-    // BUT if it's daily + menstrual phase, it should renew for tomorrow during the phase.
-    if (isMenstrualPhaseTask && !isAlsoDaily) {
+    // BUT if it has schedule recurrence (daily, weekly, monthly), it should reschedule.
+    if (isMenstrualPhaseTask && !hasScheduleRecurrence) {
       // For pure menstrual phase tasks, clear scheduledDate and mark as completed.
       // This prevents the broken getNextDueDate logic from scheduling to past dates.
       final updatedTask = Task(
@@ -1299,19 +1320,29 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       return;
     }
 
-    // For daily + menstrual phase tasks: renew for tomorrow (like regular daily tasks)
-    // The menstrual phase filter will hide it when the phase ends
+    // For menstrual + schedule-based tasks (daily, weekly, monthly, yearly):
+    // Reschedule to the next occurrence when BOTH conditions are met.
+    // The recurrence logic uses AND for combining menstrual + schedule types.
 
     // Get next due date for regular recurring tasks
-    // For postponed tasks, we need to skip the current cycle to respect the postponement
+    // Use the LATER of scheduledDate and today to ensure we always move forward
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+
     DateTime referenceDate;
     if (task.scheduledDate != null) {
-      // Task was postponed - find the next occurrence after the scheduled date
-      // This ensures we don't go back to the original cycle day that was skipped
-      referenceDate = task.scheduledDate!;
+      final scheduledDateOnly = DateTime(
+        task.scheduledDate!.year,
+        task.scheduledDate!.month,
+        task.scheduledDate!.day,
+      );
+      // Use the later of scheduledDate and today
+      // This ensures overdue tasks reschedule from today, not from their old date
+      referenceDate = scheduledDateOnly.isAfter(todayDate)
+          ? scheduledDateOnly
+          : todayDate;
     } else {
-      // Task completed on time - use natural recurrence from today
-      referenceDate = DateTime.now();
+      referenceDate = todayDate;
     }
 
     final nextDueDate = task.recurrence!.getNextDueDate(referenceDate);
@@ -1608,6 +1639,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
             },
             onCancel: () => Navigator.pop(context),
             categories: _categories,
+            energyModuleEnabled: _energyModuleEnabled,
           ),
         );
       }
@@ -1618,10 +1650,12 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   Future<List<Task>> _getFilteredTasksAsync() async {
     List<Task> filtered = _tasks;
 
-    // Filter by search query
+    // Filter by search query (diacritic-insensitive)
     if (_searchQuery.isNotEmpty) {
+      final normalizedQuery = _removeDiacritics(_searchQuery.toLowerCase());
       filtered = filtered.where((task) {
-        return task.title.toLowerCase().contains(_searchQuery.toLowerCase());
+        final normalizedTitle = _removeDiacritics(task.title.toLowerCase());
+        return normalizedTitle.contains(normalizedQuery);
       }).toList();
     }
 
@@ -1679,10 +1713,12 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     // Simple synchronous filtering for immediate UI updates
     List<Task> filtered = _tasks;
 
-    // Filter by search query
+    // Filter by search query (diacritic-insensitive)
     if (_searchQuery.isNotEmpty) {
+      final normalizedQuery = _removeDiacritics(_searchQuery.toLowerCase());
       filtered = filtered.where((task) {
-        return task.title.toLowerCase().contains(_searchQuery.toLowerCase());
+        final normalizedTitle = _removeDiacritics(task.title.toLowerCase());
+        return normalizedTitle.contains(normalizedQuery);
       }).toList();
     }
 
@@ -1720,6 +1756,25 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       RecurrenceType.lateLutealPhase
     ];
     return recurrence.types.any((type) => menstrualTypes.contains(type));
+  }
+
+  /// Normalize string by removing diacritics for search matching
+  /// e.g., "café" -> "cafe", "naïve" -> "naive"
+  String _removeDiacritics(String str) {
+    const diacritics = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëÇçÐðÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽžĂăĂăĄąĆćČčĎďĐđĘęĚěĞğĢģĪīĮįİıĶķĹĺĻļĽľŁłŃńŅņŇňŌōŐőŔŕŖŗŘřŚśŞşŢţŤťŪūŮůŰűŲųŵŶŹźŻż';
+    const replacements = 'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeCcDdIIIIiiiiUUUUuuuuNnSsYyyZzAaAaAaCcCcDdDdEeEeGgGgIiIiIiKkLlLlLlLlNnNnNnOoOoRrRrRrSsSsTtTtUuUuUuUuwYZzZz';
+
+    final buffer = StringBuffer();
+    for (final char in str.runes) {
+      final charStr = String.fromCharCode(char);
+      final index = diacritics.indexOf(charStr);
+      if (index >= 0 && index < replacements.length) {
+        buffer.write(replacements[index]);
+      } else {
+        buffer.write(charStr);
+      }
+    }
+    return buffer.toString();
   }
 
   Future<bool> _isMenstrualTaskDueToday(Task task) async {
@@ -2067,16 +2122,17 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                     ],
                   ),
                 ),
-                PopupMenuItem(
-                  value: 'energy_history',
-                  child: Row(
-                    children: const [
-                      Icon(Icons.bolt_rounded, size: 20, color: AppColors.coral),
-                      SizedBox(width: 12),
-                      Text('Energy History'),
-                    ],
+                if (_energyModuleEnabled)
+                  PopupMenuItem(
+                    value: 'energy_history',
+                    child: Row(
+                      children: const [
+                        Icon(Icons.bolt_rounded, size: 20, color: AppColors.coral),
+                        SizedBox(width: 12),
+                        Text('Energy History'),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -2100,7 +2156,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                   runSpacing: 8,
                   children: [
                     FilterChip(
-                      label: const Text('All'),
+                      label: const Text('All', style: TextStyle(fontSize: 11)),
                       selected: _selectedCategoryFilters.isEmpty,
                       backgroundColor: Colors.grey.withValues(alpha: 0.1),
                       selectedColor: Colors.grey.withValues(alpha: 0.3),
@@ -2109,8 +2165,10 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                       shape: RoundedRectangleBorder(
                         borderRadius: AppStyles.borderRadiusMedium,
                       ),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
+                      visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                       onSelected: (selected) {
                         setState(() {
                           _selectedCategoryFilters.clear();
@@ -2120,7 +2178,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                       },
                     ),
                     ..._categories.map((category) => FilterChip(
-                      label: Text(category.name),
+                      label: Text(category.name, style: const TextStyle(fontSize: 11)),
                       selected: _selectedCategoryFilters.contains(category.id),
                       backgroundColor: category.color.withValues(alpha: 0.1),
                       selectedColor: category.color.withValues(alpha: 0.3),
@@ -2129,8 +2187,10 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                       shape: RoundedRectangleBorder(
                         borderRadius: AppStyles.borderRadiusMedium,
                       ),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
+                      visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                       onSelected: (selected) {
                         setState(() {
                           if (selected) {

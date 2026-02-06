@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'friend_data_models.dart';
+import 'friend_notification_service.dart';
 import '../Services/firebase_backup_service.dart';
 import '../shared/error_logger.dart';
 
@@ -40,6 +41,9 @@ class FriendService {
 
     // Backup to Firebase
     FirebaseBackupService.triggerBackup();
+
+    // Reschedule friend notifications
+    FriendNotificationService().scheduleAllFriendNotifications();
   }
 
   /// Add a new friend

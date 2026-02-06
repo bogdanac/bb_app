@@ -15,6 +15,8 @@ import 'package:bb_app/Fasting/fasting_card.dart';
 import 'package:bb_app/Fasting/fasting_utils.dart';
 import 'package:bb_app/Habits/habit_card.dart';
 import 'package:bb_app/Habits/habit_service.dart';
+import 'package:bb_app/Habits/habit_data_models.dart';
+import 'theme/app_styles.dart';
 import 'shared/snackbar_utils.dart';
 import 'shared/error_logger.dart';
 import 'package:bb_app/Notifications/centralized_notification_manager.dart';
@@ -23,6 +25,12 @@ import 'package:bb_app/Settings/settings_screen.dart';
 import 'package:bb_app/Data/backup_service.dart';
 import 'package:bb_app/shared/widget_update_service.dart';
 import 'package:bb_app/Energy/battery_flow_home_card.dart';
+import 'package:bb_app/Timers/activities_card.dart';
+import 'package:bb_app/Timers/productivity_card.dart';
+import 'package:bb_app/EndOfDayReview/end_of_day_review_card.dart';
+import 'package:bb_app/Chores/chores_card.dart';
+import 'package:bb_app/EndOfDayReview/end_of_day_review_screen.dart';
+import 'package:bb_app/shared/collapsible_card_wrapper.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 
@@ -57,6 +65,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _backupOverdue = false;
   Map<String, bool> _cardVisibility = {};
   List<String> _cardOrder = [];
+  bool _productivityScheduledNow = false;
+  bool _productivityHiddenTemporarily = false;
+  bool _isEveningTime = false;
+  bool _endOfDayReviewEnabled = false;
 
   // Method channel for communicating with Android widget
   static const platform = MethodChannel('com.bb.bb_app/water_widget');
@@ -110,6 +122,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _checkFastingVisibility();
       _checkRoutineVisibility();
       _checkHabitCardVisibility();
+      _checkHabitCycleCompletions();
+      _checkHabitsWithMissedDays();
 
       // Non-critical: run in background without blocking UI
       _initializeWaterNotifications().catchError((e) {
@@ -215,9 +229,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(now)).split('T')[0];
 
       // Check if it's after 2:00 AM and if we need to reset water data
-      // Check both keys since widget uses flutter. prefix
-      final lastResetDate = prefs.getString('flutter.last_water_reset_date') ??
-                            prefs.getString('last_water_reset_date');
+      // Note: Flutter's SharedPreferences adds "flutter." prefix internally
+      // So getString('last_water_reset_date') looks for 'flutter.last_water_reset_date'
+      // The widget saves to both prefixed and non-prefixed keys for compatibility
+      final lastResetDate = prefs.getString('last_water_reset_date');
       final shouldReset = _shouldResetWaterToday(now, lastResetDate);
 
 
@@ -248,8 +263,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         // Use widget data if it exists, otherwise reset to 0
         intake = widgetIntake;
         await prefs.setInt('water_$today', intake);
-        // Save to both keys to stay in sync with widget
-        await prefs.setString('flutter.last_water_reset_date', today);
+        // Save reset date (Flutter adds "flutter." prefix internally)
         await prefs.setString('last_water_reset_date', today);
 
         // Reprogramează notificările pentru ziua nouă (non-blocking)
@@ -339,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _checkFastingVisibility() async {
+  Future<void> _checkFastingVisibility() async {
     final now = DateTime.now();
     final prefs = await SharedPreferences.getInstance();
 
@@ -373,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   // Callback for hiding fasting card for today
-  void _onFastingHiddenForToday() async {
+  Future<void> _onFastingHiddenForToday() async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
     await prefs.setBool('fasting_hidden_$today', true);
@@ -385,7 +399,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _checkRoutineVisibility() async {
+  Future<void> _checkRoutineVisibility() async {
     final now = DateTime.now();
     final prefs = await SharedPreferences.getInstance();
     final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(now)).split('T')[0];
@@ -433,6 +447,312 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         showHabitCard = hasUncompletedHabits;
       });
     }
+  }
+
+  /// Check for habits with completed cycles and prompt user to start new cycles
+  Future<void> _checkHabitCycleCompletions() async {
+    try {
+      final habitsWithCompletedCycles = await HabitService.getHabitsWithCompletedCycles();
+
+      if (habitsWithCompletedCycles.isEmpty) return;
+
+      // Show dialog for each habit with completed cycle (one at a time)
+      for (final habit in habitsWithCompletedCycles) {
+        if (!mounted || _isDisposed) break;
+
+        // Check if we've already prompted for this habit today
+        final prefs = await SharedPreferences.getInstance();
+        final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
+        final promptKey = 'habit_cycle_prompt_${habit.id}_$today';
+
+        if (prefs.getBool(promptKey) == true) continue;
+
+        // Mark as prompted for today
+        await prefs.setBool(promptKey, true);
+
+        // Show the dialog
+        await _showCycleCompletionPrompt(habit);
+      }
+    } catch (e) {
+      debugPrint('ERROR checking habit cycle completions: $e');
+    }
+  }
+
+  /// Check for habits with 2+ consecutive missed days and prompt user
+  Future<void> _checkHabitsWithMissedDays() async {
+    try {
+      final habitsWithMissedDays = await HabitService.getHabitsWithConsecutiveMissedDays(minMissedDays: 2);
+
+      if (habitsWithMissedDays.isEmpty) return;
+
+      // Show dialog for each habit (one at a time)
+      for (final habit in habitsWithMissedDays) {
+        if (!mounted || _isDisposed) break;
+
+        // Check if we've already prompted for this habit today
+        final prefs = await SharedPreferences.getInstance();
+        final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
+        final promptKey = 'habit_missed_prompt_${habit.id}_$today';
+
+        if (prefs.getBool(promptKey) == true) continue;
+
+        // Mark as prompted for today
+        await prefs.setBool(promptKey, true);
+
+        // Show the dialog
+        await _showMissedDaysPrompt(habit);
+      }
+    } catch (e) {
+      debugPrint('ERROR checking habits with missed days: $e');
+    }
+  }
+
+  Future<void> _showMissedDaysPrompt(Habit habit) async {
+    if (!mounted) return;
+
+    final missedDays = habit.getConsecutiveMissedDays();
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.favorite_border, color: AppColors.orange, size: 28),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Hey, checking in! 💭',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'I noticed "${habit.name}" hasn\'t been marked for $missedDays day${missedDays == 1 ? '' : 's'}. Life happens, and that\'s okay! 🌱',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'What would you like to do?',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 16),
+            // Option 1: Fresh Start
+            _buildOptionCard(
+              icon: Icons.refresh_rounded,
+              color: AppColors.successGreen,
+              title: 'Fresh Start',
+              description: 'Reset and begin a new cycle from today',
+              onTap: () async {
+                final habitId = habit.id;
+                final habitName = habit.name;
+                Navigator.pop(dialogContext);
+                await HabitService.restartHabitCycle(habitId);
+                await _checkHabitCardVisibility();
+                if (mounted) {
+                  SnackBarUtils.showSuccess(context, '🌟 Fresh start for "$habitName"! You\'ve got this!');
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            // Option 2: Grace Period
+            _buildOptionCard(
+              icon: Icons.spa_rounded,
+              color: Colors.blue,
+              title: 'Grace Period',
+              description: 'Grant yourself kindness - keep your streak alive',
+              onTap: () async {
+                final habitId = habit.id;
+                final habitName = habit.name;
+                Navigator.pop(dialogContext);
+                await HabitService.grantForgivenessForHabit(habitId, missedDays);
+                await _checkHabitCardVisibility();
+                if (mounted) {
+                  SnackBarUtils.showSuccess(context, '💚 Grace granted for "$habitName". Be kind to yourself!');
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            // Option 3: Take a Break
+            _buildOptionCard(
+              icon: Icons.pause_circle_outline_rounded,
+              color: AppColors.greyText,
+              title: 'Take a Break',
+              description: 'Pause this habit for now - you can reactivate anytime',
+              onTap: () async {
+                final habitId = habit.id;
+                final habitName = habit.name;
+                Navigator.pop(dialogContext);
+                await HabitService.deactivateHabit(habitId);
+                await _checkHabitCardVisibility();
+                if (mounted) {
+                  SnackBarUtils.showInfo(context, '⏸️ "$habitName" paused. It\'ll be waiting when you\'re ready!');
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(
+              'Keep Going',
+              style: TextStyle(color: AppColors.orange, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOptionCard({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String description,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppStyles.borderRadiusSmall,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: AppStyles.borderRadiusSmall,
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    ),
+                  ),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.greyText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: color.withValues(alpha: 0.5)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCycleCompletionPrompt(Habit habit) async {
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.celebration, color: AppColors.successGreen, size: 28),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Cycle Complete!',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.successGreen,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Congratulations! You\'ve completed a ${habit.duration.label} cycle for "${habit.name}".',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.successGreen.withValues(alpha: 0.1),
+                borderRadius: AppStyles.borderRadiusSmall,
+                border: Border.all(color: AppColors.successGreen.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.trending_up, color: AppColors.successGreen),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${habit.getCurrentCycleProgress()} days completed! This is a major milestone in building lasting habits.',
+                      style: TextStyle(
+                        color: AppColors.successGreen.withValues(alpha: 0.9),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Would you like to start a new ${habit.duration.label} cycle for this habit?',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Keep Current Progress',
+              style: TextStyle(color: AppColors.greyText),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final habitName = habit.name;
+              final durationLabel = habit.duration.label;
+              Navigator.pop(context);
+              await HabitService.startNewCycle(habit.id);
+              await _checkHabitCardVisibility();
+
+              if (mounted) {
+                SnackBarUtils.showSuccess(context, 'New $durationLabel cycle started for "$habitName"!');
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.successGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Start New Cycle'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _onAllHabitsCompleted() {
@@ -554,12 +874,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-
+  void _onChoreCompleted() {
+    // Chores card handles its own refresh, but trigger setState to update if needed
+    if (!_isDisposed && mounted) {
+      setState(() {});
+    }
+  }
 
   Future<void> _loadCardSettings() async {
     final cardStates = await AppCustomizationService.loadAllCardStates();
     final moduleStates = await AppCustomizationService.loadAllModuleStates();
     final cardOrder = await AppCustomizationService.loadCardOrder();
+    final productivityScheduled = await AppCustomizationService.isProductivityCardScheduledNow();
+    final isEvening = await AppCustomizationService.isEveningTime();
+    final reviewEnabled = await AppCustomizationService.isEndOfDayReviewEnabled();
+
+    // Check if productivity card was hidden today (persists until next day)
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
+    final productivityHidden = prefs.getBool('productivity_hidden_$today') ?? false;
 
     // Compute effective visibility: card toggle AND module dependency
     final effectiveVisibility = <String, bool>{};
@@ -573,12 +906,61 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _cardVisibility = effectiveVisibility;
         _cardOrder = cardOrder;
+        _productivityScheduledNow = productivityScheduled;
+        _productivityHiddenTemporarily = productivityHidden;
+        _isEveningTime = isEvening;
+        _endOfDayReviewEnabled = reviewEnabled;
       });
     }
   }
 
   bool _isCardVisible(String cardKey) {
     return _cardVisibility[cardKey] ?? true;
+  }
+
+  /// Show in-app alert when timer completes (especially useful on desktop)
+  void _onTimerComplete(String title, String message, bool isBreak) {
+    if (!mounted) return;
+
+    // Show a prominent snackbar with the completion message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isBreak ? Icons.coffee_rounded : Icons.check_circle_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    message,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isBreak ? AppColors.pastelGreen : AppColors.purple,
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   List<Widget> _buildOrderedCards() {
@@ -649,6 +1031,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (!_isCardVisible(AppCustomizationService.cardDailyTasks)) return null;
         return const DailyTasksCard();
       },
+      AppCustomizationService.cardChores: () {
+        if (!_isCardVisible(AppCustomizationService.cardChores)) return null;
+        return ChoresCard(
+          onTap: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleChores),
+          onChoreCompleted: _onChoreCompleted,
+        );
+      },
+      AppCustomizationService.cardActivities: () {
+        if (!_isCardVisible(AppCustomizationService.cardActivities)) return null;
+        return ActivitiesCard(
+          onNavigateToTimers: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleTimers),
+        );
+      },
+      AppCustomizationService.cardProductivity: () {
+        if (!_isCardVisible(AppCustomizationService.cardProductivity)) return null;
+        // On mobile, respect schedule and temporary hide
+        if (!_productivityScheduledNow || _productivityHiddenTemporarily) return null;
+        return ProductivityCard(
+          onNavigateToTimers: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleTimers),
+          onHideTemporarily: () async {
+            // Persist hide until next day
+            final prefs = await SharedPreferences.getInstance();
+            final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
+            await prefs.setBool('productivity_hidden_$today', true);
+            if (mounted && !_isDisposed) {
+              setState(() => _productivityHiddenTemporarily = true);
+            }
+          },
+          onTimerComplete: _onTimerComplete,
+        );
+      },
+      AppCustomizationService.cardEndOfDayReview: () {
+        if (!_isCardVisible(AppCustomizationService.cardEndOfDayReview)) return null;
+        // Only show during evening time and if feature is enabled
+        if (!_isEveningTime || !_endOfDayReviewEnabled) return null;
+        return const EndOfDayReviewCard();
+      },
     };
 
     final widgets = <Widget>[];
@@ -694,6 +1113,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             style: TextStyle(fontWeight: FontWeight.w500)),
         backgroundColor: AppColors.transparent,
         actions: [
+          // End of day review button (visible during evening only)
+          if (_isEveningTime && _endOfDayReviewEnabled)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: IconButton(
+                icon: Icon(Icons.summarize_rounded, color: AppColors.purple),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const EndOfDayReviewScreen(),
+                    ),
+                  );
+                },
+                tooltip: 'Today\'s Summary',
+              ),
+            ),
           if (_backupOverdue)
             Padding(
               padding: const EdgeInsets.only(right: 4),
@@ -736,7 +1172,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: IconButton(
-                icon: const Icon(Icons.menu_rounded),
+                icon: const Icon(Icons.menu_rounded, color: Colors.white),
                 onPressed: widget.onOpenDrawer,
                 tooltip: 'Menu',
               ),
@@ -755,22 +1191,272 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       body: RefreshIndicator(
         onRefresh: _onRefresh,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 800),
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(8), // Even tighter overall padding
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ..._buildOrderedCards(),
-                ],
-              ),
-            ),
+        child: _buildResponsiveBody(context),
+      ),
+    );
+  }
+
+  Widget _buildResponsiveBody(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth >= 1024;
+
+    if (isDesktop) {
+      return _buildDesktopDashboard();
+    }
+    return _buildMobileSingleColumn();
+  }
+
+  Widget _buildMobileSingleColumn() {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 800),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ..._buildOrderedCards(),
+            ],
           ),
         ),
       ),
     );
+  }
+
+  // Track drag state for desktop reordering
+  String? _draggedCardKey;
+
+  Widget _buildDesktopDashboard() {
+    final cards = _buildAllCardsForDesktopWithKeys();
+
+    // Cards that should be double-width on desktop
+    const doubleWidthCards = {
+      AppCustomizationService.cardCalendar,
+      AppCustomizationService.cardDailyTasks,
+    };
+
+    const singleWidth = 380.0;
+    const doubleWidth = 772.0; // 380 * 2 + 12 (spacing)
+
+    // Get card metadata for collapsible wrappers
+    final cardInfoMap = {
+      for (final info in AppCustomizationService.allCards) info.key: info
+    };
+
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: cards.map((entry) {
+          final cardKey = entry.$1;
+          final cardWidget = entry.$2;
+          final isDoubleWidth = doubleWidthCards.contains(cardKey);
+          final cardInfo = cardInfoMap[cardKey];
+          final cardWidth = isDoubleWidth ? doubleWidth : singleWidth;
+
+          Widget wrappedCard = cardWidget;
+
+          // Wrap with collapsible wrapper if we have card info
+          if (cardInfo != null) {
+            wrappedCard = CollapsibleCardWrapper(
+              cardKey: cardKey,
+              title: cardInfo.label,
+              icon: cardInfo.icon,
+              iconColor: cardInfo.color,
+              child: cardWidget,
+            );
+          }
+
+          // Wrap with drag-and-drop support
+          return _buildDraggableCard(
+            cardKey: cardKey,
+            width: cardWidth,
+            child: wrappedCard,
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildDraggableCard({
+    required String cardKey,
+    required double width,
+    required Widget child,
+  }) {
+    final isDragging = _draggedCardKey == cardKey;
+
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (details) => details.data != cardKey,
+      onAcceptWithDetails: (details) async {
+        final draggedKey = details.data;
+        final targetKey = cardKey;
+
+        // Reorder the cards
+        final newOrder = List<String>.from(_cardOrder);
+        final draggedIndex = newOrder.indexOf(draggedKey);
+        final targetIndex = newOrder.indexOf(targetKey);
+
+        if (draggedIndex != -1 && targetIndex != -1) {
+          newOrder.removeAt(draggedIndex);
+          newOrder.insert(targetIndex, draggedKey);
+
+          // Save new order
+          await AppCustomizationService.saveCardOrder(newOrder);
+
+          if (mounted) {
+            setState(() {
+              _cardOrder = newOrder;
+              _draggedCardKey = null;
+            });
+          }
+        }
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isTarget = candidateData.isNotEmpty;
+
+        return LongPressDraggable<String>(
+          data: cardKey,
+          delay: const Duration(milliseconds: 150),
+          onDragStarted: () {
+            HapticFeedback.mediumImpact();
+            setState(() => _draggedCardKey = cardKey);
+          },
+          onDragEnd: (_) {
+            setState(() => _draggedCardKey = null);
+          },
+          feedback: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: width,
+              child: Opacity(
+                opacity: 0.9,
+                child: child,
+              ),
+            ),
+          ),
+          childWhenDragging: SizedBox(
+            width: width,
+            child: Opacity(
+              opacity: 0.3,
+              child: child,
+            ),
+          ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: width,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: isTarget
+                  ? Border.all(color: AppColors.purple, width: 2)
+                  : null,
+            ),
+            transform: isDragging
+                ? Matrix4.diagonal3Values(1.02, 1.02, 1.0)
+                : Matrix4.identity(),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  /// Build ALL cards for desktop with their keys for variable width support
+  List<(String, Widget)> _buildAllCardsForDesktopWithKeys() {
+    final cardBuilders = <String, Widget? Function()>{
+      AppCustomizationService.cardProductivity: () {
+        return ProductivityCard(
+          onNavigateToTimers: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleTimers),
+          onTimerComplete: _onTimerComplete,
+        );
+      },
+      AppCustomizationService.cardMenstrual: () {
+        return MenstrualCycleCard(
+          key: _menstrualCycleKey,
+          onTap: () {
+            widget.onNavigateToModule?.call(AppCustomizationService.moduleMenstrual);
+          },
+        );
+      },
+      AppCustomizationService.cardBatteryFlow: () {
+        return BatteryFlowHomeCard(key: _batteryFlowCardKey);
+      },
+      AppCustomizationService.cardCalendar: () {
+        return CalendarEventsCard(key: _calendarEventsKey);
+      },
+      AppCustomizationService.cardFasting: () {
+        if (!showFastingSection) return null;
+        return FastingCard(
+          onHiddenForToday: _onFastingHiddenForToday,
+          onFastingStatusChanged: (bool isFasting) {
+            setState(() {
+              _isFastingInProgress = isFasting;
+            });
+          },
+          onTap: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleFasting),
+        );
+      },
+      AppCustomizationService.cardFoodTracking: () {
+        if (_isFastingInProgress) return null;
+        return const FoodTrackingCard();
+      },
+      AppCustomizationService.cardWaterTracking: () {
+        if (!_shouldShowWaterTracking) return null;
+        return WaterTrackingCard(
+          waterIntake: waterIntake,
+          onWaterAdded: _onWaterAdded,
+        );
+      },
+      AppCustomizationService.cardHabits: () {
+        if (!showHabitCard) return null;
+        return HabitCard(
+          onAllCompleted: _onAllHabitsCompleted,
+        );
+      },
+      AppCustomizationService.cardRoutines: () {
+        if (!showRoutine) return null;
+        return RoutineCard(
+          key: _routineCardKey,
+          onCompleted: _onRoutineCompleted,
+          onEnergyChanged: () {
+            _batteryFlowCardKey.currentState?.refresh();
+          },
+        );
+      },
+      AppCustomizationService.cardDailyTasks: () {
+        return const DailyTasksCard();
+      },
+      AppCustomizationService.cardChores: () {
+        return ChoresCard(
+          onTap: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleChores),
+          onChoreCompleted: _onChoreCompleted,
+        );
+      },
+      AppCustomizationService.cardActivities: () {
+        return ActivitiesCard(
+          onNavigateToTimers: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleTimers),
+        );
+      },
+      AppCustomizationService.cardEndOfDayReview: () {
+        // On desktop, show during evening if enabled (same logic as mobile)
+        if (!_isEveningTime || !_endOfDayReviewEnabled) return null;
+        return const EndOfDayReviewCard();
+      },
+    };
+
+    final result = <(String, Widget)>[];
+    for (final cardKey in _cardOrder) {
+      final builder = cardBuilders[cardKey];
+      if (builder != null) {
+        final builtWidget = builder();
+        if (builtWidget != null) {
+          result.add((cardKey, builtWidget));
+        }
+      }
+    }
+    return result;
   }
 }

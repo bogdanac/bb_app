@@ -47,12 +47,15 @@ class WaterNotificationService {
   }
 
   /// Schedule all water reminder notifications based on settings
-  static Future<void> scheduleNotifications(WaterSettings settings) async {
+  static Future<void> scheduleNotifications(WaterSettings settings, {bool forceReschedule = false}) async {
     try {
       final plugin = await _getNotificationsPlugin();
 
-      // Cancel all existing water notifications
-      await cancelAllNotifications();
+      // Only cancel if force rescheduling (e.g., settings changed)
+      // Otherwise, keep existing notifications to preserve repeat schedules
+      if (forceReschedule) {
+        await cancelAllNotifications();
+      }
 
       final thresholds = [20, 40, 60, 80];
 
@@ -256,7 +259,8 @@ class WaterNotificationService {
   static Future<void> rescheduleForNewDay() async {
     try {
       final settings = await WaterSettings.load();
-      await scheduleNotifications(settings);
+      // Force reschedule on new day to reset all notifications
+      await scheduleNotifications(settings, forceReschedule: true);
 
       // Check current intake and cancel notifications for thresholds already met
       final prefs = await SharedPreferences.getInstance();

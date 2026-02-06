@@ -195,10 +195,14 @@ class WaterWidgetProvider : AppWidgetProvider() {
 
         val newIntake = currentIntake + waterIncrement
 
-        // Save as Long to match Flutter's format
+        // Save as Int to match Flutter's SharedPreferences format
+        // Flutter's SharedPreferences adds "flutter." prefix internally,
+        // so "water_$today" is stored as "flutter.water_$today"
+        // We save to "flutter.water_$today" directly for widget reads,
+        // and Flutter reads via "water_$today" key
         prefs.edit()
-            .putLong(correctKey, newIntake.toLong())
-            .putString("flutter.last_water_reset_date", today)
+            .putInt("flutter.water_$today", newIntake)  // For widget to read directly
+            .putString("flutter.last_water_reset_date", today)  // For widget to read directly
             .apply()
 
         android.util.Log.d("WaterWidget", "Water added: $currentIntake -> $newIntake (+${waterIncrement}ml)")

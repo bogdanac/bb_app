@@ -8,6 +8,7 @@ import '../shared/error_logger.dart';
 import '../Energy/energy_service.dart';
 import '../Energy/energy_celebrations.dart';
 import '../Energy/flow_calculator.dart';
+import '../Settings/app_customization_service.dart';
 
 // ROUTINE EXECUTION SCREEN - UPDATED WITH SAVE FUNCTIONALITY
 class RoutineExecutionScreen extends StatefulWidget {
@@ -27,6 +28,7 @@ class RoutineExecutionScreen extends StatefulWidget {
 class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
   late List<RoutineItem> _items;
   bool _playMusic = false;
+  bool _energyModuleEnabled = true;
 
   @override
   void initState() {
@@ -40,15 +42,24 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
       energyLevel: item.energyLevel,
     )).toList();
     _loadProgress();
+    _loadEnergyModuleState();
+  }
+
+  Future<void> _loadEnergyModuleState() async {
+    final enabled = await AppCustomizationService.isModuleEnabled(AppCustomizationService.moduleEnergy);
+    if (mounted) {
+      setState(() => _energyModuleEnabled = enabled);
+    }
   }
 
   Future<void> _loadProgress() async {
     final progressData = await RoutineProgressService.loadRoutineProgress(widget.routine.id);
-    
+
     if (progressData != null) {
       try {
         final completedSteps = List<bool>.from(progressData['completedSteps'] ?? []);
         final skippedSteps = List<bool>.from(progressData['skippedSteps'] ?? []);
+        final postponedSteps = List<bool>.from(progressData['postponedSteps'] ?? []);
         final savedItemCount = progressData['itemCount'] as int?;
 
         // Validate that the saved data matches current routine structure
@@ -63,6 +74,9 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
             }
             if (i < skippedSteps.length) {
               _items[i].isSkipped = skippedSteps[i];
+            }
+            if (i < postponedSteps.length) {
+              _items[i].isPostponed = postponedSteps[i];
             }
           }
         });
@@ -115,23 +129,25 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     });
     await _saveProgress();
 
-    // Track energy when completing/uncompleting a step
-    // Use energyLevel if set, otherwise default to 0 (neutral - no battery impact)
-    final energyLevel = item.energyLevel ?? 0;
-    if (!wasCompleted && _items[index].isCompleted) {
-      // Just completed - add energy
-      await EnergyService.addRoutineStepEnergyConsumption(
-        stepId: item.id,
-        stepTitle: item.text,
-        energyLevel: energyLevel,
-        routineTitle: widget.routine.title,
-      );
-      if (mounted) {
-        await _showEnergyCelebration(energyLevel);
+    // Track energy when completing/uncompleting a step (only if energy module is enabled)
+    if (_energyModuleEnabled) {
+      // Use energyLevel if set, otherwise default to 0 (neutral - no battery impact)
+      final energyLevel = item.energyLevel ?? 0;
+      if (!wasCompleted && _items[index].isCompleted) {
+        // Just completed - add energy
+        await EnergyService.addRoutineStepEnergyConsumption(
+          stepId: item.id,
+          stepTitle: item.text,
+          energyLevel: energyLevel,
+          routineTitle: widget.routine.title,
+        );
+        if (mounted) {
+          await _showEnergyCelebration(energyLevel);
+        }
+      } else if (wasCompleted && !_items[index].isCompleted) {
+        // Uncompleted - remove energy
+        await EnergyService.removeEnergyConsumption(item.id);
       }
-    } else if (wasCompleted && !_items[index].isCompleted) {
-      // Uncompleted - remove energy
-      await EnergyService.removeEnergyConsumption(item.id);
     }
   }
 
@@ -194,6 +210,18 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
       _items[index].isSkipped = !_items[index].isSkipped;
       if (_items[index].isSkipped) {
         _items[index].isCompleted = false; // If skipped, it's not completed
+        _items[index].isPostponed = false; // If skipped, it's not postponed
+      }
+    });
+    await _saveProgress();
+  }
+
+  Future<void> _postponeItem(int index) async {
+    setState(() {
+      _items[index].isPostponed = !_items[index].isPostponed;
+      if (_items[index].isPostponed) {
+        _items[index].isCompleted = false; // If postponed, it's not completed
+        _items[index].isSkipped = false; // If postponed, it's not skipped
       }
     });
     await _saveProgress();
@@ -207,12 +235,24 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
     return _items.where((item) => !item.isSkipped).every((item) => item.isCompleted);
   }
 
+  bool _areAllNonPostponedNonSkippedCompleted() {
+    return _items.where((item) => !item.isSkipped && !item.isPostponed).every((item) => item.isCompleted);
+  }
+
   List<RoutineItem> _getSkippedItems() {
     return _items.where((item) => item.isSkipped).toList();
   }
 
+  List<RoutineItem> _getPostponedItems() {
+    return _items.where((item) => item.isPostponed).toList();
+  }
+
   bool _hasSkippedItems() {
     return _items.any((item) => item.isSkipped);
+  }
+
+  bool _hasPostponedItems() {
+    return _items.any((item) => item.isPostponed);
   }
 
   Future<void> _completeRoutine() async {
@@ -262,6 +302,7 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
   Widget build(BuildContext context) {
     final completedCount = _items.where((item) => item.isCompleted).length;
     final skippedCount = _items.where((item) => item.isSkipped).length;
+    final postponedCount = _items.where((item) => item.isPostponed).length;
     final allCompleted = _isAllCompleted();
 
     return Scaffold(
@@ -320,9 +361,14 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                             'Progress: $completedCount/${_items.length}',
                             style: const TextStyle(fontSize: 16, color: AppColors.greyText),
                           ),
+                          if (postponedCount > 0)
+                            Text(
+                              'Postponed: $postponedCount deferred',
+                              style: TextStyle(fontSize: 14, color: Colors.blue[600]),
+                            ),
                           if (skippedCount > 0)
                             Text(
-                              'Skipped: $skippedCount in queue',
+                              'Skipped: $skippedCount',
                               style: TextStyle(fontSize: 14, color: Colors.orange[600]),
                             ),
                         ],
@@ -344,19 +390,41 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
               Expanded(
                 child: Column(
                   children: [
-                    // Show notification if non-skipped items are complete but skipped items remain
-                    if (_areAllNonSkippedCompleted() && _hasSkippedItems()) ...[
+                    // Show notification if regular items are done but postponed items remain
+                    if (_areAllNonPostponedNonSkippedCompleted() && _hasPostponedItems()) ...[
+                      Card(
+                        color: Colors.blue.withValues(alpha: 0.1),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Icon(Icons.schedule, color: Colors.blue),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Great progress! You have ${_getPostponedItems().length} postponed step${_getPostponedItems().length == 1 ? '' : 's'} waiting. Complete them when ready!',
+                                  style: TextStyle(color: Colors.blue[700]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                    ],
+                    // Show notification if skipped items remain
+                    if (_areAllNonSkippedCompleted() && _hasSkippedItems() && !_hasPostponedItems()) ...[
                       Card(
                         color: Colors.orange.withValues(alpha: 0.1),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Row(
                             children: [
-                              Icon(Icons.queue, color: Colors.orange),
+                              Icon(Icons.skip_next, color: Colors.orange),
                               SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  'Great job! You have ${_getSkippedItems().length} skipped steps in your queue. Complete them when ready!',
+                                  'You have ${_getSkippedItems().length} skipped step${_getSkippedItems().length == 1 ? '' : 's'}. Unskip them if you want to complete them.',
                                   style: TextStyle(color: Colors.orange[700]),
                                 ),
                               ),
@@ -373,9 +441,18 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                         itemBuilder: (context, index) {
                           final item = _items[index];
                           final hasEnergy = item.energyLevel != null;
+
+                          // Determine card color based on state
+                          Color? cardColor;
+                          if (item.isPostponed) {
+                            cardColor = Colors.blue.withValues(alpha: 0.1);
+                          } else if (item.isSkipped) {
+                            cardColor = Colors.orange.withValues(alpha: 0.1);
+                          }
+
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
-                            color: item.isSkipped ? Colors.orange.withValues(alpha: 0.1) : null,
+                            color: cardColor,
                             child: ListTile(
                               leading: Checkbox(
                                 value: item.isCompleted,
@@ -392,12 +469,16 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                                         decoration: item.isCompleted
                                             ? TextDecoration.lineThrough
                                             : null,
-                                        color: item.isSkipped ? Colors.orange[700] : null,
+                                        color: item.isPostponed
+                                            ? Colors.blue[700]
+                                            : item.isSkipped
+                                                ? Colors.orange[700]
+                                                : null,
                                       ),
                                     ),
                                   ),
-                                  // Energy indicator
-                                  if (hasEnergy)
+                                  // Energy indicator (only show if energy module enabled)
+                                  if (hasEnergy && _energyModuleEnabled)
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
@@ -426,22 +507,45 @@ class _RoutineExecutionScreenState extends State<RoutineExecutionScreen> {
                                     ),
                                 ],
                               ),
-                              subtitle: item.isSkipped
+                              subtitle: item.isPostponed
                                   ? Text(
-                                      'Skipped - In Queue',
+                                      'Postponed - Will return later',
                                       style: TextStyle(
-                                        color: Colors.orange[600],
+                                        color: Colors.blue[600],
                                         fontSize: 12,
                                       ),
                                     )
-                                  : null,
-                              trailing: IconButton(
-                                icon: Icon(
-                                  item.isSkipped ? Icons.undo : Icons.skip_next,
-                                  color: item.isSkipped ? Colors.orange : AppColors.greyText,
-                                ),
-                                onPressed: () => _skipItem(index),
-                                tooltip: item.isSkipped ? 'Unskip' : 'Skip for later',
+                                  : item.isSkipped
+                                      ? Text(
+                                          'Skipped',
+                                          style: TextStyle(
+                                            color: Colors.orange[600],
+                                            fontSize: 12,
+                                          ),
+                                        )
+                                      : null,
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Postpone button (defer to later)
+                                  IconButton(
+                                    icon: Icon(
+                                      item.isPostponed ? Icons.undo : Icons.schedule,
+                                      color: item.isPostponed ? Colors.blue : AppColors.greyText,
+                                    ),
+                                    onPressed: () => _postponeItem(index),
+                                    tooltip: item.isPostponed ? 'Unpostpone' : 'Postpone',
+                                  ),
+                                  // Skip button (permanent skip)
+                                  IconButton(
+                                    icon: Icon(
+                                      item.isSkipped ? Icons.undo : Icons.close,
+                                      color: item.isSkipped ? Colors.orange : AppColors.greyText,
+                                    ),
+                                    onPressed: () => _skipItem(index),
+                                    tooltip: item.isSkipped ? 'Unskip' : 'Skip',
+                                  ),
+                                ],
                               ),
                             ),
                           );

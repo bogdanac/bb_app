@@ -70,7 +70,7 @@ class RecurrenceEvaluator {
         return _isWeeklyDueOn(recurrence, date, taskCreatedAt);
 
       case RecurrenceType.monthly:
-        return _isMonthlyDueOn(recurrence, date);
+        return _isMonthlyDueOn(recurrence, date, taskCreatedAt);
 
       case RecurrenceType.yearly:
         return _isYearlyDueOn(recurrence, date);
@@ -137,13 +137,36 @@ class RecurrenceEvaluator {
     return true;
   }
 
-  static bool _isMonthlyDueOn(TaskRecurrenceModel recurrence, DateTime date) {
+  static bool _isMonthlyDueOn(
+    TaskRecurrenceModel recurrence,
+    DateTime date,
+    DateTime? taskCreatedAt,
+  ) {
+    // First check day of month
+    bool dayMatches = false;
+
     if (recurrence.isLastDayOfMonth) {
       final nextMonth = DateTime(date.year, date.month + 1, 1);
       final lastDay = nextMonth.subtract(const Duration(days: 1));
-      return date.day == lastDay.day;
+      dayMatches = date.day == lastDay.day;
+    } else if (recurrence.dayOfMonth != null) {
+      dayMatches = date.day == recurrence.dayOfMonth;
     }
-    return recurrence.dayOfMonth != null && date.day == recurrence.dayOfMonth;
+
+    if (!dayMatches) return false;
+
+    // For monthly interval > 1, check if the month is correct
+    if (recurrence.interval > 1) {
+      final referenceDate = recurrence.startDate ?? taskCreatedAt;
+      if (referenceDate != null) {
+        final startMonth = referenceDate.year * 12 + referenceDate.month;
+        final dateMonth = date.year * 12 + date.month;
+        final monthsDiff = dateMonth - startMonth;
+        return monthsDiff >= 0 && monthsDiff % recurrence.interval == 0;
+      }
+    }
+
+    return true;
   }
 
   static bool _isYearlyDueOn(TaskRecurrenceModel recurrence, DateTime date) {

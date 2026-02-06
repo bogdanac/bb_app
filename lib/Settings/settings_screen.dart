@@ -128,64 +128,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _saveSecondaryTabsOrder();
   }
 
-  void _onPrimaryReorder(int oldIndex, int newIndex) {
-    setState(() {
-      if (newIndex > oldIndex) {
-        newIndex -= 1;
-      }
-      final item = _primaryTabs.removeAt(oldIndex);
-      _primaryTabs.insert(newIndex, item);
-    });
-    _savePrimaryTabs();
-  }
-
-  void _onSecondaryReorder(int oldIndex, int newIndex) {
-    setState(() {
-      if (newIndex > oldIndex) {
-        newIndex -= 1;
-      }
-      final item = _secondaryTabs.removeAt(oldIndex);
-      _secondaryTabs.insert(newIndex, item);
-    });
-    _saveSecondaryTabsOrder();
-  }
-
-  void _moveToPrimary(String moduleKey) {
-    setState(() {
-      _secondaryTabs.remove(moduleKey);
-      if (_primaryTabs.length >= 4) {
-        // Move last primary to secondary
-        final lastPrimary = _primaryTabs.removeLast();
-        _secondaryTabs.insert(0, lastPrimary);
-      }
-      _primaryTabs.add(moduleKey);
-    });
-    _savePrimaryTabs();
-    _saveSecondaryTabsOrder();
-  }
-
-  void _moveToSecondary(String moduleKey) {
-    setState(() {
-      _primaryTabs.remove(moduleKey);
-      _secondaryTabs.insert(0, moduleKey);
-
-      // If now below 4, automatically move first enabled Secondary to Primary
-      if (_primaryTabs.length < 4 && _secondaryTabs.length > 1) {
-        // Find first enabled module in secondary (skip the one we just moved)
-        for (int i = 1; i < _secondaryTabs.length; i++) {
-          final candidateKey = _secondaryTabs[i];
-          if (_moduleStates[candidateKey] == true) {
-            _secondaryTabs.removeAt(i);
-            _primaryTabs.add(candidateKey);
-            break;
-          }
-        }
-      }
-    });
-    _savePrimaryTabs();
-    _saveSecondaryTabsOrder();
-  }
-
   ModuleInfo? _getModuleInfo(String key) {
     return AppCustomizationService.allModules.firstWhere(
       (m) => m.key == key,
@@ -239,28 +181,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildMobileLayout() {
+    // Build unified list: primary tabs + secondary tabs
+    final allModules = [..._primaryTabs, ..._secondaryTabs];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-                // Section 1: Primary Features
-                _buildSectionHeader(
-                  'Primary Features',
-                  'Bottom navigation (${_primaryTabs.length}/4 modules + Home)',
-                ),
+                // Section 1: App Features (unified list)
+                _buildSectionHeader('App Features', ''),
                 const SizedBox(height: 12),
-                _buildPrimaryList(),
+                _buildUnifiedModuleList(allModules),
 
                 const SizedBox(height: 32),
 
-                // Section 2: Secondary Features
-                _buildSectionHeader('Secondary Features', 'Hamburger menu'),
-                const SizedBox(height: 12),
-                _buildSecondaryList(),
-
-                const SizedBox(height: 32),
-
-                // Section 3: Home Page Cards
-                _buildSectionHeader('Home Page', 'Customize home screen'),
+                // Section 2: Home Page Cards
+                _buildSectionHeader('Home Page', ''),
                 const SizedBox(height: 12),
                 _buildNavigationCard(
                   icon: Icons.dashboard_customize_rounded,
@@ -279,8 +214,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 32),
 
-                // Section 4: App & Data
-                _buildSectionHeader('App & Data', 'Backup, colors, and logs'),
+                // Section 3: App & Data
+                _buildSectionHeader('App & Data', ''),
                 const SizedBox(height: 12),
                 _buildNavigationCard(
                   icon: Icons.backup_rounded,
@@ -440,11 +375,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _savePrimaryTabs();
                     _saveSecondaryTabsOrder();
                   },
-                  children: allEnabledModules.map((moduleKey) {
+                  children: allEnabledModules.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final moduleKey = entry.value;
                     final module = _getModuleInfo(moduleKey);
                     final isEnabled = _moduleStates[moduleKey] ?? false;
                     return _buildDesktopModuleItem(
                       key: ValueKey(moduleKey),
+                      index: index,
                       module: module!,
                       isEnabled: isEnabled,
                       onToggle: (val) => _toggleModule(moduleKey, val),
@@ -627,6 +565,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildDesktopModuleItem({
     required Key key,
+    required int index,
     required ModuleInfo module,
     required bool isEnabled,
     required Function(bool) onToggle,
@@ -648,7 +587,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 // Drag handle
                 ReorderableDragStartListener(
-                  index: 0, // Will be set by parent
+                  index: index,
                   child: Icon(
                     Icons.drag_handle_rounded,
                     color: AppColors.grey300,
@@ -738,157 +677,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
             letterSpacing: isDesktop ? 0.5 : 0,
           ),
         ),
-        SizedBox(height: isDesktop ? 8 : 4),
-        Text(
-          subtitle,
-          style: TextStyle(
-            fontSize: isDesktop ? 15 : 14,
-            color: AppColors.greyText,
-            letterSpacing: 0.2,
+        if (subtitle.isNotEmpty) ...[
+          SizedBox(height: isDesktop ? 8 : 4),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: isDesktop ? 15 : 14,
+              color: AppColors.greyText,
+              letterSpacing: 0.2,
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
 
-  Widget _buildPrimaryList() {
-    // Calculate where Home should be inserted (middle of the list)
-    final midpoint = (_primaryTabs.length / 2).ceil();
-
-    // Build list with Home icon inserted at midpoint
-    final items = <Widget>[];
-
-    for (int i = 0; i < _primaryTabs.length; i++) {
-      // Insert Home icon at midpoint
-      if (i == midpoint) {
-        items.add(_buildHomeItem(key: const ValueKey('home_icon')));
-      }
-
-      final moduleKey = _primaryTabs[i];
-      final module = _getModuleInfo(moduleKey);
-      if (module != null) {
-        items.add(_buildModuleItem(
-          key: ValueKey(moduleKey),
-          module: module,
-          isEnabled: _moduleStates[moduleKey] ?? false,
-          isPrimary: true,
-          onToggle: (val) => _toggleModule(moduleKey, val),
-          onMove: () => _moveToSecondary(moduleKey),
-        ));
-      }
-    }
-
-    // If we haven't added Home yet (empty list), add it
-    if (midpoint >= _primaryTabs.length) {
-      items.add(_buildHomeItem(key: const ValueKey('home_icon')));
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: AppStyles.borderRadiusLarge,
-        border: Border.all(color: AppColors.normalCardBackground),
-      ),
-      child: Column(
-        children: [
-          if (items.isNotEmpty)
-            ReorderableListView(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              onReorder: (oldIndex, newIndex) {
-                // Adjust indices to skip Home icon
-                int actualOldIndex = oldIndex;
-                int actualNewIndex = newIndex;
-
-                // If dragging past Home, adjust index
-                if (oldIndex > midpoint) actualOldIndex--;
-                if (newIndex > midpoint) actualNewIndex--;
-
-                _onPrimaryReorder(actualOldIndex, actualNewIndex);
-              },
-              children: items,
-            ),
-          if (_primaryTabs.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                'No primary features. Enable modules below.',
-                style: TextStyle(color: AppColors.greyText),
-                textAlign: TextAlign.center,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHomeItem({required Key key}) {
-    return SizedBox(
-      key: key,
-      height: 72, // Fixed height to prevent expansion
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: AppColors.normalCardBackground, width: 0.5),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              // No drag handle for Home
-              const SizedBox(width: 32),
-
-              // Home icon (grayed out)
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.grey300.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.home_rounded, color: AppColors.grey300, size: 20),
-              ),
-              const SizedBox(width: 12),
-
-              // Home label
-              const Expanded(
-                child: Text(
-                  'Home',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.grey300,
-                  ),
-                ),
-              ),
-
-              // Always on indicator
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.grey300.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  'Always On',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.grey300,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-
-              // No settings or move buttons
-              const SizedBox(width: 72), // Same width as toggle + buttons
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSecondaryList() {
+  Widget _buildUnifiedModuleList(List<String> allModules) {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -900,44 +704,119 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ReorderableListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            onReorder: _onSecondaryReorder,
-            itemCount: _secondaryTabs.length,
-            itemBuilder: (context, index) {
-              final moduleKey = _secondaryTabs[index];
-              final module = _getModuleInfo(moduleKey);
-              if (module == null) return const SizedBox.shrink();
+            onReorder: (oldIndex, newIndex) {
+              setState(() {
+                if (oldIndex < newIndex) newIndex -= 1;
+                // Account for Home row at position (midpoint of primary + secondary)
+                // Home is inserted visually but isn't in allModules
+                final item = allModules.removeAt(oldIndex);
+                allModules.insert(newIndex, item);
 
-              return _buildModuleItem(
+                // Split: first 4 = primary, rest = secondary
+                _primaryTabs = allModules.take(4).toList();
+                _secondaryTabs = allModules.skip(4).toList();
+              });
+              _savePrimaryTabs();
+              _saveSecondaryTabsOrder();
+            },
+            itemCount: allModules.length,
+            proxyDecorator: (child, index, animation) {
+              return AnimatedBuilder(
+                animation: animation,
+                builder: (context, child) {
+                  return Material(
+                    color: Colors.transparent,
+                    elevation: 4,
+                    shadowColor: AppColors.black.withValues(alpha: 0.3),
+                    borderRadius: AppStyles.borderRadiusLarge,
+                    child: child,
+                  );
+                },
+                child: child,
+              );
+            },
+            itemBuilder: (context, index) {
+              final moduleKey = allModules[index];
+              final module = _getModuleInfo(moduleKey);
+              if (module == null) return SizedBox.shrink(key: ValueKey(moduleKey));
+
+              final isEnabled = _moduleStates[moduleKey] ?? false;
+              final isPrimary = index < 4;
+
+              return _buildUnifiedModuleItem(
                 key: ValueKey(moduleKey),
                 module: module,
-                isEnabled: _moduleStates[moduleKey] ?? false,
-                isPrimary: false,
+                isEnabled: isEnabled,
+                isPrimary: isPrimary,
                 onToggle: (val) => _toggleModule(moduleKey, val),
-                onMove: () => _moveToPrimary(moduleKey),
+                index: index,
               );
             },
           ),
-          if (_secondaryTabs.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                'No secondary features.',
-                style: TextStyle(color: AppColors.greyText),
-                textAlign: TextAlign.center,
+          // Disabled modules at the bottom
+          ...AppCustomizationService.allModules.where((m) {
+            final isDisabled = _moduleStates[m.key] != true;
+            return m.canBeDisabled && isDisabled && !allModules.contains(m.key);
+          }).map((module) {
+            return Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: AppColors.normalCardBackground, width: 0.5),
+                ),
               ),
-            ),
+              child: Opacity(
+                opacity: 0.5,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: module.color.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(module.icon, color: module.color, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          module.label,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      Switch(
+                        value: false,
+                        onChanged: (val) => _toggleModule(module.key, val),
+                        activeTrackColor: module.color.withValues(alpha: 0.5),
+                        thumbColor: WidgetStateProperty.resolveWith((states) {
+                          if (states.contains(WidgetState.selected)) {
+                            return module.color;
+                          }
+                          return null;
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );
   }
 
-  Widget _buildModuleItem({
+  Widget _buildUnifiedModuleItem({
     required Key key,
     required ModuleInfo module,
     required bool isEnabled,
     required bool isPrimary,
     required ValueChanged<bool> onToggle,
-    required VoidCallback onMove,
+    required int index,
   }) {
     return Container(
       key: key,
@@ -946,69 +825,99 @@ class _SettingsScreenState extends State<SettingsScreen> {
           bottom: BorderSide(color: AppColors.normalCardBackground, width: 0.5),
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            // Drag handle
-            Icon(Icons.drag_handle_rounded, color: AppColors.grey300, size: 20),
-            const SizedBox(width: 12),
-
-            // Module icon
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Show divider label between primary (index 3) and secondary (index 4)
+          if (index == 4)
             Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: module.color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(module.icon, color: module.color, size: 20),
-            ),
-            const SizedBox(width: 12),
-
-            // Module name
-            Expanded(
-              child: Text(
-                module.label,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              color: AppColors.normalCardBackground.withValues(alpha: 0.3),
+              child: const Text(
+                'MENU',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.greyText,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1,
                 ),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              children: [
+                // Drag handle
+                ReorderableDragStartListener(
+                  index: index,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Icon(
+                      Icons.drag_handle_rounded,
+                      color: AppColors.grey300,
+                      size: 20,
+                    ),
+                  ),
+                ),
+                // Module icon
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: module.color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(module.icon, color: module.color, size: 20),
+                ),
+                const SizedBox(width: 12),
 
-            // Toggle switch
-            Switch(
-              value: isEnabled,
-              onChanged: onToggle,
-              activeTrackColor: module.color.withValues(alpha: 0.5),
-              thumbColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) {
-                  return module.color;
-                }
-                return null;
-              }),
+                // Module name + location indicator
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        module.label,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        isPrimary ? 'Bottom bar' : 'Menu',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isPrimary ? module.color.withValues(alpha: 0.7) : AppColors.greyText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Toggle switch
+                Switch(
+                  value: isEnabled,
+                  onChanged: onToggle,
+                  activeTrackColor: module.color.withValues(alpha: 0.5),
+                  thumbColor: WidgetStateProperty.resolveWith((states) {
+                    if (states.contains(WidgetState.selected)) {
+                      return module.color;
+                    }
+                    return null;
+                  }),
+                ),
+
+                // Settings button (if module has settings)
+                if (_hasSettings(module.key))
+                  IconButton(
+                    icon: const Icon(Icons.settings_outlined, size: 20),
+                    color: AppColors.grey300,
+                    onPressed: () => _openModuleSettings(module.key),
+                  ),
+              ],
             ),
-
-            // Settings button (if module has settings)
-            if (_hasSettings(module.key))
-              IconButton(
-                icon: const Icon(Icons.settings_outlined, size: 20),
-                color: AppColors.grey300,
-                onPressed: () => _openModuleSettings(module.key),
-              ),
-
-            // Move button
-            IconButton(
-              icon: Icon(
-                isPrimary ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-                size: 20,
-              ),
-              color: AppColors.grey300,
-              tooltip: isPrimary ? 'Move to Secondary' : 'Move to Primary',
-              onPressed: isEnabled ? onMove : null,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

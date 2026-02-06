@@ -16,13 +16,19 @@ class TaskBuilder {
     required TaskRecurrence? recurrence,
     required bool hasUserModifiedScheduledDate,
     required Task? currentTask,
-    bool preserveCompletionStatus = false,
+    bool? isCompleted, // Explicit completion status from edit screen
     int energyLevel = -1,
   }) {
     // Calculate effective scheduled date
     final DateTime? effectiveScheduledDate = hasUserModifiedScheduledDate
         ? scheduledDate
         : (scheduledDate ?? (currentTask?.scheduledDate));
+
+    // Determine completion status: use explicit value if provided, otherwise preserve from current task
+    final bool effectiveIsCompleted = isCompleted ?? (currentTask?.isCompleted ?? false);
+    final DateTime? effectiveCompletedAt = effectiveIsCompleted
+        ? (currentTask?.completedAt ?? DateTime.now())
+        : null;
 
     return Task(
       id: currentTaskId ?? DateTime.now().millisecondsSinceEpoch.toString(),
@@ -35,8 +41,8 @@ class TaskBuilder {
       isImportant: isImportant,
       isPostponed: isPostponed || (scheduledDate != null),
       recurrence: recurrence,
-      isCompleted: preserveCompletionStatus ? (currentTask?.isCompleted ?? false) : false,
-      completedAt: preserveCompletionStatus ? currentTask?.completedAt : null,
+      isCompleted: effectiveIsCompleted,
+      completedAt: effectiveCompletedAt,
       createdAt: currentTask?.createdAt ?? DateTime.now(),
       energyLevel: energyLevel,
     );

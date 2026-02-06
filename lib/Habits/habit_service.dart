@@ -176,6 +176,53 @@ class HabitService {
     }
   }
 
+  /// Get habits that have completed their current cycle but haven't started a new one
+  /// Use this on app startup to prompt users about starting new cycles
+  static Future<List<Habit>> getHabitsWithCompletedCycles() async {
+    final habits = await getActiveHabits();
+    return habits.where((habit) => habit.canContinueToNextCycle()).toList();
+  }
+
+  /// Get habits that have been missed for 2+ consecutive days
+  /// Use this on app startup to prompt users about struggling habits
+  static Future<List<Habit>> getHabitsWithConsecutiveMissedDays({int minMissedDays = 2}) async {
+    final habits = await getActiveHabits();
+    return habits.where((habit) => habit.getConsecutiveMissedDays() >= minMissedDays).toList();
+  }
+
+  /// Grant forgiveness days for a habit's missed days
+  static Future<void> grantForgivenessForHabit(String habitId, int days) async {
+    final habits = await loadHabits();
+    final habitIndex = habits.indexWhere((h) => h.id == habitId);
+
+    if (habitIndex != -1) {
+      habits[habitIndex].grantForgivenessForMissedDays(days);
+      await saveHabits(habits);
+    }
+  }
+
+  /// Restart a habit's current cycle from today
+  static Future<void> restartHabitCycle(String habitId) async {
+    final habits = await loadHabits();
+    final habitIndex = habits.indexWhere((h) => h.id == habitId);
+
+    if (habitIndex != -1) {
+      habits[habitIndex].restartCurrentCycle(DateTime.now());
+      await saveHabits(habits);
+    }
+  }
+
+  /// Deactivate a habit
+  static Future<void> deactivateHabit(String habitId) async {
+    final habits = await loadHabits();
+    final habitIndex = habits.indexWhere((h) => h.id == habitId);
+
+    if (habitIndex != -1) {
+      habits[habitIndex].isActive = false;
+      await saveHabits(habits);
+    }
+  }
+
   /// Clean up old completed dates (older than 1 year) to keep storage size manageable
   static Future<void> cleanupOldData() async {
     final habits = await loadHabits();

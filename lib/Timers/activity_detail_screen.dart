@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
+import '../shared/dialog_utils.dart';
+import '../shared/snackbar_utils.dart';
 import 'timer_data_models.dart';
 import 'timer_service.dart';
 import 'add_manual_time_dialog.dart';
@@ -18,9 +21,12 @@ class ActivityDetailScreen extends StatefulWidget {
 class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   Map<String, Duration> _dailyTotals = {};
   Duration _grandTotal = Duration.zero;
+  Duration _weeklyTotal = Duration.zero;
+  Duration _monthlyTotal = Duration.zero;
   bool _isLoading = true;
   DateTime _focusedMonth = DateTime.now();
   DateTime? _selectedDate;
+  List<TimerSession> _selectedDaySessions = [];
 
   @override
   void initState() {
@@ -31,12 +37,148 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   Future<void> _loadHistory() async {
     final dailyTotals = await TimerService.getDailyTotals(widget.activity.id);
     final grandTotal = await TimerService.getGrandTotal(widget.activity.id);
+    final weeklyTotal = await TimerService.getWeeklyTotal(widget.activity.id);
+    final monthlyTotal = await TimerService.getMonthlyTotal(widget.activity.id);
     if (mounted) {
       setState(() {
         _dailyTotals = dailyTotals;
         _grandTotal = grandTotal;
+        _weeklyTotal = weeklyTotal;
+        _monthlyTotal = monthlyTotal;
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadSelectedDaySessions() async {
+    if (_selectedDate == null) return;
+    final allSessions = await TimerService.getSessionsForActivity(widget.activity.id);
+    final daySessions = allSessions.where((s) {
+      return s.startTime.year == _selectedDate!.year &&
+          s.startTime.month == _selectedDate!.month &&
+          s.startTime.day == _selectedDate!.day;
+    }).toList();
+    if (mounted) {
+      setState(() {
+        _selectedDaySessions = daySessions;
+      });
+    }
+  }
+
+  Future<void> _deleteSession(TimerSession session) async {
+    final confirmed = await DialogUtils.showDeleteConfirmation(
+      context,
+      title: 'Delete Session',
+      itemName: 'this session',
+      customMessage: 'Delete ${_formatDuration(session.duration)} session from ${DateFormat('HH:mm').format(session.startTime)}?',
+    );
+    if (confirmed == true) {
+      await TimerService.deleteSession(session.id);
+      HapticFeedback.lightImpact();
+      await _loadHistory();
+      await _loadSelectedDaySessions();
+      if (mounted) {
+        SnackBarUtils.showSuccess(context, 'Session deleted');
+      }
+    }
+  }
+
+  Future<void> _editSessionDuration(TimerSession session) async {
+    int hours = session.duration.inHours;
+    int minutes = session.duration.inMinutes.remainder(60);
+
+    final result = await showDialog<Duration>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Edit Duration'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Session from ${DateFormat('HH:mm').format(session.startTime)}',
+                style: TextStyle(color: AppColors.greyText, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Hours
+                  Column(
+                    children: [
+                      IconButton(
+                        onPressed: () => setDialogState(() => hours++),
+                        icon: const Icon(Icons.arrow_drop_up),
+                      ),
+                      Text(
+                        '$hours',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.purple,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: hours > 0 ? () => setDialogState(() => hours--) : null,
+                        icon: const Icon(Icons.arrow_drop_down),
+                      ),
+                      Text('hours', style: TextStyle(color: AppColors.greyText, fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(width: 20),
+                  Text(':', style: TextStyle(fontSize: 32, color: AppColors.greyText)),
+                  const SizedBox(width: 20),
+                  // Minutes
+                  Column(
+                    children: [
+                      IconButton(
+                        onPressed: () => setDialogState(() => minutes = (minutes + 5) % 60),
+                        icon: const Icon(Icons.arrow_drop_up),
+                      ),
+                      Text(
+                        minutes.toString().padLeft(2, '0'),
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.purple,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => setDialogState(() => minutes = minutes > 0 ? minutes - 5 : 55),
+                        icon: const Icon(Icons.arrow_drop_down),
+                      ),
+                      Text('mins', style: TextStyle(color: AppColors.greyText, fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: (hours > 0 || minutes > 0)
+                  ? () => Navigator.pop(context, Duration(hours: hours, minutes: minutes))
+                  : null,
+              style: FilledButton.styleFrom(backgroundColor: AppColors.purple),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null) {
+      await TimerService.updateSessionDuration(session.id, result);
+      HapticFeedback.lightImpact();
+      await _loadHistory();
+      await _loadSelectedDaySessions();
+      if (mounted) {
+        SnackBarUtils.showSuccess(context, 'Duration updated');
+      }
     }
   }
 
@@ -191,6 +333,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                         setState(() {
                           _selectedDate = date;
                         });
+                        _loadSelectedDaySessions();
                       },
                 child: Container(
                   margin: const EdgeInsets.all(2),
@@ -279,35 +422,98 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(16),
       decoration: AppStyles.cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _formatDateKey(key),
-            style: const TextStyle(
-                fontSize: 15, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(Icons.timer, color: AppColors.purple, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                duration.inSeconds > 0
-                    ? _formatDuration(duration)
-                    : 'No time recorded',
-                style: TextStyle(
-                  color: duration.inSeconds > 0
-                      ? AppColors.purple
-                      : AppColors.grey300,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _formatDateKey(key),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.timer, color: AppColors.purple, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      duration.inSeconds > 0 ? _formatDuration(duration) : 'No time recorded',
+                      style: TextStyle(
+                        color: duration.inSeconds > 0 ? AppColors.purple : AppColors.grey300,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
+          // Individual sessions list
+          if (_selectedDaySessions.isNotEmpty) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Sessions',
+                    style: TextStyle(fontSize: 12, color: AppColors.greyText, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._selectedDaySessions.map((session) => Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.purple.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.timer_outlined, size: 16, color: AppColors.purple),
+                        const SizedBox(width: 8),
+                        Text(
+                          DateFormat('HH:mm').format(session.startTime),
+                          style: TextStyle(fontSize: 13, color: AppColors.greyText),
+                        ),
+                        const Spacer(),
+                        Text(
+                          _formatDuration(session.duration),
+                          style: TextStyle(
+                            color: AppColors.purple,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: () => _editSessionDuration(session),
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          color: AppColors.waterBlue,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          tooltip: 'Edit',
+                        ),
+                        IconButton(
+                          onPressed: () => _deleteSession(session),
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          color: AppColors.deleteRed.withValues(alpha: 0.7),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          tooltip: 'Delete',
+                        ),
+                      ],
+                    ),
+                  )),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -340,39 +546,84 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Grand total card
+                  // Stats cards
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(16),
                     decoration: AppStyles.cardDecoration(),
                     child: Column(
                       children: [
+                        // Grand total (larger)
                         Text(
                           'Total Time',
-                          style: TextStyle(
-                            color: AppColors.grey200,
-                            fontSize: 14,
-                          ),
+                          style: TextStyle(color: AppColors.grey200, fontSize: 13),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 4),
                         Text(
                           _formatDuration(_grandTotal),
                           style: TextStyle(
                             color: AppColors.purple,
-                            fontSize: 32,
+                            fontSize: 28,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         if (_dailyTotals.isNotEmpty) ...[
-                          const SizedBox(height: 4),
                           Text(
                             '${_dailyTotals.length} day${_dailyTotals.length == 1 ? '' : 's'} tracked',
-                            style: TextStyle(
-                              color: AppColors.grey300,
-                              fontSize: 13,
-                            ),
+                            style: TextStyle(color: AppColors.grey300, fontSize: 12),
                           ),
                         ],
+                        const SizedBox(height: 12),
+                        const Divider(height: 1),
+                        const SizedBox(height: 12),
+                        // Weekly and Monthly totals
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Text(
+                                    'This Week',
+                                    style: TextStyle(color: AppColors.grey300, fontSize: 11),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _formatDuration(_weeklyTotal),
+                                    style: TextStyle(
+                                      color: AppColors.purple,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 40,
+                              color: AppColors.grey700,
+                            ),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Text(
+                                    'This Month',
+                                    style: TextStyle(color: AppColors.grey300, fontSize: 11),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _formatDuration(_monthlyTotal),
+                                    style: TextStyle(
+                                      color: AppColors.purple,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),

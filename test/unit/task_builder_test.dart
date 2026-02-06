@@ -270,14 +270,14 @@ void main() {
             recurrence: null,
             hasUserModifiedScheduledDate: false,
             currentTask: existingTask,
-            preserveCompletionStatus: false,
+            isCompleted: false, // Explicitly set to false
           );
 
           expect(task.isCompleted, false);
           expect(task.completedAt, isNull);
         });
 
-        test('should preserve completion when preserveCompletionStatus=true', () {
+        test('should preserve completion when isCompleted is null', () {
           final completedAt = DateTime(2025, 10, 1);
           final existingTask = Task(
             id: 'task-1',
@@ -300,14 +300,14 @@ void main() {
             recurrence: null,
             hasUserModifiedScheduledDate: false,
             currentTask: existingTask,
-            preserveCompletionStatus: true,
+            // isCompleted: null (default) - preserves existing value
           );
 
           expect(task.isCompleted, true);
           expect(task.completedAt, completedAt);
         });
 
-        test('should handle uncompleted task with preserveCompletionStatus=true', () {
+        test('should handle uncompleted task when isCompleted is null', () {
           final existingTask = Task(
             id: 'task-1',
             title: 'Task',
@@ -328,7 +328,7 @@ void main() {
             recurrence: null,
             hasUserModifiedScheduledDate: false,
             currentTask: existingTask,
-            preserveCompletionStatus: true,
+            // isCompleted: null (default) - preserves existing value
           );
 
           expect(task.isCompleted, false);

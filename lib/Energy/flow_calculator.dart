@@ -2,17 +2,17 @@ import 'energy_settings_model.dart';
 
 /// Calculator for Flow Points system - converts energy levels to productivity points
 ///
-/// Flow Points Formula:
-/// - 1 task = 1 flow point (regardless of energy level)
+/// Tasks:
+/// - 1 task = 1 flow point
+/// - Battery: energy × 5% (so -5 = -25%, +5 = +25%)
 ///
-/// Battery Formula:
-/// - Energy × 10% battery change
-/// - So -5 drains 50%, +5 charges 50%
+/// Timer Sessions:
+/// - 1 flow point per 25 min
+/// - Battery: ±5% per 25 min (draining = -5%, neutral = 0%, recharging = +5%)
 class FlowCalculator {
-  /// Calculate flow points earned from an energy level (-5 to +5)
-  /// Each completed task gives 1 flow point
+  /// Calculate flow points earned from completing a task
+  /// Simple: 1 task = 1 flow point (regardless of energy level)
   static int calculateFlowPoints(int energyLevel) {
-    // 1 task = 1 flow point, regardless of energy level
     return 1;
   }
 
@@ -21,11 +21,35 @@ class FlowCalculator {
     // Clamp energy level to valid range
     final energy = energyLevel.clamp(-5, 5);
 
-    // Simple formula: energy × 10%
-    // -5 → -50% (drains 50%)
+    // Formula: energy × 5%
+    // -5 → -25% (drains 25%)
+    // -4 → -20% (drains 20%)
+    // -3 → -15% (drains 15%)
+    // -2 → -10% (drains 10%)
+    // -1 → -5% (drains 5%)
     // 0 → 0% (neutral)
-    // +5 → +50% (charges 50%)
-    return energy * 10;
+    // +1 → +5% (charges 5%)
+    // +2 → +10% (charges 10%)
+    // +3 → +15% (charges 15%)
+    // +4 → +20% (charges 20%)
+    // +5 → +25% (charges 25%)
+    return energy * 5;
+  }
+
+  // ==================== Timer Session Calculations ====================
+
+  /// Calculate flow points for timer sessions (duration-based)
+  /// 1 point per 25 minutes of work
+  static int calculateTimerSessionFlowPoints(int durationMinutes) {
+    return (durationMinutes / 25).floor().clamp(0, 100);
+  }
+
+  /// Calculate battery change for timer sessions
+  /// batteryPer25Min: -5 (draining), 0 (neutral), or +5 (recharging)
+  /// Returns total battery change based on duration
+  static int calculateTimerSessionBatteryChange(int batteryPer25Min, int durationMinutes) {
+    final blocks = durationMinutes / 25.0;
+    return (batteryPer25Min * blocks).round();
   }
 
   /// Calculate flow points from multiple energy entries

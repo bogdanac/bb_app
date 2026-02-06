@@ -21,6 +21,10 @@ class AppCustomizationService {
   static const String moduleRoutines = 'module_routines_enabled';
   static const String moduleHabits = 'module_habits_enabled';
   static const String moduleTimers = 'module_timers_enabled';
+  static const String moduleEnergy = 'module_energy_enabled';
+  static const String moduleWater = 'module_water_enabled';
+  static const String moduleFood = 'module_food_enabled';
+  static const String moduleChores = 'module_chores_enabled';
 
   // ============= Card Keys =============
   static const String cardMenstrual = 'card_menstrual_visible';
@@ -32,6 +36,21 @@ class AppCustomizationService {
   static const String cardHabits = 'card_habits_visible';
   static const String cardRoutines = 'card_routines_visible';
   static const String cardDailyTasks = 'card_daily_tasks_visible';
+  static const String cardActivities = 'card_activities_visible';
+  static const String cardProductivity = 'card_productivity_visible';
+  static const String cardEndOfDayReview = 'card_end_of_day_review_visible';
+  static const String cardChores = 'card_chores_visible';
+
+  // ============= Productivity Card Schedule Keys =============
+  static const String _productivityDaysKey = 'productivity_card_days';
+  static const String _productivityStartHourKey = 'productivity_card_start_hour';
+  static const String _productivityEndHourKey = 'productivity_card_end_hour';
+
+  // ============= End of Day Review Keys =============
+  static const String endOfDayReviewEnabled = 'end_of_day_review_enabled';
+  static const String endOfDayReviewHour = 'end_of_day_review_hour';
+  static const String endOfDayReviewMinute = 'end_of_day_review_minute';
+  static const String endOfDayReviewEveningStart = 'end_of_day_review_evening_start';
 
   // ============= Other Keys =============
   static const String cardOrderKey = 'home_card_order';
@@ -56,14 +75,20 @@ class AppCustomizationService {
     cardHabits: moduleHabits,
     cardRoutines: moduleRoutines,
     cardDailyTasks: moduleTasks,
-    cardBatteryFlow: null,
+    cardActivities: moduleTimers,
+    cardProductivity: moduleTimers,
+    cardBatteryFlow: moduleEnergy,
     cardCalendar: null,
-    cardFoodTracking: null,
-    cardWaterTracking: null,
+    cardFoodTracking: moduleFood,
+    cardWaterTracking: moduleWater,
+    cardEndOfDayReview: null, // No module dependency - controlled by its own settings
+    cardChores: moduleChores,
   };
 
   // ============= Default Card Order =============
   static const List<String> defaultCardOrder = [
+    cardEndOfDayReview,
+    cardProductivity,
     cardMenstrual,
     cardBatteryFlow,
     cardCalendar,
@@ -73,6 +98,8 @@ class AppCustomizationService {
     cardHabits,
     cardRoutines,
     cardDailyTasks,
+    cardChores,
+    cardActivities,
   ];
 
   // ============= Module Metadata =============
@@ -95,7 +122,7 @@ class AppCustomizationService {
     ),
     ModuleInfo(
       key: moduleFriends,
-      label: 'Friends',
+      label: 'Social',
       description: 'Circle of friends with friendship battery tracking',
       icon: Icons.people_rounded,
       color: AppColors.successGreen,
@@ -133,6 +160,38 @@ class AppCustomizationService {
       color: AppColors.purple,
       canBeDisabled: true,
     ),
+    ModuleInfo(
+      key: moduleEnergy,
+      label: 'Energy Tracking',
+      description: 'Battery & flow tracking with daily goals',
+      icon: Icons.bolt_rounded,
+      color: AppColors.coral,
+      canBeDisabled: true,
+    ),
+    ModuleInfo(
+      key: moduleWater,
+      label: 'Water Tracking',
+      description: 'Daily water intake goals',
+      icon: Icons.water_drop_rounded,
+      color: AppColors.waterBlue,
+      canBeDisabled: true,
+    ),
+    ModuleInfo(
+      key: moduleFood,
+      label: 'Food Tracking',
+      description: 'Healthy vs processed food tracking',
+      icon: Icons.restaurant_rounded,
+      color: AppColors.pastelGreen,
+      canBeDisabled: true,
+    ),
+    ModuleInfo(
+      key: moduleChores,
+      label: 'Chores',
+      description: 'Household chores with condition decay tracking',
+      icon: Icons.cleaning_services_rounded,
+      color: AppColors.waterBlue,
+      canBeDisabled: true,
+    ),
   ];
 
   // ============= Card Metadata =============
@@ -151,7 +210,7 @@ class AppCustomizationService {
       description: 'Energy and flow tracking',
       icon: Icons.bolt_rounded,
       color: AppColors.coral,
-      dependsOnModule: null,
+      dependsOnModule: moduleEnergy,
     ),
     CardInfo(
       key: cardCalendar,
@@ -175,7 +234,7 @@ class AppCustomizationService {
       description: 'Daily food log and target percentage',
       icon: Icons.restaurant_rounded,
       color: AppColors.pastelGreen,
-      dependsOnModule: null,
+      dependsOnModule: moduleFood,
     ),
     CardInfo(
       key: cardWaterTracking,
@@ -183,7 +242,7 @@ class AppCustomizationService {
       description: 'Daily water intake goal',
       icon: Icons.water_drop_rounded,
       color: AppColors.waterBlue,
-      dependsOnModule: null,
+      dependsOnModule: moduleWater,
     ),
     CardInfo(
       key: cardHabits,
@@ -209,6 +268,38 @@ class AppCustomizationService {
       color: AppColors.coral,
       dependsOnModule: moduleTasks,
     ),
+    CardInfo(
+      key: cardChores,
+      label: 'Chores',
+      description: 'Today\'s household chores',
+      icon: Icons.cleaning_services_rounded,
+      color: AppColors.waterBlue,
+      dependsOnModule: moduleChores,
+    ),
+    CardInfo(
+      key: cardActivities,
+      label: 'Activities',
+      description: 'Quick start activity timers',
+      icon: Icons.timer_rounded,
+      color: AppColors.purple,
+      dependsOnModule: moduleTimers,
+    ),
+    CardInfo(
+      key: cardProductivity,
+      label: 'Productivity',
+      description: 'Quick pomodoro/countdown timer',
+      icon: Icons.psychology_rounded,
+      color: AppColors.purple,
+      dependsOnModule: moduleTimers,
+    ),
+    CardInfo(
+      key: cardEndOfDayReview,
+      label: 'Daily Summary',
+      description: 'End of day review (evening only)',
+      icon: Icons.summarize_rounded,
+      color: AppColors.purple,
+      dependsOnModule: null,
+    ),
   ];
 
   // ============= Migration =============
@@ -227,20 +318,29 @@ class AppCustomizationService {
 
   // ============= Module Management =============
 
+  // Modules that default to OFF on fresh install
+  static const Set<String> _modulesDefaultOff = {
+    moduleFood,
+    moduleEnergy,
+    moduleMenstrual,
+    moduleFriends,
+    moduleChores,
+  };
+
   /// Load all module states
   static Future<Map<String, bool>> loadAllModuleStates() async {
     final prefs = await SharedPreferences.getInstance();
     return {
       for (var module in allModules)
-        module.key: prefs.getBool(module.key) ?? (module.key == moduleTimers ? false : true),
+        module.key: prefs.getBool(module.key) ?? !_modulesDefaultOff.contains(module.key),
     };
   }
 
   /// Check if a specific module is enabled
   static Future<bool> isModuleEnabled(String moduleKey) async {
     final prefs = await SharedPreferences.getInstance();
-    // Timers defaults to false, all others default to true
-    return prefs.getBool(moduleKey) ?? (moduleKey == moduleTimers ? false : true);
+    // Modules in _modulesDefaultOff default to false, all others default to true
+    return prefs.getBool(moduleKey) ?? !_modulesDefaultOff.contains(moduleKey);
   }
 
   /// Enable or disable a module
@@ -408,6 +508,101 @@ class AppCustomizationService {
         .where((entry) => entry.value)
         .map((entry) => entry.key)
         .toList();
+  }
+
+  // ============= Productivity Card Schedule =============
+
+  /// Get days when productivity card should be visible (1=Monday, 7=Sunday)
+  static Future<Set<int>> getProductivityDays() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_productivityDaysKey) ?? ['1', '2', '3', '4', '5', '6', '7'];
+    return list.map((s) => int.parse(s)).toSet();
+  }
+
+  /// Set days when productivity card should be visible
+  static Future<void> setProductivityDays(Set<int> days) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_productivityDaysKey, days.map((d) => d.toString()).toList());
+  }
+
+  /// Get start and end hours for productivity card visibility (0-23, 1-24)
+  static Future<(int, int)> getProductivityHours() async {
+    final prefs = await SharedPreferences.getInstance();
+    final start = prefs.getInt(_productivityStartHourKey) ?? 0;
+    final end = prefs.getInt(_productivityEndHourKey) ?? 24;
+    return (start, end);
+  }
+
+  /// Set start and end hours for productivity card visibility
+  static Future<void> setProductivityHours(int start, int end) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_productivityStartHourKey, start);
+    await prefs.setInt(_productivityEndHourKey, end);
+  }
+
+  /// Check if productivity card should be visible based on current day/time
+  static Future<bool> isProductivityCardScheduledNow() async {
+    final now = DateTime.now();
+    final days = await getProductivityDays();
+    if (!days.contains(now.weekday)) return false;
+
+    final (start, end) = await getProductivityHours();
+    final hour = now.hour;
+    return hour >= start && hour < end;
+  }
+
+  // ============= End of Day Review Settings =============
+
+  /// Check if end of day review is enabled
+  static Future<bool> isEndOfDayReviewEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(endOfDayReviewEnabled) ?? true; // Default ON
+  }
+
+  /// Enable or disable end of day review
+  static Future<void> setEndOfDayReviewEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(endOfDayReviewEnabled, enabled);
+    // Trigger notification reschedule
+    final notificationManager = CentralizedNotificationManager();
+    await notificationManager.forceRescheduleAll();
+  }
+
+  /// Get end of day review notification time (hour, minute)
+  static Future<(int, int)> getEndOfDayReviewTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hour = prefs.getInt(endOfDayReviewHour) ?? 21; // Default 9 PM
+    final minute = prefs.getInt(endOfDayReviewMinute) ?? 0;
+    return (hour, minute);
+  }
+
+  /// Set end of day review notification time
+  static Future<void> setEndOfDayReviewTime(int hour, int minute) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(endOfDayReviewHour, hour);
+    await prefs.setInt(endOfDayReviewMinute, minute);
+    // Trigger notification reschedule
+    final notificationManager = CentralizedNotificationManager();
+    await notificationManager.forceRescheduleAll();
+  }
+
+  /// Get evening start hour (when card becomes visible)
+  static Future<int> getEveningStartHour() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(endOfDayReviewEveningStart) ?? 20; // Default 8 PM
+  }
+
+  /// Set evening start hour
+  static Future<void> setEveningStartHour(int hour) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(endOfDayReviewEveningStart, hour);
+  }
+
+  /// Check if it's currently evening time (for card/button visibility)
+  static Future<bool> isEveningTime() async {
+    final eveningStart = await getEveningStartHour();
+    final now = DateTime.now();
+    return now.hour >= eveningStart;
   }
 }
 

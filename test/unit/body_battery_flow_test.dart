@@ -178,43 +178,36 @@ void main() {
   });
 
   group('FlowCalculator - Flow Points', () {
-    test('should calculate flow points for draining tasks', () {
-      expect(FlowCalculator.calculateFlowPoints(-5), 10);
-      expect(FlowCalculator.calculateFlowPoints(-4), 8);
-      expect(FlowCalculator.calculateFlowPoints(-3), 6);
-      expect(FlowCalculator.calculateFlowPoints(-2), 4);
-      expect(FlowCalculator.calculateFlowPoints(-1), 2);
-    });
-
-    test('should calculate flow points for neutral tasks', () {
+    test('should return 1 flow point per task regardless of energy', () {
+      // 1 task = 1 flow point (simple and consistent)
+      expect(FlowCalculator.calculateFlowPoints(-5), 1);
+      expect(FlowCalculator.calculateFlowPoints(-3), 1);
+      expect(FlowCalculator.calculateFlowPoints(-1), 1);
       expect(FlowCalculator.calculateFlowPoints(0), 1);
+      expect(FlowCalculator.calculateFlowPoints(1), 1);
+      expect(FlowCalculator.calculateFlowPoints(3), 1);
+      expect(FlowCalculator.calculateFlowPoints(5), 1);
     });
 
-    test('should calculate flow points for charging tasks', () {
-      expect(FlowCalculator.calculateFlowPoints(1), 2);
-      expect(FlowCalculator.calculateFlowPoints(2), 3);
-      expect(FlowCalculator.calculateFlowPoints(3), 4);
-      expect(FlowCalculator.calculateFlowPoints(4), 5);
-      expect(FlowCalculator.calculateFlowPoints(5), 6);
-    });
-
-    test('should clamp out-of-range energy levels', () {
-      expect(FlowCalculator.calculateFlowPoints(-10), 10); // Clamped to -5
-      expect(FlowCalculator.calculateFlowPoints(10), 6); // Clamped to +5
+    test('should handle out-of-range energy levels', () {
+      expect(FlowCalculator.calculateFlowPoints(-10), 1);
+      expect(FlowCalculator.calculateFlowPoints(10), 1);
     });
   });
 
   group('FlowCalculator - Battery Changes', () {
     test('should calculate battery drain correctly', () {
-      expect(FlowCalculator.calculateBatteryChange(-5), -50);
-      expect(FlowCalculator.calculateBatteryChange(-3), -30);
-      expect(FlowCalculator.calculateBatteryChange(-1), -10);
+      // Formula: energy × 5% (so -5 = -25%, -3 = -15%, -1 = -5%)
+      expect(FlowCalculator.calculateBatteryChange(-5), -25);
+      expect(FlowCalculator.calculateBatteryChange(-3), -15);
+      expect(FlowCalculator.calculateBatteryChange(-1), -5);
     });
 
     test('should calculate battery charge correctly', () {
-      expect(FlowCalculator.calculateBatteryChange(5), 50);
-      expect(FlowCalculator.calculateBatteryChange(3), 30);
-      expect(FlowCalculator.calculateBatteryChange(1), 10);
+      // Formula: energy × 5% (so +5 = +25%, +3 = +15%, +1 = +5%)
+      expect(FlowCalculator.calculateBatteryChange(5), 25);
+      expect(FlowCalculator.calculateBatteryChange(3), 15);
+      expect(FlowCalculator.calculateBatteryChange(1), 5);
     });
 
     test('should handle neutral energy', () {
@@ -249,8 +242,8 @@ void main() {
       ];
 
       final totalFlow = FlowCalculator.calculateTotalFlowPoints(entries);
-      // -3 = 6pts, -2 = 4pts, +2 = 3pts = 13 total
-      expect(totalFlow, 13);
+      // 1 task = 1 pt, so 3 tasks = 3 pts
+      expect(totalFlow, 3);
     });
 
     test('should calculate total battery change from entries', () {
@@ -272,8 +265,8 @@ void main() {
       ];
 
       final totalBattery = FlowCalculator.calculateTotalBatteryChange(entries);
-      // -5 = -50%, +3 = +30% = -20% total
-      expect(totalBattery, -20);
+      // -5 = -25%, +3 = +15% = -10% total
+      expect(totalBattery, -10);
     });
   });
 
@@ -333,9 +326,10 @@ void main() {
 
   group('FlowCalculator - Display Helpers', () {
     test('should generate correct flow descriptions', () {
+      // Battery formula: energy × 5%, Flow: 1 pt per task
       expect(
         FlowCalculator.getFlowDescription(-5),
-        'Drains 50%, Earns 10 pts',
+        'Drains 25%, Earns 1 pts',
       );
       expect(
         FlowCalculator.getFlowDescription(0),
@@ -343,7 +337,7 @@ void main() {
       );
       expect(
         FlowCalculator.getFlowDescription(5),
-        'Charges 50%, Earns 6 pts',
+        'Charges 25%, Earns 1 pts',
       );
     });
 
@@ -460,7 +454,7 @@ void main() {
       final effectiveEnergy = item.energyLevel ?? 0;
       expect(effectiveEnergy, 0);
 
-      // Default 0 gives 1 flow point
+      // 1 task = 1 flow point
       expect(FlowCalculator.calculateFlowPoints(effectiveEnergy), 1);
 
       // Default 0 has no battery impact
@@ -478,11 +472,11 @@ void main() {
       final effectiveEnergy = item.energyLevel ?? 0;
       expect(effectiveEnergy, -3);
 
-      // -3 gives 6 flow points
-      expect(FlowCalculator.calculateFlowPoints(effectiveEnergy), 6);
+      // 1 task = 1 flow point
+      expect(FlowCalculator.calculateFlowPoints(effectiveEnergy), 1);
 
-      // -3 drains 30% battery
-      expect(FlowCalculator.calculateBatteryChange(effectiveEnergy), -30);
+      // -3 drains 15% battery (formula: energy × 5%)
+      expect(FlowCalculator.calculateBatteryChange(effectiveEnergy), -15);
     });
 
     test('should track energy for all routine steps including those with null energy', () {
@@ -503,13 +497,15 @@ void main() {
         totalBatteryChange += FlowCalculator.calculateBatteryChange(energy);
       }
 
-      // Step 1 (energy +2): 3 pts, +20% battery
-      // Step 2 (energy null -> 0): 1 pt, 0% battery
-      // Step 3 (energy -4): 8 pts, -40% battery
-      // Step 4 (energy null -> 0): 1 pt, 0% battery
-      // Total: 13 pts, -20% battery
-      expect(totalFlowPoints, 13);
-      expect(totalBatteryChange, -20);
+      // 1 task = 1 flow point, so 4 steps = 4 pts
+      // Battery formula: energy × 5%
+      // Step 1 (energy +2): +10% battery
+      // Step 2 (energy null -> 0): 0% battery
+      // Step 3 (energy -4): -20% battery
+      // Step 4 (energy null -> 0): 0% battery
+      // Total: 4 pts, -10% battery
+      expect(totalFlowPoints, 4);
+      expect(totalBatteryChange, -10);
     });
 
     test('should correctly display energy indicator for negative energy levels', () {

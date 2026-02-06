@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
+import '../shared/date_format_utils.dart';
 import 'food_tracking_service.dart';
 import 'food_tracking_data_models.dart';
 import 'food_tracking_goal_history_screen.dart';
-import '../shared/date_picker_utils.dart';
 import '../shared/snackbar_utils.dart';
 import '../shared/dialog_utils.dart';
 
@@ -19,9 +19,13 @@ class FoodTrackingHistoryScreen extends StatefulWidget {
 class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   List<FoodEntry> _entries = [];
   bool _isLoading = true;
-  Map<String, List<FoodEntry>> _groupedEntries = {};
-  List<Map<String, dynamic>> _periodHistory = [];
-  bool _showPeriodHistory = false;
+  Map<DateTime, List<FoodEntry>> _entriesByDate = {};
+  List<Map<String, dynamic>> _timeframeHistory = [];
+  bool _showTimeframeHistory = false;
+
+  // Calendar state
+  DateTime _focusedMonth = DateTime.now();
+  DateTime? _selectedDate;
 
   @override
   void initState() {
@@ -33,49 +37,169 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     setState(() => _isLoading = true);
     final entries = await FoodTrackingService.getAllEntries();
     final periodHistory = await FoodTrackingService.getPeriodHistory();
-    _groupedEntries = _groupEntriesByDate(entries);
+    _entriesByDate = _groupEntriesByDate(entries);
+
+    // Auto-select today if it has entries, otherwise most recent day with entries
+    DateTime? dateToSelect;
+    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    if (_entriesByDate.containsKey(today)) {
+      dateToSelect = today;
+    } else if (_entriesByDate.isNotEmpty) {
+      dateToSelect = _entriesByDate.keys.reduce((a, b) => a.isAfter(b) ? a : b);
+    }
+
     setState(() {
       _entries = entries;
-      _periodHistory = periodHistory;
+      _timeframeHistory = periodHistory;
+      _selectedDate = dateToSelect;
       _isLoading = false;
     });
   }
 
-  Map<String, List<FoodEntry>> _groupEntriesByDate(List<FoodEntry> entries) {
-    final groups = <String, List<FoodEntry>>{};
+  Map<DateTime, List<FoodEntry>> _groupEntriesByDate(List<FoodEntry> entries) {
+    final groups = <DateTime, List<FoodEntry>>{};
     for (final entry in entries) {
-      final dateKey = _formatDate(entry.timestamp);
+      final dateKey = DateTime(entry.timestamp.year, entry.timestamp.month, entry.timestamp.day);
       groups[dateKey] ??= [];
       groups[dateKey]!.add(entry);
     }
-    return groups;
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final entryDate = DateTime(date.year, date.month, date.day);
-
-    if (entryDate == today) {
-      return 'Today';
-    } else if (entryDate == yesterday) {
-      return 'Yesterday';
-    } else {
-      return '${date.day}/${date.month}/${date.year}';
+    // Sort entries within each day by time
+    for (final list in groups.values) {
+      list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     }
+    return groups;
   }
 
   String _formatTime(DateTime date) {
     return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
+  Future<void> _addEntry(FoodType type) async {
+    HapticFeedback.lightImpact();
+    final entry = FoodEntry(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      type: type,
+      timestamp: DateTime.now(),
+    );
+    await FoodTrackingService.addEntry(entry);
+    await _loadEntries();
+
+    // Select today to show the new entry
+    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    setState(() {
+      _selectedDate = today;
+      _focusedMonth = DateTime(today.year, today.month, 1);
+    });
+
+    if (mounted) {
+      SnackBarUtils.showSuccess(
+        context,
+        type == FoodType.healthy ? 'Healthy food added' : 'Processed food added',
+      );
+    }
+  }
+
+  void _showAddFoodBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: AppColors.greyText.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Text(
+              'Add Food Entry',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildAddButton(
+                    label: 'Healthy',
+                    icon: Icons.restaurant,
+                    color: AppColors.successGreen,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _addEntry(FoodType.healthy);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildAddButton(
+                    label: 'Processed',
+                    icon: Icons.fastfood,
+                    color: AppColors.orange,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _addEntry(FoodType.processed);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppStyles.borderRadiusMedium,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          borderRadius: AppStyles.borderRadiusMedium,
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 32),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _deleteEntry(FoodEntry entry) async {
     final confirmed = await DialogUtils.showDeleteConfirmation(
       context,
-      title: 'Șterge înregistrare',
+      title: 'Delete Entry',
       itemName: '${entry.type.name} food',
-      customMessage: 'Sigur vrei să ștergi această înregistrare?',
+      customMessage: 'Are you sure you want to delete this entry?',
     );
 
     if (confirmed == true) {
@@ -85,36 +209,26 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     }
   }
 
-  Future<void> _showChangeDateDialog(FoodEntry entry) async {
-    final selectedDate = await DatePickerUtils.showStyledDatePicker(
-      context: context,
-      initialDate: entry.timestamp,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 30)),
-    );
+  Future<void> _moveEntryToDate(FoodEntry entry, DateTime targetDate) async {
+    // Don't move if same day
+    final entryDate = DateTime(entry.timestamp.year, entry.timestamp.month, entry.timestamp.day);
+    if (entryDate == targetDate) return;
 
-    if (selectedDate != null) {
-      await _changeEntryDate(entry, selectedDate);
-    }
-  }
-
-  Future<void> _changeEntryDate(FoodEntry entry, DateTime newDate) async {
     // Create new entry with updated timestamp but keep same time
     final newTimestamp = DateTime(
-      newDate.year,
-      newDate.month,
-      newDate.day,
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
       entry.timestamp.hour,
       entry.timestamp.minute,
     );
 
     final newEntry = FoodEntry(
-      id: '', // Will get new ID
+      id: '',
       type: entry.type,
       timestamp: newTimestamp,
     );
 
-    // Delete old entry and add new one
     await FoodTrackingService.deleteEntry(entry.id);
     await FoodTrackingService.addEntry(newEntry);
 
@@ -122,99 +236,369 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     await _loadEntries();
 
     if (mounted) {
-      final dateString = _formatDate(newTimestamp);
-      SnackBarUtils.showSuccess(context, 'Food entry moved to $dateString');
+      SnackBarUtils.showSuccess(context, 'Moved to ${DateFormatUtils.formatShort(targetDate)}');
     }
   }
 
-  Future<void> _moveEntryToDate(FoodEntry entry, String targetDateKey) async {
-    // Parse the target date
-    DateTime targetDate;
-    final now = DateTime.now();
+  Color _getDayColor(DateTime date) {
+    final entries = _entriesByDate[date];
+    if (entries == null || entries.isEmpty) return Colors.transparent;
 
-    if (targetDateKey == 'Today') {
-      targetDate = now;
-    } else if (targetDateKey == 'Yesterday') {
-      targetDate = now.subtract(const Duration(days: 1));
-    } else {
-      // Parse format "dd/mm/yyyy"
-      final parts = targetDateKey.split('/');
-      if (parts.length == 3) {
-        targetDate = DateTime(
-          int.parse(parts[2]), // year
-          int.parse(parts[1]), // month
-          int.parse(parts[0]), // day
-          entry.timestamp.hour,
-          entry.timestamp.minute,
-        );
-      } else {
-        return; // Invalid date format
-      }
-    }
+    final healthyCount = entries.where((e) => e.type == FoodType.healthy).length;
+    final total = entries.length;
+    final percentage = (healthyCount / total * 100).round();
 
-    // Create new entry with updated timestamp
-    final newEntry = FoodEntry(
-      id: '', // Will get new ID
-      type: entry.type,
-      timestamp: targetDate,
+    if (percentage >= 80) return AppColors.successGreen;
+    if (percentage >= 60) return AppColors.yellow;
+    if (percentage >= 40) return AppColors.orange;
+    return AppColors.coral;
+  }
+
+  Widget _buildCalendar() {
+    final firstDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
+    final lastDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
+    final firstWeekday = firstDayOfMonth.weekday;
+    final daysInMonth = lastDayOfMonth.day;
+    final startOffset = (firstWeekday - 1) % 7;
+
+    return Column(
+      children: [
+        // Month navigation
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
+                  });
+                },
+                icon: const Icon(Icons.chevron_left_rounded),
+                color: AppColors.greyText,
+                iconSize: 20,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+              Text(
+                DateFormatUtils.formatMonthYear(_focusedMonth),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              IconButton(
+                onPressed: _focusedMonth.isBefore(DateTime(DateTime.now().year, DateTime.now().month, 1))
+                    ? () {
+                        setState(() {
+                          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
+                        });
+                      }
+                    : null,
+                icon: const Icon(Icons.chevron_right_rounded),
+                color: AppColors.greyText,
+                iconSize: 20,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+            ],
+          ),
+        ),
+
+        // Weekday headers
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day) {
+              return SizedBox(
+                width: 36,
+                child: Center(
+                  child: Text(
+                    day,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.greyText,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+
+        const SizedBox(height: 4),
+
+        // Calendar grid
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 2,
+              crossAxisSpacing: 2,
+              childAspectRatio: 1.2,
+            ),
+            itemCount: startOffset + daysInMonth,
+            itemBuilder: (context, index) {
+              if (index < startOffset) {
+                return const SizedBox();
+              }
+
+              final day = index - startOffset + 1;
+              final date = DateTime(_focusedMonth.year, _focusedMonth.month, day);
+              final isToday = DateFormatUtils.isSameDay(date, DateTime.now());
+              final isSelected = _selectedDate != null && DateFormatUtils.isSameDay(date, _selectedDate!);
+              final isFuture = date.isAfter(DateTime.now());
+              final hasEntries = _entriesByDate.containsKey(date);
+              final dayColor = _getDayColor(date);
+              final entries = _entriesByDate[date] ?? [];
+
+              return DragTarget<FoodEntry>(
+                onWillAcceptWithDetails: (details) => !isFuture,
+                onAcceptWithDetails: (details) {
+                  _moveEntryToDate(details.data, date);
+                },
+                builder: (context, candidateData, rejectedData) {
+                  final isDropTarget = candidateData.isNotEmpty;
+
+                  return GestureDetector(
+                    onTap: hasEntries ? () => setState(() => _selectedDate = date) : null,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isDropTarget
+                            ? AppColors.successGreen.withValues(alpha: 0.3)
+                            : isSelected
+                                ? AppColors.successGreen.withValues(alpha: 0.2)
+                                : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                        border: isToday
+                            ? Border.all(color: AppColors.waterBlue, width: 1.5)
+                            : isDropTarget
+                                ? Border.all(color: AppColors.successGreen, width: 2)
+                                : null,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '$day',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isToday || isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isFuture
+                                  ? AppColors.greyText.withValues(alpha: 0.4)
+                                  : isToday
+                                      ? AppColors.waterBlue
+                                      : Colors.white,
+                            ),
+                          ),
+                          if (hasEntries)
+                            Container(
+                              margin: const EdgeInsets.only(top: 2),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 16,
+                                    height: 3,
+                                    decoration: BoxDecoration(
+                                      color: dayColor,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '${entries.length}',
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      color: dayColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+
+        // Legend
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildLegendItem('80%+', AppColors.successGreen),
+              _buildLegendItem('60%+', AppColors.yellow),
+              _buildLegendItem('40%+', AppColors.orange),
+              _buildLegendItem('<40%', AppColors.coral),
+            ],
+          ),
+        ),
+      ],
     );
-
-    // Delete old entry and add new one
-    await FoodTrackingService.deleteEntry(entry.id);
-    await FoodTrackingService.addEntry(newEntry);
-
-    HapticFeedback.mediumImpact();
-    await _loadEntries();
-
-    if (mounted) {
-      SnackBarUtils.showSuccess(context, 'Food entry moved to $targetDateKey');
-    }
   }
 
-  Widget _buildEntryTile(FoodEntry entry) {
+  Widget _buildLegendItem(String label, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: AppColors.greyText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedDaySection() {
+    if (_selectedDate == null) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Text(
+            'Tap a day with entries to view details',
+            style: TextStyle(color: AppColors.greyText, fontSize: 13),
+          ),
+        ),
+      );
+    }
+
+    final entries = _entriesByDate[_selectedDate!] ?? [];
+    if (entries.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Text(
+            'No entries for this day',
+            style: TextStyle(color: AppColors.greyText, fontSize: 13),
+          ),
+        ),
+      );
+    }
+
+    final healthyCount = entries.where((e) => e.type == FoodType.healthy).length;
+    final processedCount = entries.where((e) => e.type == FoodType.processed).length;
+    final total = healthyCount + processedCount;
+    final healthyPercentage = total > 0 ? (healthyCount / total * 100).round() : 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Day header
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.normalCardBackground,
+            borderRadius: AppStyles.borderRadiusMedium,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.calendar_today_rounded,
+                color: AppColors.successGreen,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  DateFormatUtils.formatFullDate(_selectedDate!),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: healthyPercentage >= 80
+                      ? AppColors.successGreen.withValues(alpha: 0.2)
+                      : healthyPercentage >= 60
+                          ? AppColors.yellow.withValues(alpha: 0.2)
+                          : AppColors.orange.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$healthyPercentage% healthy',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: healthyPercentage >= 80
+                        ? AppColors.successGreen
+                        : healthyPercentage >= 60
+                            ? AppColors.yellow
+                            : AppColors.orange,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // Compact entry list
+        ...entries.map((entry) => _buildCompactEntryTile(entry)),
+      ],
+    );
+  }
+
+  Widget _buildCompactEntryTile(FoodEntry entry) {
     final isHealthy = entry.type == FoodType.healthy;
     final color = isHealthy ? AppColors.successGreen : AppColors.orange;
     final icon = isHealthy ? Icons.restaurant : Icons.fastfood;
 
     return LongPressDraggable<FoodEntry>(
       data: entry,
-      delay: const Duration(milliseconds: 300),
+      delay: const Duration(milliseconds: 200),
       feedback: Material(
         elevation: 8,
-        borderRadius: AppStyles.borderRadiusMedium,
+        borderRadius: AppStyles.borderRadiusSmall,
         child: Container(
-          width: 300,
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: AppColors.normalCardBackground,
-            borderRadius: AppStyles.borderRadiusMedium,
+            borderRadius: AppStyles.borderRadiusSmall,
             border: Border.all(color: color, width: 2),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircleAvatar(
-                backgroundColor: color.withValues(alpha: 0.2),
-                child: Icon(icon, color: color),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      isHealthy ? 'Healthy Food' : 'Processed Food',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        color: color,
-                      ),
-                    ),
-                    Text(
-                      _formatTime(entry.timestamp),
-                      style: const TextStyle(color: AppColors.greyText),
-                    ),
-                  ],
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                isHealthy ? 'Healthy' : 'Processed',
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                  fontSize: 13,
                 ),
               ),
             ],
@@ -223,111 +607,99 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
       ),
       childWhenDragging: Opacity(
         opacity: 0.3,
-        child: Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: color.withValues(alpha: 0.2),
-              child: Icon(icon, color: color),
+        child: _buildEntryRow(entry, color, icon, isHealthy),
+      ),
+      child: _buildEntryRow(entry, color, icon, isHealthy),
+    );
+  }
+
+  Widget _buildEntryRow(FoodEntry entry, Color color, IconData icon, bool isHealthy) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: AppStyles.borderRadiusSmall,
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(6),
             ),
-            title: Text(
-              isHealthy ? 'Healthy Food' : 'Processed Food',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: color,
-              ),
-            ),
-            subtitle: Text(_formatTime(entry.timestamp)),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(
-                  onPressed: () => _showChangeDateDialog(entry),
-                  icon: const Icon(Icons.edit_calendar),
-                  color: AppColors.waterBlue.withValues(alpha: 0.7),
-                  tooltip: 'Change Date',
+                Text(
+                  isHealthy ? 'Healthy Food' : 'Processed Food',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: color,
+                    fontSize: 13,
+                  ),
                 ),
-                IconButton(
-                  onPressed: () => _deleteEntry(entry),
-                  icon: const Icon(Icons.delete_outline),
-                  color: AppColors.deleteRed.withValues(alpha: 0.7),
-                  tooltip: 'Delete',
+                Text(
+                  _formatTime(entry.timestamp),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.greyText,
+                  ),
                 ),
               ],
             ),
           ),
-        ),
-      ),
-      child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: ListTile(
-          leading: CircleAvatar(
-            backgroundColor: color.withValues(alpha: 0.2),
-            child: Icon(icon, color: color),
+          Icon(Icons.drag_indicator, color: AppColors.greyText.withValues(alpha: 0.5), size: 18),
+          IconButton(
+            onPressed: () => _deleteEntry(entry),
+            icon: const Icon(Icons.close, size: 16),
+            color: AppColors.deleteRed.withValues(alpha: 0.6),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            tooltip: 'Delete',
           ),
-          title: Text(
-            isHealthy ? 'Healthy Food' : 'Processed Food',
-            style: TextStyle(
-              fontWeight: FontWeight.w500,
-              color: color,
-            ),
-          ),
-          subtitle: Text(_formatTime(entry.timestamp)),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                onPressed: () => _showChangeDateDialog(entry),
-                icon: const Icon(Icons.edit_calendar),
-                color: AppColors.waterBlue.withValues(alpha: 0.7),
-                tooltip: 'Change Date',
-              ),
-              IconButton(
-                onPressed: () => _deleteEntry(entry),
-                icon: const Icon(Icons.delete_outline),
-                color: AppColors.deleteRed.withValues(alpha: 0.7),
-                tooltip: 'Delete',
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildWeeklyStatsSection() {
-    if (_periodHistory.isEmpty) return const SizedBox.shrink();
+  Widget _buildStatsHistorySection() {
+    if (_timeframeHistory.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      children: [
-        Card(
-          margin: const EdgeInsets.all(16),
-          child: ExpansionTile(
-            initiallyExpanded: _showPeriodHistory,
-            onExpansionChanged: (expanded) {
-              setState(() => _showPeriodHistory = expanded);
-            },
-            title: const Text(
-              'Period History',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text('${_periodHistory.length} periods completed'),
-            children: [
-              ..._periodHistory.map((period) => _buildPeriodTile(period)),
-              const SizedBox(height: 8),
-            ],
-          ),
+    return Card(
+      margin: const EdgeInsets.all(16),
+      child: ExpansionTile(
+        initiallyExpanded: _showTimeframeHistory,
+        onExpansionChanged: (expanded) {
+          setState(() => _showTimeframeHistory = expanded);
+        },
+        title: const Text(
+          'Stats History',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
         ),
-      ],
+        subtitle: Text(
+          '${_timeframeHistory.length} completed',
+          style: const TextStyle(fontSize: 12),
+        ),
+        children: [
+          ..._timeframeHistory.map((entry) => _buildTimeframeTile(entry)),
+          const SizedBox(height: 8),
+        ],
+      ),
     );
   }
 
-  Widget _buildPeriodTile(Map<String, dynamic> period) {
-    final percentage = period['percentage'] as int;
-    final healthy = period['healthy'] as int;
-    final processed = period['processed'] as int;
-    final periodLabel = period['periodLabel'] as String;
-    final frequency = period['frequency'] as String;
+  Widget _buildTimeframeTile(Map<String, dynamic> timeframe) {
+    final percentage = timeframe['percentage'] as int;
+    final healthy = timeframe['healthy'] as int;
+    final processed = timeframe['processed'] as int;
+    final timeframeLabel = timeframe['periodLabel'] as String;
+    final frequency = timeframe['frequency'] as String;
 
     Color statusColor;
     if (percentage >= 80) {
@@ -339,22 +711,27 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     }
 
     return ListTile(
+      dense: true,
       leading: CircleAvatar(
+        radius: 16,
         backgroundColor: statusColor.withValues(alpha: 0.2),
         child: Text(
           '$percentage%',
           style: TextStyle(
             color: statusColor,
-            fontSize: 12,
+            fontSize: 10,
             fontWeight: FontWeight.bold,
           ),
         ),
       ),
-      title: Text(periodLabel),
-      subtitle: Text('$healthy healthy, $processed processed • ${frequency == "monthly" ? "Monthly" : "Weekly"}'),
+      title: Text(timeframeLabel, style: const TextStyle(fontSize: 13)),
+      subtitle: Text(
+        '$healthy healthy, $processed processed • ${frequency == "monthly" ? "Monthly" : "Weekly"}',
+        style: const TextStyle(fontSize: 11),
+      ),
       trailing: Container(
-        width: 60,
-        height: 6,
+        width: 50,
+        height: 5,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(3),
           color: AppColors.orange.withValues(alpha: 0.3),
@@ -370,121 +747,6 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildDaySection(String date, List<FoodEntry> entries) {
-    final healthyCount = entries.where((e) => e.type == FoodType.healthy).length;
-    final processedCount = entries.where((e) => e.type == FoodType.processed).length;
-    final total = healthyCount + processedCount;
-    final healthyPercentage = total > 0 ? (healthyCount / total * 100).round() : 0;
-
-    return DragTarget<FoodEntry>(
-      onWillAcceptWithDetails: (details) => true,
-      onAcceptWithDetails: (details) {
-        final entry = details.data;
-        // Don't move if dropping on the same date
-        final entryDateKey = _formatDate(entry.timestamp);
-        if (entryDateKey != date) {
-          _moveEntryToDate(entry, date);
-        }
-      },
-      builder: (context, candidateData, rejectedData) {
-        final isBeingDraggedOver = candidateData.isNotEmpty;
-
-        return Container(
-          decoration: BoxDecoration(
-            color: isBeingDraggedOver
-                ? AppColors.successGreen.withValues(alpha: 0.1)
-                : null,
-            border: isBeingDraggedOver
-                ? Border.all(color: AppColors.successGreen, width: 2)
-                : null,
-            borderRadius: isBeingDraggedOver ? AppStyles.borderRadiusSmall : null,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                margin: const EdgeInsets.only(top: 16),
-                color: isBeingDraggedOver
-                    ? AppColors.successGreen.withValues(alpha: 0.2)
-                    : AppColors.normalCardBackground.withValues(alpha: 0.3),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          date,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (isBeingDraggedOver) ...[
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.add_circle_outline,
-                            color: AppColors.successGreen,
-                            size: 16,
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (total > 0)
-                      Text(
-                        '$healthyPercentage% healthy ($healthyCount/$total)',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: healthyPercentage >= 80
-                              ? AppColors.successGreen
-                              : healthyPercentage >= 60
-                                  ? AppColors.orange
-                                  : AppColors.red,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              ...entries.map(_buildEntryTile),
-              if (isBeingDraggedOver)
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.successGreen.withValues(alpha: 0.1),
-                    borderRadius: AppStyles.borderRadiusSmall,
-                    border: Border.all(
-                      color: AppColors.successGreen.withValues(alpha: 0.3),
-                      style: BorderStyle.solid,
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.add_circle_outline,
-                        color: AppColors.successGreen,
-                        size: 20,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Drop here to move to this date',
-                        style: TextStyle(
-                          color: AppColors.successGreen,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -515,15 +777,20 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
                   title: 'Food Tracking Tips',
                   message: 'Track your food intake to maintain a healthy balance:\n\n'
                       '• Aim for 80% healthy foods\n'
-                      '• Limit processed foods to 20%\n'
-                      '• Counts reset monthly (configurable in settings)\n'
-                      '• Swipe or tap delete to remove entries',
+                      '• Long-press and drag entries to move them to another day\n'
+                      '• Tap a day in the calendar to see its entries\n'
+                      '• Colors show healthy food percentage',
                   buttonText: 'Got it',
                 );
               },
               icon: const Icon(Icons.info_outline),
             ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddFoodBottomSheet,
+        backgroundColor: AppColors.successGreen,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -551,12 +818,16 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
                     ],
                   ),
                 )
-              : ListView(
-                  children: [
-                    _buildWeeklyStatsSection(),
-                    ..._groupedEntries.entries
-                        .map((entry) => _buildDaySection(entry.key, entry.value)),
-                  ],
+              : SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildCalendar(),
+                      const Divider(height: 1),
+                      _buildSelectedDaySection(),
+                      _buildStatsHistorySection(),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
                 ),
     );
   }

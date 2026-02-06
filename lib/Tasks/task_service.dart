@@ -413,14 +413,15 @@ class TaskService {
         }
       }
 
-      // For menstrual tasks: clear scheduledDate but DON'T mark as postponed
+      // For menstrual tasks: clear scheduledDate AND mark as postponed
+      // This ensures they appear at the bottom of the list (priority service handles this)
       // They will naturally reschedule when the phase occurs again
       // For regular tasks: set next occurrence and mark as postponed
       final updatedTask = task.copyWith(
         scheduledDate: isMenstrualTask ? null : nextOccurrenceDate,
         clearScheduledDate: isMenstrualTask,
         reminderTime: newReminderTime,
-        isPostponed: !isMenstrualTask, // Only mark regular tasks as postponed
+        isPostponed: true, // Mark ALL skipped tasks as postponed (including menstrual)
       );
 
       // Load fresh task list and update it

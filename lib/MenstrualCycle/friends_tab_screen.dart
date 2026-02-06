@@ -168,61 +168,145 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
   void _editFriend(Friend friend) {
     final nameController = TextEditingController(text: friend.name);
     Color selectedColor = friend.color;
+    DateTime? selectedBirthday = friend.birthday;
+    bool notifyLowBattery = friend.notifyLowBattery;
+    bool notifyBirthday = friend.notifyBirthday;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Edit Friend'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  border: OutlineInputBorder(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Text('Select Color:', style: TextStyle(fontWeight: FontWeight.w500)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _availableColors.map((color) {
-                  final isSelected = color == selectedColor;
-                  return GestureDetector(
-                    onTap: () {
-                      setDialogState(() {
-                        selectedColor = color;
-                      });
-                    },
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isSelected ? Colors.white : Colors.transparent,
-                          width: 3,
+                const SizedBox(height: 16),
+                const Text('Select Color:', style: TextStyle(fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _availableColors.map((color) {
+                    final isSelected = color == selectedColor;
+                    return GestureDetector(
+                      onTap: () {
+                        setDialogState(() {
+                          selectedColor = color;
+                        });
+                      },
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isSelected ? Colors.white : Colors.transparent,
+                            width: 3,
+                          ),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: color.withValues(alpha: 0.5),
+                                    blurRadius: 8,
+                                    spreadRadius: 2,
+                                  ),
+                                ]
+                              : null,
                         ),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: color.withValues(alpha: 0.5),
-                                  blurRadius: 8,
-                                  spreadRadius: 2,
-                                ),
-                              ]
-                            : null,
                       ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                // Birthday picker
+                const Text('Birthday:', style: TextStyle(fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: selectedBirthday ?? DateTime.now(),
+                      firstDate: DateTime(1900),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) {
+                      setDialogState(() {
+                        selectedBirthday = picked;
+                      });
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.greyText),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                  );
-                }).toList(),
-              ),
-            ],
+                    child: Row(
+                      children: [
+                        Icon(Icons.cake_rounded, color: selectedBirthday != null ? selectedColor : AppColors.greyText),
+                        const SizedBox(width: 12),
+                        Text(
+                          selectedBirthday != null
+                              ? '${_months[selectedBirthday!.month - 1]} ${selectedBirthday!.day}'
+                              : 'Not set',
+                          style: TextStyle(
+                            color: selectedBirthday != null ? null : AppColors.greyText,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (selectedBirthday != null)
+                          GestureDetector(
+                            onTap: () {
+                              setDialogState(() {
+                                selectedBirthday = null;
+                              });
+                            },
+                            child: Icon(Icons.close, size: 20, color: AppColors.greyText),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Notification toggles
+                const Text('Notifications:', style: TextStyle(fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  title: const Text('Low battery reminder'),
+                  subtitle: Text('Notify when below 30%', style: TextStyle(fontSize: 12, color: AppColors.greyText)),
+                  value: notifyLowBattery,
+                  onChanged: (value) {
+                    setDialogState(() {
+                      notifyLowBattery = value;
+                    });
+                  },
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                SwitchListTile(
+                  title: const Text('Birthday reminder'),
+                  subtitle: Text('Notify 3 days before', style: TextStyle(fontSize: 12, color: AppColors.greyText)),
+                  value: notifyBirthday,
+                  onChanged: selectedBirthday != null ? (value) {
+                    setDialogState(() {
+                      notifyBirthday = value;
+                    });
+                  } : null,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -236,6 +320,9 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                   final updatedFriend = friend.copyWith(
                     name: name,
                     color: selectedColor,
+                    birthday: selectedBirthday,
+                    notifyLowBattery: notifyLowBattery,
+                    notifyBirthday: notifyBirthday,
                   );
 
                   final navigator = Navigator.of(context);
@@ -254,6 +341,8 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
       ),
     );
   }
+
+  static const List<String> _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   void _editNotes(Friend friend) {
     final notesController = TextEditingController(text: friend.notes ?? '');
@@ -276,18 +365,33 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
         content: SizedBox(
           width: MediaQuery.of(context).size.width * 0.9,
           height: MediaQuery.of(context).size.height * 0.6,
-          child: TextField(
-            controller: notesController,
-            decoration: InputDecoration(
-              labelText: 'Personal Notes',
-              border: const OutlineInputBorder(),
-              hintText: 'Add personal notes about ${friend.name}...',
-              alignLabelWithHint: true,
-            ),
-            maxLines: null,
-            expands: true,
-            autofocus: true,
-            textAlignVertical: TextAlignVertical.top,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Save details to remember for your next meeting: children\'s names, topics discussed, things to follow up on, or anything useful.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.greyText,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: TextField(
+                  controller: notesController,
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    hintText: 'e.g., Has 2 kids: Emma and Jack. Works at...',
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: null,
+                  expands: true,
+                  autofocus: true,
+                  textAlignVertical: TextAlignVertical.top,
+                ),
+              ),
+            ],
           ),
         ),
         actions: [
@@ -338,13 +442,72 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
     });
   }
 
-  void _rechargeBattery(Friend friend) {
-    FriendService.updateFriendBattery(friend.id, 1.0, _friends).then((_) {
-      _loadFriends();
-      if (mounted) {
-        SnackBarUtils.showSuccess(context, '${friend.name}\'s friendship battery recharged to 100%!', duration: const Duration(seconds: 2));
-      }
-    });
+  void _showMeetingTypeDialog(Friend friend) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.favorite_rounded, color: Colors.red),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('Log Interaction')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'How did you connect with ${friend.name}?',
+              style: TextStyle(color: AppColors.greyText),
+            ),
+            const SizedBox(height: 16),
+            ...MeetingType.values.map((type) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: type.color.withValues(alpha: 0.2),
+                  child: Icon(type.icon, color: type.color),
+                ),
+                title: Text(type.label),
+                subtitle: Text(
+                  'Recharge to ${(type.batteryBoost * 100).toInt()}%',
+                  style: TextStyle(fontSize: 12, color: AppColors.greyText),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(color: AppColors.greyText.withValues(alpha: 0.3)),
+                ),
+                onTap: () {
+                  final meeting = Meeting(
+                    date: DateTime.now(),
+                    type: type,
+                  );
+                  friend.addMeeting(meeting);
+                  final navigator = Navigator.of(context);
+                  FriendService.updateFriend(friend, _friends).then((_) {
+                    _loadFriends();
+                    if (mounted) {
+                      navigator.pop();
+                      SnackBarUtils.showSuccess(
+                        context,
+                        '${friend.name}\'s battery recharged to ${(type.batteryBoost * 100).toInt()}%!',
+                        duration: const Duration(seconds: 2),
+                      );
+                    }
+                  });
+                },
+              ),
+            )),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -469,14 +632,14 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
           key: ValueKey(friend.id),
           onHorizontalDragUpdate: (details) {
             setState(() {
-              _swipeOffsets[friend.id] = (swipeOffset + details.delta.dx).clamp(-150.0, 150.0);
+              _swipeOffsets[friend.id] = (swipeOffset + details.delta.dx).clamp(-200.0, 200.0);
             });
 
             final offset = _swipeOffsets[friend.id]!;
             // Start hold timer if swiped far enough
-            if ((offset < -100 || offset > 100) && _holdTimers[friend.id] == null) {
+            if ((offset < -150 || offset > 150) && _holdTimers[friend.id] == null) {
               _startHoldTimer(friend);
-            } else if (offset.abs() < 100) {
+            } else if (offset.abs() < 150) {
               _cancelHoldTimer(friend.id);
             }
           },
@@ -566,15 +729,6 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                           children: [
                   Row(
                     children: [
-                      // Drag handle for reordering (only show for active friends)
-                      if (!_showArchived) ...[
-                        Icon(
-                          Icons.drag_handle_rounded,
-                          color: AppColors.greyText.withValues(alpha: 0.5),
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                      ],
                       // Friend color indicator
                       Container(
                         width: 12,
@@ -610,7 +764,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                       // Recharge button (only show for active friends)
                       if (!_showArchived)
                         IconButton(
-                          onPressed: () => _rechargeBattery(friend),
+                          onPressed: () => _showMeetingTypeDialog(friend),
                           icon: const Icon(Icons.favorite_rounded),
                           color: Colors.red,
                           tooltip: 'Met today!',
@@ -653,9 +807,9 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  // Last updated info
+                  // Last seen info
                   Text(
-                    'Last updated: ${_formatLastUpdated(friend.lastUpdated)}',
+                    'Last seen: ${_formatLastSeen(friend.lastUpdated)}',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.greyText,
@@ -727,18 +881,22 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
     });
   }
 
-  String _formatLastUpdated(DateTime date) {
+  String _formatLastSeen(DateTime date) {
     final now = DateTime.now();
-    final difference = now.difference(date);
+    final today = DateTime(now.year, now.month, now.day);
+    final dateOnly = DateTime(date.year, date.month, date.day);
+    final difference = today.difference(dateOnly).inDays;
 
-    if (difference.inDays == 0) {
+    if (difference == 0) {
       return 'Today';
-    } else if (difference.inDays == 1) {
+    } else if (difference == 1) {
       return 'Yesterday';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} days ago';
+    } else if (difference < 7) {
+      return '$difference days ago';
     } else {
-      return '${(difference.inDays / 7).floor()} weeks ago';
+      // Show actual date for older entries
+      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return '${months[date.month - 1]} ${date.day}${date.year != now.year ? ', ${date.year}' : ''}';
     }
   }
 }
