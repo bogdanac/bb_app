@@ -1563,7 +1563,7 @@ class _FastingScreenState extends State<FastingScreen>
 
                       // Recommended fast button
                       if (recommendedFast.isNotEmpty) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 20),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
@@ -1590,7 +1590,7 @@ class _FastingScreenState extends State<FastingScreen>
 
                         // Fast Guide button (show for all fast types)
                         if (recommendedFast.isNotEmpty) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 16),
                           SizedBox(
                             width: double.infinity,
                             child: TextButton.icon(

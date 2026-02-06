@@ -585,7 +585,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
-  int _selectedIndex = 0;
+  int _selectedIndex = 2; // Default to Home tab (middle of 5 primary tabs)
   late AnimationController _animationController;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   Map<String, bool> _moduleStates = {};
@@ -647,7 +647,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
     ),
     AppCustomizationService.moduleChores: _TabConfig(
       screen: ChoresScreen(onOpenDrawer: _openDrawer),
-      icon: Icons.cleaning_services_rounded,
+      icon: Icons.checklist_rounded,
       label: 'Chores',
       color: AppColors.waterBlue,
       moduleKey: AppCustomizationService.moduleChores,

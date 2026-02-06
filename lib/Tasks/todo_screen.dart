@@ -1856,9 +1856,6 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildTasksList(List<Task> prioritizedTasks) {
-    // Check if we're in desktop/web mode with wider resolution
-    final isDesktopMode = MediaQuery.of(context).size.width > 800;
-
     final listWidget = prioritizedTasks.isEmpty
         ? ListView(
           // Need ListView for RefreshIndicator to work with empty state
@@ -1917,19 +1914,13 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           },
         );
 
-    // For desktop mode, center the list and constrain width to 50%
-    if (isDesktopMode) {
-      return Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.5,
-          ),
-          child: listWidget,
-        ),
-      );
-    }
-
-    return listWidget;
+    // For desktop mode, center the list and constrain width
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 800),
+        child: listWidget,
+      ),
+    );
   }
 
   @override

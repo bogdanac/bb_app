@@ -96,7 +96,8 @@ class _CollapsibleCardWrapperState extends State<CollapsibleCardWrapper> {
         ),
       ),
       child: InkWell(
-        onTap: widget.onTap,
+        // Tapping the collapsed card should expand it, not navigate
+        onTap: _toggleCollapsed,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -121,17 +122,26 @@ class _CollapsibleCardWrapperState extends State<CollapsibleCardWrapper> {
                 widget.trailing!,
                 const SizedBox(width: 8),
               ],
-              // Expand button
-              GestureDetector(
-                onTap: _toggleCollapsed,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    Icons.expand_more_rounded,
-                    color: AppColors.grey300,
-                    size: 20,
+              // Navigate button (when collapsed, allow navigation via icon)
+              if (widget.onTap != null) ...[
+                GestureDetector(
+                  onTap: widget.onTap,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.open_in_new_rounded,
+                      color: AppColors.white70,
+                      size: 18,
+                    ),
                   ),
                 ),
+                const SizedBox(width: 4),
+              ],
+              // Expand indicator
+              Icon(
+                Icons.expand_more_rounded,
+                color: AppColors.white70,
+                size: 20,
               ),
             ],
           ),
@@ -153,12 +163,12 @@ class _CollapsibleCardWrapperState extends State<CollapsibleCardWrapper> {
             child: Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: AppColors.grey300.withValues(alpha: 0.1),
+                color: AppColors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Icon(
                 Icons.expand_less_rounded,
-                color: AppColors.grey300,
+                color: AppColors.white70,
                 size: 18,
               ),
             ),

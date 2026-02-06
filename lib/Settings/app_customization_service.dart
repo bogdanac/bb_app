@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_colors.dart';
@@ -188,7 +190,7 @@ class AppCustomizationService {
       key: moduleChores,
       label: 'Chores',
       description: 'Household chores with condition decay tracking',
-      icon: Icons.cleaning_services_rounded,
+      icon: Icons.checklist_rounded,
       color: AppColors.waterBlue,
       canBeDisabled: true,
     ),
@@ -272,7 +274,7 @@ class AppCustomizationService {
       key: cardChores,
       label: 'Chores',
       description: 'Today\'s household chores',
-      icon: Icons.cleaning_services_rounded,
+      icon: Icons.checklist_rounded,
       color: AppColors.waterBlue,
       dependsOnModule: moduleChores,
     ),
@@ -318,8 +320,9 @@ class AppCustomizationService {
 
   // ============= Module Management =============
 
-  // Modules that default to OFF on fresh install
-  static const Set<String> _modulesDefaultOff = {
+  // Modules that default to OFF on fresh install (MOBILE ONLY)
+  // On desktop/web, all modules default to ON
+  static const Set<String> _modulesDefaultOffMobile = {
     moduleFood,
     moduleEnergy,
     moduleMenstrual,
@@ -328,19 +331,35 @@ class AppCustomizationService {
   };
 
   /// Load all module states
+  /// On desktop/web, all modules default to ON
+  /// On mobile, some modules default to OFF (defined in _modulesDefaultOffMobile)
   static Future<Map<String, bool>> loadAllModuleStates() async {
     final prefs = await SharedPreferences.getInstance();
+    // On web/desktop, all modules default to ON
+    final isDesktop = _isDesktopPlatform();
     return {
       for (var module in allModules)
-        module.key: prefs.getBool(module.key) ?? !_modulesDefaultOff.contains(module.key),
+        module.key: prefs.getBool(module.key) ?? (isDesktop ? true : !_modulesDefaultOffMobile.contains(module.key)),
     };
+  }
+
+  /// Check if running on desktop platform (web, Windows, macOS, Linux)
+  static bool _isDesktopPlatform() {
+    if (kIsWeb) return true;
+    try {
+      return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Check if a specific module is enabled
   static Future<bool> isModuleEnabled(String moduleKey) async {
     final prefs = await SharedPreferences.getInstance();
-    // Modules in _modulesDefaultOff default to false, all others default to true
-    return prefs.getBool(moduleKey) ?? !_modulesDefaultOff.contains(moduleKey);
+    // On web/desktop, all modules default to ON
+    // On mobile, modules in _modulesDefaultOffMobile default to false
+    final isDesktop = _isDesktopPlatform();
+    return prefs.getBool(moduleKey) ?? (isDesktop ? true : !_modulesDefaultOffMobile.contains(moduleKey));
   }
 
   /// Enable or disable a module

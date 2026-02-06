@@ -612,7 +612,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
     }
 
     return ReorderableListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80), // Extra bottom padding for FAB
       itemCount: _friends.length,
       onReorder: _showArchived
           ? (oldIndex, newIndex) {} // Disable reordering for archived friends

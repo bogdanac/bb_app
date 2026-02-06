@@ -1330,16 +1330,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           feedback: Material(
             elevation: 8,
             borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              width: width,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: width, maxHeight: 450),
               child: Opacity(
                 opacity: 0.9,
                 child: child,
               ),
             ),
           ),
-          childWhenDragging: SizedBox(
-            width: width,
+          childWhenDragging: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: width, maxHeight: 450),
             child: Opacity(
               opacity: 0.3,
               child: child,
@@ -1365,15 +1365,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   /// Build ALL cards for desktop with their keys for variable width support
+  /// Respects card visibility toggles from settings
   List<(String, Widget)> _buildAllCardsForDesktopWithKeys() {
     final cardBuilders = <String, Widget? Function()>{
       AppCustomizationService.cardProductivity: () {
+        if (!_isCardVisible(AppCustomizationService.cardProductivity)) return null;
         return ProductivityCard(
           onNavigateToTimers: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleTimers),
           onTimerComplete: _onTimerComplete,
         );
       },
       AppCustomizationService.cardMenstrual: () {
+        if (!_isCardVisible(AppCustomizationService.cardMenstrual)) return null;
         return MenstrualCycleCard(
           key: _menstrualCycleKey,
           onTap: () {
@@ -1382,12 +1385,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
       },
       AppCustomizationService.cardBatteryFlow: () {
+        if (!_isCardVisible(AppCustomizationService.cardBatteryFlow)) return null;
         return BatteryFlowHomeCard(key: _batteryFlowCardKey);
       },
       AppCustomizationService.cardCalendar: () {
+        if (!_isCardVisible(AppCustomizationService.cardCalendar)) return null;
         return CalendarEventsCard(key: _calendarEventsKey);
       },
       AppCustomizationService.cardFasting: () {
+        if (!_isCardVisible(AppCustomizationService.cardFasting)) return null;
         if (!showFastingSection) return null;
         return FastingCard(
           onHiddenForToday: _onFastingHiddenForToday,
@@ -1400,10 +1406,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
       },
       AppCustomizationService.cardFoodTracking: () {
+        if (!_isCardVisible(AppCustomizationService.cardFoodTracking)) return null;
         if (_isFastingInProgress) return null;
         return const FoodTrackingCard();
       },
       AppCustomizationService.cardWaterTracking: () {
+        if (!_isCardVisible(AppCustomizationService.cardWaterTracking)) return null;
         if (!_shouldShowWaterTracking) return null;
         return WaterTrackingCard(
           waterIntake: waterIntake,
@@ -1411,12 +1419,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
       },
       AppCustomizationService.cardHabits: () {
+        if (!_isCardVisible(AppCustomizationService.cardHabits)) return null;
         if (!showHabitCard) return null;
         return HabitCard(
           onAllCompleted: _onAllHabitsCompleted,
         );
       },
       AppCustomizationService.cardRoutines: () {
+        if (!_isCardVisible(AppCustomizationService.cardRoutines)) return null;
         if (!showRoutine) return null;
         return RoutineCard(
           key: _routineCardKey,
@@ -1427,20 +1437,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
       },
       AppCustomizationService.cardDailyTasks: () {
+        if (!_isCardVisible(AppCustomizationService.cardDailyTasks)) return null;
         return const DailyTasksCard();
       },
       AppCustomizationService.cardChores: () {
+        if (!_isCardVisible(AppCustomizationService.cardChores)) return null;
         return ChoresCard(
           onTap: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleChores),
           onChoreCompleted: _onChoreCompleted,
         );
       },
       AppCustomizationService.cardActivities: () {
+        if (!_isCardVisible(AppCustomizationService.cardActivities)) return null;
         return ActivitiesCard(
           onNavigateToTimers: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleTimers),
         );
       },
       AppCustomizationService.cardEndOfDayReview: () {
+        if (!_isCardVisible(AppCustomizationService.cardEndOfDayReview)) return null;
         // On desktop, show during evening if enabled (same logic as mobile)
         if (!_isEveningTime || !_endOfDayReviewEnabled) return null;
         return const EndOfDayReviewCard();

@@ -31,10 +31,10 @@ class _TimersScreenState extends State<TimersScreen>
   // --- Productivity tab state ---
   bool _isCountdownMode = false;
   String? _selectedActivityId;
-  int _countdownMinutes = 0;
+  int _countdownMinutes = 25;
   int _workMinutes = 25;
   int _breakMinutes = 5;
-  Duration _remainingTime = Duration.zero;
+  Duration _remainingTime = const Duration(minutes: 25);
   bool _isRunning = false;
   bool _isPomodoroBreak = false;
   int _pomodoroCount = 0;
@@ -896,21 +896,58 @@ class _TimersScreenState extends State<TimersScreen>
               ),
             ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.purple,
-          indicatorWeight: 3,
-          labelColor: AppColors.purple,
-          labelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-          unselectedLabelColor: AppColors.grey200,
-          unselectedLabelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-          dividerColor: Colors.transparent,
-          splashFactory: NoSplash.splashFactory,
-          overlayColor: WidgetStateProperty.all(Colors.transparent),
-          tabs: const [
-            Tab(text: 'Productivity'),
-            Tab(text: 'Activities'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.purple.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(25),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                color: AppColors.purple,
+                borderRadius: BorderRadius.circular(25),
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
+              labelColor: AppColors.white,
+              unselectedLabelColor: AppColors.lightPurple,
+              labelStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+              splashFactory: NoSplash.splashFactory,
+              overlayColor: WidgetStateProperty.all(Colors.transparent),
+              tabs: const [
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.timer_rounded, size: 20),
+                      SizedBox(width: 8),
+                      Text('Productivity'),
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.history_rounded, size: 20),
+                      SizedBox(width: 8),
+                      Text('Activities'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
       body: Center(
@@ -951,6 +988,7 @@ class _TimersScreenState extends State<TimersScreen>
               children: [
                 Expanded(
                   child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: _productivityTimerActive
                         ? null
                         : () {
@@ -964,18 +1002,26 @@ class _TimersScreenState extends State<TimersScreen>
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
                         color: !_isCountdownMode
-                            ? AppColors.purple.withValues(alpha: 0.2)
+                            ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.1 : 0.25)
                             : Colors.transparent,
                         borderRadius: AppStyles.borderRadiusMedium,
+                        border: !_isCountdownMode
+                            ? Border.all(
+                                color: AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.2 : 0.5),
+                                width: 1.5,
+                              )
+                            : null,
                       ),
                       child: Center(
                         child: Text(
                           'Pomodoro',
                           style: TextStyle(
                             color: !_isCountdownMode
-                                ? AppColors.purple
-                                : AppColors.grey200,
-                            fontWeight: FontWeight.w600,
+                                ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0)
+                                : AppColors.grey300.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0),
+                            fontWeight: !_isCountdownMode
+                                ? FontWeight.bold
+                                : FontWeight.w500,
                           ),
                         ),
                       ),
@@ -984,6 +1030,7 @@ class _TimersScreenState extends State<TimersScreen>
                 ),
                 Expanded(
                   child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: _productivityTimerActive
                         ? null
                         : () {
@@ -997,18 +1044,26 @@ class _TimersScreenState extends State<TimersScreen>
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
                         color: _isCountdownMode
-                            ? AppColors.purple.withValues(alpha: 0.2)
+                            ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.1 : 0.25)
                             : Colors.transparent,
                         borderRadius: AppStyles.borderRadiusMedium,
+                        border: _isCountdownMode
+                            ? Border.all(
+                                color: AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.2 : 0.5),
+                                width: 1.5,
+                              )
+                            : null,
                       ),
                       child: Center(
                         child: Text(
                           'Countdown',
                           style: TextStyle(
                             color: _isCountdownMode
-                                ? AppColors.purple
-                                : AppColors.grey200,
-                            fontWeight: FontWeight.w600,
+                                ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0)
+                                : AppColors.grey300.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0),
+                            fontWeight: _isCountdownMode
+                                ? FontWeight.bold
+                                : FontWeight.w500,
                           ),
                         ),
                       ),

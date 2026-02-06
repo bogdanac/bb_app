@@ -747,7 +747,8 @@ class FlowMilestoneDialog extends StatelessWidget {
 }
 
 /// Small assistant widget for inline display
-class MiniProductivityAssistant extends StatelessWidget {
+/// Uses StatefulWidget to keep tip stable during timer updates
+class MiniProductivityAssistant extends StatefulWidget {
   final AssistantState state;
   final String? tip;
 
@@ -756,6 +757,14 @@ class MiniProductivityAssistant extends StatelessWidget {
     this.state = AssistantState.idle,
     this.tip,
   });
+
+  @override
+  State<MiniProductivityAssistant> createState() => _MiniProductivityAssistantState();
+}
+
+class _MiniProductivityAssistantState extends State<MiniProductivityAssistant> {
+  String? _cachedTip;
+  AssistantState? _lastState;
 
   static const List<String> _focusTips = [
     "Stay hydrated!",
@@ -784,21 +793,28 @@ class MiniProductivityAssistant extends StatelessWidget {
   ];
 
   String _getTip() {
-    if (tip != null) return tip!;
-    final List<String> tips;
-    if (state == AssistantState.inFlow) {
-      tips = _flowTips;
-    } else if (state == AssistantState.resting) {
-      tips = _breakTips;
-    } else {
-      tips = _focusTips;
+    if (widget.tip != null) return widget.tip!;
+
+    // Only regenerate tip when state changes
+    if (_cachedTip == null || _lastState != widget.state) {
+      _lastState = widget.state;
+      final List<String> tips;
+      if (widget.state == AssistantState.inFlow) {
+        tips = _flowTips;
+      } else if (widget.state == AssistantState.resting) {
+        tips = _breakTips;
+      } else {
+        tips = _focusTips;
+      }
+      // Use random index based on current minute (changes every minute, not second)
+      _cachedTip = tips[DateTime.now().minute % tips.length];
     }
-    return tips[DateTime.now().second % tips.length];
+    return _cachedTip!;
   }
 
   @override
   Widget build(BuildContext context) {
-    final isInFlow = state == AssistantState.inFlow;
+    final isInFlow = widget.state == AssistantState.inFlow;
     final bgColor = isInFlow
         ? AppColors.yellow.withValues(alpha: 0.15)
         : AppColors.purple.withValues(alpha: 0.1);
@@ -817,7 +833,7 @@ class MiniProductivityAssistant extends StatelessWidget {
       child: Row(
         children: [
           ProductivityAssistant(
-            state: state,
+            state: widget.state,
             size: 50,
           ),
           const SizedBox(width: 12),

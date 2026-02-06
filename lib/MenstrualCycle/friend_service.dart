@@ -47,24 +47,33 @@ class FriendService {
   }
 
   /// Add a new friend
+  /// Loads all friends from storage, adds the new one, and saves back
   static Future<void> addFriend(Friend friend, List<Friend> friends) async {
-    friends.add(friend);
-    await saveFriends(friends);
+    // Load ALL friends from storage (not the filtered list passed in)
+    final allFriends = await loadFriends();
+    allFriends.add(friend);
+    await saveFriends(allFriends);
   }
 
   /// Update an existing friend
+  /// Loads all friends from storage, updates the matching one, and saves back
   static Future<void> updateFriend(Friend updatedFriend, List<Friend> friends) async {
-    final index = friends.indexWhere((f) => f.id == updatedFriend.id);
+    // Load ALL friends from storage (not the filtered list passed in)
+    final allFriends = await loadFriends();
+    final index = allFriends.indexWhere((f) => f.id == updatedFriend.id);
     if (index != -1) {
-      friends[index] = updatedFriend;
-      await saveFriends(friends);
+      allFriends[index] = updatedFriend;
+      await saveFriends(allFriends);
     }
   }
 
   /// Delete a friend
+  /// Loads all friends from storage, removes the matching one, and saves back
   static Future<void> deleteFriend(String friendId, List<Friend> friends) async {
-    friends.removeWhere((f) => f.id == friendId);
-    await saveFriends(friends);
+    // Load ALL friends from storage (not the filtered list passed in)
+    final allFriends = await loadFriends();
+    allFriends.removeWhere((f) => f.id == friendId);
+    await saveFriends(allFriends);
   }
 
   /// Reorder friends (for drag and drop)
@@ -86,9 +95,12 @@ class FriendService {
   }
 
   /// Update a friend's battery level manually
+  /// Loads all friends from storage, updates the battery, and saves back
   static Future<void> updateFriendBattery(String friendId, double newBattery, List<Friend> friends) async {
-    final friend = friends.firstWhere((f) => f.id == friendId);
+    // Load ALL friends from storage (not the filtered list passed in)
+    final allFriends = await loadFriends();
+    final friend = allFriends.firstWhere((f) => f.id == friendId, orElse: () => throw Exception('Friend not found'));
     friend.updateBattery(newBattery);
-    await saveFriends(friends);
+    await saveFriends(allFriends);
   }
 }

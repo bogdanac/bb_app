@@ -830,6 +830,13 @@ class _MenstrualCycleScreenState extends State<MenstrualCycleScreen> {
   }
 
   Widget _buildCalendar() {
+    // Calculate calendar height based on screen width
+    // Each cell is square (width/7), and we need up to 6 rows
+    final screenWidth = MediaQuery.of(context).size.width;
+    final constrainedWidth = screenWidth > 800 ? 800.0 : screenWidth;
+    final cellSize = (constrainedWidth - 64) / 7; // Account for padding
+    final calendarHeight = cellSize * 6 + 20; // 6 rows + spacing
+
     return Column(
       children: [
         _buildCalendarHeader(),
@@ -837,7 +844,7 @@ class _MenstrualCycleScreenState extends State<MenstrualCycleScreen> {
         _buildWeekdayHeaders(),
         const SizedBox(height: 8),
         SizedBox(
-          height: 240,
+          height: calendarHeight.clamp(240.0, 500.0), // Min 240, max 500
           child: PageView.builder(
             controller: _pageController,
             onPageChanged: (index) {

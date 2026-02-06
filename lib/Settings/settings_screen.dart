@@ -302,6 +302,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             border: Border.all(color: AppColors.normalCardBackground),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               // Home (always first, not movable)
               Container(
@@ -610,6 +611,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // Module info
             Expanded(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(

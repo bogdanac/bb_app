@@ -236,13 +236,15 @@ class _HabitsScreenState extends State<HabitsScreen> {
           child: ReorderableListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _habits.length,
-            onReorder: (oldIndex, newIndex) {
+            buildDefaultDragHandles: false,
+            onReorder: (oldIndex, newIndex) async {
               setState(() {
                 if (newIndex > oldIndex) newIndex--;
                 final habit = _habits.removeAt(oldIndex);
                 _habits.insert(newIndex, habit);
               });
-              // Note: Habits don't have a specific save order method like routines
+              // Save the new order
+              await HabitService.saveHabits(_habits);
             },
             itemBuilder: (context, index) {
               final habit = _habits[index];
@@ -337,7 +339,10 @@ class _HabitsScreenState extends State<HabitsScreen> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(

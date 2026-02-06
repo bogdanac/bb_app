@@ -527,6 +527,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
           child: ReorderableListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _routines.length,
+            buildDefaultDragHandles: false,
             onReorder: (oldIndex, newIndex) {
               setState(() {
                 if (newIndex > oldIndex) newIndex--;
@@ -594,6 +595,7 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
           child: ReorderableListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _habits.length,
+            buildDefaultDragHandles: false,
             onReorder: (oldIndex, newIndex) {
               setState(() {
                 if (newIndex > oldIndex) newIndex--;
@@ -692,7 +694,10 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
               children: [
                 Row(
                   children: [
-                    Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -974,7 +979,10 @@ class _RoutinesHabitsScreenState extends State<RoutinesHabitsScreen>
               children: [
                 Row(
                   children: [
-                    Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(

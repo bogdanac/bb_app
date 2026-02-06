@@ -198,6 +198,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
               )
                   : ReorderableListView.builder(
                 itemCount: _items.length,
+                buildDefaultDragHandles: false,
                 onReorder: (oldIndex, newIndex) {
                   setState(() {
                     if (newIndex > oldIndex) newIndex--;
@@ -217,7 +218,10 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
+                              ReorderableDragStartListener(
+                                index: index,
+                                child: Icon(Icons.drag_handle_rounded, color: AppColors.greyText),
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: TextField(
