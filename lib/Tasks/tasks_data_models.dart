@@ -21,7 +21,7 @@ class Task {
   final bool isCompleted;
   final DateTime? completedAt;
   final DateTime createdAt;
-  final int energyLevel; // Body Battery impact (-5 to +5: negative=draining, positive=charging, default=-1)
+  final int energyLevel; // Body Battery impact (-5 to +5: negative=draining, positive=charging, default=0)
 
   Task({
     required this.id,
@@ -37,7 +37,7 @@ class Task {
     this.isCompleted = false,
     this.completedAt,
     DateTime? createdAt,
-    this.energyLevel = -1, // Default to -1 (drains 10%, earns 11 flow points)
+    this.energyLevel = 0, // Default to 0 (neutral, no battery change)
   }) : createdAt = createdAt ?? DateTime.now();
 
   /// Create a copy of this task with modified fields
@@ -94,6 +94,12 @@ class Task {
       // If scheduled for a future date, ignore recurrence pattern
       if (scheduledDate != null && scheduledDate!.isAfter(today)) {
         return false;
+      }
+
+      // If scheduled for a past date (overdue), show as due today
+      // This handles postponed tasks whose scheduled date has passed
+      if (scheduledDate != null && scheduledDate!.isBefore(today)) {
+        return true;
       }
 
       // Then check recurrence pattern

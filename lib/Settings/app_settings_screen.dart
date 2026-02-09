@@ -4,12 +4,42 @@ import '../Routines/widget_color_settings_screen.dart';
 import 'modules_screen.dart';
 import 'home_cards_screen.dart';
 import 'primary_tabs_screen.dart';
+import 'app_customization_service.dart';
 import '../shared/error_logs_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 
-class AppSettingsScreen extends StatelessWidget {
+class AppSettingsScreen extends StatefulWidget {
   const AppSettingsScreen({super.key});
+
+  @override
+  State<AppSettingsScreen> createState() => _AppSettingsScreenState();
+}
+
+class _AppSettingsScreenState extends State<AppSettingsScreen> {
+  int _firstDayOfWeek = 1; // 1 = Monday, 7 = Sunday
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final firstDay = await AppCustomizationService.getCalendarFirstDayOfWeek();
+    if (mounted) {
+      setState(() {
+        _firstDayOfWeek = firstDay;
+      });
+    }
+  }
+
+  Future<void> _setFirstDayOfWeek(int day) async {
+    await AppCustomizationService.setCalendarFirstDayOfWeek(day);
+    setState(() {
+      _firstDayOfWeek = day;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +129,11 @@ class AppSettingsScreen extends StatelessWidget {
                     );
                   },
                 ),
+
+                const SizedBox(height: 16),
+
+                // Calendar First Day of Week
+                _buildFirstDayOfWeekSetting(),
 
                 const SizedBox(height: 16),
 
@@ -209,6 +244,90 @@ class AppSettingsScreen extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFirstDayOfWeekSetting() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: AppStyles.borderRadiusLarge,
+        border: Border.all(
+          color: AppColors.normalCardBackground,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.waterBlue.withValues(alpha: 0.1),
+                borderRadius: AppStyles.borderRadiusSmall,
+              ),
+              child: Icon(
+                Icons.calendar_month_rounded,
+                color: AppColors.waterBlue,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'First Day of Week',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _firstDayOfWeek == 1 ? 'Monday (ISO standard)' : 'Sunday (US standard)',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.greyText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SegmentedButton<int>(
+              segments: const [
+                ButtonSegment(
+                  value: 1,
+                  label: Text('Mon'),
+                ),
+                ButtonSegment(
+                  value: 7,
+                  label: Text('Sun'),
+                ),
+              ],
+              selected: {_firstDayOfWeek},
+              onSelectionChanged: (Set<int> newSelection) {
+                _setFirstDayOfWeek(newSelection.first);
+              },
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return AppColors.waterBlue;
+                  }
+                  return AppColors.greyText.withValues(alpha: 0.1);
+                }),
+                foregroundColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return Colors.white;
+                  }
+                  return AppColors.greyText;
+                }),
+              ),
+            ),
+          ],
         ),
       ),
     );

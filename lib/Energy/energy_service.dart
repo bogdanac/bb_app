@@ -250,18 +250,30 @@ class EnergyService {
     // Update streak if goal just met
     int newStreak = settings.currentStreak;
     int newLongestStreak = settings.longestStreak;
+    DateTime? newStreakDate = settings.lastStreakDate;
+    final todayDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+
     if (isGoalMet && !today.isGoalMet) {
-      // Goal was just achieved
-      final yesterday = DateTime.now().subtract(const Duration(days: 1));
-      final yesterdayRecord = await getRecordForDate(yesterday);
-      newStreak = FlowCalculator.updateStreak(
-        goalMetToday: true,
-        goalMetYesterday: yesterdayRecord?.isGoalMet ?? false,
-        currentStreak: settings.currentStreak,
-      );
-      // Update longest streak if current beats it
-      if (newStreak > newLongestStreak) {
-        newLongestStreak = newStreak;
+      // Goal was just achieved - check if we already updated streak today
+      final alreadyUpdatedToday = settings.lastStreakDate != null &&
+          settings.lastStreakDate!.year == todayDate.year &&
+          settings.lastStreakDate!.month == todayDate.month &&
+          settings.lastStreakDate!.day == todayDate.day;
+
+      if (!alreadyUpdatedToday) {
+        // First time meeting goal today - update streak
+        final yesterday = DateTime.now().subtract(const Duration(days: 1));
+        final yesterdayRecord = await getRecordForDate(yesterday);
+        newStreak = FlowCalculator.updateStreak(
+          goalMetToday: true,
+          goalMetYesterday: yesterdayRecord?.isGoalMet ?? false,
+          currentStreak: settings.currentStreak,
+        );
+        newStreakDate = todayDate;
+        // Update longest streak if current beats it
+        if (newStreak > newLongestStreak) {
+          newLongestStreak = newStreak;
+        }
       }
     }
 
@@ -272,11 +284,13 @@ class EnergyService {
     }
 
     // Save updated settings
-    if (newStreak != settings.currentStreak || newPR != settings.personalRecord || newLongestStreak != settings.longestStreak) {
+    if (newStreak != settings.currentStreak || newPR != settings.personalRecord ||
+        newLongestStreak != settings.longestStreak || newStreakDate != settings.lastStreakDate) {
       await saveSettings(settings.copyWith(
         currentStreak: newStreak,
         longestStreak: newLongestStreak,
         personalRecord: newPR,
+        lastStreakDate: newStreakDate,
       ));
     }
 
@@ -487,18 +501,30 @@ class EnergyService {
     // Update streak if goal just met
     int newStreak = settings.currentStreak;
     int newLongestStreak = settings.longestStreak;
+    DateTime? newStreakDate = settings.lastStreakDate;
+    final todayDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+
     if (isGoalMet && !today.isGoalMet) {
-      // Goal was just achieved
-      final yesterday = DateTime.now().subtract(const Duration(days: 1));
-      final yesterdayRecord = await getRecordForDate(yesterday);
-      newStreak = FlowCalculator.updateStreak(
-        goalMetToday: true,
-        goalMetYesterday: yesterdayRecord?.isGoalMet ?? false,
-        currentStreak: settings.currentStreak,
-      );
-      // Update longest streak if current beats it
-      if (newStreak > newLongestStreak) {
-        newLongestStreak = newStreak;
+      // Goal was just achieved - check if we already updated streak today
+      final alreadyUpdatedToday = settings.lastStreakDate != null &&
+          settings.lastStreakDate!.year == todayDate.year &&
+          settings.lastStreakDate!.month == todayDate.month &&
+          settings.lastStreakDate!.day == todayDate.day;
+
+      if (!alreadyUpdatedToday) {
+        // First time meeting goal today - update streak
+        final yesterday = DateTime.now().subtract(const Duration(days: 1));
+        final yesterdayRecord = await getRecordForDate(yesterday);
+        newStreak = FlowCalculator.updateStreak(
+          goalMetToday: true,
+          goalMetYesterday: yesterdayRecord?.isGoalMet ?? false,
+          currentStreak: settings.currentStreak,
+        );
+        newStreakDate = todayDate;
+        // Update longest streak if current beats it
+        if (newStreak > newLongestStreak) {
+          newLongestStreak = newStreak;
+        }
       }
     }
     // Note: Don't break streak here if goal drops below - that's handled at day end
@@ -510,11 +536,13 @@ class EnergyService {
     }
 
     // Save updated settings
-    if (newStreak != settings.currentStreak || newPR != settings.personalRecord || newLongestStreak != settings.longestStreak) {
+    if (newStreak != settings.currentStreak || newPR != settings.personalRecord ||
+        newLongestStreak != settings.longestStreak || newStreakDate != settings.lastStreakDate) {
       await saveSettings(settings.copyWith(
         currentStreak: newStreak,
         longestStreak: newLongestStreak,
         personalRecord: newPR,
+        lastStreakDate: newStreakDate,
       ));
     }
 
@@ -539,7 +567,7 @@ class EnergyService {
   /// This is where streak can break or skip is used
   /// Returns true if a skip was auto-used
   static Future<bool> checkStreakAtDayEnd(DateTime previousDay) async {
-    final settings = await loadSettings();
+    var settings = await loadSettings();
 
     // Normalize date to midnight
     final checkDate = DateTime(previousDay.year, previousDay.month, previousDay.day);
@@ -563,6 +591,8 @@ class EnergyService {
 
     if (goalMetOnDate) {
       // Goal was met, streak continues normally - update last check date
+      // Reload settings to get the latest streak value (may have been updated elsewhere)
+      settings = await loadSettings();
       await saveSettings(settings.copyWith(
         lastStreakCheckDate: checkDate,
       ));

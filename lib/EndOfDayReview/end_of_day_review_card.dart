@@ -10,12 +10,18 @@ class EndOfDayReviewCard extends StatefulWidget {
   const EndOfDayReviewCard({super.key});
 
   @override
-  State<EndOfDayReviewCard> createState() => _EndOfDayReviewCardState();
+  State<EndOfDayReviewCard> createState() => EndOfDayReviewCardState();
 }
 
-class _EndOfDayReviewCardState extends State<EndOfDayReviewCard> {
+// Make state public for GlobalKey access
+class EndOfDayReviewCardState extends State<EndOfDayReviewCard> {
   EndOfDayReviewData? _reviewData;
   bool _isLoading = true;
+
+  /// Public method to refresh the card data
+  Future<void> refresh() async {
+    await _loadQuickSummary();
+  }
 
   @override
   void initState() {

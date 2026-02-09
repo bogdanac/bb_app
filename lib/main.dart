@@ -585,9 +585,11 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
-  int _selectedIndex = 2; // Default to Home tab (middle of 5 primary tabs)
+  int _selectedIndex = 0; // Will be set to Home index after settings load
+  bool _settingsLoaded = false; // Prevent rendering until Home index is determined
   late AnimationController _animationController;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _homeScreenKey = GlobalKey<HomeScreenState>();
   Map<String, bool> _moduleStates = {};
   List<String> _primaryTabs = [];
   List<String> _secondaryTabsOrder = [];
@@ -670,6 +672,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
     final midpoint = (configs.length / 2).ceil();
     configs.insert(midpoint, _TabConfig(
       screen: HomeScreen(
+        key: _homeScreenKey,
         onNavigateToModule: _navigateToModule,
         onReloadSettings: reloadCustomizationSettings,
         onOpenDrawer: _openDrawer,
@@ -708,6 +711,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
     // Add Home first
     configs.add(_TabConfig(
       screen: HomeScreen(
+        key: _homeScreenKey,
         onNavigateToModule: _navigateToModule,
         onReloadSettings: reloadCustomizationSettings,
         onOpenDrawer: _openDrawer,
@@ -751,12 +755,23 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
     );
     _loadCustomizationSettings().then((_) {
       if (mounted) {
-        final homeIndex = _primaryTabConfigs.indexWhere((c) => c.isHome);
-        if (homeIndex >= 0 && _selectedIndex != homeIndex) {
-          setState(() {
-            _selectedIndex = homeIndex;
-          });
-        }
+        // Use post-frame callback to ensure context is available for MediaQuery
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              // Set initial tab to Home
+              // For web/desktop: Home is always at index 0 in _allEnabledTabConfigs
+              // For mobile: Find Home in primary tabs
+              if (kIsWeb || MediaQuery.of(context).size.width > 800) {
+                _selectedIndex = 0;
+              } else {
+                final homeIndex = _primaryTabConfigs.indexWhere((c) => c.isHome);
+                _selectedIndex = homeIndex >= 0 ? homeIndex : 0;
+              }
+              _settingsLoaded = true;
+            });
+          }
+        });
       }
     });
     _checkForWidgetIntent();
@@ -807,6 +822,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
 
   Future<void> reloadCustomizationSettings() async {
     await _loadCustomizationSettings();
+    // Also refresh HomeScreen's card settings
+    _homeScreenKey.currentState?.refreshCardSettings();
   }
 
   void _checkNotificationPermissions() async {
@@ -895,6 +912,11 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
 
   @override
   Widget build(BuildContext context) {
+    // Wait for settings to load before rendering to ensure Home tab is selected
+    if (!_settingsLoaded) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     final isDesktop = _isDesktop(context);
 
     if (isDesktop) {
@@ -918,14 +940,27 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
   }
 
   Widget _buildMobileLayout(List<_TabConfig> primaryTabs, List<_TabConfig> secondaryTabs, int safeIndex) {
-    return Scaffold(
-      key: _scaffoldKey,
-      drawer: _buildDrawer(secondaryTabs), // Always show drawer (Settings is always accessible)
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: primaryTabs[safeIndex].screen,
+    // Find the Home tab index
+    final homeIndex = primaryTabs.indexWhere((c) => c.isHome);
+    final isOnHome = safeIndex == homeIndex;
+
+    return PopScope(
+      canPop: isOnHome, // Allow pop (exit) only when on Home
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && homeIndex >= 0) {
+          // User pressed back on non-Home tab - navigate to Home instead of exiting
+          _onItemTapped(homeIndex);
+        }
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        drawer: _buildDrawer(secondaryTabs), // Always show drawer (Settings is always accessible)
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: primaryTabs[safeIndex].screen,
+        ),
+        bottomNavigationBar: _buildBottomNav(primaryTabs, safeIndex, hasDrawer: true), // Always show menu icon
       ),
-      bottomNavigationBar: _buildBottomNav(primaryTabs, safeIndex, hasDrawer: true), // Always show menu icon
     );
   }
 

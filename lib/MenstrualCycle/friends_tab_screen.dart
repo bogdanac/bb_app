@@ -2,12 +2,20 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
+import '../shared/date_picker_utils.dart';
 import 'friend_data_models.dart';
 import 'friend_service.dart';
 import '../shared/snackbar_utils.dart';
 
 class FriendsTabScreen extends StatefulWidget {
-  const FriendsTabScreen({super.key});
+  final bool showArchived;
+  final VoidCallback? onFriendArchiveChanged;
+
+  const FriendsTabScreen({
+    super.key,
+    this.showArchived = false,
+    this.onFriendArchiveChanged,
+  });
 
   @override
   State<FriendsTabScreen> createState() => FriendsTabScreenState();
@@ -16,7 +24,11 @@ class FriendsTabScreen extends StatefulWidget {
 class FriendsTabScreenState extends State<FriendsTabScreen> {
   List<Friend> _friends = [];
   bool _isLoading = true;
-  bool _showArchived = false; // Toggle for showing archived friends
+
+  /// Public method to refresh friends list from outside
+  void refresh() {
+    _loadFriends();
+  }
 
   // Track swipe state for each friend
   final Map<String, double> _swipeOffsets = {};
@@ -63,7 +75,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
       setState(() {
         // Filter based on archived state
         _friends = friends.where((friend) =>
-          _showArchived ? friend.isArchived : !friend.isArchived
+          widget.showArchived ? friend.isArchived : !friend.isArchived
         ).toList();
         _isLoading = false;
       });
@@ -233,7 +245,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                 const SizedBox(height: 8),
                 InkWell(
                   onTap: () async {
-                    final picked = await showDatePicker(
+                    final picked = await DatePickerUtils.showStyledDatePicker(
                       context: context,
                       initialDate: selectedBirthday ?? DateTime.now(),
                       firstDate: DateTime(1900),
@@ -426,6 +438,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
     final updatedFriend = friend.copyWith(isArchived: true);
     FriendService.updateFriend(updatedFriend, _friends).then((_) {
       _loadFriends();
+      widget.onFriendArchiveChanged?.call(); // Refresh both tabs
       if (mounted) {
         SnackBarUtils.showCustom(context, '${friend.name} archived', backgroundColor: AppColors.purple, duration: const Duration(seconds: 2));
       }
@@ -436,6 +449,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
     final updatedFriend = friend.copyWith(isArchived: false);
     FriendService.updateFriend(updatedFriend, _friends).then((_) {
       _loadFriends();
+      widget.onFriendArchiveChanged?.call(); // Refresh both tabs
       if (mounted) {
         SnackBarUtils.showSuccess(context, '${friend.name} restored to active friends', duration: const Duration(seconds: 2));
       }
@@ -516,53 +530,8 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Column(
-      children: [
-        // Filter toggle
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment(
-                      value: false,
-                      label: Text('Active'),
-                      icon: Icon(Icons.people_rounded, size: 20),
-                    ),
-                    ButtonSegment(
-                      value: true,
-                      label: Text('Archived'),
-                      icon: Icon(Icons.archive_rounded, size: 20),
-                    ),
-                  ],
-                  selected: {_showArchived},
-                  onSelectionChanged: (Set<bool> newSelection) {
-                    setState(() {
-                      _showArchived = newSelection.first;
-                    });
-                    _loadFriends();
-                  },
-                  style: ButtonStyle(
-                    backgroundColor: WidgetStateProperty.resolveWith((states) {
-                      if (states.contains(WidgetState.selected)) {
-                        return _showArchived ? AppColors.purple : AppColors.successGreen;
-                      }
-                      return AppColors.greyText.withValues(alpha: 0.1);
-                    }),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Friends list
-        Expanded(
-          child: _buildFriendsList(),
-        ),
-      ],
-    );
+    // Directly show friends list - tabs handle the filtering now
+    return _buildFriendsList();
   }
 
   Widget _buildFriendsList() {
@@ -572,13 +541,13 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              _showArchived ? Icons.archive_outlined : Icons.people_outline_rounded,
+              widget.showArchived ? Icons.archive_outlined : Icons.people_outline_rounded,
               size: 80,
               color: AppColors.greyText.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
-              _showArchived ? 'No archived friends' : 'No friends added yet',
+              widget.showArchived ? 'No archived friends' : 'No friends added yet',
               style: TextStyle(
                 fontSize: 18,
                 color: AppColors.greyText,
@@ -587,7 +556,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _showArchived
+              widget.showArchived
                   ? 'Archived friends will appear here'
                   : 'Add friends to track your friendships',
               style: TextStyle(
@@ -595,7 +564,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                 color: AppColors.greyText,
               ),
             ),
-            if (!_showArchived) ...[
+            if (!widget.showArchived) ...[
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: addFriend,
@@ -614,7 +583,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
     return ReorderableListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 80), // Extra bottom padding for FAB
       itemCount: _friends.length,
-      onReorder: _showArchived
+      onReorder: widget.showArchived
           ? (oldIndex, newIndex) {} // Disable reordering for archived friends
           : (oldIndex, newIndex) {
               FriendService.reorderFriends(oldIndex, newIndex, _friends).then((_) {
@@ -662,7 +631,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                       decoration: BoxDecoration(
                         color: swipeOffset < 0
                             ? Colors.red
-                            : (_showArchived ? AppColors.successGreen : AppColors.purple),
+                            : (widget.showArchived ? AppColors.successGreen : AppColors.purple),
                         borderRadius: AppStyles.borderRadiusLarge,
                       ),
                       alignment: swipeOffset < 0 ? Alignment.centerRight : Alignment.centerLeft,
@@ -673,7 +642,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                           Icon(
                             swipeOffset < 0
                                 ? Icons.delete_rounded
-                                : (_showArchived ? Icons.unarchive_rounded : Icons.archive_rounded),
+                                : (widget.showArchived ? Icons.unarchive_rounded : Icons.archive_rounded),
                             color: Colors.white,
                             size: 32,
                           ),
@@ -681,7 +650,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                           Text(
                             swipeOffset < 0
                                 ? 'Delete'
-                                : (_showArchived ? 'Unarchive' : 'Archive'),
+                                : (widget.showArchived ? 'Unarchive' : 'Archive'),
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -762,7 +731,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                         iconSize: 24,
                       ),
                       // Recharge button (only show for active friends)
-                      if (!_showArchived)
+                      if (!widget.showArchived)
                         IconButton(
                           onPressed: () => _showMeetingTypeDialog(friend),
                           icon: const Icon(Icons.favorite_rounded),
@@ -854,7 +823,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
           });
         } else {
           // Swiped right - archive or unarchive depending on current view
-          if (_showArchived) {
+          if (widget.showArchived) {
             _unarchiveFriend(friend);
           } else {
             _archiveFriend(friend);

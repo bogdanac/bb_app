@@ -13,6 +13,23 @@ class EditActivityDialog extends StatefulWidget {
     required this.onSave,
   });
 
+  /// Show as a full-screen page
+  static Future<void> show(
+    BuildContext context, {
+    required Activity activity,
+    required Function(Activity) onSave,
+  }) {
+    return Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditActivityDialog(
+          activity: activity,
+          onSave: onSave,
+        ),
+      ),
+    );
+  }
+
   @override
   State<EditActivityDialog> createState() => _EditActivityDialogState();
 }
@@ -45,6 +62,8 @@ class _EditActivityDialogState extends State<EditActivityDialog> {
     widget.onSave(updatedActivity);
     Navigator.pop(context);
   }
+
+  bool get _canSave => _nameController.text.trim().isNotEmpty;
 
   Color _getModeColor(ActivityEnergyMode mode) {
     switch (mode) {
@@ -90,23 +109,191 @@ class _EditActivityDialogState extends State<EditActivityDialog> {
     }
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.dialogBackground,
+      appBar: AppBar(
+        title: const Text('Edit Activity'),
+        backgroundColor: Colors.transparent,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton.icon(
+              onPressed: _canSave ? _submit : null,
+              icon: Icon(
+                Icons.check_rounded,
+                color: _canSave ? AppColors.successGreen : AppColors.grey300,
+              ),
+              label: Text(
+                'Save',
+                style: TextStyle(
+                  color: _canSave ? AppColors.successGreen : AppColors.grey300,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Preview card at top
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: AppStyles.cardDecoration(color: AppColors.homeCardBackground),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _getModeColor(_energyMode).withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _getModeIcon(_energyMode),
+                      color: _getModeColor(_energyMode),
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _nameController.text.isEmpty ? 'Activity Name' : _nameController.text,
+                    style: TextStyle(
+                      color: _nameController.text.isEmpty ? AppColors.grey300 : AppColors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _getModeDescription(_energyMode),
+                    style: TextStyle(
+                      color: _getModeColor(_energyMode),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Name field
+            _buildFieldContainer(
+              icon: Icons.label_rounded,
+              iconColor: AppColors.purple,
+              label: 'Activity Name',
+              child: TextField(
+                controller: _nameController,
+                decoration: AppStyles.inputDecoration(
+                  hintText: 'e.g., Piano Learning',
+                ),
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => _submit(),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Energy impact section
+            _buildFieldContainer(
+              icon: Icons.bolt_rounded,
+              iconColor: AppColors.yellow,
+              label: 'Energy Impact',
+              subtitle: 'Per 25 min: earns 1 flow point',
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  _buildModeOption(ActivityEnergyMode.recharging),
+                  const SizedBox(height: 8),
+                  _buildModeOption(ActivityEnergyMode.neutral),
+                  const SizedBox(height: 8),
+                  _buildModeOption(ActivityEnergyMode.draining),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFieldContainer({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    String? subtitle,
+    Widget? child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: AppStyles.cardDecoration(color: AppColors.homeCardBackground),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: AppColors.greyText,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: AppColors.greyText.withValues(alpha: 0.7),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          if (child != null) ...[
+            const SizedBox(height: 16),
+            child,
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildModeOption(ActivityEnergyMode mode) {
     final isSelected = _energyMode == mode;
     final color = _getModeColor(mode);
 
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _energyMode = mode;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      onTap: () => setState(() => _energyMode = mode),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
-          borderRadius: AppStyles.borderRadiusSmall,
+          borderRadius: AppStyles.borderRadiusMedium,
           border: Border.all(
-            color: isSelected ? color : AppColors.greyText.withValues(alpha: 0.3),
+            color: isSelected ? color : AppColors.grey700,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -115,9 +302,9 @@ class _EditActivityDialogState extends State<EditActivityDialog> {
             Icon(
               _getModeIcon(mode),
               color: isSelected ? color : AppColors.greyText,
-              size: 24,
+              size: 28,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,15 +312,15 @@ class _EditActivityDialogState extends State<EditActivityDialog> {
                   Text(
                     _getModeLabel(mode),
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? color : null,
+                      color: isSelected ? color : AppColors.white,
                     ),
                   ),
                   Text(
                     _getModeDescription(mode),
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 12,
                       color: AppColors.greyText,
                     ),
                   ),
@@ -144,70 +331,11 @@ class _EditActivityDialogState extends State<EditActivityDialog> {
               Icon(
                 Icons.check_circle_rounded,
                 color: color,
-                size: 20,
+                size: 24,
               ),
           ],
         ),
       ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppColors.dialogBackground,
-      title: const Text('Edit Activity'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: _nameController,
-              decoration: AppStyles.inputDecoration(
-                hintText: 'Activity name',
-              ),
-              textCapitalization: TextCapitalization.sentences,
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Energy Impact',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.greyText,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Per 25 min: earns 1 flow point',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.greyText.withValues(alpha: 0.7),
-              ),
-            ),
-            const SizedBox(height: 12),
-            _buildModeOption(ActivityEnergyMode.recharging),
-            const SizedBox(height: 8),
-            _buildModeOption(ActivityEnergyMode.neutral),
-            const SizedBox(height: 8),
-            _buildModeOption(ActivityEnergyMode.draining),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          style: AppStyles.textButtonStyle(),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: _submit,
-          style: AppStyles.elevatedButtonStyle(backgroundColor: AppColors.purple),
-          child: const Text('Save'),
-        ),
-      ],
     );
   }
 }

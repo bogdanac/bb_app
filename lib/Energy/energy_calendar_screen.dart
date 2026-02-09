@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
+import '../shared/calendar_widget.dart';
 import '../shared/date_format_utils.dart';
 import 'energy_settings_model.dart';
 import 'energy_service.dart';
@@ -78,188 +79,104 @@ class _EnergyCalendarScreenState extends State<EnergyCalendarScreen> {
   }
 
   Widget _buildCalendar() {
-    final firstDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
-    final lastDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
-    final firstWeekday = firstDayOfMonth.weekday;
-    final daysInMonth = lastDayOfMonth.day;
+    return CalendarWidget(
+      focusedMonth: _focusedMonth,
+      onMonthChanged: (newMonth) async {
+        setState(() {
+          _focusedMonth = newMonth;
+          _selectedDate = null;
+          _selectedDayRecord = null;
+        });
+        await _loadEnergyHistory();
+        if (mounted) setState(() {});
+      },
+      allowFutureMonths: false,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      dayBuilder: (date) => _buildDayCell(date),
+      onDayTap: (date) {
+        if (!date.isAfter(DateTime.now())) {
+          _selectDate(date);
+        }
+      },
+    );
+  }
 
-    // Calculate the starting day (Monday = 1)
-    final startOffset = (firstWeekday - 1) % 7;
+  Widget _buildDayCell(DateTime date) {
+    final dateKey = DateTime(date.year, date.month, date.day);
+    final isToday = dateKey.year == DateTime.now().year &&
+        dateKey.month == DateTime.now().month &&
+        dateKey.day == DateTime.now().day;
+    final isSelected = _selectedDate != null &&
+        dateKey.year == _selectedDate!.year &&
+        dateKey.month == _selectedDate!.month &&
+        dateKey.day == _selectedDate!.day;
+    final record = _energyHistory[dateKey];
+    final isFuture = date.isAfter(DateTime.now());
 
-    return Column(
-      children: [
-        // Month navigation
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Container(
+      decoration: BoxDecoration(
+        color: isSelected
+            ? AppColors.coral.withValues(alpha: 0.3)
+            : isToday
+                ? AppColors.waterBlue.withValues(alpha: 0.2)
+                : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        border: isToday
+            ? Border.all(color: AppColors.waterBlue, width: 2)
+            : null,
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              IconButton(
-                onPressed: () async {
-                  setState(() {
-                    _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
-                    _selectedDate = null;
-                    _selectedDayRecord = null;
-                  });
-                  await _loadEnergyHistory();
-                  if (mounted) setState(() {});
-                },
-                icon: const Icon(Icons.chevron_left_rounded),
-                color: AppColors.greyText,
-              ),
               Text(
-                DateFormatUtils.formatMonthYear(_focusedMonth),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                '${date.day}',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                  color: isFuture
+                      ? AppColors.greyText.withValues(alpha: 0.5)
+                      : isToday
+                          ? AppColors.waterBlue
+                          : Colors.white,
                 ),
               ),
-              IconButton(
-                onPressed: _focusedMonth.isBefore(DateTime.now().subtract(const Duration(days: 28)))
-                    ? () async {
-                        setState(() {
-                          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
-                          _selectedDate = null;
-                          _selectedDayRecord = null;
-                        });
-                        await _loadEnergyHistory();
-                        if (mounted) setState(() {});
-                      }
-                    : null,
-                icon: const Icon(Icons.chevron_right_rounded),
-                color: AppColors.greyText,
-              ),
+              if (record != null)
+                Container(
+                  width: 24,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: _getCompletionColor(record.completionLevel),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
             ],
           ),
-        ),
-
-        // Weekday headers
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day) {
-              return SizedBox(
-                width: 40,
-                child: Center(
-                  child: Text(
-                    day,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.greyText,
-                    ),
+          // Energy number indicator
+          if (record != null)
+            Positioned(
+              top: 2,
+              right: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                decoration: BoxDecoration(
+                  color: _getCompletionColor(record.completionLevel),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '${record.flowPoints}',
+                  style: const TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                 ),
-              );
-            }).toList(),
-          ),
-        ),
-
-        const SizedBox(height: 8),
-
-        // Calendar grid
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              mainAxisSpacing: 4,
-              crossAxisSpacing: 4,
+              ),
             ),
-            itemCount: startOffset + daysInMonth,
-            itemBuilder: (context, index) {
-              if (index < startOffset) {
-                return const SizedBox(); // Empty cell before first day
-              }
-
-              final day = index - startOffset + 1;
-              final date = DateTime(_focusedMonth.year, _focusedMonth.month, day);
-              final dateKey = DateTime(date.year, date.month, date.day);
-              final isToday = dateKey.year == DateTime.now().year &&
-                  dateKey.month == DateTime.now().month &&
-                  dateKey.day == DateTime.now().day;
-              final isSelected = _selectedDate != null &&
-                  dateKey.year == _selectedDate!.year &&
-                  dateKey.month == _selectedDate!.month &&
-                  dateKey.day == _selectedDate!.day;
-              final record = _energyHistory[dateKey];
-              final isFuture = date.isAfter(DateTime.now());
-
-              return GestureDetector(
-                onTap: isFuture ? null : () => _selectDate(date),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.coral.withValues(alpha: 0.3)
-                        : isToday
-                            ? AppColors.waterBlue.withValues(alpha: 0.2)
-                            : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: isToday
-                        ? Border.all(color: AppColors.waterBlue, width: 2)
-                        : null,
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '$day',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                              color: isFuture
-                                  ? AppColors.greyText.withValues(alpha: 0.5)
-                                  : isToday
-                                      ? AppColors.waterBlue
-                                      : Colors.white,
-                            ),
-                          ),
-                          if (record != null)
-                            Container(
-                              width: 24,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: _getCompletionColor(record.completionLevel),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                        ],
-                      ),
-                      // Energy number indicator
-                      if (record != null)
-                        Positioned(
-                          top: 2,
-                          right: 2,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: _getCompletionColor(record.completionLevel),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '${record.flowPoints}',
-                              style: const TextStyle(
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

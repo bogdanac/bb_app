@@ -39,20 +39,18 @@ class _FastingHistoryScreenState extends State<FastingHistoryScreen> {
     final startTime = DateTime.parse(fast['startTime']);
     final endTime = DateTime.parse(fast['endTime']);
 
-    showDialog(
-      context: context,
-      builder: (context) => FastEditDialog(
-        startTime: startTime,
-        endTime: endTime,
-        onSave: (newStart, newEnd) {
-          setState(() {
-            _editableHistory[index]['startTime'] = newStart.toIso8601String();
-            _editableHistory[index]['endTime'] = newEnd.toIso8601String();
-            _editableHistory[index]['actualDuration'] = newEnd.difference(newStart).inMinutes;
-          });
-          _saveHistory();
-        },
-      ),
+    FastEditDialog.show(
+      context,
+      startTime: startTime,
+      endTime: endTime,
+      onSave: (newStart, newEnd) {
+        setState(() {
+          _editableHistory[index]['startTime'] = newStart.toIso8601String();
+          _editableHistory[index]['endTime'] = newEnd.toIso8601String();
+          _editableHistory[index]['actualDuration'] = newEnd.difference(newStart).inMinutes;
+        });
+        _saveHistory();
+      },
     );
   }
 

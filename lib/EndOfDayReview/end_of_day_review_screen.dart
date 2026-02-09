@@ -78,6 +78,11 @@ class _EndOfDayReviewScreenState extends State<EndOfDayReviewScreen> {
       );
     }
 
+    // Filter out empty modules (except food which always shows)
+    final filteredSummaries = _reviewData!.moduleSummaries.where((summary) {
+      return _hasActivity(summary);
+    }).toList();
+
     return RefreshIndicator(
       onRefresh: _loadReview,
       child: ListView(
@@ -85,12 +90,72 @@ class _EndOfDayReviewScreenState extends State<EndOfDayReviewScreen> {
         children: [
           _buildHeader(),
           const SizedBox(height: 16),
-          ..._reviewData!.moduleSummaries.map(_buildModuleCard),
+          ...filteredSummaries.map(_buildModuleCard),
+          if (filteredSummaries.isEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: AppStyles.cardDecoration(color: AppColors.homeCardBackground),
+              child: Column(
+                children: [
+                  Icon(Icons.check_circle_outline_rounded, size: 48, color: AppColors.grey300),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Nothing to show yet',
+                    style: TextStyle(color: AppColors.greyText, fontSize: 16),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Complete tasks, track habits, or log activities to see your summary.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.grey300, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           _buildFooter(),
         ],
       ),
     );
+  }
+
+  /// Check if a module has any activity worth showing
+  bool _hasActivity(ModuleSummary summary) {
+    switch (summary.moduleKey) {
+      case AppCustomizationService.moduleFood:
+        // Food ALWAYS shows (per user request)
+        return true;
+      case AppCustomizationService.moduleWater:
+        final helper = WaterSummaryHelper(summary);
+        return helper.intake > 0;
+      case AppCustomizationService.moduleTasks:
+        final helper = TasksSummaryHelper(summary);
+        return helper.completedCount > 0;
+      case AppCustomizationService.moduleHabits:
+        final helper = HabitsSummaryHelper(summary);
+        return helper.totalCount > 0;
+      case AppCustomizationService.moduleEnergy:
+        final helper = EnergySummaryHelper(summary);
+        return helper.flowPoints > 0;
+      case AppCustomizationService.moduleTimers:
+        final helper = TimersSummaryHelper(summary);
+        return helper.totalMinutes > 0;
+      case AppCustomizationService.moduleFasting:
+        final helper = FastingSummaryHelper(summary);
+        return helper.hasActivity;
+      case AppCustomizationService.moduleMenstrual:
+        final helper = MenstrualSummaryHelper(summary);
+        return helper.hasData;
+      case AppCustomizationService.moduleRoutines:
+        final helper = RoutinesSummaryHelper(summary);
+        return helper.totalCount > 0;
+      case AppCustomizationService.moduleChores:
+        final helper = ChoresSummaryHelper(summary);
+        return helper.totalChores > 0;
+      default:
+        return true; // Show unknown modules by default
+    }
   }
 
   Widget _buildHeader() {
@@ -169,6 +234,8 @@ class _EndOfDayReviewScreenState extends State<EndOfDayReviewScreen> {
         return _buildMenstrualContent(summary);
       case AppCustomizationService.moduleRoutines:
         return _buildRoutinesContent(summary);
+      case AppCustomizationService.moduleChores:
+        return _buildChoresContent(summary);
       default:
         return _buildGenericContent(summary);
     }
@@ -704,6 +771,74 @@ class _EndOfDayReviewScreenState extends State<EndOfDayReviewScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildChoresContent(ModuleSummary summary) {
+    final helper = ChoresSummaryHelper(summary);
+
+    if (helper.totalChores == 0) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildModuleHeader(summary),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Text(
+              'No chores set up yet',
+              style: TextStyle(color: AppColors.greyText, fontSize: 14),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildModuleHeader(
+          summary,
+          trailing: helper.completedToday > 0
+              ? Icon(Icons.check_circle_rounded, color: AppColors.successGreen, size: 20)
+              : null,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildStatBox(
+                  '${helper.completedToday}',
+                  'Done today',
+                  helper.completedToday > 0 ? AppColors.successGreen : AppColors.greyText,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStatBox(
+                  '${helper.avgCondition.toStringAsFixed(0)}%',
+                  'Avg condition',
+                  _getConditionColor(helper.avgCondition),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStatBox(
+                  '${helper.criticalCount}',
+                  'Critical',
+                  helper.criticalCount > 0 ? AppColors.error : AppColors.greyText,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _getConditionColor(double condition) {
+    if (condition >= 70) return AppColors.successGreen;
+    if (condition >= 40) return AppColors.yellow;
+    return AppColors.orange;
   }
 
   Widget _buildGenericContent(ModuleSummary summary) {

@@ -282,8 +282,13 @@ class TaskPriorityService {
         task.isDueToday() &&
         (task.scheduledDate == null || !task.scheduledDate!.isAfter(today))) {
       // Check if task is scheduled today (not overdue, not future)
+      // For daily interval=1 tasks with past scheduledDates, treat as "scheduled today"
+      // since they recur every day and shouldn't be treated as overdue
+      final isDailyInterval1Task = task.recurrence?.type == RecurrenceType.daily &&
+                                    (task.recurrence?.interval ?? 1) == 1;
       final isScheduledToday = task.scheduledDate == null ||
-                                _isSameDay(task.scheduledDate!, today);
+                                _isSameDay(task.scheduledDate!, today) ||
+                                (isDailyInterval1Task && task.scheduledDate!.isBefore(today));
 
       if (isScheduledToday) {
         if (_isMenstrualCycleTask(task.recurrence!)) {

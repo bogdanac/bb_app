@@ -177,6 +177,7 @@ class AppCustomizationService {
       icon: Icons.water_drop_rounded,
       color: AppColors.waterBlue,
       canBeDisabled: true,
+      showInNavigation: false, // Feature only - accessible via Home card and Settings
     ),
     ModuleInfo(
       key: moduleFood,
@@ -623,6 +624,29 @@ class AppCustomizationService {
     final now = DateTime.now();
     return now.hour >= eveningStart;
   }
+
+  // ============= Calendar Settings =============
+  static const String _calendarFirstDayOfWeek = 'calendar_first_day_of_week';
+
+  /// Get the first day of week for calendars
+  /// Returns 1 for Monday (default), 7 for Sunday
+  static Future<int> getCalendarFirstDayOfWeek() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_calendarFirstDayOfWeek) ?? 1; // Default Monday
+  }
+
+  /// Set the first day of week for calendars
+  /// Use 1 for Monday, 7 for Sunday
+  static Future<void> setCalendarFirstDayOfWeek(int day) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_calendarFirstDayOfWeek, day);
+  }
+
+  /// Check if calendar starts on Monday
+  static Future<bool> isCalendarMondayFirst() async {
+    final firstDay = await getCalendarFirstDayOfWeek();
+    return firstDay == 1;
+  }
 }
 
 // ============= Data Classes =============
@@ -635,6 +659,7 @@ class ModuleInfo {
   final IconData icon;
   final Color color;
   final bool canBeDisabled;
+  final bool showInNavigation; // Whether this module appears as a tab option
 
   const ModuleInfo({
     required this.key,
@@ -643,6 +668,7 @@ class ModuleInfo {
     required this.icon,
     required this.color,
     required this.canBeDisabled,
+    this.showInNavigation = true, // Default to true for backward compatibility
   });
 }
 

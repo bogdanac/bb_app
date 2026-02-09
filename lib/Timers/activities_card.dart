@@ -296,7 +296,7 @@ class _ActivitiesCardState extends State<ActivitiesCard> {
             ),
 
           if (!hasMore)
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
         ],
       ),
     );

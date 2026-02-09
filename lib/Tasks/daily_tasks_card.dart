@@ -6,7 +6,9 @@ import '../Tasks/todo_screen.dart';
 import '../Tasks/task_edit_screen.dart';
 
 class DailyTasksCard extends StatefulWidget {
-  const DailyTasksCard({super.key});
+  final VoidCallback? onTasksChanged;
+
+  const DailyTasksCard({super.key, this.onTasksChanged});
 
   @override
   State<DailyTasksCard> createState() => _DailyTasksCardState();
@@ -31,6 +33,8 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
     setState(() {
       _refreshCounter++;
     });
+    // Notify parent about tasks change (e.g., to refresh EndOfDayReviewCard)
+    widget.onTasksChanged?.call();
   }
 
   @override

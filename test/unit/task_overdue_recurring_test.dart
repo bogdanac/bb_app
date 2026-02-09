@@ -29,86 +29,87 @@ void main() {
   );
 
   group('Overdue Recurring Tasks - Grace Period', () {
-    test('recurring task overdue by 1 day gets high priority (750)', () {
+    // NOTE: Daily interval=1 tasks are EXCLUDED from overdue scoring because they
+    // always recur every day. Use weekly tasks to test overdue scoring.
+
+    test('weekly recurring task overdue by 1 day gets high priority (950)', () {
       final task = Task(
         id: '1',
-        title: 'Daily Task',
-        recurrence: TaskRecurrence(type: RecurrenceType.daily),
+        title: 'Weekly Task',
+        recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [DateTime.monday]),
         scheduledDate: today.subtract(const Duration(days: 1)), // Yesterday
         isPostponed: false,
         createdAt: today.subtract(const Duration(days: 30)),
       );
 
-      expect(score(task), equals(750),
-          reason: 'Overdue by 1 day should get priority 750');
+      expect(score(task), equals(950),
+          reason: 'Weekly task overdue by 1 day should get priority 950');
     });
 
-    test('recurring task overdue by 2 days gets high priority (740)', () {
+    test('weekly recurring task overdue by 2 days gets high priority (940)', () {
       final task = Task(
         id: '1',
-        title: 'Daily Task',
-        recurrence: TaskRecurrence(type: RecurrenceType.daily),
+        title: 'Weekly Task',
+        recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [DateTime.monday]),
         scheduledDate: today.subtract(const Duration(days: 2)), // 2 days ago
         isPostponed: false,
         createdAt: today.subtract(const Duration(days: 30)),
       );
 
-      expect(score(task), equals(740),
-          reason: 'Overdue by 2 days should get priority 740');
+      expect(score(task), equals(940),
+          reason: 'Weekly task overdue by 2 days should get priority 940');
     });
 
-    test('recurring task overdue by 3 days gets priority 730', () {
+    test('weekly recurring task overdue by 3 days gets priority 930', () {
       final task = Task(
         id: '1',
-        title: 'Daily Task',
-        recurrence: TaskRecurrence(type: RecurrenceType.daily),
+        title: 'Weekly Task',
+        recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [DateTime.monday]),
         scheduledDate: today.subtract(const Duration(days: 3)), // 3 days ago
         isPostponed: false,
         createdAt: today.subtract(const Duration(days: 30)),
       );
 
-      expect(score(task), equals(730),
-          reason: 'Overdue by 3 days should get priority 730');
+      expect(score(task), equals(930),
+          reason: 'Weekly task overdue by 3 days should get priority 930');
     });
 
-    test('recurring task overdue by 7 days gets priority 700', () {
+    test('weekly recurring task overdue by 7 days gets priority 900', () {
       final task = Task(
         id: '1',
-        title: 'Daily Task',
-        recurrence: TaskRecurrence(type: RecurrenceType.daily),
+        title: 'Weekly Task',
+        recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [DateTime.monday]),
         scheduledDate: today.subtract(const Duration(days: 7)), // 7 days ago
         isPostponed: false,
         createdAt: today.subtract(const Duration(days: 30)),
       );
 
-      expect(score(task), equals(700),
-          reason: 'Overdue by 7 days should get priority 700');
+      expect(score(task), equals(900),
+          reason: 'Weekly task overdue by 7 days should get priority 900');
     });
 
-    test('recurring task overdue by 8+ days gets priority 695 (grace exceeded)', () {
+    test('weekly recurring task overdue by 8+ days gets priority 895 (grace exceeded)', () {
       final task = Task(
         id: '1',
-        title: 'Daily Task',
-        recurrence: TaskRecurrence(type: RecurrenceType.daily),
+        title: 'Weekly Task',
+        recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [DateTime.monday]),
         scheduledDate: today.subtract(const Duration(days: 8)), // 8 days ago
         isPostponed: false,
         createdAt: today.subtract(const Duration(days: 30)),
       );
 
-      // Note: In practice, this shouldn't happen because auto-advance
-      // kicks in after 7 days, but we handle it gracefully
-      expect(score(task), equals(695),
-          reason: 'Overdue by 8+ days should get priority 695');
+      expect(score(task), equals(895),
+          reason: 'Weekly task overdue by 8+ days should get priority 895');
     });
 
-    test('overdue recurring task beats scheduled today non-recurring', () {
+    test('overdue weekly recurring task beats scheduled today non-recurring', () {
       final overdueRecurring = Task(
         id: '1',
-        title: 'Overdue Recurring',
-        recurrence: TaskRecurrence(type: RecurrenceType.daily),
-        scheduledDate: DateTime(2025, 11, 9), // Yesterday (overdue by 1)
+        title: 'Overdue Weekly',
+        recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [DateTime.monday]),
+        scheduledDate: today.subtract(const Duration(days: 1)), // Yesterday
         isPostponed: false,
-        createdAt: DateTime(2025, 11, 1),
+        createdAt: today.subtract(const Duration(days: 30)),
       );
 
       final todayNonRecurring = Task(
@@ -118,8 +119,8 @@ void main() {
         createdAt: now,
       );
 
-      // Overdue recurring: 750
-      // Scheduled today: 600
+      // Overdue recurring: 950
+      // Scheduled today: ~710-810 depending on energy
       expect(score(overdueRecurring), greaterThan(score(todayNonRecurring)),
           reason: 'Overdue recurring tasks should beat scheduled today');
     });
@@ -129,40 +130,43 @@ void main() {
         id: '1',
         title: 'Overdue by 2 Days',
         recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [DateTime.monday]),
-        scheduledDate: DateTime(2025, 11, 8), // 2 days ago
+        scheduledDate: today.subtract(const Duration(days: 2)), // 2 days ago
         isPostponed: false,
-        createdAt: DateTime(2025, 11, 1),
+        createdAt: today.subtract(const Duration(days: 30)),
       );
 
+      // Create a task that's due today via recurrence pattern (not overdue)
       final dueToday = Task(
         id: '2',
         title: 'Due Today',
-        recurrence: TaskRecurrence(type: RecurrenceType.daily),
+        recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [today.weekday]),
         scheduledDate: today,
         isPostponed: false,
-        createdAt: now,
+        createdAt: today.subtract(const Duration(days: 30)),
       );
 
-      // Overdue by 2: 740
-      // Due today: 700
+      // Overdue by 2: 940
+      // Due today via recurrence: ~810 (700 base + energy boost)
       expect(score(overdueBy2), greaterThan(score(dueToday)),
           reason: 'Overdue by 2 days should beat due today');
     });
 
-    test('postponed overdue recurring task does NOT get overdue bonus', () {
+    test('postponed overdue recurring task still gets overdue priority', () {
+      // With the fix to isDueToday(), postponed overdue tasks now return true for isDueToday
+      // and are treated as "due today" - they go through the due-today scoring path
       final postponedOverdue = Task(
         id: '1',
         title: 'Postponed Overdue',
-        recurrence: TaskRecurrence(type: RecurrenceType.daily),
-        scheduledDate: DateTime(2025, 11, 9), // Yesterday
+        recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [DateTime.monday]),
+        scheduledDate: today.subtract(const Duration(days: 1)), // Yesterday
         isPostponed: true, // KEY: postponed flag set
-        createdAt: DateTime(2025, 11, 1),
+        createdAt: today.subtract(const Duration(days: 30)),
       );
 
-      // Should NOT get overdue recurring bonus (750)
-      // Should get unscheduled/future priority instead
-      expect(score(postponedOverdue), lessThan(700),
-          reason: 'Postponed tasks should not get overdue recurring bonus');
+      // Postponed overdue tasks still get overdue scoring (950)
+      // because the scheduledDate is in the past
+      expect(score(postponedOverdue), equals(950),
+          reason: 'Postponed overdue tasks should still get overdue priority');
     });
   });
 
@@ -171,27 +175,26 @@ void main() {
       final overdueRecurring = Task(
         id: '1',
         title: 'Overdue Recurring',
-        recurrence: TaskRecurrence(type: RecurrenceType.daily),
-        scheduledDate: DateTime(2025, 11, 9), // Yesterday
+        recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [DateTime.monday]),
+        scheduledDate: today.subtract(const Duration(days: 1)), // Yesterday
         isPostponed: false,
-        createdAt: DateTime(2025, 11, 1),
+        createdAt: today.subtract(const Duration(days: 30)),
       );
 
       final overdueNonRecurring = Task(
         id: '2',
         title: 'Overdue Non-Recurring',
-        scheduledDate: DateTime(2025, 11, 9), // Yesterday
-        createdAt: DateTime(2025, 11, 1),
+        scheduledDate: today.subtract(const Duration(days: 1)), // Yesterday
+        createdAt: today.subtract(const Duration(days: 30)),
       );
 
-      // Overdue recurring: 750
-      // Overdue non-recurring: 595 (595 - 1*5)
+      // Overdue recurring: 950
+      // Overdue non-recurring: 875 (max(850, 880 - 5))
       expect(score(overdueRecurring), greaterThan(score(overdueNonRecurring)),
           reason: 'Overdue recurring should have higher priority than overdue non-recurring');
     });
 
     test('overdue non-recurring priority decreases over time', () {
-      // Use relative dates to ensure test works regardless of when it's run
       final overdue1Day = Task(
         id: '1',
         title: 'Overdue 1 Day',
@@ -213,31 +216,31 @@ void main() {
         createdAt: today.subtract(const Duration(days: 30)),
       );
 
-      // Formula: max(550, 595 - (daysOverdue * 5))
-      // 1 day: 595 - (1 * 5) = 590
-      // 2 days: 595 - (2 * 5) = 585
-      // 3 days: 595 - (3 * 5) = 580
-      expect(score(overdue1Day), equals(590),
-          reason: 'Non-recurring overdue 1 day should be 595 - (1 * 5) = 590');
-      expect(score(overdue2Days), equals(585),
-          reason: 'Non-recurring overdue 2 days should be 595 - (2 * 5) = 585');
-      expect(score(overdue3Days), equals(580),
-          reason: 'Non-recurring overdue 3 days should be 595 - (3 * 5) = 580');
+      // Formula: max(850, 880 - (daysOverdue * 5))
+      // 1 day: max(850, 880 - 5) = 875
+      // 2 days: max(850, 880 - 10) = 870
+      // 3 days: max(850, 880 - 15) = 865
+      expect(score(overdue1Day), equals(875),
+          reason: 'Non-recurring overdue 1 day should be max(850, 880-5) = 875');
+      expect(score(overdue2Days), equals(870),
+          reason: 'Non-recurring overdue 2 days should be max(850, 880-10) = 870');
+      expect(score(overdue3Days), equals(865),
+          reason: 'Non-recurring overdue 3 days should be max(850, 880-15) = 865');
       expect(score(overdue1Day), greaterThan(score(overdue2Days)));
       expect(score(overdue2Days), greaterThan(score(overdue3Days)));
     });
 
-    test('overdue non-recurring has minimum priority of 550', () {
+    test('overdue non-recurring has minimum priority of 850', () {
       final overdueVeryOld = Task(
         id: '1',
         title: 'Overdue 20 Days',
-        scheduledDate: DateTime(2025, 10, 21), // 20 days ago
-        createdAt: DateTime(2025, 10, 1),
+        scheduledDate: today.subtract(const Duration(days: 20)), // 20 days ago
+        createdAt: today.subtract(const Duration(days: 30)),
       );
 
-      // 595 - (20 * 5) = 495, but minimum is 550
-      expect(score(overdueVeryOld), equals(550),
-          reason: 'Overdue non-recurring tasks should have minimum priority of 550');
+      // max(850, 880 - (20 * 5)) = max(850, 780) = 850
+      expect(score(overdueVeryOld), equals(850),
+          reason: 'Overdue non-recurring tasks should have minimum priority of 850');
     });
   });
 
@@ -247,44 +250,64 @@ void main() {
         Task(
           id: 'overdue_recurring_1',
           title: 'Overdue Recurring 1 Day',
-          recurrence: TaskRecurrence(type: RecurrenceType.daily),
-          scheduledDate: DateTime(2025, 11, 9),
+          recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [DateTime.monday]),
+          scheduledDate: today.subtract(const Duration(days: 1)),
           isPostponed: false,
-          createdAt: DateTime(2025, 11, 1),
+          createdAt: today.subtract(const Duration(days: 30)),
         ),
         Task(
           id: 'overdue_recurring_2',
           title: 'Overdue Recurring 2 Days',
           recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [DateTime.saturday]),
-          scheduledDate: DateTime(2025, 11, 8), // Saturday, 2 days ago
+          scheduledDate: today.subtract(const Duration(days: 2)),
           isPostponed: false,
-          createdAt: DateTime(2025, 11, 1),
+          createdAt: today.subtract(const Duration(days: 30)),
         ),
         Task(
           id: 'recurring_today',
           title: 'Recurring Due Today',
-          recurrence: TaskRecurrence(type: RecurrenceType.daily),
+          recurrence: TaskRecurrence(type: RecurrenceType.weekly, weekDays: [today.weekday]),
           scheduledDate: today,
-          createdAt: DateTime(2025, 11, 1), // Created in the past, due today
+          createdAt: today.subtract(const Duration(days: 30)),
         ),
       ];
 
       final prioritized = service.getPrioritizedTasks(tasks, categories, 10);
 
-
       // Expected order:
-      // Overdue 1 Day: 750
-      // Overdue 2 Days: 740
-      // Due Today: 700
+      // Overdue 1 Day: 950
+      // Overdue 2 Days: 940
+      // Due Today: ~810
       expect(prioritized[0].id, equals('overdue_recurring_1'));
       expect(prioritized[1].id, equals('overdue_recurring_2'));
       expect(prioritized[2].id, equals('recurring_today'));
     });
   });
 
+  group('Daily Tasks Special Handling', () {
+    // Daily interval=1 tasks are excluded from overdue scoring because they
+    // always recur every day. They're handled by the "due today" path instead.
+
+    test('daily task with past scheduledDate is treated as due today', () {
+      final dailyTask = Task(
+        id: '1',
+        title: 'Daily Task',
+        recurrence: TaskRecurrence(type: RecurrenceType.daily),
+        scheduledDate: today.subtract(const Duration(days: 1)), // Yesterday
+        isPostponed: false,
+        createdAt: today.subtract(const Duration(days: 30)),
+      );
+
+      // Daily tasks get "due today" scoring (700 base + ~110 energy boost = ~810)
+      // NOT the overdue scoring (950, 940, etc.)
+      final taskScore = score(dailyTask);
+      expect(taskScore, greaterThan(700));
+      expect(taskScore, lessThan(900)); // Below overdue scoring
+    });
+  });
+
   group('Edge Cases', () {
     test('non-recurring task does not get recurring overdue priority', () {
-      // Use relative dates to ensure test works regardless of when it's run
       final nonRecurring = Task(
         id: '1',
         title: 'Non-Recurring Overdue',
@@ -292,11 +315,9 @@ void main() {
         createdAt: today.subtract(const Duration(days: 30)),
       );
 
-      // Should get non-recurring overdue priority, not recurring (750)
-      // Formula: max(550, 595 - (daysOverdue * 5))
-      // 1 day overdue: 595 - (1 * 5) = 590
-      expect(score(nonRecurring), equals(590),
-          reason: 'Non-recurring tasks overdue 1 day should score 590, not 750 like recurring tasks');
+      // Should get non-recurring overdue priority (875), not recurring (950)
+      expect(score(nonRecurring), equals(875),
+          reason: 'Non-recurring tasks overdue 1 day should score 875, not 950 like recurring tasks');
     });
   });
 }

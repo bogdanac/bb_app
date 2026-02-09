@@ -572,9 +572,9 @@ class _FastingScreenState extends State<FastingScreen>
   Future<void> _showStartFastDialog() async {
     HapticFeedback.lightImpact();
 
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => const StartFastDialog(defaultHours: 18),
+    final result = await StartFastDialog.show(
+      context,
+      defaultHours: 18,
     );
 
     if (result != null && mounted) {

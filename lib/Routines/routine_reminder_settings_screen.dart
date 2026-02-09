@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'routine_data_models.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
+import '../shared/time_picker_utils.dart';
 import '../Notifications/centralized_notification_manager.dart';
 
 class RoutineReminderSettingsScreen extends StatefulWidget {
@@ -171,22 +172,12 @@ class _RoutineReminderSettingsScreenState extends State<RoutineReminderSettingsS
   }
 
   Future<void> _selectTime(Routine routine) async {
-    final TimeOfDay? picked = await showTimePicker(
+    final TimeOfDay? picked = await TimePickerUtils.showStyledTimePicker(
       context: context,
       initialTime: TimeOfDay(
         hour: routine.reminderHour,
         minute: routine.reminderMinute,
       ),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: AppColors.orange,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked != null) {

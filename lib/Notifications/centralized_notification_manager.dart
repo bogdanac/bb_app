@@ -266,10 +266,34 @@ class CentralizedNotificationManager {
   /// Schedule friend notifications (low battery and birthday reminders)
   Future<void> _scheduleFriendNotifications() async {
     try {
+      // Check if the Social/Friends module is enabled
+      final socialModuleEnabled = await AppCustomizationService.isModuleEnabled(
+        AppCustomizationService.moduleFriends
+      );
+
+      if (!socialModuleEnabled) {
+        // Cancel any existing friend notifications if module is disabled
+        final friendNotificationService = FriendNotificationService();
+        await friendNotificationService.cancelAllFriendNotifications();
+        return;
+      }
+
       final friendNotificationService = FriendNotificationService();
       await friendNotificationService.scheduleAllFriendNotifications();
-      // Also check for low battery immediately on startup
-      await friendNotificationService.checkLowBatteryNotifications();
+
+      // Check for low battery notifications only once per day
+      // Use SharedPreferences to track last check time
+      final prefs = await SharedPreferences.getInstance();
+      final lastCheckKey = 'friend_battery_last_check';
+      final lastCheckMs = prefs.getInt(lastCheckKey) ?? 0;
+      final lastCheck = DateTime.fromMillisecondsSinceEpoch(lastCheckMs);
+      final now = DateTime.now();
+
+      // Only check once per day (24 hours between checks)
+      if (now.difference(lastCheck).inHours >= 24) {
+        await friendNotificationService.checkLowBatteryNotifications();
+        await prefs.setInt(lastCheckKey, now.millisecondsSinceEpoch);
+      }
 
     } catch (e, stackTrace) {
       await ErrorLogger.logError(

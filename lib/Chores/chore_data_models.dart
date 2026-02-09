@@ -29,11 +29,13 @@ class ChoreCategory {
   final String id;
   String name;
   IconData icon;
+  Color color;
 
   ChoreCategory({
     required this.id,
     required this.name,
     required this.icon,
+    this.color = const Color(0xFF64B5F6), // Default waterBlue
   });
 
   /// Default categories
@@ -42,31 +44,37 @@ class ChoreCategory {
           id: 'kitchen',
           name: 'Kitchen',
           icon: Icons.kitchen_rounded,
+          color: const Color(0xFFFF7043), // coral
         ),
         ChoreCategory(
           id: 'bathroom',
           name: 'Bathroom',
           icon: Icons.bathroom_rounded,
+          color: const Color(0xFF64B5F6), // waterBlue
         ),
         ChoreCategory(
           id: 'bedroom',
           name: 'Bedroom',
           icon: Icons.bed_rounded,
+          color: const Color(0xFF9575CD), // purple
         ),
         ChoreCategory(
           id: 'laundry',
           name: 'Laundry',
           icon: Icons.local_laundry_service_rounded,
+          color: const Color(0xFF4DD0E1), // cyan
         ),
         ChoreCategory(
           id: 'plants',
           name: 'Plants & Garden',
           icon: Icons.local_florist_rounded,
+          color: const Color(0xFF81C784), // green
         ),
         ChoreCategory(
           id: 'personal',
           name: 'Personal Care',
           icon: Icons.face_rounded,
+          color: const Color(0xFFFFB74D), // orange
         ),
       ];
 
@@ -74,6 +82,7 @@ class ChoreCategory {
         'id': id,
         'name': name,
         'iconCodePoint': icon.codePoint,
+        'color': color.toARGB32(),
       };
 
   factory ChoreCategory.fromJson(Map<String, dynamic> json) {
@@ -81,6 +90,9 @@ class ChoreCategory {
       id: json['id'],
       name: json['name'],
       icon: IconData(json['iconCodePoint'], fontFamily: 'MaterialIcons'),
+      color: json['color'] != null
+          ? Color(json['color'] as int)
+          : const Color(0xFF64B5F6),
     );
   }
 
@@ -88,11 +100,13 @@ class ChoreCategory {
     String? id,
     String? name,
     IconData? icon,
+    Color? color,
   }) {
     return ChoreCategory(
       id: id ?? this.id,
       name: name ?? this.name,
       icon: icon ?? this.icon,
+      color: color ?? this.color,
     );
   }
 }

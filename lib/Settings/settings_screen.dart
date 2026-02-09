@@ -35,21 +35,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final secondaryOrder = await AppCustomizationService.loadSecondaryTabsOrder();
     final moduleStates = await AppCustomizationService.loadAllModuleStates();
 
-    // Build secondary tabs list from enabled modules not in primary
-    final allModules = AppCustomizationService.allModules;
+    // Get only modules that should show in navigation
+    final navigableModules = AppCustomizationService.allModules
+        .where((m) => m.showInNavigation)
+        .toList();
+
+    // Filter primary tabs to only include navigable modules
+    final filteredPrimaryTabs = primaryTabs
+        .where((key) => navigableModules.any((m) => m.key == key))
+        .toList();
+
+    // Build secondary tabs list from enabled navigable modules not in primary
     final secondaryTabs = <String>[];
 
-    // First add from saved order
+    // First add from saved order (only if navigable)
     for (final moduleKey in secondaryOrder) {
-      if (moduleStates[moduleKey] == true && !primaryTabs.contains(moduleKey)) {
+      if (moduleStates[moduleKey] == true &&
+          !filteredPrimaryTabs.contains(moduleKey) &&
+          navigableModules.any((m) => m.key == moduleKey)) {
         secondaryTabs.add(moduleKey);
       }
     }
 
-    // Then add any enabled modules not in either list
-    for (final module in allModules) {
+    // Then add any enabled navigable modules not in either list
+    for (final module in navigableModules) {
       if (moduleStates[module.key] == true &&
-          !primaryTabs.contains(module.key) &&
+          !filteredPrimaryTabs.contains(module.key) &&
           !secondaryTabs.contains(module.key)) {
         secondaryTabs.add(module.key);
       }
@@ -57,7 +68,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (mounted) {
       setState(() {
-        _primaryTabs = primaryTabs;
+        _primaryTabs = filteredPrimaryTabs;
         _secondaryTabs = secondaryTabs;
         _moduleStates = moduleStates;
         _isLoading = false;
@@ -181,8 +192,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildMobileLayout() {
-    // Build unified list: primary tabs + secondary tabs
+    // Build unified list: primary tabs + secondary tabs (navigable modules only)
     final allModules = [..._primaryTabs, ..._secondaryTabs];
+
+    // Get non-navigable modules (features) that are enabled
+    final featureModules = AppCustomizationService.allModules
+        .where((m) => !m.showInNavigation)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,6 +207,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildSectionHeader('App Features', ''),
                 const SizedBox(height: 12),
                 _buildUnifiedModuleList(allModules),
+
+                // Section: Home Features (non-tab modules like Water)
+                if (featureModules.isNotEmpty) ...[
+                  const SizedBox(height: 32),
+                  _buildSectionHeader('Home Features', ''),
+                  const SizedBox(height: 12),
+                  _buildFeatureModuleList(featureModules),
+                ],
 
                 const SizedBox(height: 32),
 
@@ -281,12 +305,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildDesktopLayout() {
-    // Desktop: Reorderable list of all modules
+    // Desktop: Reorderable list of navigable modules only
     // Combine primary + secondary for display and reordering
     final allEnabledModules = [
       ..._primaryTabs,
       ..._secondaryTabs,
     ];
+
+    // Get non-navigable modules (features)
+    final featureModules = AppCustomizationService.allModules
+        .where((m) => !m.showInNavigation)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,10 +348,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: AppColors.grey300.withValues(alpha: 0.1),
+                          color: AppColors.pink.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(Icons.home_rounded, color: AppColors.grey300, size: 20),
+                        child: Icon(Icons.home_rounded, color: AppColors.pink, size: 20),
                       ),
                       const SizedBox(width: 12),
                       const Expanded(
@@ -331,21 +360,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
-                            color: AppColors.grey300,
                           ),
                         ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.grey300.withValues(alpha: 0.15),
+                          color: AppColors.pink.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text(
+                        child: Text(
                           'Always First',
                           style: TextStyle(
                             fontSize: 11,
-                            color: AppColors.grey300,
+                            color: AppColors.pink,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -391,10 +419,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   }).toList(),
                 ),
 
-              // Disabled modules (not reorderable, shown at bottom)
+              // Disabled navigable modules (not reorderable, shown at bottom)
               ...AppCustomizationService.allModules.where((m) {
                 final isDisabled = _moduleStates[m.key] != true;
-                return m.canBeDisabled && isDisabled;
+                return m.canBeDisabled && m.showInNavigation && isDisabled;
               }).map((module) {
                 return Container(
                   key: ValueKey('disabled_${module.key}'),
@@ -480,6 +508,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
+
+        // Home Features section (non-tab modules like Water)
+        if (featureModules.isNotEmpty) ...[
+          const SizedBox(height: 48),
+          _buildSectionHeader('Home Features', 'Features accessible via Home card only'),
+          const SizedBox(height: 20),
+          _buildFeatureModuleList(featureModules),
+        ],
 
         const SizedBox(height: 48),
 
@@ -755,10 +791,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
             },
           ),
-          // Disabled modules at the bottom
+          // Disabled navigable modules at the bottom
           ...AppCustomizationService.allModules.where((m) {
             final isDisabled = _moduleStates[m.key] != true;
-            return m.canBeDisabled && isDisabled && !allModules.contains(m.key);
+            return m.canBeDisabled && m.showInNavigation && isDisabled && !allModules.contains(m.key);
           }).map((module) {
             return Container(
               decoration: BoxDecoration(
@@ -924,6 +960,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildFeatureModuleList(List<ModuleInfo> featureModules) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: AppStyles.borderRadiusLarge,
+        border: Border.all(color: AppColors.normalCardBackground),
+      ),
+      child: Column(
+        children: featureModules.map((module) {
+          final isEnabled = _moduleStates[module.key] ?? false;
+          return Container(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: AppColors.normalCardBackground, width: 0.5),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: module.color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(module.icon, color: module.color, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          module.label,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          'Home card only',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.greyText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: isEnabled,
+                    onChanged: (val) async {
+                      await AppCustomizationService.setModuleEnabled(module.key, val);
+                      setState(() {
+                        _moduleStates[module.key] = val;
+                      });
+                    },
+                    activeTrackColor: module.color.withValues(alpha: 0.5),
+                    thumbColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return module.color;
+                      }
+                      return null;
+                    }),
+                  ),
+                  if (_hasSettings(module.key))
+                    IconButton(
+                      icon: const Icon(Icons.settings_outlined, size: 20),
+                      color: AppColors.grey300,
+                      onPressed: () => _openModuleSettings(module.key),
+                    ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildNavigationCard({
     required IconData icon,
     required Color iconColor,
@@ -986,9 +1103,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _hasSettings(String moduleKey) {
     // Define which modules have settings pages
     return const [
-      'module_water_tracking',  // Water settings
-      'module_food_tracking',   // Food settings
-      'module_energy_tracking', // Energy settings
+      AppCustomizationService.moduleWater,   // Water settings
+      AppCustomizationService.moduleFood,    // Food settings
+      AppCustomizationService.moduleEnergy,  // Energy settings
     ].contains(moduleKey);
   }
 
@@ -996,13 +1113,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Widget? settingsScreen;
 
     switch (moduleKey) {
-      case 'module_water_tracking':
+      case AppCustomizationService.moduleWater:
         settingsScreen = const WaterSettingsScreen();
         break;
-      case 'module_food_tracking':
+      case AppCustomizationService.moduleFood:
         settingsScreen = const FoodTrackingSettingsScreen();
         break;
-      case 'module_energy_tracking':
+      case AppCustomizationService.moduleEnergy:
         settingsScreen = const EnergySettingsScreen();
         break;
     }

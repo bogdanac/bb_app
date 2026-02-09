@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'shared/time_picker_utils.dart';
 import 'Notifications/motion_alert_quick_setup.dart';
 import 'Data/backup_screen.dart';
 import 'Routines/widget_color_settings_screen.dart';
@@ -87,7 +88,7 @@ class _HomeSettingsScreenState extends State<HomeSettingsScreen> {
   }
 
   Future<void> _showEndOfDayReviewTimePicker() async {
-    final TimeOfDay? picked = await showTimePicker(
+    final TimeOfDay? picked = await TimePickerUtils.showStyledTimePicker(
       context: context,
       initialTime: TimeOfDay(hour: _endOfDayReviewHour, minute: _endOfDayReviewMinute),
     );

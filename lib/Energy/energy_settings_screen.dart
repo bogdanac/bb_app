@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
+import '../shared/time_picker_utils.dart';
 import 'energy_settings_model.dart';
 import 'energy_service.dart';
 import 'energy_calculator.dart';
@@ -1185,15 +1186,9 @@ class _EnergySettingsScreenState extends State<EnergySettingsScreen> {
   }) {
     return InkWell(
       onTap: () async {
-        final time = await showTimePicker(
+        final time = await TimePickerUtils.showStyledTimePicker(
           context: context,
           initialTime: TimeOfDay(hour: hour, minute: minute),
-          builder: (context, child) {
-            return MediaQuery(
-              data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-              child: child!,
-            );
-          },
         );
         if (time != null) {
           onChanged(time.hour, time.minute);

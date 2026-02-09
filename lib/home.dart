@@ -32,7 +32,9 @@ import 'package:bb_app/Chores/chores_card.dart';
 import 'package:bb_app/EndOfDayReview/end_of_day_review_screen.dart';
 import 'package:bb_app/shared/collapsible_card_wrapper.dart';
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 // HOME SCREEN
 class HomeScreen extends StatefulWidget {
@@ -50,10 +52,15 @@ class HomeScreen extends StatefulWidget {
   });
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  /// Public method to refresh card settings from outside
+  Future<void> refreshCardSettings() async {
+    await _loadCardSettings();
+  }
+
   int waterIntake = 0;
   int _waterGoal = 1500; // Default water goal
   bool showFastingSection = false;
@@ -63,12 +70,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isDisposed = false;
   Timer? _waterSyncTimer;
   bool _backupOverdue = false;
+  bool _autoBackupTriggered = false; // Track if auto-backup was already triggered for this session
   Map<String, bool> _cardVisibility = {};
   List<String> _cardOrder = [];
   bool _productivityScheduledNow = false;
   bool _productivityHiddenTemporarily = false;
   bool _isEveningTime = false;
   bool _endOfDayReviewEnabled = false;
+  Set<String> _cardsHiddenForToday = {}; // Cards swiped away for today
 
   // Method channel for communicating with Android widget
   static const platform = MethodChannel('com.bb.bb_app/water_widget');
@@ -84,6 +93,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Key to access BatteryFlowHomeCard for refresh
   final GlobalKey<BatteryFlowHomeCardState> _batteryFlowCardKey = GlobalKey<BatteryFlowHomeCardState>();
+
+  // Key to access EndOfDayReviewCard for refresh when tasks change
+  final GlobalKey<EndOfDayReviewCardState> _endOfDayReviewCardKey = GlobalKey<EndOfDayReviewCardState>();
 
   @override
   void initState() {
@@ -168,9 +180,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final backupStatus = await BackupService.getDetailedBackupStatus();
       if (mounted && !_isDisposed) {
+        final wasOverdue = _backupOverdue;
+        final isNowOverdue = backupStatus['any_overdue'] ?? false;
+
         setState(() {
-          _backupOverdue = backupStatus['any_overdue'] ?? false;
+          _backupOverdue = isNowOverdue;
         });
+
+        // Auto-backup and share when overdue is detected (only once per session)
+        if (isNowOverdue && !wasOverdue && !_autoBackupTriggered) {
+          _autoBackupTriggered = true;
+          _performAutoBackupAndShare();
+        }
       }
     } catch (e) {
       // Don't show warning icon for technical errors - only for actual overdue backups
@@ -179,6 +200,112 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         setState(() {
           _backupOverdue = false; // Don't show false alarms
         });
+      }
+    }
+  }
+
+  /// Automatically create a backup and open the share panel
+  Future<void> _performAutoBackupAndShare() async {
+    if (!mounted) return;
+
+    // Show loading indicator
+    SnackBarUtils.showLoading(context, 'Creating automatic backup...');
+
+    try {
+      // Perform backup
+      final backupPath = await BackupService.exportToFile();
+
+      if (!mounted) return;
+
+      // Hide loading
+      SnackBarUtils.hide(context);
+
+      if (backupPath != null) {
+        // Show success message briefly
+        SnackBarUtils.showSuccess(
+          context,
+          '✅ Backup created! Opening share panel...',
+          duration: const Duration(seconds: 2),
+        );
+
+        // Wait a moment for snackbar to show, then open share panel
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+
+        await _shareBackupFile(backupPath);
+
+        // Refresh backup status after sharing
+        _checkBackupStatus();
+      } else {
+        SnackBarUtils.showError(
+          context,
+          '❌ Auto-backup failed - check storage permissions',
+          duration: const Duration(seconds: 4),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      SnackBarUtils.hide(context);
+      SnackBarUtils.showError(
+        context,
+        '❌ Auto-backup failed: ${e.toString()}',
+        duration: const Duration(seconds: 4),
+      );
+    }
+  }
+
+  /// Share a backup file using the system share panel
+  Future<void> _shareBackupFile(String filePath) async {
+    try {
+      final originalFile = File(filePath);
+      if (!await originalFile.exists()) {
+        if (mounted) {
+          SnackBarUtils.showError(context, '❌ Backup file not found for sharing');
+        }
+        return;
+      }
+
+      // Create a temporary copy for sharing to prevent file system issues
+      final fileName = filePath.split(Platform.pathSeparator).last;
+      final tempDir = Directory.systemTemp;
+      final tempFile = File('${tempDir.path}${Platform.pathSeparator}share_$fileName');
+
+      // Copy the file to temp location
+      await originalFile.copy(tempFile.path);
+
+      final now = DateTime.now();
+      final dateTime = '${DateFormatUtils.formatLong(now)}, ${DateFormatUtils.formatTime24(now)}';
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(tempFile.path)],
+          text: 'BBetter App Backup - $dateTime',
+          subject: 'BBetter Backup File - $dateTime',
+        ),
+      );
+
+      // Update cloud share timestamp
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('last_cloud_share', now.toIso8601String());
+      } catch (e) {
+        debugPrint('Could not update cloud share timestamp: $e');
+      }
+
+      // Clean up temp file after a delay
+      Future.delayed(const Duration(seconds: 10), () async {
+        try {
+          if (await tempFile.exists()) {
+            await tempFile.delete();
+          }
+        } catch (e) {
+          debugPrint('Could not clean up temp file: $e');
+        }
+      });
+
+    } catch (e) {
+      if (mounted) {
+        SnackBarUtils.showError(context, '❌ Error sharing backup: $e');
       }
     }
   }
@@ -894,6 +1021,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
     final productivityHidden = prefs.getBool('productivity_hidden_$today') ?? false;
 
+    // Load cards that were swiped away for today
+    final hiddenCardsJson = prefs.getStringList('cards_hidden_$today') ?? [];
+    final hiddenCards = hiddenCardsJson.toSet();
+
     // Compute effective visibility: card toggle AND module dependency
     final effectiveVisibility = <String, bool>{};
     for (final entry in cardStates.entries) {
@@ -910,12 +1041,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _productivityHiddenTemporarily = productivityHidden;
         _isEveningTime = isEvening;
         _endOfDayReviewEnabled = reviewEnabled;
+        _cardsHiddenForToday = hiddenCards;
       });
     }
   }
 
   bool _isCardVisible(String cardKey) {
     return _cardVisibility[cardKey] ?? true;
+  }
+
+  /// Hide a card for today (when user swipes it away)
+  Future<void> _hideCardForToday(String cardKey) async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
+
+    // Add to hidden set
+    _cardsHiddenForToday.add(cardKey);
+
+    // Persist to SharedPreferences
+    await prefs.setStringList('cards_hidden_$today', _cardsHiddenForToday.toList());
+
+    if (mounted && !_isDisposed) {
+      setState(() {});
+    }
+  }
+
+  /// Check if a card is hidden for today
+  bool _isCardHiddenForToday(String cardKey) {
+    return _cardsHiddenForToday.contains(cardKey);
   }
 
   /// Show in-app alert when timer completes (especially useful on desktop)
@@ -1029,7 +1182,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       },
       AppCustomizationService.cardDailyTasks: () {
         if (!_isCardVisible(AppCustomizationService.cardDailyTasks)) return null;
-        return const DailyTasksCard();
+        return DailyTasksCard(
+          onTasksChanged: () {
+            // Refresh EndOfDayReviewCard when tasks change
+            _endOfDayReviewCardKey.currentState?.refresh();
+          },
+        );
       },
       AppCustomizationService.cardChores: () {
         if (!_isCardVisible(AppCustomizationService.cardChores)) return null;
@@ -1066,18 +1224,59 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (!_isCardVisible(AppCustomizationService.cardEndOfDayReview)) return null;
         // Only show during evening time and if feature is enabled
         if (!_isEveningTime || !_endOfDayReviewEnabled) return null;
-        return const EndOfDayReviewCard();
+        return EndOfDayReviewCard(key: _endOfDayReviewCardKey);
       },
     };
 
     final widgets = <Widget>[];
     for (final cardKey in _cardOrder) {
+      // Skip cards hidden for today
+      if (_isCardHiddenForToday(cardKey)) continue;
+
       final builder = cardBuilders[cardKey];
       if (builder != null) {
-        final widget = builder();
-        if (widget != null) {
-          widgets.add(widget);
-          widgets.add(const SizedBox(height: 4));
+        final builtWidget = builder();
+        if (builtWidget != null) {
+          // Wrap with Dismissible for swipe-to-hide
+          widgets.add(
+            Dismissible(
+              key: ValueKey('dismissible_$cardKey'),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.coral.withValues(alpha: 0.2),
+                  borderRadius: AppStyles.borderRadiusLarge,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Hidden for today',
+                      style: TextStyle(color: AppColors.coral, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(Icons.visibility_off_rounded, color: AppColors.coral),
+                  ],
+                ),
+              ),
+              confirmDismiss: (direction) async {
+                HapticFeedback.lightImpact();
+                return true;
+              },
+              onDismissed: (direction) {
+                _hideCardForToday(cardKey);
+                SnackBarUtils.showSuccess(
+                  context,
+                  'Card hidden for today',
+                  duration: const Duration(seconds: 2),
+                );
+              },
+              child: builtWidget,
+            ),
+          );
+          widgets.add(const SizedBox(height: 8));
         }
       }
     }
@@ -1098,7 +1297,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     ).then((_) async {
       // Reload card settings when returning from settings
-      _loadCardSettings();
+      await _loadCardSettings();
       // Reload main screen navigation settings (primary/secondary tabs)
       await widget.onReloadSettings?.call();
     });
@@ -1109,6 +1308,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        // Menu button on left (mobile only)
+        leading: widget.onOpenDrawer != null
+            ? IconButton(
+                icon: const Icon(Icons.menu_rounded, color: Colors.white),
+                onPressed: widget.onOpenDrawer,
+                tooltip: 'Menu',
+              )
+            : null,
         title: const Text('bbetter',
             style: TextStyle(fontWeight: FontWeight.w500)),
         backgroundColor: AppColors.transparent,
@@ -1167,16 +1374,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 tooltip: 'Quick Backup - Tap to backup your data now',
               ),
             ),
-          // Menu button on mobile (opens drawer with secondary tabs + settings)
-          if (widget.onOpenDrawer != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Colors.white),
-                onPressed: widget.onOpenDrawer,
-                tooltip: 'Menu',
-              ),
-            ),
           // Settings button on desktop (no drawer, direct access)
           if (widget.onOpenDrawer == null)
             Padding(
@@ -1207,7 +1404,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildMobileSingleColumn() {
-    return Center(
+    return Align(
+      alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 800),
         child: SingleChildScrollView(
@@ -1438,7 +1636,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       },
       AppCustomizationService.cardDailyTasks: () {
         if (!_isCardVisible(AppCustomizationService.cardDailyTasks)) return null;
-        return const DailyTasksCard();
+        return DailyTasksCard(
+          onTasksChanged: () {
+            // Refresh EndOfDayReviewCard when tasks change
+            _endOfDayReviewCardKey.currentState?.refresh();
+          },
+        );
       },
       AppCustomizationService.cardChores: () {
         if (!_isCardVisible(AppCustomizationService.cardChores)) return null;
@@ -1457,12 +1660,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (!_isCardVisible(AppCustomizationService.cardEndOfDayReview)) return null;
         // On desktop, show during evening if enabled (same logic as mobile)
         if (!_isEveningTime || !_endOfDayReviewEnabled) return null;
-        return const EndOfDayReviewCard();
+        return EndOfDayReviewCard(key: _endOfDayReviewCardKey);
       },
     };
 
     final result = <(String, Widget)>[];
     for (final cardKey in _cardOrder) {
+      // Skip cards hidden for today (also applies to desktop)
+      if (_isCardHiddenForToday(cardKey)) continue;
+
       final builder = cardBuilders[cardKey];
       if (builder != null) {
         final builtWidget = builder();

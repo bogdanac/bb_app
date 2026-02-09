@@ -1677,7 +1677,8 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     // Menstrual cycle filtering logic:
     // When flower icon is OFF (_showAllTasks = false): Show ALL tasks regardless of menstrual phase settings
     // When flower icon is ON (pink) (_showAllTasks = true): Show only current phase tasks + tasks without menstrual settings
-    if (_showAllTasks) {
+    // IMPORTANT: Skip menstrual filtering when showing completed tasks - we want to see ALL completed tasks
+    if (_showAllTasks && !_showCompleted) {
       // Flower icon ON (pink): Show tasks from current phase + tasks without menstrual phase settings
       List<Task> menstrualFiltered = [];
       for (Task task in filtered) {

@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../Notifications/notification_service.dart';
 import '../shared/timezone_utils.dart';
 import '../shared/error_logger.dart';
@@ -50,9 +51,11 @@ class FriendNotificationService {
 
   /// Check and show low battery notifications immediately
   /// Call this on app startup to check current battery levels
+  /// Only shows notification once per week per friend to avoid spam
   Future<void> checkLowBatteryNotifications() async {
     try {
       final friends = await FriendService.loadFriends();
+      final prefs = await SharedPreferences.getInstance();
 
       for (final friend in friends) {
         if (friend.isArchived) continue;
@@ -62,7 +65,30 @@ class FriendNotificationService {
 
         // Show notification if battery is below 30%
         if (batteryLevel < 0.30) {
-          await _showLowBatteryNotification(friend, batteryLevel);
+          // Check if we've already notified for this friend recently (within 7 days)
+          final lastNotifiedKey = 'friend_low_battery_notified_${friend.id}';
+          final lastNotified = prefs.getString(lastNotifiedKey);
+
+          bool shouldNotify = true;
+          if (lastNotified != null) {
+            try {
+              final lastNotifiedDate = DateTime.parse(lastNotified);
+              final daysSinceNotified = DateTime.now().difference(lastNotifiedDate).inDays;
+              // Only notify again if it's been at least 7 days
+              if (daysSinceNotified < 7) {
+                shouldNotify = false;
+              }
+            } catch (e) {
+              // If parsing fails, allow notification
+              shouldNotify = true;
+            }
+          }
+
+          if (shouldNotify) {
+            await _showLowBatteryNotification(friend, batteryLevel);
+            // Save the notification timestamp
+            await prefs.setString(lastNotifiedKey, DateTime.now().toIso8601String());
+          }
         }
       }
     } catch (e, stackTrace) {
@@ -71,6 +97,16 @@ class FriendNotificationService {
         error: 'Error checking low battery notifications: $e',
         stackTrace: stackTrace.toString(),
       );
+    }
+  }
+
+  /// Clear the notification tracking for a friend (call when battery is recharged)
+  Future<void> clearLowBatteryNotificationTracking(String friendId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('friend_low_battery_notified_$friendId');
+    } catch (e) {
+      // Ignore errors in clearing tracking
     }
   }
 

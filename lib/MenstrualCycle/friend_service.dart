@@ -102,5 +102,11 @@ class FriendService {
     final friend = allFriends.firstWhere((f) => f.id == friendId, orElse: () => throw Exception('Friend not found'));
     friend.updateBattery(newBattery);
     await saveFriends(allFriends);
+
+    // If battery is recharged above 30%, clear the low battery notification tracking
+    // so they can be notified again if it drops below 30% in the future
+    if (newBattery >= 0.30) {
+      await FriendNotificationService().clearLowBatteryNotificationTracking(friendId);
+    }
   }
 }

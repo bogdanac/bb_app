@@ -31,40 +31,34 @@ class _TaskCategoriesScreenState extends State<TaskCategoriesScreen> {
   }
 
   void _addCategory() {
-    showDialog(
-      context: context,
-      useRootNavigator: true,
-      builder: (context) => CategoryEditDialog(
-        onSave: (name, color) {
-          setState(() {
-            _categories.add(TaskCategory(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              name: name,
-              color: color,
-              order: _categories.length,
-            ));
-          });
-          _saveCategories();
-        },
-      ),
+    CategoryEditDialog.show(
+      context,
+      onSave: (name, color) {
+        setState(() {
+          _categories.add(TaskCategory(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            name: name,
+            color: color,
+            order: _categories.length,
+          ));
+        });
+        _saveCategories();
+      },
     );
   }
 
   void _editCategory(TaskCategory category) {
-    showDialog(
-      context: context,
-      useRootNavigator: true,
-      builder: (context) => CategoryEditDialog(
-        initialName: category.name,
-        initialColor: category.color,
-        onSave: (name, color) {
-          setState(() {
-            category.name = name;
-            category.color = color;
-          });
-          _saveCategories();
-        },
-      ),
+    CategoryEditDialog.show(
+      context,
+      initialName: category.name,
+      initialColor: category.color,
+      onSave: (name, color) {
+        setState(() {
+          category.name = name;
+          category.color = color;
+        });
+        _saveCategories();
+      },
     );
   }
 

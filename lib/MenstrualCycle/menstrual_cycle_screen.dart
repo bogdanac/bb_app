@@ -16,6 +16,7 @@ import 'package:bb_app/MenstrualCycle/cycle_calculation_utils.dart';
 import 'package:bb_app/shared/snackbar_utils.dart';
 import 'package:bb_app/Services/firebase_backup_service.dart';
 import 'package:bb_app/Fasting/scheduled_fastings_service.dart';
+import 'package:bb_app/Settings/app_customization_service.dart';
 
 class MenstrualCycleScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
@@ -35,6 +36,7 @@ class _MenstrualCycleScreenState extends State<MenstrualCycleScreen> {
   int _averageCycleLength = 31;
   List<Map<String, DateTime>> _periodRanges = [];
   List<IntercourseRecord> _intercourseRecords = [];
+  int _firstDayOfWeek = 1; // 1 = Monday, 7 = Sunday
 
   @override
   void initState() {
@@ -45,6 +47,9 @@ class _MenstrualCycleScreenState extends State<MenstrualCycleScreen> {
   // DATA PERSISTENCE METHODS
   Future<void> _loadCycleData() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Load first day of week setting
+    _firstDayOfWeek = await AppCustomizationService.getCalendarFirstDayOfWeek();
 
     // Load last period dates
     final lastStartStr = prefs.getString('last_period_start');
@@ -894,10 +899,26 @@ class _MenstrualCycleScreenState extends State<MenstrualCycleScreen> {
     );
   }
 
+  List<String> get _weekdayHeaders {
+    const mondayFirst = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const sundayFirst = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return _firstDayOfWeek == 1 ? mondayFirst : sundayFirst;
+  }
+
+  int _getStartOffset(int firstWeekday) {
+    if (_firstDayOfWeek == 1) {
+      // Monday first: Monday=0, Tuesday=1, ..., Sunday=6
+      return (firstWeekday - 1) % 7;
+    } else {
+      // Sunday first: Sunday=0, Monday=1, ..., Saturday=6
+      return firstWeekday % 7;
+    }
+  }
+
   Widget _buildWeekdayHeaders() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      children: _weekdayHeaders
           .map((day) => SizedBox(
         width: 40,
         child: Text(
@@ -918,9 +939,10 @@ class _MenstrualCycleScreenState extends State<MenstrualCycleScreen> {
     final lastDayOfMonth = DateTime(monthDate.year, monthDate.month + 1, 0);
     final daysInMonth = lastDayOfMonth.day;
     final firstWeekday = firstDayOfMonth.weekday;
+    final startOffset = _getStartOffset(firstWeekday);
 
     // Calculate the actual number of weeks needed
-    final totalCells = (firstWeekday - 1) + daysInMonth;
+    final totalCells = startOffset + daysInMonth;
     final weeksNeeded = (totalCells / 7).ceil();
     final actualItemCount = weeksNeeded * 7;
 
@@ -935,7 +957,7 @@ class _MenstrualCycleScreenState extends State<MenstrualCycleScreen> {
       ),
       itemCount: actualItemCount,
       itemBuilder: (context, index) {
-        final dayNumber = index - firstWeekday + 2;
+        final dayNumber = index - startOffset + 1;
 
         if (dayNumber <= 0 || dayNumber > daysInMonth) {
           return const SizedBox();

@@ -44,7 +44,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
   bool _hasUnsavedChanges = false;
   bool _showSaved = false;
   Task? _currentTask; // Track the current task to prevent duplicates
-  int _energyLevel = -1; // Energy level of the task (-5 to +5, default -1 = slightly draining)
+  int _energyLevel = 0; // Energy level of the task (-5 to +5, default 0 = neutral)
   bool _isCompleted = false; // Track completion status for app bar checkbox
   bool _energyModuleEnabled = true;
 
@@ -942,19 +942,30 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                     children: [
                       Wrap(
                         spacing: 4,
-                        runSpacing: 8,
+                        runSpacing: 4,
                         children: widget.categories.map((category) {
                           final isSelected = _selectedCategoryIds.contains(category.id);
                           return FilterChip(
-                            label: Text(category.name),
+                            label: Text(
+                              category.name,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
                             selected: isSelected,
                             backgroundColor: category.color.withValues(alpha: 0.1),
                             selectedColor: category.color.withValues(alpha: 0.3),
                             checkmarkColor: category.color,
-                            side: BorderSide(color: category.color.withValues(alpha: 0.5)),
-                            shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusMedium),
+                            showCheckmark: false,
+                            side: BorderSide(
+                              color: isSelected
+                                  ? category.color.withValues(alpha: 0.8)
+                                  : category.color.withValues(alpha: 0.3),
+                              width: isSelected ? 1.5 : 1,
+                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
+                            visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                             onSelected: (selected) {
                               setState(() {
                                 if (selected) {

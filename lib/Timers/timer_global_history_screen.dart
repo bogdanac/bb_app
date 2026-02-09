@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import '../shared/date_format_utils.dart';
+import '../shared/calendar_widget.dart';
 import 'timer_data_models.dart';
 import 'timer_service.dart';
 
@@ -92,142 +93,72 @@ class _TimerGlobalHistoryScreenState extends State<TimerGlobalHistoryScreen> {
   }
 
   Widget _buildCalendar() {
-    final firstDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
-    final lastDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
-    final daysInMonth = lastDayOfMonth.day;
-    final startOffset = (firstDayOfMonth.weekday - 1) % 7;
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final canGoForward = DateTime(_focusedMonth.year, _focusedMonth.month + 1)
-        .isBefore(DateTime(now.year, now.month + 1));
-
     return Container(
       decoration: AppStyles.cardDecoration(),
       padding: const EdgeInsets.all(12),
-      child: Column(
-        children: [
-          // Month navigation
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: () {
-                  setState(() {
-                    _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
-                    _selectedDate = null;
-                    _selectedDayBreakdown = {};
-                    _selectedDaySessions = [];
-                  });
-                },
-                icon: const Icon(Icons.chevron_left),
-                color: AppColors.grey200,
-              ),
-              Text(
-                DateFormatUtils.formatMonthYear(_focusedMonth),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-              IconButton(
-                onPressed: canGoForward
-                    ? () {
-                        setState(() {
-                          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
-                          _selectedDate = null;
-                          _selectedDayBreakdown = {};
-                          _selectedDaySessions = [];
-                        });
-                      }
-                    : null,
-                icon: const Icon(Icons.chevron_right),
-                color: canGoForward ? AppColors.grey200 : AppColors.grey700,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // Weekday headers
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: ['M', 'T', 'W', 'T', 'F', 'S', 'S']
-                .map((d) => SizedBox(
-                      width: 36,
-                      child: Center(
-                        child: Text(
-                          d,
-                          style: TextStyle(
-                            color: AppColors.grey300,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ))
-                .toList(),
-          ),
-          const SizedBox(height: 4),
-          // Calendar grid
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              childAspectRatio: 1,
-            ),
-            itemCount: startOffset + daysInMonth,
-            itemBuilder: (context, index) {
-              if (index < startOffset) {
-                return const SizedBox.shrink();
-              }
-              final day = index - startOffset + 1;
-              final date = DateTime(_focusedMonth.year, _focusedMonth.month, day);
-              final dateKeyStr = _dateKey(date);
-              final duration = _dailyTotals[dateKeyStr] ?? Duration.zero;
-              final isToday = date == today;
-              final isFuture = date.isAfter(today);
-              final isSelected = _selectedDate != null &&
-                  _selectedDate!.year == date.year &&
-                  _selectedDate!.month == date.month &&
-                  _selectedDate!.day == date.day;
-              final hasData = duration.inSeconds > 0;
+      child: CalendarWidget(
+        focusedMonth: _focusedMonth,
+        onMonthChanged: (newMonth) {
+          setState(() {
+            _focusedMonth = newMonth;
+            _selectedDate = null;
+            _selectedDayBreakdown = {};
+            _selectedDaySessions = [];
+          });
+        },
+        dayBuilder: (date) => _buildDayCell(date),
+        onDayTap: (date) {
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          if (date.isAfter(today)) return; // Don't allow future dates
+          setState(() {
+            _selectedDate = date;
+          });
+          _loadSelectedDayData(date);
+        },
+        allowFutureMonths: false,
+        cellSpacing: 2.0,
+      ),
+    );
+  }
 
-              return GestureDetector(
-                onTap: isFuture
-                    ? null
-                    : () {
-                        setState(() {
-                          _selectedDate = date;
-                        });
-                        _loadSelectedDayData(date);
-                      },
-                child: Container(
-                  margin: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: hasData ? _getIntensityColor(duration) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: isSelected
-                        ? Border.all(color: AppColors.purple, width: 2)
-                        : isToday
-                            ? Border.all(color: AppColors.purple.withValues(alpha: 0.5), width: 1.5)
-                            : null,
-                  ),
-                  child: Center(
-                    child: Text(
-                      '$day',
-                      style: TextStyle(
-                        color: isFuture
-                            ? AppColors.grey700
-                            : isSelected
-                                ? AppColors.purple
-                                : AppColors.white,
-                        fontSize: 13,
-                        fontWeight: isToday || isSelected ? FontWeight.bold : null,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
+  Widget _buildDayCell(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dateKeyStr = _dateKey(date);
+    final duration = _dailyTotals[dateKeyStr] ?? Duration.zero;
+    final isToday = date.year == today.year && date.month == today.month && date.day == today.day;
+    final isFuture = date.isAfter(today);
+    final isSelected = _selectedDate != null &&
+        _selectedDate!.year == date.year &&
+        _selectedDate!.month == date.month &&
+        _selectedDate!.day == date.day;
+    final hasData = duration.inSeconds > 0;
+
+    return Container(
+      margin: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: hasData ? _getIntensityColor(duration) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        border: isSelected
+            ? Border.all(color: AppColors.purple, width: 2)
+            : isToday
+                ? Border.all(color: AppColors.purple.withValues(alpha: 0.5), width: 1.5)
+                : null,
+      ),
+      child: Center(
+        child: Text(
+          '${date.day}',
+          style: TextStyle(
+            color: isFuture
+                ? AppColors.grey700
+                : isSelected
+                    ? AppColors.purple
+                    : AppColors.white,
+            fontSize: 13,
+            fontWeight: isToday || isSelected ? FontWeight.bold : null,
           ),
-        ],
+        ),
       ),
     );
   }

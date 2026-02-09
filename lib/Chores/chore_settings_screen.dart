@@ -3,6 +3,7 @@ import 'chore_data_models.dart';
 import 'chore_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
+import '../shared/time_picker_utils.dart';
 
 class ChoreSettingsScreen extends StatefulWidget {
   const ChoreSettingsScreen({super.key});
@@ -57,7 +58,7 @@ class _ChoreSettingsScreenState extends State<ChoreSettingsScreen> {
   Future<void> _pickNotificationTime() async {
     if (_settings == null) return;
 
-    final picked = await showTimePicker(
+    final picked = await TimePickerUtils.showStyledTimePicker(
       context: context,
       initialTime: TimeOfDay(
         hour: _settings!.notificationHour,

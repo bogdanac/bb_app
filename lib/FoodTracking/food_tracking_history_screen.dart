@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import '../shared/date_format_utils.dart';
+import '../shared/calendar_widget.dart';
 import 'food_tracking_service.dart';
 import 'food_tracking_data_models.dart';
 import 'food_tracking_goal_history_screen.dart';
@@ -255,182 +256,19 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   }
 
   Widget _buildCalendar() {
-    final firstDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
-    final lastDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
-    final firstWeekday = firstDayOfMonth.weekday;
-    final daysInMonth = lastDayOfMonth.day;
-    final startOffset = (firstWeekday - 1) % 7;
-
     return Column(
       children: [
-        // Month navigation
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: () {
-                  setState(() {
-                    _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
-                  });
-                },
-                icon: const Icon(Icons.chevron_left_rounded),
-                color: AppColors.greyText,
-                iconSize: 20,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              ),
-              Text(
-                DateFormatUtils.formatMonthYear(_focusedMonth),
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              IconButton(
-                onPressed: _focusedMonth.isBefore(DateTime(DateTime.now().year, DateTime.now().month, 1))
-                    ? () {
-                        setState(() {
-                          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
-                        });
-                      }
-                    : null,
-                icon: const Icon(Icons.chevron_right_rounded),
-                color: AppColors.greyText,
-                iconSize: 20,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              ),
-            ],
-          ),
-        ),
-
-        // Weekday headers
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day) {
-              return SizedBox(
-                width: 36,
-                child: Center(
-                  child: Text(
-                    day,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.greyText,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-
-        const SizedBox(height: 4),
-
-        // Calendar grid
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              mainAxisSpacing: 2,
-              crossAxisSpacing: 2,
-              childAspectRatio: 1.2,
-            ),
-            itemCount: startOffset + daysInMonth,
-            itemBuilder: (context, index) {
-              if (index < startOffset) {
-                return const SizedBox();
-              }
-
-              final day = index - startOffset + 1;
-              final date = DateTime(_focusedMonth.year, _focusedMonth.month, day);
-              final isToday = DateFormatUtils.isSameDay(date, DateTime.now());
-              final isSelected = _selectedDate != null && DateFormatUtils.isSameDay(date, _selectedDate!);
-              final isFuture = date.isAfter(DateTime.now());
-              final hasEntries = _entriesByDate.containsKey(date);
-              final dayColor = _getDayColor(date);
-              final entries = _entriesByDate[date] ?? [];
-
-              return DragTarget<FoodEntry>(
-                onWillAcceptWithDetails: (details) => !isFuture,
-                onAcceptWithDetails: (details) {
-                  _moveEntryToDate(details.data, date);
-                },
-                builder: (context, candidateData, rejectedData) {
-                  final isDropTarget = candidateData.isNotEmpty;
-
-                  return GestureDetector(
-                    onTap: hasEntries ? () => setState(() => _selectedDate = date) : null,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isDropTarget
-                            ? AppColors.successGreen.withValues(alpha: 0.3)
-                            : isSelected
-                                ? AppColors.successGreen.withValues(alpha: 0.2)
-                                : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                        border: isToday
-                            ? Border.all(color: AppColors.waterBlue, width: 1.5)
-                            : isDropTarget
-                                ? Border.all(color: AppColors.successGreen, width: 2)
-                                : null,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '$day',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: isToday || isSelected ? FontWeight.bold : FontWeight.normal,
-                              color: isFuture
-                                  ? AppColors.greyText.withValues(alpha: 0.4)
-                                  : isToday
-                                      ? AppColors.waterBlue
-                                      : Colors.white,
-                            ),
-                          ),
-                          if (hasEntries)
-                            Container(
-                              margin: const EdgeInsets.only(top: 2),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    width: 16,
-                                    height: 3,
-                                    decoration: BoxDecoration(
-                                      color: dayColor,
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '${entries.length}',
-                                    style: TextStyle(
-                                      fontSize: 8,
-                                      color: dayColor,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
+        CalendarWidget(
+          focusedMonth: _focusedMonth,
+          onMonthChanged: (newMonth) {
+            setState(() {
+              _focusedMonth = newMonth;
+            });
+          },
+          dayBuilder: (date) => _buildDayCell(date),
+          allowFutureMonths: false,
+          cellAspectRatio: 1.2,
+          cellSpacing: 2.0,
         ),
 
         // Legend
@@ -447,6 +285,87 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildDayCell(DateTime date) {
+    final isToday = DateFormatUtils.isSameDay(date, DateTime.now());
+    final isSelected = _selectedDate != null && DateFormatUtils.isSameDay(date, _selectedDate!);
+    final isFuture = date.isAfter(DateTime.now());
+    final hasEntries = _entriesByDate.containsKey(date);
+    final dayColor = _getDayColor(date);
+    final entries = _entriesByDate[date] ?? [];
+
+    return DragTarget<FoodEntry>(
+      onWillAcceptWithDetails: (details) => !isFuture,
+      onAcceptWithDetails: (details) {
+        _moveEntryToDate(details.data, date);
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isDropTarget = candidateData.isNotEmpty;
+
+        return GestureDetector(
+          onTap: hasEntries ? () => setState(() => _selectedDate = date) : null,
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDropTarget
+                  ? AppColors.successGreen.withValues(alpha: 0.3)
+                  : isSelected
+                      ? AppColors.successGreen.withValues(alpha: 0.2)
+                      : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              border: isToday
+                  ? Border.all(color: AppColors.waterBlue, width: 1.5)
+                  : isDropTarget
+                      ? Border.all(color: AppColors.successGreen, width: 2)
+                      : null,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '${date.day}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isToday || isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isFuture
+                        ? AppColors.greyText.withValues(alpha: 0.4)
+                        : isToday
+                            ? AppColors.waterBlue
+                            : Colors.white,
+                  ),
+                ),
+                if (hasEntries)
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 16,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: dayColor,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${entries.length}',
+                          style: TextStyle(
+                            fontSize: 8,
+                            color: dayColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

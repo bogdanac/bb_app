@@ -756,16 +756,14 @@ class _TimersScreenState extends State<TimersScreen>
   }
 
   Future<void> _editActivity(Activity activity) async {
-    await showDialog(
-      context: context,
-      builder: (_) => EditActivityDialog(
-        activity: activity,
-        onSave: (updated) async {
-          await TimerService.updateActivity(updated);
-          _activities = await TimerService.loadActivities();
-          setState(() {});
-        },
-      ),
+    await EditActivityDialog.show(
+      context,
+      activity: activity,
+      onSave: (updated) async {
+        await TimerService.updateActivity(updated);
+        _activities = await TimerService.loadActivities();
+        setState(() {});
+      },
     );
   }
 
@@ -866,6 +864,13 @@ class _TimersScreenState extends State<TimersScreen>
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        leading: widget.onOpenDrawer != null
+            ? IconButton(
+                icon: const Icon(Icons.menu_rounded, color: Colors.white),
+                onPressed: widget.onOpenDrawer,
+                tooltip: 'Menu',
+              )
+            : null,
         title: const Text('Timers'),
         backgroundColor: Colors.transparent,
         actions: [
@@ -880,21 +885,12 @@ class _TimersScreenState extends State<TimersScreen>
             ),
             IconButton(
               icon: const Icon(Icons.add),
-              onPressed: () => showDialog(
-                context: context,
-                builder: (_) => AddActivityDialog(onAdd: _addActivity),
+              onPressed: () => AddActivityDialog.show(
+                context,
+                onAdd: _addActivity,
               ),
             ),
           ],
-          if (widget.onOpenDrawer != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Colors.white),
-                onPressed: widget.onOpenDrawer,
-                tooltip: 'Menu',
-              ),
-            ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
@@ -987,41 +983,46 @@ class _TimersScreenState extends State<TimersScreen>
             child: Row(
               children: [
                 Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _productivityTimerActive
-                        ? null
-                        : () {
-                            setState(() {
-                              _isCountdownMode = false;
-                              _remainingTime =
-                                  Duration(minutes: _workMinutes);
-                            });
-                          },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: !_isCountdownMode
-                            ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.1 : 0.25)
-                            : Colors.transparent,
-                        borderRadius: AppStyles.borderRadiusMedium,
-                        border: !_isCountdownMode
-                            ? Border.all(
-                                color: AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.2 : 0.5),
-                                width: 1.5,
-                              )
-                            : null,
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Pomodoro',
-                          style: TextStyle(
-                            color: !_isCountdownMode
-                                ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0)
-                                : AppColors.grey300.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0),
-                            fontWeight: !_isCountdownMode
-                                ? FontWeight.bold
-                                : FontWeight.w500,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _productivityTimerActive
+                          ? null
+                          : () {
+                              setState(() {
+                                _isCountdownMode = false;
+                                _remainingTime =
+                                    Duration(minutes: _workMinutes);
+                              });
+                            },
+                      borderRadius: AppStyles.borderRadiusMedium,
+                      splashColor: AppColors.purple.withValues(alpha: 0.3),
+                      highlightColor: AppColors.purple.withValues(alpha: 0.1),
+                      child: Ink(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: !_isCountdownMode
+                              ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.1 : 0.25)
+                              : Colors.transparent,
+                          borderRadius: AppStyles.borderRadiusMedium,
+                          border: !_isCountdownMode
+                              ? Border.all(
+                                  color: AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.2 : 0.5),
+                                  width: 1.5,
+                                )
+                              : null,
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Pomodoro',
+                            style: TextStyle(
+                              color: !_isCountdownMode
+                                  ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0)
+                                  : AppColors.grey300.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0),
+                              fontWeight: !_isCountdownMode
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
+                            ),
                           ),
                         ),
                       ),
@@ -1029,41 +1030,46 @@ class _TimersScreenState extends State<TimersScreen>
                   ),
                 ),
                 Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _productivityTimerActive
-                        ? null
-                        : () {
-                            setState(() {
-                              _isCountdownMode = true;
-                              _remainingTime =
-                                  Duration(minutes: _countdownMinutes);
-                            });
-                          },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: _isCountdownMode
-                            ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.1 : 0.25)
-                            : Colors.transparent,
-                        borderRadius: AppStyles.borderRadiusMedium,
-                        border: _isCountdownMode
-                            ? Border.all(
-                                color: AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.2 : 0.5),
-                                width: 1.5,
-                              )
-                            : null,
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Countdown',
-                          style: TextStyle(
-                            color: _isCountdownMode
-                                ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0)
-                                : AppColors.grey300.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0),
-                            fontWeight: _isCountdownMode
-                                ? FontWeight.bold
-                                : FontWeight.w500,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _productivityTimerActive
+                          ? null
+                          : () {
+                              setState(() {
+                                _isCountdownMode = true;
+                                _remainingTime =
+                                    Duration(minutes: _countdownMinutes);
+                              });
+                            },
+                      borderRadius: AppStyles.borderRadiusMedium,
+                      splashColor: AppColors.purple.withValues(alpha: 0.3),
+                      highlightColor: AppColors.purple.withValues(alpha: 0.1),
+                      child: Ink(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _isCountdownMode
+                              ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.1 : 0.25)
+                              : Colors.transparent,
+                          borderRadius: AppStyles.borderRadiusMedium,
+                          border: _isCountdownMode
+                              ? Border.all(
+                                  color: AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.2 : 0.5),
+                                  width: 1.5,
+                                )
+                              : null,
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Countdown',
+                            style: TextStyle(
+                              color: _isCountdownMode
+                                  ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0)
+                                  : AppColors.grey300.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0),
+                              fontWeight: _isCountdownMode
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
+                            ),
                           ),
                         ),
                       ),
@@ -1555,9 +1561,9 @@ class _TimersScreenState extends State<TimersScreen>
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
-              onPressed: () => showDialog(
-                context: context,
-                builder: (_) => AddActivityDialog(onAdd: _addActivity),
+              onPressed: () => AddActivityDialog.show(
+                context,
+                onAdd: _addActivity,
               ),
               icon: const Icon(Icons.add),
               label: const Text('Add Activity'),

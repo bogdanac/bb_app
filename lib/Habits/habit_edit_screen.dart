@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
+import '../shared/date_picker_utils.dart';
+import '../Settings/app_customization_service.dart';
 import 'habit_data_models.dart';
 import 'habit_service.dart';
 import 'habit_history_screen.dart';
@@ -33,6 +35,9 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
   // For monthly calendar navigation (long cycles)
   DateTime _currentViewMonth = DateTime.now();
 
+  // First day of week setting
+  int _firstDayOfWeek = 1; // 1 = Monday, 7 = Sunday
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +49,16 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
     } else {
       _startDate = DateTime.now();
       _duration = HabitDuration.threeWeeks; // Default to 21 days
+    }
+    _loadFirstDayOfWeek();
+  }
+
+  Future<void> _loadFirstDayOfWeek() async {
+    final firstDay = await AppCustomizationService.getCalendarFirstDayOfWeek();
+    if (mounted) {
+      setState(() {
+        _firstDayOfWeek = firstDay;
+      });
     }
   }
 
@@ -88,24 +103,11 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
   }
 
   Future<void> _selectStartDate() async {
-    final picked = await showDatePicker(
+    final picked = await DatePickerUtils.showStyledDatePicker(
       context: context,
       initialDate: _startDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppColors.orange,
-              onPrimary: Colors.white,
-              surface: AppColors.dialogCardBackground,
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked != null) {
@@ -378,7 +380,9 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
             const SizedBox(height: 12),
             // Days of week header
             Row(
-              children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+              children: (_firstDayOfWeek == 1
+                      ? ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+                      : ['S', 'M', 'T', 'W', 'T', 'F', 'S'])
                   .map((day) => Expanded(
                         child: Center(
                           child: Text(
@@ -446,7 +450,15 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
     }
 
     // Build calendar grid for the full month (with empty slots for alignment)
-    final firstDayWeekday = monthStart.weekday % 7; // 0 = Sunday
+    // Calculate offset based on first day of week setting
+    final int firstDayWeekday;
+    if (_firstDayOfWeek == 1) {
+      // Monday first: Monday=0, Tuesday=1, ..., Sunday=6
+      firstDayWeekday = (monthStart.weekday - 1) % 7;
+    } else {
+      // Sunday first: Sunday=0, Monday=1, ..., Saturday=6
+      firstDayWeekday = monthStart.weekday % 7;
+    }
     final allDays = <DateTime?>[];
 
     // Add empty slots for days before the month starts
@@ -546,7 +558,9 @@ class _HabitEditScreenState extends State<HabitEditScreen> {
 
             // Days of week header
             Row(
-              children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+              children: (_firstDayOfWeek == 1
+                      ? ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+                      : ['S', 'M', 'T', 'W', 'T', 'F', 'S'])
                   .map((day) => Expanded(
                         child: Center(
                           child: Text(
