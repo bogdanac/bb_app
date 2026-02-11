@@ -7,7 +7,7 @@ import 'timer_data_models.dart';
 import 'timer_service.dart';
 import 'timer_notification_helper.dart';
 
-enum ProductivityMode { countdown, pomodoro }
+enum ProductivityMode { focus, pomodoro }
 
 class ProductivityCard extends StatefulWidget {
   final VoidCallback? onNavigateToTimers;
@@ -33,12 +33,12 @@ class _ProductivityCardState extends State<ProductivityCard> {
   Timer? _timer;
   Duration _remaining = Duration.zero;
   Duration _totalDuration = Duration.zero;
+  Duration _elapsed = Duration.zero; // For timer (count-up) mode
   DateTime? _startTime;
 
   // Settings
   int _pomodoroWorkMinutes = 25;
   int _pomodoroBreakMinutes = 5;
-  int _countdownMinutes = 10;
 
   // Activity linking
   List<Activity> _activities = [];
@@ -68,7 +68,7 @@ class _ProductivityCardState extends State<ProductivityCard> {
 
   void _subscribeToTimerStream() {
     _timerStateSubscription = TimerService.timerStateStream.listen((state) {
-      if (_isUpdatingFromStream) return; // Skip if we triggered this update
+      if (_isUpdatingFromStream) return;
       _handleExternalTimerChange(state);
     });
   }
@@ -77,7 +77,6 @@ class _ProductivityCardState extends State<ProductivityCard> {
     if (!mounted) return;
 
     if (state == null) {
-      // Timer was cleared externally
       if (_isRunning) {
         _timer?.cancel();
         setState(() {
@@ -85,14 +84,13 @@ class _ProductivityCardState extends State<ProductivityCard> {
           _isPaused = false;
           _isBreak = false;
           _remaining = Duration.zero;
+          _elapsed = Duration.zero;
         });
       }
       return;
     }
 
-    // Only handle productivity type timers
     if (state['type'] != 'productivity') {
-      // Different timer type started - stop our timer
       if (_isRunning) {
         _timer?.cancel();
         setState(() {
@@ -100,33 +98,43 @@ class _ProductivityCardState extends State<ProductivityCard> {
           _isPaused = false;
           _isBreak = false;
           _remaining = Duration.zero;
+          _elapsed = Duration.zero;
         });
       }
       return;
     }
 
-    // Update from external productivity timer state
-    final newMode = state['mode'] == 'countdown'
-        ? ProductivityMode.countdown
+    // 'countdown' or 'timer' both map to timer mode
+    final modeStr = state['mode'];
+    final newMode = (modeStr == 'countdown' || modeStr == 'timer')
+        ? ProductivityMode.focus
         : ProductivityMode.pomodoro;
     final newIsBreak = state['isPomodoroBreak'] ?? state['isBreak'] ?? false;
-    final newRemaining = Duration(
-      seconds: state['remainingSeconds'] ?? state['remaining'] ?? 0,
-    );
     final wasRunning = state['wasRunning'] ?? false;
 
     setState(() {
       _mode = newMode;
       _isBreak = newIsBreak;
-      _remaining = newRemaining;
-      _totalDuration = newIsBreak
-          ? Duration(minutes: _pomodoroBreakMinutes)
-          : (newMode == ProductivityMode.pomodoro
-              ? Duration(minutes: _pomodoroWorkMinutes)
-              : Duration(minutes: _countdownMinutes));
       _startTime = state['startedAt'] != null
           ? DateTime.tryParse(state['startedAt'])
           : null;
+
+      if (newMode == ProductivityMode.focus) {
+        // Timer (count-up) mode
+        _elapsed = Duration(
+          seconds: state['accumulatedWorkSeconds'] ?? state['elapsed'] ?? 0,
+        );
+        _remaining = Duration.zero;
+        _totalDuration = Duration.zero;
+      } else {
+        // Pomodoro mode
+        _remaining = Duration(
+          seconds: state['remainingSeconds'] ?? state['remaining'] ?? 0,
+        );
+        _totalDuration = newIsBreak
+            ? Duration(minutes: _pomodoroBreakMinutes)
+            : Duration(minutes: _pomodoroWorkMinutes);
+      }
 
       if (wasRunning && !_isRunning) {
         _isRunning = true;
@@ -143,14 +151,12 @@ class _ProductivityCardState extends State<ProductivityCard> {
   Future<void> _loadSettings() async {
     final workMinutes = await TimerService.getPomodoroWorkMinutes();
     final breakMinutes = await TimerService.getPomodoroBreakMinutes();
-    final countdownMinutes = await TimerService.getCountdownMinutes();
     final activities = await TimerService.loadActivities();
 
     if (mounted) {
       setState(() {
         _pomodoroWorkMinutes = workMinutes;
         _pomodoroBreakMinutes = breakMinutes;
-        _countdownMinutes = countdownMinutes > 0 ? countdownMinutes : 10;
         _activities = activities;
       });
     }
@@ -161,45 +167,59 @@ class _ProductivityCardState extends State<ProductivityCard> {
     if (state == null) return;
 
     try {
-      // Only restore productivity timer state (compatible with timers_screen.dart format)
       if (state['type'] == 'productivity') {
         final savedAt = DateTime.parse(state['savedAt']);
         final timeSinceSave = DateTime.now().difference(savedAt);
-        // Support both 'remainingSeconds' (from tab) and 'remaining' (legacy)
-        final savedRemaining = Duration(
-          seconds: state['remainingSeconds'] ?? state['remaining'] ?? 0,
-        );
 
-        _mode = state['mode'] == 'countdown'
-            ? ProductivityMode.countdown
+        final modeStr = state['mode'];
+        _mode = (modeStr == 'countdown' || modeStr == 'timer')
+            ? ProductivityMode.focus
             : ProductivityMode.pomodoro;
-        // Support both 'isPomodoroBreak' (from tab) and 'isBreak' (legacy)
         _isBreak = state['isPomodoroBreak'] ?? state['isBreak'] ?? false;
-        _totalDuration = _isBreak
-            ? Duration(minutes: _pomodoroBreakMinutes)
-            : (_mode == ProductivityMode.pomodoro
-                ? Duration(minutes: _pomodoroWorkMinutes)
-                : Duration(minutes: _countdownMinutes));
         _startTime = state['startedAt'] != null
             ? DateTime.parse(state['startedAt'])
             : null;
 
-        if (state['wasRunning'] == true) {
-          // Timer was running - subtract elapsed time
-          _remaining = savedRemaining - timeSinceSave;
-          if (_remaining.isNegative || _remaining == Duration.zero) {
-            _remaining = Duration.zero;
-            _onTimerComplete();
-            return;
+        if (_mode == ProductivityMode.focus) {
+          // Timer (count-up) mode
+          final savedElapsed = Duration(
+            seconds: state['accumulatedWorkSeconds'] ?? state['elapsed'] ?? 0,
+          );
+
+          if (state['wasRunning'] == true) {
+            _elapsed = savedElapsed + timeSinceSave;
+            _isRunning = true;
+            _isPaused = false;
+            _startTicker();
+          } else {
+            _elapsed = savedElapsed;
+            _isRunning = true;
+            _isPaused = true;
           }
-          _isRunning = true;
-          _isPaused = false;
-          _startTicker();
         } else {
-          // Timer was paused
-          _remaining = savedRemaining;
-          _isRunning = true;
-          _isPaused = true;
+          // Pomodoro mode
+          final savedRemaining = Duration(
+            seconds: state['remainingSeconds'] ?? state['remaining'] ?? 0,
+          );
+          _totalDuration = _isBreak
+              ? Duration(minutes: _pomodoroBreakMinutes)
+              : Duration(minutes: _pomodoroWorkMinutes);
+
+          if (state['wasRunning'] == true) {
+            _remaining = savedRemaining - timeSinceSave;
+            if (_remaining.isNegative || _remaining == Duration.zero) {
+              _remaining = Duration.zero;
+              _onTimerComplete();
+              return;
+            }
+            _isRunning = true;
+            _isPaused = false;
+            _startTicker();
+          } else {
+            _remaining = savedRemaining;
+            _isRunning = true;
+            _isPaused = true;
+          }
         }
 
         if (mounted) setState(() {});
@@ -212,19 +232,35 @@ class _ProductivityCardState extends State<ProductivityCard> {
   Future<void> _saveTimerState() async {
     if (_isRunning) {
       _isUpdatingFromStream = true;
-      // Save in format compatible with timers_screen.dart
-      await TimerService.saveActiveTimerState({
-        'type': 'productivity',
-        'activityId': _linkedActivityId,
-        'mode': _mode == ProductivityMode.countdown ? 'countdown' : 'pomodoro',
-        'remainingSeconds': _remaining.inSeconds,
-        'accumulatedWorkSeconds': (_totalDuration - _remaining).inSeconds,
-        'isPomodoroBreak': _isBreak,
-        'pomodoroCount': 0,
-        'startedAt': _startTime?.toIso8601String(),
-        'wasRunning': !_isPaused,
-        'savedAt': DateTime.now().toIso8601String(),
-      });
+      if (_mode == ProductivityMode.focus) {
+        // Timer (count-up) mode
+        await TimerService.saveActiveTimerState({
+          'type': 'productivity',
+          'activityId': _linkedActivityId,
+          'mode': 'countdown', // Keep 'countdown' for backward compat with timers_screen
+          'remainingSeconds': 0,
+          'accumulatedWorkSeconds': _elapsed.inSeconds,
+          'isPomodoroBreak': false,
+          'pomodoroCount': 0,
+          'startedAt': _startTime?.toIso8601String(),
+          'wasRunning': !_isPaused,
+          'savedAt': DateTime.now().toIso8601String(),
+        });
+      } else {
+        // Pomodoro mode
+        await TimerService.saveActiveTimerState({
+          'type': 'productivity',
+          'activityId': _linkedActivityId,
+          'mode': 'pomodoro',
+          'remainingSeconds': _remaining.inSeconds,
+          'accumulatedWorkSeconds': (_totalDuration - _remaining).inSeconds,
+          'isPomodoroBreak': _isBreak,
+          'pomodoroCount': 0,
+          'startedAt': _startTime?.toIso8601String(),
+          'wasRunning': !_isPaused,
+          'savedAt': DateTime.now().toIso8601String(),
+        });
+      }
       _isUpdatingFromStream = false;
     }
   }
@@ -234,12 +270,15 @@ class _ProductivityCardState extends State<ProductivityCard> {
 
     if (_mode == ProductivityMode.pomodoro) {
       _totalDuration = Duration(minutes: _pomodoroWorkMinutes);
+      _remaining = _totalDuration;
       _isBreak = false;
     } else {
-      _totalDuration = Duration(minutes: _countdownMinutes);
+      // Timer (count-up) mode — start from 0
+      _elapsed = Duration.zero;
+      _totalDuration = Duration.zero;
+      _remaining = Duration.zero;
     }
 
-    _remaining = _totalDuration;
     _startTime = DateTime.now();
     _isRunning = true;
     _isPaused = false;
@@ -254,14 +293,23 @@ class _ProductivityCardState extends State<ProductivityCard> {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && !_isPaused) {
         setState(() {
-          _remaining -= const Duration(seconds: 1);
-          if (_remaining.isNegative || _remaining == Duration.zero) {
-            _timer?.cancel();
-            _onTimerComplete();
+          if (_mode == ProductivityMode.focus) {
+            // Count UP
+            _elapsed += const Duration(seconds: 1);
+          } else {
+            // Count DOWN (pomodoro)
+            _remaining -= const Duration(seconds: 1);
+            if (_remaining.isNegative || _remaining == Duration.zero) {
+              _timer?.cancel();
+              _onTimerComplete();
+            }
           }
         });
-        // Update notification every 30 seconds to reduce battery usage
-        if (_remaining.inSeconds % 30 == 0) {
+        // Update notification every 30 seconds
+        final seconds = _mode == ProductivityMode.focus
+            ? _elapsed.inSeconds
+            : _remaining.inSeconds;
+        if (seconds % 30 == 0) {
           _updateNotification();
         }
       }
@@ -272,7 +320,7 @@ class _ProductivityCardState extends State<ProductivityCard> {
     HapticFeedback.heavyImpact();
 
     if (_mode == ProductivityMode.pomodoro && !_isBreak) {
-      // Work session complete - record it
+      // Work session complete
       final session = TimerSession(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         activityId: _linkedActivityId ?? 'productivity_pomodoro',
@@ -283,7 +331,6 @@ class _ProductivityCardState extends State<ProductivityCard> {
       );
       TimerService.addSession(session);
 
-      // Show completion notification for work session
       _showCompletionAlert(
         title: 'Focus Session Complete! 🎯',
         message: 'Great work! Time for a $_pomodoroBreakMinutes minute break.',
@@ -300,33 +347,14 @@ class _ProductivityCardState extends State<ProductivityCard> {
       _saveTimerState();
       setState(() {});
     } else if (_mode == ProductivityMode.pomodoro && _isBreak) {
-      // Break complete - show notification and stop
       _showCompletionAlert(
         title: 'Break Complete! 💪',
         message: 'Ready for another focus session?',
         isBreak: true,
       );
       _stopTimer(save: false);
-    } else {
-      // Countdown complete - record and stop
-      final session = TimerSession(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        activityId: _linkedActivityId ?? 'productivity_countdown',
-        startTime: _startTime ?? DateTime.now().subtract(_totalDuration),
-        endTime: DateTime.now(),
-        duration: _totalDuration,
-        type: TimerSessionType.countdown,
-      );
-      TimerService.addSession(session);
-
-      // Show completion notification
-      _showCompletionAlert(
-        title: 'Timer Complete! ⏰',
-        message: 'Your countdown has finished.',
-        isBreak: false,
-      );
-      _stopTimer(save: false);
     }
+    // Timer (count-up) mode never auto-completes
   }
 
   void _showCompletionAlert({
@@ -334,14 +362,11 @@ class _ProductivityCardState extends State<ProductivityCard> {
     required String message,
     required bool isBreak,
   }) {
-    // Show system notification (works on mobile, limited on desktop)
     TimerNotificationHelper.showCompletionNotification(
       title: title,
       body: message,
       isBreakComplete: isBreak,
     );
-
-    // Call the in-app callback for additional alert (especially useful on desktop)
     widget.onTimerComplete?.call(title, message, isBreak);
   }
 
@@ -367,28 +392,44 @@ class _ProductivityCardState extends State<ProductivityCard> {
     HapticFeedback.lightImpact();
     _timer?.cancel();
 
-    if (save && _isRunning && _totalDuration.inSeconds - _remaining.inSeconds > 60) {
-      // Only save if ran for more than a minute
-      final session = TimerSession(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        activityId: _linkedActivityId ??
-            (_mode == ProductivityMode.pomodoro
-                ? 'productivity_pomodoro'
-                : 'productivity_countdown'),
-        startTime: _startTime ?? DateTime.now().subtract(_totalDuration - _remaining),
-        endTime: DateTime.now(),
-        duration: _totalDuration - _remaining,
-        type: _mode == ProductivityMode.pomodoro
-            ? TimerSessionType.pomodoro
-            : TimerSessionType.countdown,
-      );
-      TimerService.addSession(session);
+    if (save && _isRunning) {
+      final duration = _mode == ProductivityMode.focus
+          ? _elapsed
+          : _totalDuration - _remaining;
+
+      if (duration.inSeconds > 60) {
+        final session = TimerSession(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          activityId: _linkedActivityId ??
+              (_mode == ProductivityMode.pomodoro
+                  ? 'productivity_pomodoro'
+                  : 'productivity_timer'),
+          startTime: _startTime ?? DateTime.now().subtract(duration),
+          endTime: DateTime.now(),
+          duration: duration,
+          type: _mode == ProductivityMode.pomodoro
+              ? TimerSessionType.pomodoro
+              : TimerSessionType.countdown,
+        );
+        TimerService.addSession(session);
+
+        // Show encouraging message for longer focus sessions
+        if (_mode == ProductivityMode.focus && duration.inMinutes >= 15 && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Great session — stretch and breathe.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
     }
 
     _isRunning = false;
     _isPaused = false;
     _isBreak = false;
     _remaining = Duration.zero;
+    _elapsed = Duration.zero;
     _startTime = null;
     _linkedActivityId = null;
     TimerNotificationHelper.cancelTimerNotification();
@@ -401,11 +442,11 @@ class _ProductivityCardState extends State<ProductivityCard> {
   void _updateNotification() {
     final label = _mode == ProductivityMode.pomodoro
         ? (_isBreak ? 'Break' : 'Focus')
-        : 'Countdown';
+        : 'Focus';
 
     TimerNotificationHelper.showTimerNotification(
       activityName: label,
-      remaining: _remaining,
+      remaining: _mode == ProductivityMode.focus ? _elapsed : _remaining,
       isPomodoro: _mode == ProductivityMode.pomodoro,
       isBreak: _isBreak,
       isPaused: _isPaused,
@@ -413,22 +454,32 @@ class _ProductivityCardState extends State<ProductivityCard> {
   }
 
   String _formatTime(Duration d) {
+    final h = d.inHours;
     final m = d.inMinutes.remainder(60);
     final s = d.inSeconds.remainder(60);
+    if (h > 0) {
+      return '${h.toString()}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: AppStyles.cardDecoration(),
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
+      child: Container(
+      decoration: BoxDecoration(
+        borderRadius: AppStyles.borderRadiusLarge,
+        color: AppColors.homeCardBackground,
+      ),
       child: Column(
         children: [
           // Header
           GestureDetector(
             onTap: widget.onNavigateToTimers,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+              padding: const EdgeInsets.fromLTRB(16, 10, 12, 0),
               child: Row(
                 children: [
                   Icon(
@@ -474,7 +525,7 @@ class _ProductivityCardState extends State<ProductivityCard> {
                             ),
                           const SizedBox(width: 4),
                           Text(
-                            _isBreak ? 'Break' : (_mode == ProductivityMode.pomodoro ? 'Focus' : 'Timer'),
+                            _isBreak ? 'Break' : (_mode == ProductivityMode.pomodoro ? 'Focus' : 'Focus'),
                             style: TextStyle(
                               color: _isBreak ? AppColors.pastelGreen : AppColors.purple,
                               fontSize: 11,
@@ -515,10 +566,11 @@ class _ProductivityCardState extends State<ProductivityCard> {
 
           // Timer content
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
             child: _isRunning ? _buildRunningState() : _buildIdleState(),
           ),
         ],
+      ),
       ),
     );
   }
@@ -526,101 +578,106 @@ class _ProductivityCardState extends State<ProductivityCard> {
   Widget _buildIdleState() {
     return Column(
       children: [
-        // Mode selector
-        Row(
-          children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() => _mode = ProductivityMode.pomodoro);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: _mode == ProductivityMode.pomodoro
-                        ? AppColors.purple.withValues(alpha: 0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
+        // Mode selector - wrapped to prevent Dismissible from stealing taps
+        GestureDetector(
+          onHorizontalDragUpdate: (_) {},
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _mode = ProductivityMode.pomodoro);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
                       color: _mode == ProductivityMode.pomodoro
-                          ? AppColors.purple
-                          : AppColors.grey300.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.timer_rounded,
-                        size: 16,
+                          ? AppColors.purple.withValues(alpha: 0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
                         color: _mode == ProductivityMode.pomodoro
                             ? AppColors.purple
-                            : AppColors.grey300,
+                            : AppColors.grey300.withValues(alpha: 0.3),
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Pomodoro',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.timer_rounded,
+                          size: 16,
                           color: _mode == ProductivityMode.pomodoro
                               ? AppColors.purple
                               : AppColors.grey300,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        Text(
+                          'Pomodoro',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: _mode == ProductivityMode.pomodoro
+                                ? AppColors.purple
+                                : AppColors.grey300,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() => _mode = ProductivityMode.countdown);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: _mode == ProductivityMode.countdown
-                        ? AppColors.purple.withValues(alpha: 0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: _mode == ProductivityMode.countdown
-                          ? AppColors.purple
-                          : AppColors.grey300.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.hourglass_empty_rounded,
-                        size: 16,
-                        color: _mode == ProductivityMode.countdown
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _mode = ProductivityMode.focus);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _mode == ProductivityMode.focus
+                          ? AppColors.purple.withValues(alpha: 0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _mode == ProductivityMode.focus
                             ? AppColors.purple
-                            : AppColors.grey300,
+                            : AppColors.grey300.withValues(alpha: 0.3),
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Countdown',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: _mode == ProductivityMode.countdown
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.av_timer_rounded,
+                          size: 16,
+                          color: _mode == ProductivityMode.focus
                               ? AppColors.purple
                               : AppColors.grey300,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        Text(
+                          'Focus',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: _mode == ProductivityMode.focus
+                                ? AppColors.purple
+                                : AppColors.grey300,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
 
         // Activity selector (only show if activities exist)
@@ -669,7 +726,7 @@ class _ProductivityCardState extends State<ProductivityCard> {
               child: Text(
                 _mode == ProductivityMode.pomodoro
                     ? '$_pomodoroWorkMinutes min focus + $_pomodoroBreakMinutes min break'
-                    : '$_countdownMinutes min countdown',
+                    : 'Counts up from 0:00',
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.grey300,
@@ -712,32 +769,47 @@ class _ProductivityCardState extends State<ProductivityCard> {
   }
 
   Widget _buildRunningState() {
-    final progress = _totalDuration.inSeconds > 0
-        ? 1 - (_remaining.inSeconds / _totalDuration.inSeconds)
-        : 0.0;
+    final bool isTimerMode = _mode == ProductivityMode.focus;
+    final displayDuration = isTimerMode ? _elapsed : _remaining;
+    final progress = isTimerMode
+        ? null // No progress for count-up
+        : (_totalDuration.inSeconds > 0
+            ? 1 - (_remaining.inSeconds / _totalDuration.inSeconds)
+            : 0.0);
 
     return Column(
       children: [
-        // Timer display
         Row(
           children: [
-            // Circular progress
+            // Circular progress / elapsed display
             SizedBox(
               width: 56,
               height: 56,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 4,
-                    backgroundColor: AppColors.grey300.withValues(alpha: 0.2),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      _isBreak ? AppColors.pastelGreen : AppColors.purple,
+                  if (isTimerMode)
+                    // Pulsing ring for count-up timer
+                    CircularProgressIndicator(
+                      value: null, // Indeterminate
+                      strokeWidth: 4,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        _isPaused
+                            ? AppColors.grey300.withValues(alpha: 0.3)
+                            : AppColors.purple.withValues(alpha: 0.6),
+                      ),
+                    )
+                  else
+                    CircularProgressIndicator(
+                      value: progress,
+                      strokeWidth: 4,
+                      backgroundColor: AppColors.grey300.withValues(alpha: 0.2),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        _isBreak ? AppColors.pastelGreen : AppColors.purple,
+                      ),
                     ),
-                  ),
                   Text(
-                    _formatTime(_remaining),
+                    _formatTime(displayDuration),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -757,7 +829,7 @@ class _ProductivityCardState extends State<ProductivityCard> {
                   Text(
                     _isBreak
                         ? 'Break Time'
-                        : (_mode == ProductivityMode.pomodoro ? 'Focus Time' : 'Countdown'),
+                        : (isTimerMode ? 'Focus' : 'Focus Time'),
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -766,7 +838,9 @@ class _ProductivityCardState extends State<ProductivityCard> {
                   Text(
                     _isPaused
                         ? 'Paused'
-                        : '${_formatTime(_remaining)} remaining',
+                        : isTimerMode
+                            ? _formatTime(_elapsed)
+                            : '${_formatTime(_remaining)} remaining',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.grey300,
@@ -780,7 +854,6 @@ class _ProductivityCardState extends State<ProductivityCard> {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Pause/Resume
                 GestureDetector(
                   onTap: _isPaused ? _resumeTimer : _pauseTimer,
                   child: Container(
@@ -798,7 +871,6 @@ class _ProductivityCardState extends State<ProductivityCard> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Stop
                 GestureDetector(
                   onTap: () => _stopTimer(save: true),
                   child: Container(

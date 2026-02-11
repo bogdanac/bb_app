@@ -941,22 +941,22 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Wrap(
-                        spacing: 4,
-                        runSpacing: 4,
+                        spacing: 6,
+                        runSpacing: 6,
                         children: widget.categories.map((category) {
                           final isSelected = _selectedCategoryIds.contains(category.id);
                           return FilterChip(
                             label: Text(
                               category.name,
-                              style: const TextStyle(fontSize: 11),
+                              style: const TextStyle(fontSize: 13),
                             ),
-                            labelPadding: const EdgeInsets.symmetric(horizontal: 2),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                            labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             selected: isSelected,
                             backgroundColor: category.color.withValues(alpha: 0.1),
                             selectedColor: category.color.withValues(alpha: 0.3),
                             checkmarkColor: category.color,
-                            showCheckmark: false,
+                            showCheckmark: true,
                             side: BorderSide(
                               color: isSelected
                                   ? category.color.withValues(alpha: 0.8)
@@ -965,7 +965,7 @@ class _TaskEditScreenState extends State<TaskEditScreen> {
                             ),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                            visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
                             onSelected: (selected) {
                               setState(() {
                                 if (selected) {

@@ -207,7 +207,7 @@ class TimerService {
   /// Auto Flow Mode: when enabled, timer continues counting up after work period ends
   static Future<bool> getAutoFlowMode() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_autoFlowModeKey) ?? false;
+    return prefs.getBool(_autoFlowModeKey) ?? true;
   }
 
   static Future<void> setAutoFlowMode(bool enabled) async {

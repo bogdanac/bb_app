@@ -7,8 +7,9 @@ import '../Tasks/task_edit_screen.dart';
 
 class DailyTasksCard extends StatefulWidget {
   final VoidCallback? onTasksChanged;
+  final double? height; // null = use default 320, pass larger to fill space
 
-  const DailyTasksCard({super.key, this.onTasksChanged});
+  const DailyTasksCard({super.key, this.onTasksChanged, this.height});
 
   @override
   State<DailyTasksCard> createState() => _DailyTasksCardState();
@@ -41,7 +42,7 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.all(4),
-      elevation: 6,
+      elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
       child: Stack(
         children: [
@@ -57,7 +58,7 @@ class _DailyTasksCardState extends State<DailyTasksCard> {
                 children: [
                   // Use TodoScreen for consistent task display
                   SizedBox(
-                    height: 320,
+                    height: widget.height ?? 320,
                     child: Material(
                       color: Colors.transparent,
                       child: TodoScreen(

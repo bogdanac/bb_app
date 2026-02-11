@@ -581,6 +581,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
     }
 
     return ReorderableListView.builder(
+      buildDefaultDragHandles: false,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 80), // Extra bottom padding for FAB
       itemCount: _friends.length,
       onReorder: widget.showArchived
@@ -738,6 +739,15 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                           color: Colors.red,
                           tooltip: 'Met today!',
                           iconSize: 28,
+                        ),
+                      if (!widget.showArchived)
+                        ReorderableDragStartListener(
+                          index: index,
+                          child: Icon(
+                            Icons.drag_handle_rounded,
+                            color: AppColors.greyText.withValues(alpha: 0.5),
+                            size: 20,
+                          ),
                         ),
                     ],
                   ),

@@ -27,6 +27,7 @@ class AppCustomizationService {
   static const String moduleWater = 'module_water_enabled';
   static const String moduleFood = 'module_food_enabled';
   static const String moduleChores = 'module_chores_enabled';
+  static const String moduleCalendar = 'module_calendar_enabled';
 
   // ============= Card Keys =============
   static const String cardMenstrual = 'card_menstrual_visible';
@@ -180,6 +181,15 @@ class AppCustomizationService {
       showInNavigation: false, // Feature only - accessible via Home card and Settings
     ),
     ModuleInfo(
+      key: moduleCalendar,
+      label: 'Calendar Events',
+      description: 'Upcoming events on Home card',
+      icon: Icons.event_rounded,
+      color: AppColors.lightPink,
+      canBeDisabled: true,
+      showInNavigation: false, // Feature only - accessible via Home card
+    ),
+    ModuleInfo(
       key: moduleFood,
       label: 'Food Tracking',
       description: 'Healthy vs processed food tracking',
@@ -221,7 +231,7 @@ class AppCustomizationService {
       description: 'Upcoming calendar events',
       icon: Icons.event_rounded,
       color: AppColors.lightPink,
-      dependsOnModule: null,
+      dependsOnModule: moduleCalendar,
     ),
     CardInfo(
       key: cardFasting,
@@ -379,25 +389,35 @@ class AppCustomizationService {
 
   // ============= Card Visibility Management =============
 
+  /// Get platform-specific key for card settings (web stores separately from mobile)
+  static String _cardKey(String cardKey) {
+    return kIsWeb ? 'web_$cardKey' : cardKey;
+  }
+
+  /// Get platform-specific card order key
+  static String get _platformCardOrderKey {
+    return kIsWeb ? 'web_$cardOrderKey' : cardOrderKey;
+  }
+
   /// Load all card visibility states
   static Future<Map<String, bool>> loadAllCardStates() async {
     final prefs = await SharedPreferences.getInstance();
     return {
       for (var card in allCards)
-        card.key: prefs.getBool(card.key) ?? true,
+        card.key: prefs.getBool(_cardKey(card.key)) ?? true,
     };
   }
 
   /// Check if a specific card is set to visible (ignores module dependency)
   static Future<bool> isCardVisible(String cardKey) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(cardKey) ?? true;
+    return prefs.getBool(_cardKey(cardKey)) ?? true;
   }
 
   /// Set card visibility
   static Future<void> setCardVisible(String cardKey, bool visible) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(cardKey, visible);
+    await prefs.setBool(_cardKey(cardKey), visible);
   }
 
   /// Check if a card should be shown (considers both toggle AND module dependency)
@@ -417,7 +437,7 @@ class AppCustomizationService {
   /// Load card display order
   static Future<List<String>> loadCardOrder() async {
     final prefs = await SharedPreferences.getInstance();
-    final orderList = prefs.getStringList(cardOrderKey);
+    final orderList = prefs.getStringList(_platformCardOrderKey);
     if (orderList == null || orderList.isEmpty) {
       return List.from(defaultCardOrder);
     }
@@ -435,7 +455,7 @@ class AppCustomizationService {
   /// Save card display order
   static Future<void> saveCardOrder(List<String> order) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(cardOrderKey, order);
+    await prefs.setStringList(_platformCardOrderKey, order);
   }
 
   // ============= Primary Tabs Management =============

@@ -29,9 +29,9 @@ class _TimersScreenState extends State<TimersScreen>
   bool _isLoading = true;
 
   // --- Productivity tab state ---
-  bool _isCountdownMode = false;
+  bool _isFocusMode = false; // Focus = count-up timer (formerly "countdown")
   String? _selectedActivityId;
-  int _countdownMinutes = 25;
+  Duration _focusElapsed = Duration.zero; // Elapsed time for focus count-up mode
   int _workMinutes = 25;
   int _breakMinutes = 5;
   Duration _remainingTime = const Duration(minutes: 25);
@@ -42,7 +42,7 @@ class _TimersScreenState extends State<TimersScreen>
   DateTime? _sessionStartTime;
   Duration _accumulatedWorkTime = Duration.zero;
   bool _productivityTimerActive = false;
-  bool _autoFlowMode = false; // Auto-continue without breaks
+  bool _autoFlowMode = true; // Auto-continue without breaks (default ON)
   bool _isInFlowState = false; // Currently in flow (past initial work time)
   Duration _flowExtraTime = Duration.zero; // Time beyond the work period
   Set<int> _reachedMilestones = {}; // Track which milestones we've celebrated (in minutes)
@@ -80,11 +80,10 @@ class _TimersScreenState extends State<TimersScreen>
 
   Future<void> _loadData() async {
     _activities = await TimerService.loadActivities();
-    _countdownMinutes = await TimerService.getCountdownMinutes();
     _workMinutes = await TimerService.getPomodoroWorkMinutes();
     _breakMinutes = await TimerService.getPomodoroBreakMinutes();
     _autoFlowMode = await TimerService.getAutoFlowMode();
-    _remainingTime = Duration(minutes: _isCountdownMode ? _countdownMinutes : _workMinutes);
+    _remainingTime = _isFocusMode ? Duration.zero : Duration(minutes: _workMinutes);
 
     // Load flow stats
     final flowStats = await TimerService.getFlowStats();
@@ -108,7 +107,7 @@ class _TimersScreenState extends State<TimersScreen>
         'type': 'productivity',
         'activityId': _selectedActivityId,
         'startedAt': _sessionStartTime?.toIso8601String(),
-        'mode': _isCountdownMode ? 'countdown' : 'pomodoro',
+        'mode': _isFocusMode ? 'countdown' : 'pomodoro',
         'wasRunning': _isRunning,
         'remainingSeconds': _remainingTime.inSeconds,
         'accumulatedWorkSeconds': _accumulatedWorkTime.inSeconds,
@@ -140,7 +139,7 @@ class _TimersScreenState extends State<TimersScreen>
 
       if (state['type'] == 'productivity') {
         _selectedActivityId = state['activityId'];
-        _isCountdownMode = state['mode'] == 'countdown';
+        _isFocusMode = state['mode'] == 'countdown';
         _isPomodoroBreak = state['isPomodoroBreak'] ?? false;
         _pomodoroCount = state['pomodoroCount'] ?? 0;
         _isInFlowState = state['isInFlowState'] ?? false;
@@ -154,7 +153,13 @@ class _TimersScreenState extends State<TimersScreen>
         final savedRemaining = Duration(seconds: state['remainingSeconds'] ?? 0);
 
         if (state['wasRunning'] == true) {
-          if (_isInFlowState) {
+          if (_isFocusMode) {
+            // Focus mode: count-up — add time since save
+            _focusElapsed = _accumulatedWorkTime + timeSinceSave;
+            _accumulatedWorkTime += timeSinceSave;
+            _productivityTimerActive = true;
+            _startProductivityTicker();
+          } else if (_isInFlowState) {
             // Restore flow state - add time since save
             _flowExtraTime += timeSinceSave;
             _accumulatedWorkTime += timeSinceSave;
@@ -180,7 +185,11 @@ class _TimersScreenState extends State<TimersScreen>
             _startProductivityTicker();
           }
         } else {
-          _remainingTime = savedRemaining;
+          if (_isFocusMode) {
+            _focusElapsed = _accumulatedWorkTime;
+          } else {
+            _remainingTime = savedRemaining;
+          }
           _productivityTimerActive = true;
         }
       } else if (state['type'] == 'activity') {
@@ -221,18 +230,30 @@ class _TimersScreenState extends State<TimersScreen>
     _isRunning = true;
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_remainingTime.inSeconds <= 0) {
-        _onProductivityTimerComplete();
-        return;
-      }
-      setState(() {
-        _remainingTime -= const Duration(seconds: 1);
-        if (!_isPomodoroBreak) {
+      if (_isFocusMode) {
+        // Focus mode: count UP
+        setState(() {
+          _focusElapsed += const Duration(seconds: 1);
           _accumulatedWorkTime += const Duration(seconds: 1);
+        });
+        if (_focusElapsed.inSeconds % 30 == 0) {
+          _updateProductivityNotification();
         }
-      });
-      if (_remainingTime.inSeconds % 30 == 0) {
-        _updateProductivityNotification();
+      } else {
+        // Pomodoro mode: count DOWN
+        if (_remainingTime.inSeconds <= 0) {
+          _onProductivityTimerComplete();
+          return;
+        }
+        setState(() {
+          _remainingTime -= const Duration(seconds: 1);
+          if (!_isPomodoroBreak) {
+            _accumulatedWorkTime += const Duration(seconds: 1);
+          }
+        });
+        if (_remainingTime.inSeconds % 30 == 0) {
+          _updateProductivityNotification();
+        }
       }
     });
   }
@@ -256,8 +277,8 @@ class _TimersScreenState extends State<TimersScreen>
     _isInFlowState = false;
     _flowExtraTime = Duration.zero;
     _reachedMilestones = {};
-    _remainingTime = Duration(
-        minutes: _isCountdownMode ? _countdownMinutes : _workMinutes);
+    _focusElapsed = Duration.zero;
+    _remainingTime = _isFocusMode ? Duration.zero : Duration(minutes: _workMinutes);
     await TimerService.clearActiveTimerState();
     await TimerNotificationHelper.cancelTimerNotification();
     if (mounted) setState(() {});
@@ -266,16 +287,9 @@ class _TimersScreenState extends State<TimersScreen>
   void _onProductivityTimerComplete() {
     _timer?.cancel();
 
-    if (_isCountdownMode) {
-      // Countdown done
-      _saveProductivitySession();
-      _isRunning = false;
-      _productivityTimerActive = false;
-      TimerNotificationHelper.cancelTimerNotification();
-      TimerService.clearActiveTimerState();
-      if (mounted) {
-        SnackBarUtils.showSuccess(context, 'Timer complete!');
-      }
+    if (_isFocusMode) {
+      // Focus mode never auto-completes (count-up), this shouldn't be called
+      return;
     } else {
       // Pomodoro mode
       if (_isPomodoroBreak) {
@@ -604,7 +618,7 @@ class _TimersScreenState extends State<TimersScreen>
       startTime: _sessionStartTime ?? DateTime.now(),
       endTime: DateTime.now(),
       duration: _accumulatedWorkTime,
-      type: _isCountdownMode
+      type: _isFocusMode
           ? TimerSessionType.countdown
           : TimerSessionType.pomodoro,
     );
@@ -646,8 +660,8 @@ class _TimersScreenState extends State<TimersScreen>
     } else {
       TimerNotificationHelper.showTimerNotification(
         activityName: activityName,
-        remaining: _remainingTime,
-        isPomodoro: !_isCountdownMode,
+        remaining: _isFocusMode ? _focusElapsed : _remainingTime,
+        isPomodoro: !_isFocusMode,
         isBreak: _isPomodoroBreak,
         isPaused: !_isRunning,
       );
@@ -840,6 +854,7 @@ class _TimersScreenState extends State<TimersScreen>
   // --- Format helpers ---
 
   String _formatTimer(Duration d) {
+    if (d.isNegative) d = Duration.zero;
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     if (d.inHours > 0) {
@@ -894,6 +909,9 @@ class _TimersScreenState extends State<TimersScreen>
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
+          child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
@@ -944,6 +962,8 @@ class _TimersScreenState extends State<TimersScreen>
               ],
             ),
           ),
+          ),
+          ),
         ),
       ),
       body: Center(
@@ -966,11 +986,12 @@ class _TimersScreenState extends State<TimersScreen>
   // --- Productivity Tab ---
 
   Widget _buildProductivityTab() {
-    final totalSeconds = _isCountdownMode
-        ? _countdownMinutes * 60
+    final totalSeconds = _isFocusMode
+        ? 0 // Focus mode: count-up, no total
         : (_isPomodoroBreak ? _breakMinutes * 60 : _workMinutes * 60);
-    final progress =
-        totalSeconds > 0 ? _remainingTime.inSeconds / totalSeconds : 0.0;
+    final progress = _isFocusMode
+        ? null // No progress for count-up
+        : (totalSeconds > 0 ? _remainingTime.inSeconds / totalSeconds : 0.0);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -983,95 +1004,94 @@ class _TimersScreenState extends State<TimersScreen>
             child: Row(
               children: [
                 Expanded(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: _productivityTimerActive
-                          ? null
-                          : () {
-                              setState(() {
-                                _isCountdownMode = false;
-                                _remainingTime =
-                                    Duration(minutes: _workMinutes);
-                              });
-                            },
-                      borderRadius: AppStyles.borderRadiusMedium,
-                      splashColor: AppColors.purple.withValues(alpha: 0.3),
-                      highlightColor: AppColors.purple.withValues(alpha: 0.1),
-                      child: Ink(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: !_isCountdownMode
-                              ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.1 : 0.25)
-                              : Colors.transparent,
-                          borderRadius: AppStyles.borderRadiusMedium,
-                          border: !_isCountdownMode
-                              ? Border.all(
-                                  color: AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.2 : 0.5),
-                                  width: 1.5,
-                                )
-                              : null,
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Pomodoro',
-                            style: TextStyle(
-                              color: !_isCountdownMode
-                                  ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0)
-                                  : AppColors.grey300.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0),
-                              fontWeight: !_isCountdownMode
-                                  ? FontWeight.bold
-                                  : FontWeight.w500,
-                            ),
-                          ),
-                        ),
+                  child: ElevatedButton(
+                    onPressed: _productivityTimerActive
+                        ? null
+                        : () {
+                            setState(() {
+                              _isFocusMode = false;
+                              _remainingTime =
+                                  Duration(minutes: _workMinutes);
+                            });
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: !_isFocusMode
+                          ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.1 : 0.25)
+                          : Colors.transparent,
+                      foregroundColor: !_isFocusMode
+                          ? AppColors.purple
+                          : AppColors.grey300,
+                      disabledBackgroundColor: !_isFocusMode
+                          ? AppColors.purple.withValues(alpha: 0.1)
+                          : Colors.transparent,
+                      disabledForegroundColor: !_isFocusMode
+                          ? AppColors.purple.withValues(alpha: 0.5)
+                          : AppColors.grey300.withValues(alpha: 0.5),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: AppStyles.borderRadiusMedium,
+                        side: !_isFocusMode
+                            ? BorderSide(
+                                color: AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.2 : 0.5),
+                                width: 1.5,
+                              )
+                            : BorderSide.none,
+                      ),
+                    ),
+                    child: Text(
+                      'Pomodoro',
+                      style: TextStyle(
+                        fontWeight: !_isFocusMode
+                            ? FontWeight.bold
+                            : FontWeight.w500,
                       ),
                     ),
                   ),
                 ),
+                const SizedBox(width: 4),
                 Expanded(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: _productivityTimerActive
-                          ? null
-                          : () {
-                              setState(() {
-                                _isCountdownMode = true;
-                                _remainingTime =
-                                    Duration(minutes: _countdownMinutes);
-                              });
-                            },
-                      borderRadius: AppStyles.borderRadiusMedium,
-                      splashColor: AppColors.purple.withValues(alpha: 0.3),
-                      highlightColor: AppColors.purple.withValues(alpha: 0.1),
-                      child: Ink(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: _isCountdownMode
-                              ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.1 : 0.25)
-                              : Colors.transparent,
-                          borderRadius: AppStyles.borderRadiusMedium,
-                          border: _isCountdownMode
-                              ? Border.all(
-                                  color: AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.2 : 0.5),
-                                  width: 1.5,
-                                )
-                              : null,
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Countdown',
-                            style: TextStyle(
-                              color: _isCountdownMode
-                                  ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0)
-                                  : AppColors.grey300.withValues(alpha: _productivityTimerActive ? 0.5 : 1.0),
-                              fontWeight: _isCountdownMode
-                                  ? FontWeight.bold
-                                  : FontWeight.w500,
-                            ),
-                          ),
-                        ),
+                  child: ElevatedButton(
+                    onPressed: _productivityTimerActive
+                        ? null
+                        : () {
+                            setState(() {
+                              _isFocusMode = true;
+                              _focusElapsed = Duration.zero;
+                              _remainingTime = Duration.zero;
+                            });
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isFocusMode
+                          ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.1 : 0.25)
+                          : Colors.transparent,
+                      foregroundColor: _isFocusMode
+                          ? AppColors.purple
+                          : AppColors.grey300,
+                      disabledBackgroundColor: _isFocusMode
+                          ? AppColors.purple.withValues(alpha: 0.1)
+                          : Colors.transparent,
+                      disabledForegroundColor: _isFocusMode
+                          ? AppColors.purple.withValues(alpha: 0.5)
+                          : AppColors.grey300.withValues(alpha: 0.5),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: AppStyles.borderRadiusMedium,
+                        side: _isFocusMode
+                            ? BorderSide(
+                                color: AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.2 : 0.5),
+                                width: 1.5,
+                              )
+                            : BorderSide.none,
+                      ),
+                    ),
+                    child: Text(
+                      'Focus',
+                      style: TextStyle(
+                        fontWeight: _isFocusMode
+                            ? FontWeight.bold
+                            : FontWeight.w500,
                       ),
                     ),
                   ),
@@ -1110,7 +1130,7 @@ class _TimersScreenState extends State<TimersScreen>
           const SizedBox(height: 24),
 
           // Timer settings
-          if (!_isCountdownMode) ...[
+          if (!_isFocusMode) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -1219,26 +1239,11 @@ class _TimersScreenState extends State<TimersScreen>
             ),
             const SizedBox(height: 16),
           ] else ...[
-            GestureDetector(
-              onTap: _productivityTimerActive
-                  ? null
-                  : () => _editDuration(
-                        title: 'Countdown Duration',
-                        currentValue: _countdownMinutes,
-                        onSave: (v) {
-                          setState(() {
-                            _countdownMinutes = v;
-                            _remainingTime = Duration(minutes: v);
-                          });
-                          TimerService.setCountdownMinutes(v);
-                        },
-                      ),
-              child: Text(
-                '$_countdownMinutes min',
-                style: TextStyle(
-                  color: AppColors.grey200,
-                  fontSize: 14,
-                ),
+            Text(
+              'Counts up from 0:00',
+              style: TextStyle(
+                color: AppColors.grey200,
+                fontSize: 14,
               ),
             ),
             const SizedBox(height: 16),
@@ -1255,7 +1260,7 @@ class _TimersScreenState extends State<TimersScreen>
                   width: 220,
                   height: 220,
                   child: CircularProgressIndicator(
-                    value: _isInFlowState ? 1.0 : progress.clamp(0.0, 1.0),
+                    value: _isFocusMode ? null : (_isInFlowState ? 1.0 : (progress ?? 0.0).clamp(0.0, 1.0)),
                     strokeWidth: 8,
                     backgroundColor: AppColors.grey700,
                     valueColor: AlwaysStoppedAnimation<Color>(
@@ -1270,7 +1275,7 @@ class _TimersScreenState extends State<TimersScreen>
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (!_isCountdownMode)
+                    if (!_isFocusMode)
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1300,13 +1305,17 @@ class _TimersScreenState extends State<TimersScreen>
                         ],
                       ),
                     Text(
-                      _isInFlowState
-                          ? '+${_formatTimer(_flowExtraTime)}'
-                          : _formatTimer(_remainingTime),
+                      _isFocusMode
+                          ? _formatTimer(_focusElapsed)
+                          : _isInFlowState
+                              ? '+${_formatTimer(_flowExtraTime)}'
+                              : _formatTimer(_remainingTime),
                       style: TextStyle(
                         fontSize: 44,
                         fontWeight: FontWeight.bold,
-                        color: _isInFlowState ? AppColors.yellow : null,
+                        color: _isFocusMode
+                            ? AppColors.purple
+                            : _isInFlowState ? AppColors.yellow : null,
                       ),
                     ),
                     if (_isInFlowState)

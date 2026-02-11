@@ -3,6 +3,8 @@ import 'chore_data_models.dart';
 import 'chore_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
+import '../Settings/app_customization_service.dart';
+import '../Energy/energy_service.dart';
 
 class ChoresCard extends StatefulWidget {
   final VoidCallback? onTap;
@@ -21,6 +23,7 @@ class ChoresCard extends StatefulWidget {
 class _ChoresCardState extends State<ChoresCard> {
   List<Chore> _todayChores = [];
   bool _isLoading = true;
+  bool _isLowEnergy = false;
 
   @override
   void initState() {
@@ -30,9 +33,8 @@ class _ChoresCardState extends State<ChoresCard> {
 
   Future<void> _loadChores() async {
     final settings = await ChoreService.loadSettings();
-    final today = DateTime.now().weekday; // 1=Monday, 7=Sunday
+    final today = DateTime.now().weekday;
 
-    // Only load if today is a preferred day
     if (!settings.preferredCleaningDays.contains(today)) {
       setState(() {
         _todayChores = [];
@@ -41,7 +43,33 @@ class _ChoresCardState extends State<ChoresCard> {
       return;
     }
 
-    final chores = await ChoreService.getTodayChores();
+    var chores = await ChoreService.getTodayChores();
+
+    // Energy-aware filtering: if energy module active and battery is low,
+    // prefer chores with lower effort (energyLevel closer to 0 or positive)
+    final states = await AppCustomizationService.loadAllModuleStates();
+    final energyEnabled = states[AppCustomizationService.moduleEnergy] ?? false;
+
+    if (energyEnabled && chores.isNotEmpty) {
+      final record = await EnergyService.getTodayRecord();
+      final battery = record?.currentBattery ?? 50;
+
+      if (battery < 30) {
+        _isLowEnergy = true;
+        // Low energy: only show easy chores (effort -1 to +5, i.e. not draining)
+        final easyChores = chores.where((c) => c.energyLevel >= -1).toList();
+        // Fall back to all chores if no easy ones match
+        if (easyChores.isNotEmpty) {
+          chores = easyChores;
+        }
+      } else if (battery < 50) {
+        // Medium energy: filter out very draining chores (-4, -5)
+        final mediumChores = chores.where((c) => c.energyLevel >= -2).toList();
+        if (mediumChores.isNotEmpty) {
+          chores = mediumChores;
+        }
+      }
+    }
 
     setState(() {
       _todayChores = chores;
@@ -55,9 +83,17 @@ class _ChoresCardState extends State<ChoresCard> {
     widget.onChoreCompleted?.call();
 
     if (mounted) {
+      String message;
+      if (_todayChores.isEmpty) {
+        message = 'All done — home is happy today!';
+      } else if (_isLowEnergy) {
+        message = 'Nice — you got it done even on a low day!';
+      } else {
+        message = '${chore.name} done!';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${chore.name} completed! 🎉'),
+          content: Text(message),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -66,23 +102,29 @@ class _ChoresCardState extends State<ChoresCard> {
 
   @override
   Widget build(BuildContext context) {
-    // Don't show card if loading or no chores
     if (_isLoading || _todayChores.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    final displayChores = _todayChores.take(5).toList();
-    final hasMore = _todayChores.length > 5;
+    final displayChores = _todayChores.take(3).toList();
+    final hasMore = _todayChores.length > 3;
 
     return GestureDetector(
       onTap: widget.onTap,
-      child: Container(
-        decoration:
-            AppStyles.cardDecoration(color: AppColors.homeCardBackground),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Card(
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: AppStyles.borderRadiusLarge,
+              color: AppColors.homeCardBackground,
+            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
               child: Row(
@@ -90,13 +132,35 @@ class _ChoresCardState extends State<ChoresCard> {
                   Icon(Icons.cleaning_services_rounded,
                       color: AppColors.waterBlue, size: 20),
                   const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Chores',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Text(
+                          'Chores',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (_isLowEnergy) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.orange.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Easy mode',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AppColors.orange,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   Icon(Icons.chevron_right_rounded,
@@ -126,6 +190,8 @@ class _ChoresCardState extends State<ChoresCard> {
             ),
           ],
         ),
+      ),
+      ),
       ),
     );
   }
@@ -173,14 +239,24 @@ class _ChoresCardState extends State<ChoresCard> {
                           ),
                         ),
                         if (chore.isCritical)
-                          const Text(
-                            '🔴',
-                            style: TextStyle(fontSize: 12),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(left: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                         if (chore.isOverdue && !chore.isCritical)
-                          const Text(
-                            '⚠️',
-                            style: TextStyle(fontSize: 12),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(left: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.grey300,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                       ],
                     ),
@@ -200,13 +276,21 @@ class _ChoresCardState extends State<ChoresCard> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Text(
                           '${chore.conditionPercentage}%',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                             color: chore.conditionColor,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _daysAgoText(chore),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.grey300,
                           ),
                         ),
                       ],
@@ -232,5 +316,12 @@ class _ChoresCardState extends State<ChoresCard> {
         );
       },
     );
+  }
+
+  String _daysAgoText(Chore chore) {
+    final days = DateTime.now().difference(chore.lastCompleted).inDays;
+    if (days == 0) return 'today';
+    if (days == 1) return '1d ago';
+    return '${days}d ago';
   }
 }

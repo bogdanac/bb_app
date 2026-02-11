@@ -53,9 +53,17 @@ class EndOfDayReviewCardState extends State<EndOfDayReviewCard> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: _openFullReview,
-      child: Container(
-        decoration: AppStyles.cardDecoration(color: AppColors.homeCardBackground),
-        child: Column(
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Card(
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: AppStyles.borderRadiusLarge,
+              color: AppColors.homeCardBackground,
+            ),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header
@@ -90,6 +98,8 @@ class EndOfDayReviewCardState extends State<EndOfDayReviewCard> {
             ),
           ],
         ),
+      ),
+      ),
       ),
     );
   }

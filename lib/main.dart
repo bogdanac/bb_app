@@ -792,7 +792,9 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
         _secondaryTabsOrder = secondaryTabsOrder;
 
         // Clamp selected index if current tab no longer exists
-        final tabs = _primaryTabConfigs;
+        // Use the correct tab list based on platform
+        final isDesktop = kIsWeb || (context.mounted && MediaQuery.of(context).size.width >= 1024);
+        final tabs = isDesktop ? _allEnabledTabConfigs : _primaryTabConfigs;
         if (_selectedIndex >= tabs.length) {
           _selectedIndex = tabs.indexWhere((c) => c.isHome);
           if (_selectedIndex < 0) _selectedIndex = 0;

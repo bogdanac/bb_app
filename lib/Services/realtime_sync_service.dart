@@ -201,8 +201,12 @@ class RealtimeSyncService {
         final remoteTimestamp = lastSync.millisecondsSinceEpoch;
         final localTimestamp = _lastSyncTimestamps['tasks'] ?? 0;
 
-        // Skip if this is our own sync
-        if (remoteTimestamp <= localTimestamp) {
+        // Skip if this is our own sync (use 2s tolerance for server timestamp drift)
+        if (localTimestamp > 0 && (remoteTimestamp - localTimestamp).abs() < 2000) {
+          return;
+        }
+        // Skip if remote is older than our last sync
+        if (remoteTimestamp < localTimestamp) {
           return;
         }
 
@@ -383,8 +387,12 @@ class RealtimeSyncService {
           final remoteTimestamp = lastSync.millisecondsSinceEpoch;
           final localTimestamp = _lastSyncTimestamps['routines'] ?? 0;
 
-          // Skip if remote is not newer AND local is not empty
-          if (remoteTimestamp <= localTimestamp && !localIsEmpty) {
+          // Skip if this is our own sync (use 2s tolerance for server timestamp drift)
+          if (localTimestamp > 0 && (remoteTimestamp - localTimestamp).abs() < 2000 && !localIsEmpty) {
+            return;
+          }
+          // Skip if remote is older than our last sync AND local is not empty
+          if (remoteTimestamp < localTimestamp && !localIsEmpty) {
             return;
           }
         } else if (!localIsEmpty) {
@@ -576,7 +584,11 @@ class RealtimeSyncService {
         final remoteTimestamp = lastSync.millisecondsSinceEpoch;
         final localTimestamp = _lastSyncTimestamps['habits'] ?? 0;
 
-        if (remoteTimestamp <= localTimestamp) {
+        // Skip if this is our own sync (use 2s tolerance for server timestamp drift)
+        if (localTimestamp > 0 && (remoteTimestamp - localTimestamp).abs() < 2000) {
+          return;
+        }
+        if (remoteTimestamp < localTimestamp) {
           return;
         }
 
@@ -719,7 +731,11 @@ class RealtimeSyncService {
         final remoteTimestamp = lastSync.millisecondsSinceEpoch;
         final localTimestamp = _lastSyncTimestamps['energy'] ?? 0;
 
-        if (remoteTimestamp <= localTimestamp) {
+        // Skip if this is our own sync (use 2s tolerance for server timestamp drift)
+        if (localTimestamp > 0 && (remoteTimestamp - localTimestamp).abs() < 2000) {
+          return;
+        }
+        if (remoteTimestamp < localTimestamp) {
           return;
         }
 

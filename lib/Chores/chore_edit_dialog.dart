@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'chore_data_models.dart';
 import 'chore_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
-import '../shared/date_picker_utils.dart';
+import '../Settings/app_customization_service.dart';
 
 class ChoreEditDialog extends StatefulWidget {
   final Chore? chore; // Null for creating new chore
@@ -29,11 +28,15 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
   late TextEditingController _nameController;
   late TextEditingController _notesController;
   late String _selectedCategory;
-  late int _intervalDays;
+  late int _intervalValue;
+  late String _intervalUnit;
   late double _condition;
   late DateTime _lastCompleted;
+  late int _energyLevel;
+  int? _activeMonth;
   List<ChoreCategory> _categories = [];
   bool _isLoading = true;
+  bool _energyModuleEnabled = false;
 
   @override
   void initState() {
@@ -41,10 +44,14 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
     _nameController = TextEditingController(text: widget.chore?.name ?? '');
     _notesController = TextEditingController(text: widget.chore?.notes ?? '');
     _selectedCategory = widget.chore?.category ?? 'House';
-    _intervalDays = widget.chore?.intervalDays ?? 7;
-    _condition = widget.chore?.condition ?? 1.0;
+    _intervalValue = widget.chore?.intervalValue ?? 7;
+    _intervalUnit = widget.chore?.intervalUnit ?? 'days';
+    _condition = widget.chore?.currentCondition ?? 1.0;
     _lastCompleted = widget.chore?.lastCompleted ?? DateTime.now();
+    _energyLevel = widget.chore?.energyLevel ?? 0;
+    _activeMonth = widget.chore?.activeMonth;
     _loadCategories();
+    _loadEnergyModuleState();
   }
 
   Future<void> _loadCategories() async {
@@ -53,6 +60,15 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
       _categories = categories;
       _isLoading = false;
     });
+  }
+
+  Future<void> _loadEnergyModuleState() async {
+    final states = await AppCustomizationService.loadAllModuleStates();
+    if (mounted) {
+      setState(() {
+        _energyModuleEnabled = states[AppCustomizationService.moduleEnergy] ?? false;
+      });
+    }
   }
 
   @override
@@ -70,25 +86,48 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
       return;
     }
 
+    // Reverse decay: slider shows currentCondition, but we store the base
+    // value so that currentCondition getter reproduces the slider value.
+    // storedCondition = sliderValue + daysSince * decayRate
+    final int totalIntervalDays;
+    switch (_intervalUnit) {
+      case 'weeks': totalIntervalDays = _intervalValue * 7; break;
+      case 'months': totalIntervalDays = _intervalValue * 30; break;
+      case 'years': totalIntervalDays = _intervalValue * 365; break;
+      default: totalIntervalDays = _intervalValue;
+    }
+    final daysSince = DateTime.now().difference(_lastCompleted).inDays;
+    final decayRate = 1.0 / totalIntervalDays;
+    final storedCondition = (_condition + daysSince * decayRate).clamp(0.0, 1.0);
+
+    final effectiveActiveMonth = _intervalUnit == 'years' ? _activeMonth : null;
+
     final chore = widget.chore?.copyWith(
           name: _nameController.text.trim(),
           category: _selectedCategory,
-          intervalDays: _intervalDays,
-          condition: _condition,
+          intervalValue: _intervalValue,
+          intervalUnit: _intervalUnit,
+          condition: storedCondition,
           lastCompleted: _lastCompleted,
           notes: _notesController.text.trim().isEmpty
               ? null
               : _notesController.text.trim(),
+          energyLevel: _energyLevel,
+          activeMonth: effectiveActiveMonth,
+          clearActiveMonth: effectiveActiveMonth == null,
         ) ??
         Chore(
           name: _nameController.text.trim(),
           category: _selectedCategory,
-          intervalDays: _intervalDays,
-          condition: _condition,
+          intervalValue: _intervalValue,
+          intervalUnit: _intervalUnit,
+          condition: _condition, // New chore: no decay to reverse
           lastCompleted: _lastCompleted,
           notes: _notesController.text.trim().isEmpty
               ? null
               : _notesController.text.trim(),
+          energyLevel: _energyLevel,
+          activeMonth: effectiveActiveMonth,
         );
 
     if (widget.chore == null) {
@@ -99,21 +138,6 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
 
     if (mounted) {
       Navigator.of(context).pop(true);
-    }
-  }
-
-  Future<void> _pickLastCompleted() async {
-    final picked = await DatePickerUtils.showStyledDatePicker(
-      context: context,
-      initialDate: _lastCompleted,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-    );
-
-    if (picked != null) {
-      setState(() {
-        _lastCompleted = picked;
-      });
     }
   }
 
@@ -171,10 +195,43 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
     }
   }
 
+  String _buildIntervalDisplayText() {
+    final unit = _intervalValue == 1
+        ? _intervalUnit.substring(0, _intervalUnit.length - 1)
+        : _intervalUnit;
+    return 'Every $_intervalValue $unit';
+  }
+
   Color _getConditionColor(double condition) {
     if (condition >= 0.7) return AppColors.successGreen;
     if (condition >= 0.4) return AppColors.orange;
     return AppColors.coral;
+  }
+
+  Color _getEnergyColor(int level) {
+    if (level <= -4) return AppColors.coral;
+    if (level <= -2) return AppColors.orange;
+    if (level < 0) return AppColors.yellow;
+    if (level == 0) return AppColors.greyText;
+    if (level <= 2) return AppColors.lightGreen;
+    return AppColors.successGreen;
+  }
+
+  String _getEnergyDescription(int level) {
+    switch (level) {
+      case -5: return 'Exhausting (-50%)';
+      case -4: return 'Very draining (-40%)';
+      case -3: return 'Draining (-30%)';
+      case -2: return 'Moderate effort (-20%)';
+      case -1: return 'Light effort (-10%)';
+      case 0: return 'Neutral (0%)';
+      case 1: return 'Relaxing (+10%)';
+      case 2: return 'Refreshing (+20%)';
+      case 3: return 'Energizing (+30%)';
+      case 4: return 'Very energizing (+40%)';
+      case 5: return 'Restorative (+50%)';
+      default: return 'Unknown';
+    }
   }
 
   @override
@@ -210,7 +267,10 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
           const SizedBox(width: 8),
         ],
       ),
-      body: SingleChildScrollView(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+        child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,7 +375,7 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
 
             const SizedBox(height: 16),
 
-            // Interval Days Section
+            // Repeat Interval Section
             Container(
               decoration: BoxDecoration(
                 color: AppColors.dialogBackground.withValues(alpha: 0.08),
@@ -324,75 +384,145 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
+                child: Column(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.purple.withValues(alpha: 0.1),
-                        borderRadius: AppStyles.borderRadiusMedium,
-                      ),
-                      child: Icon(
-                        Icons.repeat_rounded,
-                        color: AppColors.purple,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Repeat Interval',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.greyText,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Every $_intervalDays days',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.purple,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                     Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
-                          onPressed: _intervalDays > 1
-                              ? () => setState(() => _intervalDays--)
-                              : null,
-                          icon: const Icon(Icons.remove_circle_outline),
-                          color: AppColors.purple,
-                        ),
-                        SizedBox(
-                          width: 40,
-                          child: Text(
-                            '$_intervalDays',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.purple.withValues(alpha: 0.1),
+                            borderRadius: AppStyles.borderRadiusMedium,
+                          ),
+                          child: Icon(
+                            Icons.repeat_rounded,
+                            color: AppColors.purple,
+                            size: 24,
                           ),
                         ),
-                        IconButton(
-                          onPressed: _intervalDays < 365
-                              ? () => setState(() => _intervalDays++)
-                              : null,
-                          icon: const Icon(Icons.add_circle_outline),
-                          color: AppColors.purple,
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Repeat Interval',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.greyText,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _buildIntervalDisplayText(),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.purple,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              onPressed: _intervalValue > 1
+                                  ? () => setState(() => _intervalValue--)
+                                  : null,
+                              icon: const Icon(Icons.remove_circle_outline),
+                              color: AppColors.purple,
+                            ),
+                            SizedBox(
+                              width: 40,
+                              child: Text(
+                                '$_intervalValue',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: _intervalValue < 365
+                                  ? () => setState(() => _intervalValue++)
+                                  : null,
+                              icon: const Icon(Icons.add_circle_outline),
+                              color: AppColors.purple,
+                            ),
+                          ],
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    // Unit selector
+                    Row(
+                      children: [
+                        for (final unit in ['days', 'weeks', 'months', 'years'])
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 2),
+                              child: ChoiceChip(
+                                label: Text(
+                                  unit[0].toUpperCase() + unit.substring(1),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: _intervalUnit == unit ? AppColors.white : AppColors.greyText,
+                                  ),
+                                ),
+                                selected: _intervalUnit == unit,
+                                selectedColor: AppColors.purple,
+                                backgroundColor: AppColors.dialogBackground.withValues(alpha: 0.1),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                padding: EdgeInsets.zero,
+                                labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+                                showCheckmark: false,
+                                onSelected: (selected) {
+                                  if (selected) setState(() => _intervalUnit = unit);
+                                },
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    // Active month selector (only for yearly interval)
+                    if (_intervalUnit == 'years') ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          for (int m = 1; m <= 12; m++)
+                            ChoiceChip(
+                              label: Text(
+                                const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1],
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: _activeMonth == m ? AppColors.white : AppColors.greyText,
+                                ),
+                              ),
+                              selected: _activeMonth == m,
+                              selectedColor: AppColors.purple,
+                              backgroundColor: AppColors.dialogBackground.withValues(alpha: 0.1),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: EdgeInsets.zero,
+                              labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+                              showCheckmark: false,
+                              onSelected: (selected) {
+                                setState(() => _activeMonth = selected ? m : null);
+                              },
+                            ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -488,70 +618,6 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
 
             const SizedBox(height: 16),
 
-            // Last Completed Section
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.dialogBackground.withValues(alpha: 0.08),
-                borderRadius: AppStyles.borderRadiusLarge,
-                border: Border.all(color: AppColors.greyText),
-              ),
-              child: InkWell(
-                onTap: _pickLastCompleted,
-                borderRadius: AppStyles.borderRadiusLarge,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.successGreen.withValues(alpha: 0.1),
-                          borderRadius: AppStyles.borderRadiusMedium,
-                        ),
-                        child: Icon(
-                          Icons.check_circle_rounded,
-                          color: AppColors.successGreen,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Last Completed',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.greyText,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              DateFormat('MMM d, yyyy').format(_lastCompleted),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: AppColors.greyText,
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.calendar_today_rounded,
-                        color: AppColors.greyText,
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
             // Notes Section
             TextField(
               controller: _notesController,
@@ -579,26 +645,94 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
               style: const TextStyle(fontSize: 16),
             ),
 
+            // Energy Level Section (only if energy module active)
+            if (_energyModuleEnabled) ...[
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.dialogBackground.withValues(alpha: 0.08),
+                  borderRadius: AppStyles.borderRadiusLarge,
+                  border: Border.all(
+                    color: _energyLevel != 0
+                        ? _getEnergyColor(_energyLevel).withValues(alpha: 0.3)
+                        : AppColors.greyText,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _energyLevel < 0 ? Icons.battery_3_bar_rounded : Icons.battery_charging_full_rounded,
+                        color: _energyLevel != 0
+                            ? _getEnergyColor(_energyLevel)
+                            : AppColors.greyText,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                activeTrackColor: _getEnergyColor(_energyLevel),
+                                inactiveTrackColor: AppColors.greyText.withValues(alpha: 0.2),
+                                thumbColor: _getEnergyColor(_energyLevel),
+                                overlayColor: _getEnergyColor(_energyLevel).withValues(alpha: 0.2),
+                                trackHeight: 4,
+                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                              ),
+                              child: Slider(
+                                value: _energyLevel.toDouble(),
+                                min: -5,
+                                max: 5,
+                                divisions: 10,
+                                onChanged: (value) {
+                                  setState(() => _energyLevel = value.round());
+                                },
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 12),
+                              child: Text(
+                                _getEnergyDescription(_energyLevel),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: _energyLevel != 0 ? _getEnergyColor(_energyLevel) : AppColors.greyText,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+
             // Active status badge (for critical condition)
             if (isActive) ...[
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: AppColors.coral.withValues(alpha: 0.1),
+                  color: AppColors.waterBlue.withValues(alpha: 0.1),
                   borderRadius: AppStyles.borderRadiusLarge,
                   border: Border.all(
-                    color: AppColors.coral.withValues(alpha: 0.3),
+                    color: AppColors.waterBlue.withValues(alpha: 0.2),
                   ),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.warning_rounded, size: 20, color: AppColors.coral),
+                    Icon(Icons.spa_rounded, size: 20, color: AppColors.waterBlue),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'This chore is in critical condition and needs attention!',
-                        style: TextStyle(color: AppColors.coral, fontSize: 14),
+                        'A little care goes a long way — this one could use some love!',
+                        style: TextStyle(color: AppColors.waterBlue, fontSize: 14),
                       ),
                     ),
                   ],
@@ -610,6 +744,8 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
           ],
         ),
       ),
+      ),
+      ),
     );
   }
 
@@ -618,6 +754,6 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
     if (condition >= 0.6) return 'Good';
     if (condition >= 0.4) return 'Fair';
     if (condition >= 0.2) return 'Needs attention';
-    return 'Critical';
+    return 'Overdue';
   }
 }

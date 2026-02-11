@@ -64,6 +64,9 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
+          child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
@@ -113,6 +116,8 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                 ),
               ],
             ),
+          ),
+          ),
           ),
         ),
       ),

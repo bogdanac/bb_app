@@ -42,6 +42,13 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
     );
     _loadCurrentPeriodCounts();
     _loadCalories();
+    // Start expanded on desktop
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && MediaQuery.of(context).size.width >= 1024) {
+        setState(() { _isExpanded = true; });
+        _controller.forward();
+      }
+    });
   }
 
   @override

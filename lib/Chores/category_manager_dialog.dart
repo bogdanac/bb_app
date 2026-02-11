@@ -184,6 +184,19 @@ class _CategoryManagerDialogState extends State<CategoryManagerDialog> {
       appBar: AppBar(
         title: const Text('Manage Categories'),
         backgroundColor: Colors.transparent,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(24),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Drag to set priority — top = highest priority',
+              style: TextStyle(
+                color: AppColors.grey300,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -210,28 +223,33 @@ class _CategoryManagerDialogState extends State<CategoryManagerDialog> {
         icon: const Icon(Icons.add_rounded),
         label: const Text('Add Category'),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _categories.isEmpty
-              ? _buildEmptyState()
-              : ReorderableListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                  itemCount: _categories.length,
-                  onReorder: (oldIndex, newIndex) async {
-                    setState(() {
-                      if (newIndex > oldIndex) {
-                        newIndex--;
-                      }
-                      final item = _categories.removeAt(oldIndex);
-                      _categories.insert(newIndex, item);
-                    });
-                    await ChoreService.saveCategories(_categories);
-                  },
-                  itemBuilder: (context, index) {
-                    final category = _categories[index];
-                    return _buildCategoryCard(category, index);
-                  },
-                ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _categories.isEmpty
+                  ? _buildEmptyState()
+                  : ReorderableListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                      itemCount: _categories.length,
+                      onReorder: (oldIndex, newIndex) async {
+                        setState(() {
+                          if (newIndex > oldIndex) {
+                            newIndex--;
+                          }
+                          final item = _categories.removeAt(oldIndex);
+                          _categories.insert(newIndex, item);
+                        });
+                        await ChoreService.saveCategories(_categories);
+                      },
+                      itemBuilder: (context, index) {
+                        final category = _categories[index];
+                        return _buildCategoryCard(category, index);
+                      },
+                    ),
+        ),
+      ),
     );
   }
 
@@ -272,33 +290,57 @@ class _CategoryManagerDialogState extends State<CategoryManagerDialog> {
       key: ValueKey(category.id),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: AppStyles.cardDecoration(color: AppColors.homeCardBackground),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: category.color.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(category.icon, color: category.color, size: 24),
-        ),
-        title: Text(
-          category.name,
-          style: const TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 16,
-          ),
-        ),
-        subtitle: Text(
-          'Drag to reorder',
-          style: TextStyle(
-            color: AppColors.grey300,
-            fontSize: 12,
-          ),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: Row(
           children: [
+            // Subtle drag grip on the left
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 16, height: 2, margin: const EdgeInsets.only(bottom: 3), decoration: BoxDecoration(color: AppColors.grey300.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(1))),
+                  Container(width: 16, height: 2, margin: const EdgeInsets.only(bottom: 3), decoration: BoxDecoration(color: AppColors.grey300.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(1))),
+                  Container(width: 16, height: 2, decoration: BoxDecoration(color: AppColors.grey300.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(1))),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Category icon
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: category.color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(category.icon, color: category.color, size: 24),
+            ),
+            const SizedBox(width: 12),
+            // Name and priority
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    category.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '#${index + 1} priority',
+                    style: TextStyle(
+                      color: AppColors.grey300,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Edit & delete buttons
             IconButton(
               icon: Icon(Icons.edit_rounded, size: 20, color: AppColors.greyText),
               onPressed: () => _editCategory(category),
@@ -309,7 +351,6 @@ class _CategoryManagerDialogState extends State<CategoryManagerDialog> {
               onPressed: () => _deleteCategory(category),
               tooltip: 'Delete',
             ),
-            Icon(Icons.drag_handle_rounded, color: AppColors.grey300),
           ],
         ),
       ),
@@ -397,7 +438,10 @@ class _CategoryEditScreenState extends State<_CategoryEditScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -531,6 +575,8 @@ class _CategoryEditScreenState extends State<_CategoryEditScreen> {
               ),
             ),
           ],
+        ),
+      ),
         ),
       ),
     );

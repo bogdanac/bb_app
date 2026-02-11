@@ -57,8 +57,8 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
 
     // Reload routine when app comes back to foreground to pick up widget changes
     if (state == AppLifecycleState.resumed) {
-      // Don't sync - just reload to read widget progress
-      _loadCurrentRoutine();
+      // Silently reload without showing loading spinner
+      _refreshRoutine();
     }
   }
 
@@ -143,6 +143,37 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
     }
   }
 
+  /// Refresh routine data without showing loading spinner (for background resume)
+  Future<void> _refreshRoutine() async {
+    if (!mounted) return;
+    try {
+      final routines = await RoutineService.loadRoutines();
+      final routine = await RoutineService.getCurrentActiveRoutine(routines);
+      if (routine != null) {
+        final progressData = await RoutineProgressService.loadRoutineProgress(routine.id);
+        if (progressData != null) {
+          var stepIndex = progressData['currentStepIndex'] ?? 0;
+          final completedSteps = List<bool>.from(progressData['completedSteps'] ?? []);
+          final skippedSteps = List<bool>.from(progressData['skippedSteps'] ?? []);
+          final postponedSteps = List<bool>.from(progressData['postponedSteps'] ?? []);
+          for (int i = 0; i < routine.items.length; i++) {
+            routine.items[i].isCompleted = i < completedSteps.length ? completedSteps[i] : false;
+            routine.items[i].isSkipped = i < skippedSteps.length ? skippedSteps[i] : false;
+            routine.items[i].isPostponed = i < postponedSteps.length ? postponedSteps[i] : false;
+          }
+          if (mounted) {
+            setState(() {
+              _currentRoutine = routine;
+              _currentStepIndex = stepIndex;
+            });
+          }
+        }
+      }
+    } catch (_) {
+      // Silently ignore refresh errors
+    }
+  }
+
   Future<void> _saveProgress() async {
     if (_currentRoutine == null) return;
 
@@ -222,7 +253,11 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
       await prefs.setBool(completedKey, true);
 
       if (mounted) {
-        SnackBarUtils.showSuccess(context, '🎉 Routine completed! Great job!');
+        final hour = DateTime.now().hour;
+        final msg = hour < 12
+            ? 'Morning set. You\'re ready for anything.'
+            : 'Routine done — well played.';
+        SnackBarUtils.showSuccess(context, msg);
       }
 
       // Try to load the next routine automatically
@@ -494,11 +529,15 @@ class _RoutineCardState extends State<RoutineCard> with WidgetsBindingObserver {
                   color: Colors.green.withValues(alpha: 0.2),
                   borderRadius: AppStyles.borderRadiusSmall,
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.check_circle, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('Routine completed! 🎉'),
+                    const Icon(Icons.check_circle, color: Colors.green),
+                    const SizedBox(width: 8),
+                    Text(
+                      DateTime.now().hour < 12
+                          ? 'Morning set. You\'re ready for anything.'
+                          : 'Routine done — well played.',
+                    ),
                   ],
                 ),
               ),

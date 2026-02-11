@@ -839,7 +839,7 @@ class _MenstrualCycleScreenState extends State<MenstrualCycleScreen> {
     // Each cell is square (width/7), and we need up to 6 rows
     final screenWidth = MediaQuery.of(context).size.width;
     final constrainedWidth = screenWidth > 800 ? 800.0 : screenWidth;
-    final cellSize = (constrainedWidth - 64) / 7; // Account for padding
+    final cellSize = ((constrainedWidth - 64) / 7).clamp(0.0, 40.0); // Cap cell size for desktop
     final calendarHeight = cellSize * 6 + 20; // 6 rows + spacing
 
     return Column(

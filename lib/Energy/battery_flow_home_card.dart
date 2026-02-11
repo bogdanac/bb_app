@@ -10,6 +10,10 @@ import 'energy_settings_screen.dart';
 import 'flow_calculator.dart';
 import 'morning_battery_prompt.dart';
 import 'skip_day_notification.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../Settings/app_customization_service.dart';
+import '../MenstrualCycle/menstrual_cycle_utils.dart';
+import '../MenstrualCycle/menstrual_cycle_constants.dart';
 
 /// Battery & Flow Home Card - Expandable card matching food tracking style
 class BatteryFlowHomeCard extends StatefulWidget {
@@ -33,6 +37,7 @@ class BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
   Timer? _decayTimer;
   bool _canUseSkip = false;
   bool _isShowingMorningPrompt = false;
+  bool _isLowEnergyPhase = false;
 
   @override
   void initState() {
@@ -48,6 +53,13 @@ class BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
     );
     _loadData();
     _startDecayTimer();
+    // Start expanded on desktop
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && MediaQuery.of(context).size.width >= 1024) {
+        setState(() { _isExpanded = true; });
+        _controller.forward();
+      }
+    });
   }
 
   @override
@@ -129,12 +141,32 @@ class BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
     final settings = results[1] as EnergySettings;
     final canSkip = results[2] as bool;
 
+    // Check if menstrual cycle module is active and in a low-energy phase
+    bool lowEnergyPhase = false;
+    try {
+      final states = await AppCustomizationService.loadAllModuleStates();
+      if (states[AppCustomizationService.moduleMenstrual] == true) {
+        final prefs = await SharedPreferences.getInstance();
+        final lastStartStr = prefs.getString('last_period_start');
+        final lastEndStr = prefs.getString('last_period_end');
+        final avgLen = prefs.getInt('average_cycle_length') ?? 28;
+        if (lastStartStr != null) {
+          final lastStart = DateTime.parse(lastStartStr);
+          final lastEnd = lastEndStr != null ? DateTime.parse(lastEndStr) : null;
+          final phase = MenstrualCycleUtils.getCyclePhase(lastStart, lastEnd, avgLen);
+          lowEnergyPhase = phase == MenstrualCycleConstants.menstrualPhase ||
+              phase == MenstrualCycleConstants.lateLutealPhase;
+        }
+      }
+    } catch (_) {}
+
     // Update UI first, then show prompt if needed (non-blocking)
     if (mounted) {
       setState(() {
         _todayRecord = record;
         _settings = settings;
         _canUseSkip = canSkip;
+        _isLowEnergyPhase = lowEnergyPhase;
         _isLoading = false;
         _lastLoadDate = today;
       });
@@ -550,12 +582,6 @@ class BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                       ),
                     ),
                     const SizedBox(width: 4),
-                    AnimatedRotation(
-                      turns: _isExpanded ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 300),
-                      child: const Icon(Icons.expand_more),
-                    ),
-                    const SizedBox(width: 4),
                   ],
                 ),
               ),
@@ -717,32 +743,34 @@ class BatteryFlowHomeCardState extends State<BatteryFlowHomeCard>
                         ),
                       ],
                     ),
-                    // Warning for low battery
+                    // Encouraging message for low battery
                     if (FlowCalculator.isBatteryCritical(battery)) ...[
                       const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: AppColors.coral.withValues(alpha: 0.2),
+                          color: AppColors.waterBlue.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: AppColors.coral.withValues(alpha: 0.5),
+                            color: AppColors.waterBlue.withValues(alpha: 0.2),
                           ),
                         ),
                         child: Row(
                           children: [
                             Icon(
-                              Icons.warning_rounded,
-                              color: AppColors.coral,
+                              Icons.spa_rounded,
+                              color: AppColors.waterBlue,
                               size: 18,
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Low battery! Prioritize rest.',
+                                _isLowEnergyPhase
+                                    ? 'Your body\'s doing a lot — go easy.'
+                                    : 'Running low — be kind to yourself today.',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: AppColors.coral,
+                                  color: AppColors.waterBlue,
                                 ),
                               ),
                             ),

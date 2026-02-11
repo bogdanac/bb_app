@@ -161,7 +161,7 @@ class _HabitCardState extends State<HabitCard> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: AppStyles.borderRadiusLarge,
-            color: AppColors.dialogCardBackground,
+            color: AppColors.homeCardBackground,
           ),
           child: const Center(
             child: CircularProgressIndicator(),

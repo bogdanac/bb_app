@@ -61,15 +61,15 @@ class _EndOfDayReviewScreenState extends State<EndOfDayReviewScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.summarize_rounded, size: 64, color: AppColors.grey300),
+            Icon(Icons.nights_stay_rounded, size: 64, color: AppColors.grey300),
             const SizedBox(height: 16),
             Text(
-              'No activity recorded today',
+              'Quiet days count too.',
               style: TextStyle(color: AppColors.greyText, fontSize: 16),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(
-              'Complete some tasks, habits, or track your activities\nto see your daily summary here.',
+              'Not every day needs to be productive.\nRest is part of the process.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.grey300, fontSize: 14),
             ),
@@ -149,7 +149,7 @@ class _EndOfDayReviewScreenState extends State<EndOfDayReviewScreen> {
         return helper.hasData;
       case AppCustomizationService.moduleRoutines:
         final helper = RoutinesSummaryHelper(summary);
-        return helper.totalCount > 0;
+        return helper.completedCount > 0;
       case AppCustomizationService.moduleChores:
         final helper = ChoresSummaryHelper(summary);
         return helper.totalChores > 0;

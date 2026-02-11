@@ -186,15 +186,21 @@ class _ActivitiesCardState extends State<ActivitiesCard> {
         : _activities.take(3).toList();
     final hasMore = _activities.length > 3;
 
-    return Container(
-      decoration: AppStyles.cardDecoration(),
-      child: Column(
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: AppStyles.borderRadiusLarge,
+          color: AppColors.homeCardBackground,
+        ),
+        child: Column(
         children: [
           // Header
           GestureDetector(
             onTap: widget.onNavigateToTimers,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+              padding: const EdgeInsets.fromLTRB(16, 4, 12, 0),
               child: Row(
                 children: [
                   Icon(
@@ -283,13 +289,7 @@ class _ActivitiesCardState extends State<ActivitiesCard> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    Icon(
-                      _isExpanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      color: AppColors.purple,
-                      size: 18,
-                    ),
+                    const SizedBox(width: 4),
                   ],
                 ),
               ),
@@ -298,6 +298,7 @@ class _ActivitiesCardState extends State<ActivitiesCard> {
           if (!hasMore)
             const SizedBox(height: 4),
         ],
+        ),
       ),
     );
   }

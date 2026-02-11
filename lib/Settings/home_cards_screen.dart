@@ -89,7 +89,10 @@ class _HomeCardsScreenState extends State<HomeCardsScreen> {
                   ),
                 ),
                 Expanded(
-                  child: ReorderableListView.builder(
+                  child: Theme(
+                    data: Theme.of(context).copyWith(canvasColor: Colors.transparent, cardColor: Colors.transparent, colorScheme: Theme.of(context).colorScheme.copyWith(surface: Colors.transparent, surfaceContainerHighest: Colors.transparent)),
+                    child: ReorderableListView.builder(
+                    buildDefaultDragHandles: false,
                     padding: const EdgeInsets.all(16),
                     itemCount: _cardOrder.length,
                     onReorder: _onReorder,
@@ -117,6 +120,7 @@ class _HomeCardsScreenState extends State<HomeCardsScreen> {
                       return _buildCardItem(cardInfo, index);
                     },
                   ),
+                  ),
                 ),
               ],
             ),
@@ -132,7 +136,7 @@ class _HomeCardsScreenState extends State<HomeCardsScreen> {
       key: ValueKey(card.key),
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColors.normalCardBackground,
         borderRadius: AppStyles.borderRadiusLarge,
         border: Border.all(
           color: effectivelyEnabled

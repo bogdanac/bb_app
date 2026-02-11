@@ -85,9 +85,16 @@ class _ChoresScreenState extends State<ChoresScreen> {
     await _loadData();
 
     if (mounted) {
+      final remaining = _chores.where((c) => c.isCritical || c.isOverdue).length;
+      String message;
+      if (remaining == 0) {
+        message = 'All done — home is happy today!';
+      } else {
+        message = '${chore.name} done!';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${chore.name} completed! 🎉'),
+          content: Text(message),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -157,8 +164,13 @@ class _ChoresScreenState extends State<ChoresScreen> {
                 size: 64, color: AppColors.grey300),
             const SizedBox(height: 16),
             Text(
-              'No chores yet. Tap + to add one!',
+              'A tidy space starts with one chore',
               style: TextStyle(color: AppColors.greyText, fontSize: 16),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Tap + to add your first one',
+              style: TextStyle(color: AppColors.grey300, fontSize: 14),
             ),
           ],
         ),
@@ -322,7 +334,7 @@ class _ChoresScreenState extends State<ChoresScreen> {
                     ),
                   ),
                   Text(
-                    '${chore.conditionPercentage}% • ${_getDueText(chore)}',
+                    '${chore.conditionPercentage}% • ${_daysAgoText(chore)} • ${_getDueText(chore)}',
                     style: TextStyle(
                       fontSize: 11,
                       color: chore.isOverdue ? Colors.red : AppColors.greyText,
@@ -337,7 +349,7 @@ class _ChoresScreenState extends State<ChoresScreen> {
               iconSize: 24,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
-              color: Colors.red,
+              color: AppColors.successGreen,
             ),
           ],
         ),
@@ -546,31 +558,12 @@ class _ChoresScreenState extends State<ChoresScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Title row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          chore.name,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      if (chore.getStreak() > 0) ...[
-                        Icon(Icons.local_fire_department,
-                            size: 14, color: AppColors.orange),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${chore.getStreak()}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.orange,
-                          ),
-                        ),
-                      ],
-                    ],
+                  Text(
+                    chore.name,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   // Info row
@@ -584,15 +577,15 @@ class _ChoresScreenState extends State<ChoresScreen> {
                           color: chore.conditionColor,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        chore.isOverdue
-                            ? Icons.warning_rounded
-                            : Icons.schedule_rounded,
-                        size: 12,
-                        color: chore.isOverdue ? Colors.red : AppColors.greyText,
+                      const SizedBox(width: 6),
+                      Text(
+                        _daysAgoText(chore),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.grey300,
+                        ),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 8),
                       Text(
                         _getDueText(chore),
                         style: TextStyle(
@@ -602,7 +595,7 @@ class _ChoresScreenState extends State<ChoresScreen> {
                       ),
                       const Spacer(),
                       Text(
-                        '${chore.intervalDays}d',
+                        chore.intervalDisplayText,
                         style: TextStyle(
                           fontSize: 11,
                           color: AppColors.greyText,
@@ -623,13 +616,20 @@ class _ChoresScreenState extends State<ChoresScreen> {
               iconSize: 28,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
-              color: chore.conditionColor,
+              color: AppColors.successGreen,
               tooltip: 'Complete',
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _daysAgoText(Chore chore) {
+    final days = DateTime.now().difference(chore.lastCompleted).inDays;
+    if (days == 0) return 'today';
+    if (days == 1) return '1d ago';
+    return '${days}d ago';
   }
 
   String _getDueText(Chore chore) {

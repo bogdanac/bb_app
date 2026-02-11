@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tasks_data_models.dart';
@@ -1915,13 +1916,8 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
           },
         );
 
-    // For desktop mode, center the list and constrain width
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 800),
-        child: listWidget,
-      ),
-    );
+    // Width is now constrained by the parent body wrapper
+    return listWidget;
   }
 
   @override
@@ -2131,10 +2127,13 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         ],
       ) : null,
       backgroundColor: widget.showFilters ? null : Colors.transparent,
-      body: Column(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+        child: Column(
         children: [
           // Filter Section
-          if (widget.showFilters) 
+          if (widget.showFilters)
             Container(
               padding: const EdgeInsets.all(8),
             child: Column(
@@ -2144,11 +2143,11 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                 Wrap(
                   alignment: WrapAlignment.start,
                   runAlignment: WrapAlignment.start,
-                  spacing: 4,
-                  runSpacing: 8,
+                  spacing: kIsWeb ? 6 : 4,
+                  runSpacing: 6,
                   children: [
                     FilterChip(
-                      label: const Text('All', style: TextStyle(fontSize: 11)),
+                      label: Text('All', style: TextStyle(fontSize: kIsWeb ? 13 : 11)),
                       selected: _selectedCategoryFilters.isEmpty,
                       backgroundColor: Colors.grey.withValues(alpha: 0.1),
                       selectedColor: Colors.grey.withValues(alpha: 0.3),
@@ -2157,10 +2156,10 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                       shape: RoundedRectangleBorder(
                         borderRadius: AppStyles.borderRadiusMedium,
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: EdgeInsets.symmetric(horizontal: kIsWeb ? 8 : 4, vertical: kIsWeb ? 4 : 0),
+                      labelPadding: EdgeInsets.symmetric(horizontal: kIsWeb ? 8 : 4),
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                      visualDensity: kIsWeb ? const VisualDensity(horizontal: -2, vertical: -2) : const VisualDensity(horizontal: -4, vertical: -4),
                       onSelected: (selected) {
                         setState(() {
                           _selectedCategoryFilters.clear();
@@ -2170,7 +2169,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                       },
                     ),
                     ..._categories.map((category) => FilterChip(
-                      label: Text(category.name, style: const TextStyle(fontSize: 11)),
+                      label: Text(category.name, style: TextStyle(fontSize: kIsWeb ? 13 : 11)),
                       selected: _selectedCategoryFilters.contains(category.id),
                       backgroundColor: category.color.withValues(alpha: 0.1),
                       selectedColor: category.color.withValues(alpha: 0.3),
@@ -2179,10 +2178,10 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                       shape: RoundedRectangleBorder(
                         borderRadius: AppStyles.borderRadiusMedium,
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: EdgeInsets.symmetric(horizontal: kIsWeb ? 8 : 4, vertical: kIsWeb ? 4 : 0),
+                      labelPadding: EdgeInsets.symmetric(horizontal: kIsWeb ? 8 : 4),
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                      visualDensity: kIsWeb ? const VisualDensity(horizontal: -2, vertical: -2) : const VisualDensity(horizontal: -4, vertical: -4),
                       onSelected: (selected) {
                         setState(() {
                           if (selected) {
@@ -2215,6 +2214,8 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
               ),
           ),
         ],
+      ),
+      ),
       ),
       floatingActionButton: widget.showAddButton ? FloatingActionButton(
         onPressed: _addTask,

@@ -116,27 +116,65 @@ class Chore {
   final String id;
   String name;
   String category; // Category name (editable)
-  int intervalDays; // Recurs X days after completion
+  int intervalValue; // The number (e.g., 3)
+  String intervalUnit; // 'days', 'weeks', 'months', 'years'
   double condition; // 0.0-1.0 (stored value)
   DateTime lastCompleted;
   DateTime createdAt;
   List<ChoreCompletion> completionHistory;
   String? notes;
+  int energyLevel; // Energy impact (-5 to +5), 0 = neutral
+  int? activeMonth; // 1-12, only for yearly chores: which month this chore is relevant
 
   Chore({
     String? id,
     required this.name,
     required this.category,
-    required this.intervalDays,
+    int? intervalDays, // Legacy support
+    int? intervalValue,
+    this.intervalUnit = 'days',
     this.condition = 1.0,
     DateTime? lastCompleted,
     DateTime? createdAt,
     List<ChoreCompletion>? completionHistory,
     this.notes,
+    this.energyLevel = 0,
+    this.activeMonth,
   })  : id = id ?? const Uuid().v4(),
+        intervalValue = intervalValue ?? intervalDays ?? 7,
         lastCompleted = lastCompleted ?? DateTime.now(),
         createdAt = createdAt ?? DateTime.now(),
         completionHistory = completionHistory ?? [];
+
+  /// Calculate total interval in days (for decay calculation)
+  int get intervalDays {
+    switch (intervalUnit) {
+      case 'weeks': return intervalValue * 7;
+      case 'months': return intervalValue * 30;
+      case 'years': return intervalValue * 365;
+      default: return intervalValue;
+    }
+  }
+
+  /// Human-readable interval text
+  String get intervalDisplayText {
+    final unit = intervalValue == 1
+        ? intervalUnit.substring(0, intervalUnit.length - 1) // Remove 's'
+        : intervalUnit;
+    final base = 'Every $intervalValue $unit';
+    if (intervalUnit == 'years' && activeMonth != null) {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return '$base (in ${months[activeMonth! - 1]})';
+    }
+    return base;
+  }
+
+  /// Check if this chore is in its active month (for yearly chores)
+  bool get isInActiveMonth {
+    if (intervalUnit != 'years' || activeMonth == null) return true;
+    return DateTime.now().month == activeMonth;
+  }
 
   /// Calculate current condition based on ADAPTIVE decay
   /// Decay rate = 100% / intervalDays per day
@@ -199,11 +237,6 @@ class Chore {
     condition = newCondition.clamp(0.0, 1.0);
   }
 
-  /// Refresh condition to current calculated value (for persistence)
-  void refreshCondition() {
-    condition = currentCondition;
-  }
-
   /// Get total completion count
   int get totalCompletions => completionHistory.length;
 
@@ -249,13 +282,17 @@ class Chore {
         'id': id,
         'name': name,
         'category': category,
-        'intervalDays': intervalDays,
+        'intervalValue': intervalValue,
+        'intervalUnit': intervalUnit,
+        'intervalDays': intervalDays, // Keep for backward compat
         'condition': condition,
         'lastCompleted': lastCompleted.toIso8601String(),
         'createdAt': createdAt.toIso8601String(),
         'completionHistory':
             completionHistory.map((c) => c.toJson()).toList(),
         if (notes != null) 'notes': notes,
+        'energyLevel': energyLevel,
+        if (activeMonth != null) 'activeMonth': activeMonth,
       };
 
   factory Chore.fromJson(Map<String, dynamic> json) {
@@ -263,7 +300,10 @@ class Chore {
       id: json['id'],
       name: json['name'],
       category: json['category'],
-      intervalDays: json['intervalDays'],
+      intervalValue: json['intervalValue'],
+      intervalUnit: json['intervalUnit'] ?? 'days',
+      // Fallback: if no intervalValue, use legacy intervalDays
+      intervalDays: json['intervalValue'] == null ? json['intervalDays'] : null,
       condition: (json['condition'] as num).toDouble(),
       lastCompleted: DateTime.parse(json['lastCompleted']),
       createdAt: DateTime.parse(json['createdAt']),
@@ -272,6 +312,8 @@ class Chore {
               .toList() ??
           [],
       notes: json['notes'],
+      energyLevel: json['energyLevel'] ?? 0,
+      activeMonth: json['activeMonth'],
     );
   }
 
@@ -279,23 +321,30 @@ class Chore {
     String? id,
     String? name,
     String? category,
-    int? intervalDays,
+    int? intervalValue,
+    String? intervalUnit,
     double? condition,
     DateTime? lastCompleted,
     DateTime? createdAt,
     List<ChoreCompletion>? completionHistory,
     String? notes,
+    int? energyLevel,
+    int? activeMonth,
+    bool clearActiveMonth = false,
   }) {
     return Chore(
       id: id ?? this.id,
       name: name ?? this.name,
       category: category ?? this.category,
-      intervalDays: intervalDays ?? this.intervalDays,
+      intervalValue: intervalValue ?? this.intervalValue,
+      intervalUnit: intervalUnit ?? this.intervalUnit,
       condition: condition ?? this.condition,
       lastCompleted: lastCompleted ?? this.lastCompleted,
       createdAt: createdAt ?? this.createdAt,
       completionHistory: completionHistory ?? this.completionHistory,
       notes: notes ?? this.notes,
+      energyLevel: energyLevel ?? this.energyLevel,
+      activeMonth: clearActiveMonth ? null : (activeMonth ?? this.activeMonth),
     );
   }
 }

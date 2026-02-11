@@ -1,8 +1,12 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'chore_data_models.dart';
 import '../Services/firebase_backup_service.dart';
 import '../shared/error_logger.dart';
+import '../Settings/app_customization_service.dart';
+import '../Energy/energy_service.dart';
+import '../Energy/energy_calculator.dart';
 
 class ChoreService {
   static const String _choresKey = 'chores';
@@ -22,11 +26,6 @@ class ChoreService {
       final chores =
           choresJson.map((json) => Chore.fromJson(jsonDecode(json))).toList();
 
-      // Refresh condition values based on decay
-      for (var chore in chores) {
-        chore.refreshCondition();
-      }
-
       return chores;
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
@@ -41,11 +40,6 @@ class ChoreService {
   /// Save chores to SharedPreferences
   static Future<void> saveChores(List<Chore> chores) async {
     final prefs = await SharedPreferences.getInstance();
-
-    // Refresh condition before saving
-    for (var chore in chores) {
-      chore.refreshCondition();
-    }
 
     final choresJson =
         chores.map((chore) => jsonEncode(chore.toJson())).toList();
@@ -67,16 +61,20 @@ class ChoreService {
     final settings = await loadSettings();
     final today = DateTime.now().weekday; // 1=Monday, 7=Sunday
     final chores = await getActiveChores();
+    final categories = await loadCategories();
+    final categoryOrder = categories.map((c) => c.name).toList();
 
     // Filter: today is preferred day OR chore is overdue
+    // For yearly chores with activeMonth: only show if in active month or overdue
     final todayChores = chores.where((chore) {
+      if (!chore.isInActiveMonth && !chore.isOverdue) return false;
       return settings.preferredCleaningDays.contains(today) || chore.isOverdue;
     }).toList();
 
     // Sort by priority (highest priority first)
     todayChores.sort((a, b) {
-      final aPriority = calculatePriority(a);
-      final bPriority = calculatePriority(b);
+      final aPriority = calculatePriority(a, categoryOrder: categoryOrder);
+      final bPriority = calculatePriority(b, categoryOrder: categoryOrder);
       return bPriority.compareTo(aPriority); // Higher priority first
     });
 
@@ -126,6 +124,23 @@ class ChoreService {
     final chore = chores.firstWhere((c) => c.id == choreId);
     chore.complete(completionNotes: notes);
     await saveChores(chores);
+
+    // Track energy if module is enabled and chore has energy level
+    if (chore.energyLevel != 0) {
+      try {
+        final states = await AppCustomizationService.loadAllModuleStates();
+        if (states[AppCustomizationService.moduleEnergy] == true) {
+          await EnergyCalculator.initializeToday();
+          await EnergyService.addTaskEnergyConsumption(
+            taskId: 'chore_${chore.id}',
+            taskTitle: chore.name,
+            energyLevel: chore.energyLevel,
+          );
+        }
+      } catch (e) {
+        debugPrint('Error tracking chore energy: $e');
+      }
+    }
   }
 
   /// Update chore condition manually
@@ -150,8 +165,8 @@ class ChoreService {
 
   /// Calculate priority for sorting today's list
   /// Higher number = higher priority
-  /// Factors: condition level, days overdue, critical status
-  static double calculatePriority(Chore chore) {
+  /// Factors: category rank, condition level, days overdue, critical status
+  static double calculatePriority(Chore chore, {List<String>? categoryOrder}) {
     final overdueDays = chore.isOverdue
         ? DateTime.now().difference(chore.nextDueDate).inDays
         : 0;
@@ -159,8 +174,20 @@ class ChoreService {
         (1.0 - chore.currentCondition) * 100; // 0-100 (lower condition = higher priority)
     final overdueFactor = overdueDays * 10; // 10 points per overdue day
     final criticalBonus = chore.isCritical ? 50 : 0; // Critical = urgent
+    // Yearly chores get a boost during their active month
+    final activeMonthBonus = (chore.intervalUnit == 'years' &&
+        chore.activeMonth != null &&
+        chore.isInActiveMonth) ? 30 : 0;
+    // Category priority: top category (#0) gets max bonus, lower ones get less
+    double categoryBonus = 0;
+    if (categoryOrder != null && categoryOrder.isNotEmpty) {
+      final idx = categoryOrder.indexOf(chore.category);
+      if (idx >= 0) {
+        categoryBonus = (categoryOrder.length - idx) * 20.0; // 20 pts per rank
+      }
+    }
 
-    return conditionFactor + overdueFactor + criticalBonus;
+    return conditionFactor + overdueFactor + criticalBonus + activeMonthBonus + categoryBonus;
   }
 
   // ==================== Categories Management ====================

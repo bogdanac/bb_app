@@ -326,7 +326,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         // All modules list (reorderable)
         Container(
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color: AppColors.normalCardBackground,
             borderRadius: AppStyles.borderRadiusLarge,
             border: Border.all(color: AppColors.normalCardBackground),
           ),
@@ -386,37 +386,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               // Reorderable module list
               if (allEnabledModules.isNotEmpty)
-                ReorderableListView(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  onReorder: (oldIndex, newIndex) {
-                    setState(() {
-                      if (oldIndex < newIndex) {
-                        newIndex -= 1;
-                      }
-                      final module = allEnabledModules.removeAt(oldIndex);
-                      allEnabledModules.insert(newIndex, module);
+                SizedBox(
+                  height: allEnabledModules.length * 85.0,
+                  child: Theme(
+                    data: Theme.of(context).copyWith(canvasColor: Colors.transparent, cardColor: Colors.transparent, colorScheme: Theme.of(context).colorScheme.copyWith(surface: Colors.transparent, surfaceContainerHighest: Colors.transparent)),
+                    child: ReorderableListView(
+                    buildDefaultDragHandles: false,
+                    physics: const NeverScrollableScrollPhysics(),
+                    onReorder: (oldIndex, newIndex) {
+                      setState(() {
+                        if (oldIndex < newIndex) {
+                          newIndex -= 1;
+                        }
+                        final module = allEnabledModules.removeAt(oldIndex);
+                        allEnabledModules.insert(newIndex, module);
 
-                      // Split back into primary (first 4) and secondary (rest)
-                      _primaryTabs = allEnabledModules.take(4).toList();
-                      _secondaryTabs = allEnabledModules.skip(4).toList();
-                    });
-                    _savePrimaryTabs();
-                    _saveSecondaryTabsOrder();
-                  },
-                  children: allEnabledModules.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final moduleKey = entry.value;
-                    final module = _getModuleInfo(moduleKey);
-                    final isEnabled = _moduleStates[moduleKey] ?? false;
-                    return _buildDesktopModuleItem(
-                      key: ValueKey(moduleKey),
-                      index: index,
-                      module: module!,
-                      isEnabled: isEnabled,
-                      onToggle: (val) => _toggleModule(moduleKey, val),
-                    );
-                  }).toList(),
+                        // Split back into primary (first 4) and secondary (rest)
+                        _primaryTabs = allEnabledModules.take(4).toList();
+                        _secondaryTabs = allEnabledModules.skip(4).toList();
+                      });
+                      _savePrimaryTabs();
+                      _saveSecondaryTabsOrder();
+                    },
+                    children: allEnabledModules.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final moduleKey = entry.value;
+                      final module = _getModuleInfo(moduleKey);
+                      final isEnabled = _moduleStates[moduleKey] ?? false;
+                      return _buildDesktopModuleItem(
+                        key: ValueKey(moduleKey),
+                        index: index,
+                        module: module!,
+                        isEnabled: isEnabled,
+                        onToggle: (val) => _toggleModule(moduleKey, val),
+                      );
+                    }).toList(),
+                  ),
+                  ),
                 ),
 
               // Disabled navigable modules (not reorderable, shown at bottom)
@@ -608,9 +614,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required Function(bool) onToggle,
   }) {
     return MouseRegion(
+      key: key,
       cursor: SystemMouseCursors.grab,
       child: Container(
-        key: key,
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(color: AppColors.normalCardBackground, width: 0.5),
@@ -671,6 +677,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
 
+            // Settings button (before toggle so toggles align)
+            if (_hasSettings(module.key))
+              IconButton(
+                icon: const Icon(Icons.settings_outlined, size: 20),
+                color: AppColors.grey300,
+                onPressed: () => _openModuleSettings(module.key),
+              )
+            else
+              const SizedBox(width: 48),
+
             // Toggle switch
             Switch(
               value: isEnabled,
@@ -683,16 +699,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 return null;
               }),
             ),
-
-            // Settings button
-            if (_hasSettings(module.key))
-              IconButton(
-                icon: const Icon(Icons.settings_outlined, size: 20),
-                color: AppColors.grey300,
-                onPressed: () => _openModuleSettings(module.key),
-              )
-            else
-              const SizedBox(width: 48),
           ],
         ),
       ),
@@ -733,63 +739,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildUnifiedModuleList(List<String> allModules) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColors.normalCardBackground,
         borderRadius: AppStyles.borderRadiusLarge,
         border: Border.all(color: AppColors.normalCardBackground),
       ),
       child: Column(
         children: [
-          ReorderableListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            onReorder: (oldIndex, newIndex) {
-              setState(() {
-                if (oldIndex < newIndex) newIndex -= 1;
-                // Account for Home row at position (midpoint of primary + secondary)
-                // Home is inserted visually but isn't in allModules
-                final item = allModules.removeAt(oldIndex);
-                allModules.insert(newIndex, item);
+          Theme(
+            data: Theme.of(context).copyWith(canvasColor: Colors.transparent, cardColor: Colors.transparent, colorScheme: Theme.of(context).colorScheme.copyWith(surface: Colors.transparent, surfaceContainerHighest: Colors.transparent)),
+            child: ReorderableListView.builder(
+              buildDefaultDragHandles: false,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              onReorder: (oldIndex, newIndex) {
+                setState(() {
+                  if (oldIndex < newIndex) newIndex -= 1;
+                  final item = allModules.removeAt(oldIndex);
+                  allModules.insert(newIndex, item);
 
-                // Split: first 4 = primary, rest = secondary
-                _primaryTabs = allModules.take(4).toList();
-                _secondaryTabs = allModules.skip(4).toList();
-              });
-              _savePrimaryTabs();
-              _saveSecondaryTabsOrder();
-            },
-            itemCount: allModules.length,
-            proxyDecorator: (child, index, animation) {
-              return AnimatedBuilder(
-                animation: animation,
-                builder: (context, child) {
-                  return Material(
-                    color: Colors.transparent,
-                    elevation: 4,
-                    shadowColor: AppColors.black.withValues(alpha: 0.3),
-                    borderRadius: AppStyles.borderRadiusLarge,
-                    child: child,
-                  );
-                },
-                child: child,
-              );
-            },
-            itemBuilder: (context, index) {
-              final moduleKey = allModules[index];
-              final module = _getModuleInfo(moduleKey);
-              if (module == null) return SizedBox.shrink(key: ValueKey(moduleKey));
+                  // Split: first 4 = primary, rest = secondary
+                  _primaryTabs = allModules.take(4).toList();
+                  _secondaryTabs = allModules.skip(4).toList();
+                });
+                _savePrimaryTabs();
+                _saveSecondaryTabsOrder();
+              },
+              itemCount: allModules.length,
+              proxyDecorator: (child, index, animation) {
+                return AnimatedBuilder(
+                  animation: animation,
+                  builder: (context, child) {
+                    return Material(
+                      color: Colors.transparent,
+                      elevation: 4,
+                      shadowColor: AppColors.black.withValues(alpha: 0.3),
+                      borderRadius: AppStyles.borderRadiusLarge,
+                      child: child,
+                    );
+                  },
+                  child: child,
+                );
+              },
+              itemBuilder: (context, index) {
+                final moduleKey = allModules[index];
+                final module = _getModuleInfo(moduleKey);
+                if (module == null) return SizedBox.shrink(key: ValueKey(moduleKey));
 
-              final isEnabled = _moduleStates[moduleKey] ?? false;
-              final isPrimary = index < 4;
+                final isEnabled = _moduleStates[moduleKey] ?? false;
+                final isPrimary = index < 4;
 
-              return _buildUnifiedModuleItem(
-                key: ValueKey(moduleKey),
-                module: module,
-                isEnabled: isEnabled,
-                isPrimary: isPrimary,
-                onToggle: (val) => _toggleModule(moduleKey, val),
-                index: index,
-              );
-            },
+                return _buildUnifiedModuleItem(
+                  key: ValueKey(moduleKey),
+                  module: module,
+                  isEnabled: isEnabled,
+                  isPrimary: isPrimary,
+                  onToggle: (val) => _toggleModule(moduleKey, val),
+                  index: index,
+                );
+              },
+            ),
           ),
           // Disabled navigable modules at the bottom
           ...AppCustomizationService.allModules.where((m) {
@@ -932,6 +940,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
 
+                // Settings button before toggle so toggles align
+                if (_hasSettings(module.key))
+                  IconButton(
+                    icon: const Icon(Icons.settings_outlined, size: 20),
+                    color: AppColors.grey300,
+                    onPressed: () => _openModuleSettings(module.key),
+                  ),
+
                 // Toggle switch
                 Switch(
                   value: isEnabled,
@@ -944,14 +960,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     return null;
                   }),
                 ),
-
-                // Settings button (if module has settings)
-                if (_hasSettings(module.key))
-                  IconButton(
-                    icon: const Icon(Icons.settings_outlined, size: 20),
-                    color: AppColors.grey300,
-                    onPressed: () => _openModuleSettings(module.key),
-                  ),
               ],
             ),
           ),
@@ -963,7 +971,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildFeatureModuleList(List<ModuleInfo> featureModules) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColors.normalCardBackground,
         borderRadius: AppStyles.borderRadiusLarge,
         border: Border.all(color: AppColors.normalCardBackground),
       ),
@@ -1010,6 +1018,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
                   ),
+                  if (_hasSettings(module.key))
+                    IconButton(
+                      icon: const Icon(Icons.settings_outlined, size: 20),
+                      color: AppColors.grey300,
+                      onPressed: () => _openModuleSettings(module.key),
+                    ),
                   Switch(
                     value: isEnabled,
                     onChanged: (val) async {
@@ -1026,12 +1040,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       return null;
                     }),
                   ),
-                  if (_hasSettings(module.key))
-                    IconButton(
-                      icon: const Icon(Icons.settings_outlined, size: 20),
-                      color: AppColors.grey300,
-                      onPressed: () => _openModuleSettings(module.key),
-                    ),
                 ],
               ),
             ),
@@ -1050,7 +1058,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColors.normalCardBackground,
         borderRadius: AppStyles.borderRadiusLarge,
         border: Border.all(color: AppColors.normalCardBackground),
       ),

@@ -78,6 +78,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isEveningTime = false;
   bool _endOfDayReviewEnabled = false;
   Set<String> _cardsHiddenForToday = {}; // Cards swiped away for today
+  double? _expandedTasksHeight; // Calculated height to fill remaining space
 
   // Method channel for communicating with Android widget
   static const platform = MethodChannel('com.bb.bb_app/water_widget');
@@ -86,7 +87,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Key _menstrualCycleKey = UniqueKey();
 
   // Add a key to force rebuild of RoutineCard
-  Key _routineCardKey = UniqueKey();
+  final Key _routineCardKey = UniqueKey();
 
   // Key to access CalendarEventsCard for refresh
   final GlobalKey _calendarEventsKey = GlobalKey();
@@ -323,10 +324,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _refreshMenstrualCycleData();
       // Refresh backup status when returning to the app
       _checkBackupStatus();
-      // Force refresh of all home screen widgets including tasks
-      setState(() {
-        _routineCardKey = UniqueKey(); // Force RoutineCard to reload from widget progress
-      });
+      // Note: RoutineCard handles its own refresh via WidgetsBindingObserver._refreshRoutine()
+      // Do NOT reassign _routineCardKey here - it destroys and rebuilds the card, showing a loading spinner
       debugPrint('App resumed - refreshed all home screen data');
     }
   }
@@ -1183,6 +1182,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       AppCustomizationService.cardDailyTasks: () {
         if (!_isCardVisible(AppCustomizationService.cardDailyTasks)) return null;
         return DailyTasksCard(
+          height: _expandedTasksHeight,
           onTasksChanged: () {
             // Refresh EndOfDayReviewCard when tasks change
             _endOfDayReviewCardKey.currentState?.refresh();
@@ -1404,21 +1404,36 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildMobileSingleColumn() {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 800),
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ..._buildOrderedCards(),
-            ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportHeight = constraints.maxHeight;
+        final cards = _buildOrderedCards();
+        // Count non-task cards (each ~100-150px estimated + 8px spacing)
+        final otherCardCount = cards.where((w) => w is! SizedBox).length - 1; // -1 for tasks card
+        final estimatedOtherHeight = otherCardCount * 140.0;
+        final availableForTasks = viewportHeight - estimatedOtherHeight - 32; // padding
+        final tasksHeight = availableForTasks > 320 ? availableForTasks : null;
+
+        // Store for card builders to use
+        _expandedTasksHeight = tasksHeight;
+
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ..._buildOrderedCards(),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -1426,6 +1441,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String? _draggedCardKey;
 
   Widget _buildDesktopDashboard() {
+    _expandedTasksHeight = null; // Desktop uses default height
     final cards = _buildAllCardsForDesktopWithKeys();
 
     // Cards that should be double-width on desktop
@@ -1515,48 +1531,65 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       builder: (context, candidateData, rejectedData) {
         final isTarget = candidateData.isNotEmpty;
 
-        return LongPressDraggable<String>(
-          data: cardKey,
-          delay: const Duration(milliseconds: 150),
-          onDragStarted: () {
-            HapticFeedback.mediumImpact();
-            setState(() => _draggedCardKey = cardKey);
-          },
-          onDragEnd: (_) {
-            setState(() => _draggedCardKey = null);
-          },
-          feedback: Material(
-            elevation: 8,
-            borderRadius: BorderRadius.circular(12),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: width, maxHeight: 450),
-              child: Opacity(
-                opacity: 0.9,
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Insertion indicator line shown above the target card
+            if (isTarget)
+              Container(
+                width: width,
+                height: 3,
+                margin: const EdgeInsets.only(bottom: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.purple,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            LongPressDraggable<String>(
+              data: cardKey,
+              delay: const Duration(milliseconds: 150),
+              onDragStarted: () {
+                HapticFeedback.mediumImpact();
+                setState(() => _draggedCardKey = cardKey);
+              },
+              onDragEnd: (_) {
+                setState(() => _draggedCardKey = null);
+              },
+              feedback: Material(
+                elevation: 8,
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: width, maxHeight: 200),
+                    child: Opacity(
+                      opacity: 0.85,
+                      child: child,
+                    ),
+                  ),
+                ),
+              ),
+              childWhenDragging: Opacity(
+                opacity: 0.3,
+                child: SizedBox(width: width, height: 60, child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.normalCardBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.purple.withValues(alpha: 0.3), width: 1),
+                  ),
+                )),
+              ),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: width,
+                transform: isDragging
+                    ? Matrix4.diagonal3Values(1.02, 1.02, 1.0)
+                    : Matrix4.identity(),
                 child: child,
               ),
             ),
-          ),
-          childWhenDragging: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: width, maxHeight: 450),
-            child: Opacity(
-              opacity: 0.3,
-              child: child,
-            ),
-          ),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: width,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: isTarget
-                  ? Border.all(color: AppColors.purple, width: 2)
-                  : null,
-            ),
-            transform: isDragging
-                ? Matrix4.diagonal3Values(1.02, 1.02, 1.0)
-                : Matrix4.identity(),
-            child: child,
-          ),
+          ],
         );
       },
     );
@@ -1637,6 +1670,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       AppCustomizationService.cardDailyTasks: () {
         if (!_isCardVisible(AppCustomizationService.cardDailyTasks)) return null;
         return DailyTasksCard(
+          height: _expandedTasksHeight,
           onTasksChanged: () {
             // Refresh EndOfDayReviewCard when tasks change
             _endOfDayReviewCardKey.currentState?.refresh();

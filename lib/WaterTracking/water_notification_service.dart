@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'water_settings_model.dart';
 import 'dart:developer' as developer;
 import '../shared/timezone_utils.dart';
+import '../Settings/app_customization_service.dart';
 
 class WaterNotificationService {
   static const int notification20Id = 1001;
@@ -148,28 +149,28 @@ class WaterNotificationService {
     switch (threshold) {
       case 20:
         return {
-          'title': '💧 Morning Hydration Time!',
-          'body': 'Start your day right! Aim for ${amount}ml to stay on track 🌟',
+          'title': '💧 Good morning',
+          'body': 'A glass of water is a great way to start the day.',
         };
       case 40:
         return {
-          'title': '💦 Midday Water Check!',
-          'body': 'Keep the momentum going! You should have ${amount}ml by now 💪',
+          'title': '💧 Quick reminder',
+          'body': 'A glass of water might help right now.',
         };
       case 60:
         return {
-          'title': '🌊 Afternoon Refresh!',
-          'body': 'Stay hydrated! Try to reach ${amount}ml to keep your energy up ⚡',
+          'title': '💧 Afternoon check-in',
+          'body': 'You\'re doing well — keep sipping when you can.',
         };
       case 80:
         return {
-          'title': '✨ Almost There!',
-          'body': 'Final push! Aim for ${amount}ml - you\'re so close to your goal 🎯',
+          'title': '💧 Almost there',
+          'body': 'Just a bit more and you\'ve hit your goal for today.',
         };
       default:
         return {
-          'title': '💧 Time to Hydrate!',
-          'body': 'Drink ${amount}ml to reach your $threshold% goal',
+          'title': '💧 Stay hydrated',
+          'body': 'A glass of water might help right now.',
         };
     }
   }
@@ -232,9 +233,22 @@ class WaterNotificationService {
     }
   }
 
+  /// Check if water module is enabled
+  static Future<bool> _isWaterModuleEnabled() async {
+    final states = await AppCustomizationService.loadAllModuleStates();
+    return states[AppCustomizationService.moduleWater] ?? false;
+  }
+
   /// Initialize notifications for water tracking (call on app start)
   static Future<void> initialize() async {
     try {
+      // Skip if water module is disabled
+      if (!await _isWaterModuleEnabled()) {
+        await cancelAllNotifications();
+        developer.log('Water module disabled - notifications cancelled');
+        return;
+      }
+
       await _getNotificationsPlugin();
 
       // Load settings and schedule notifications
@@ -258,6 +272,12 @@ class WaterNotificationService {
   /// Reschedule notifications for the next day (call at day reset)
   static Future<void> rescheduleForNewDay() async {
     try {
+      // Skip if water module is disabled
+      if (!await _isWaterModuleEnabled()) {
+        await cancelAllNotifications();
+        return;
+      }
+
       final settings = await WaterSettings.load();
       // Force reschedule on new day to reset all notifications
       await scheduleNotifications(settings, forceReschedule: true);

@@ -26,6 +26,9 @@ class TaskRepository {
         if (firestoreTasks != null && firestoreTasks.isNotEmpty) {
           debugPrint('TaskRepository.loadTasks: WEB - got ${firestoreTasks.length} tasks from Firestore');
           tasksJson = firestoreTasks;
+          // Cache Firestore data to SharedPreferences so fallback is fresh
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setStringList('tasks', firestoreTasks);
         }
       }
 
@@ -112,6 +115,9 @@ class TaskRepository {
         if (firestoreCategories != null && firestoreCategories.isNotEmpty) {
           debugPrint('TaskRepository.loadCategories: WEB - got ${firestoreCategories.length} categories from Firestore');
           categoriesJson = firestoreCategories;
+          // Cache Firestore data to SharedPreferences so fallback is fresh
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setStringList('task_categories', firestoreCategories);
         }
       }
 
