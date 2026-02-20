@@ -21,8 +21,6 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   List<FoodEntry> _entries = [];
   bool _isLoading = true;
   Map<DateTime, List<FoodEntry>> _entriesByDate = {};
-  List<Map<String, dynamic>> _timeframeHistory = [];
-  bool _showTimeframeHistory = false;
 
   // Calendar state
   DateTime _focusedMonth = DateTime.now();
@@ -37,7 +35,6 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   Future<void> _loadEntries() async {
     setState(() => _isLoading = true);
     final entries = await FoodTrackingService.getAllEntries();
-    final periodHistory = await FoodTrackingService.getPeriodHistory();
     _entriesByDate = _groupEntriesByDate(entries);
 
     // Auto-select today if it has entries, otherwise most recent day with entries
@@ -51,7 +48,6 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
 
     setState(() {
       _entries = entries;
-      _timeframeHistory = periodHistory;
       _selectedDate = dateToSelect;
       _isLoading = false;
     });
@@ -105,7 +101,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   void _showAddFoodBottomSheet({DateTime? forDate}) {
     final isToday = forDate == null ||
         DateFormatUtils.isSameDay(forDate, DateTime.now());
-    final dateLabel = isToday ? 'today' : DateFormatUtils.formatFullDate(forDate!);
+    final dateLabel = isToday ? 'today' : DateFormatUtils.formatFullDate(forDate);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -401,6 +397,41 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     );
   }
 
+  Widget _buildQuickAddButtons({required DateTime forDate}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () => _addEntry(FoodType.healthy, forDate: forDate),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Healthy'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.successGreen,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () => _addEntry(FoodType.processed, forDate: forDate),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Processed'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.orange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSelectedDaySection() {
     if (_selectedDate == null) {
       return Container(
@@ -415,28 +446,18 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     }
 
     final entries = _entriesByDate[_selectedDate!] ?? [];
+
     if (entries.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'No entries for ${DateFormatUtils.formatFullDate(_selectedDate!)}',
-              style: TextStyle(color: AppColors.greyText, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () => _showAddFoodBottomSheet(forDate: _selectedDate),
-              icon: const Icon(Icons.add),
-              label: const Text('Add entry for this day'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.successGreen,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-        ),
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Text(
+            'No entries for ${DateFormatUtils.formatFullDate(_selectedDate!)}',
+            style: TextStyle(color: AppColors.greyText, fontSize: 13),
+          ),
+          _buildQuickAddButtons(forDate: _selectedDate!),
+        ],
       );
     }
 
@@ -448,6 +469,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const SizedBox(height: 12),
         // Day header
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -458,19 +480,12 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.calendar_today_rounded,
-                color: AppColors.successGreen,
-                size: 18,
-              ),
+              Icon(Icons.calendar_today_rounded, color: AppColors.successGreen, size: 18),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   DateFormatUtils.formatFullDate(_selectedDate!),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                 ),
               ),
               Container(
@@ -499,10 +514,13 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
 
-        // Compact entry list
+        // Entry list
         ...entries.map((entry) => _buildCompactEntryTile(entry)),
+
+        // Quick-add buttons always visible
+        _buildQuickAddButtons(forDate: _selectedDate!),
       ],
     );
   }
@@ -511,6 +529,8 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     final isHealthy = entry.type == FoodType.healthy;
     final color = isHealthy ? AppColors.successGreen : AppColors.orange;
     final icon = isHealthy ? Icons.restaurant : Icons.fastfood;
+    // Match the tile width so feedback stays directly under the thumb
+    final tileWidth = MediaQuery.of(context).size.width - 32;
 
     return LongPressDraggable<FoodEntry>(
       data: entry,
@@ -518,27 +538,25 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
       feedback: Material(
         elevation: 8,
         borderRadius: AppStyles.borderRadiusSmall,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.normalCardBackground,
-            borderRadius: AppStyles.borderRadiusSmall,
-            border: Border.all(color: color, width: 2),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                isHealthy ? 'Healthy' : 'Processed',
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  color: color,
-                  fontSize: 13,
+        child: SizedBox(
+          width: tileWidth,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.normalCardBackground,
+              borderRadius: AppStyles.borderRadiusSmall,
+              border: Border.all(color: color, width: 2),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  isHealthy ? 'Healthy' : 'Processed',
+                  style: TextStyle(fontWeight: FontWeight.w500, color: color, fontSize: 13),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -605,87 +623,6 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     );
   }
 
-  Widget _buildStatsHistorySection() {
-    if (_timeframeHistory.isEmpty) return const SizedBox.shrink();
-
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: ExpansionTile(
-        initiallyExpanded: _showTimeframeHistory,
-        onExpansionChanged: (expanded) {
-          setState(() => _showTimeframeHistory = expanded);
-        },
-        title: const Text(
-          'Stats History',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-        ),
-        subtitle: Text(
-          '${_timeframeHistory.length} completed',
-          style: const TextStyle(fontSize: 12),
-        ),
-        children: [
-          ..._timeframeHistory.map((entry) => _buildTimeframeTile(entry)),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeframeTile(Map<String, dynamic> timeframe) {
-    final percentage = timeframe['percentage'] as int;
-    final healthy = timeframe['healthy'] as int;
-    final processed = timeframe['processed'] as int;
-    final timeframeLabel = timeframe['periodLabel'] as String;
-    final frequency = timeframe['frequency'] as String;
-
-    Color statusColor;
-    if (percentage >= 80) {
-      statusColor = AppColors.successGreen;
-    } else if (percentage >= 60) {
-      statusColor = AppColors.orange;
-    } else {
-      statusColor = AppColors.red;
-    }
-
-    return ListTile(
-      dense: true,
-      leading: CircleAvatar(
-        radius: 16,
-        backgroundColor: statusColor.withValues(alpha: 0.2),
-        child: Text(
-          '$percentage%',
-          style: TextStyle(
-            color: statusColor,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      title: Text(timeframeLabel, style: const TextStyle(fontSize: 13)),
-      subtitle: Text(
-        '$healthy healthy, $processed processed • ${frequency == "monthly" ? "Monthly" : "Weekly"}',
-        style: const TextStyle(fontSize: 11),
-      ),
-      trailing: Container(
-        width: 50,
-        height: 5,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(3),
-          color: AppColors.orange.withValues(alpha: 0.3),
-        ),
-        child: FractionallySizedBox(
-          alignment: Alignment.centerLeft,
-          widthFactor: percentage / 100,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(3),
-              color: statusColor,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -725,7 +662,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddFoodBottomSheet,
+        onPressed: () => _showAddFoodBottomSheet(forDate: _selectedDate),
         backgroundColor: AppColors.successGreen,
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -761,8 +698,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
                       _buildCalendar(),
                       const Divider(height: 1),
                       _buildSelectedDaySection(),
-                      _buildStatsHistorySection(),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 80),
                     ],
                   ),
                 ),

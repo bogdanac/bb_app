@@ -459,7 +459,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
   void _showMeetingTypeDialog(Friend friend) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Row(
           children: [
             Icon(Icons.favorite_rounded, color: Colors.red),
@@ -484,31 +484,56 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                 ),
                 title: Text(type.label),
                 subtitle: Text(
-                  'Recharge to ${(type.batteryBoost * 100).toInt()}%',
+                  type == MeetingType.metInPerson
+                      ? 'Full recharge — pick a date'
+                      : '+${(type.batteryBoost * 100).toInt()}% added to current battery',
                   style: TextStyle(fontSize: 12, color: AppColors.greyText),
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                   side: BorderSide(color: AppColors.greyText.withValues(alpha: 0.3)),
                 ),
-                onTap: () {
-                  final meeting = Meeting(
-                    date: DateTime.now(),
-                    type: type,
-                  );
-                  friend.addMeeting(meeting);
-                  final navigator = Navigator.of(context);
-                  FriendService.updateFriend(friend, _friends).then((_) {
+                onTap: () async {
+                  if (type == MeetingType.metInPerson) {
+                    // Close dialog first, then show date picker from screen context
+                    Navigator.pop(dialogContext);
+                    if (!mounted) return;
+                    final picked = await DatePickerUtils.showStyledDatePicker(
+                      context: context,
+                      initialDate: DateTime.now(),
+                      firstDate: DateTime(2010),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null && mounted) {
+                      final meeting = Meeting(date: picked, type: type);
+                      friend.addMeeting(meeting);
+                      await FriendService.updateFriend(friend, _friends);
+                      _loadFriends();
+                      if (mounted) {
+                        SnackBarUtils.showSuccess(
+                          context,
+                          '${friend.name}\'s battery recharged to ${friend.batteryPercentage}%!',
+                          duration: const Duration(seconds: 2),
+                        );
+                      }
+                    }
+                  } else {
+                    // For call/text: add boost to current battery
+                    final meeting = Meeting(date: DateTime.now(), type: type);
+                    friend.addMeeting(meeting);
+                    final newBattery = friend.batteryPercentage;
+                    final nav = Navigator.of(dialogContext);
+                    await FriendService.updateFriend(friend, _friends);
                     _loadFriends();
                     if (mounted) {
-                      navigator.pop();
+                      nav.pop();
                       SnackBarUtils.showSuccess(
                         context,
-                        '${friend.name}\'s battery recharged to ${(type.batteryBoost * 100).toInt()}%!',
+                        '${friend.name}\'s battery boosted to $newBattery%!',
                         duration: const Duration(seconds: 2),
                       );
                     }
-                  });
+                  }
                 },
               ),
             )),
@@ -516,7 +541,7 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
         ],
@@ -786,9 +811,11 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  // Last seen info
+                  // Last seen info (in-person only)
                   Text(
-                    'Last seen: ${_formatLastSeen(friend.lastUpdated)}',
+                    friend.lastSeenInPersonDate != null
+                        ? 'Last seen: ${_formatLastSeen(friend.lastSeenInPersonDate!)}'
+                        : 'Never met in person',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.greyText,

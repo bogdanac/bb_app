@@ -74,111 +74,80 @@ class _FoodTrackingGoalHistoryScreenState extends State<FoodTrackingGoalHistoryS
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: AppStyles.borderRadiusMedium,
-        side: BorderSide(
-          color: statusColor.withValues(alpha: 0.3),
-          width: 1,
-        ),
+        side: BorderSide(color: statusColor.withValues(alpha: 0.3), width: 1),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        leading: Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: statusColor.withValues(alpha: 0.2),
-            border: Border.all(
-              color: statusColor,
-              width: 3,
-            ),
-          ),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '$percentage%',
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Icon(
-                  statusIcon,
-                  color: statusColor,
-                  size: 16,
-                ),
-              ],
-            ),
-          ),
-        ),
-        title: Text(
-          periodLabel,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 16,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const SizedBox(height: 4),
-            Text(
-              '${frequency == "monthly" ? "Monthly" : "Weekly"} tracking period',
-              style: TextStyle(
-                color: AppColors.white.withValues(alpha: 0.6),
-                fontSize: 12,
+            // Circle percentage indicator
+            Container(
+              width: 60, height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: statusColor.withValues(alpha: 0.2),
+                border: Border.all(color: statusColor, width: 3),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '$percentage%',
+                    style: TextStyle(color: statusColor, fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                  Icon(statusIcon, color: statusColor, size: 14),
+                ],
               ),
             ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(
-                  Icons.restaurant,
-                  size: 14,
-                  color: AppColors.successGreen,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '$healthy healthy',
-                  style: const TextStyle(
-                    color: AppColors.successGreen,
-                    fontSize: 13,
+            const SizedBox(width: 14),
+            // Content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          periodLabel,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.2),
+                          borderRadius: AppStyles.borderRadiusSmall,
+                        ),
+                        child: Text(
+                          statusLabel,
+                          style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                Icon(
-                  Icons.fastfood,
-                  size: 14,
-                  color: AppColors.orange,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '$processed processed',
-                  style: const TextStyle(
-                    color: AppColors.orange,
-                    fontSize: 13,
+                  const SizedBox(height: 4),
+                  Text(
+                    '${frequency == "monthly" ? "Monthly" : "Weekly"} tracking period',
+                    style: TextStyle(color: AppColors.white.withValues(alpha: 0.6), fontSize: 12),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.restaurant, size: 13, color: AppColors.successGreen),
+                      const SizedBox(width: 3),
+                      Text('$healthy healthy', style: const TextStyle(color: AppColors.successGreen, fontSize: 12)),
+                      const SizedBox(width: 10),
+                      Icon(Icons.fastfood, size: 13, color: AppColors.orange),
+                      const SizedBox(width: 3),
+                      Text('$processed processed', style: const TextStyle(color: AppColors.orange, fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: statusColor.withValues(alpha: 0.2),
-            borderRadius: AppStyles.borderRadiusSmall,
-          ),
-          child: Text(
-            statusLabel,
-            style: TextStyle(
-              color: statusColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
         ),
       ),
     );

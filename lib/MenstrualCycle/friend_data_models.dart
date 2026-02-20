@@ -30,15 +30,17 @@ extension MeetingTypeExtension on MeetingType {
     }
   }
 
-  /// Battery boost for this meeting type (0.0 to 1.0)
+  /// Battery effect for this meeting type:
+  /// metInPerson → sets battery to 1.0 (full recharge)
+  /// called / texted → amount ADDED to current battery
   double get batteryBoost {
     switch (this) {
       case MeetingType.metInPerson:
         return 1.0; // Full recharge to 100%
       case MeetingType.called:
-        return 0.75; // Recharge to 75%
+        return 0.25; // +25% added to current battery
       case MeetingType.texted:
-        return 0.50; // Recharge to 50%
+        return 0.10; // +10% added to current battery
     }
   }
 
@@ -155,19 +157,34 @@ class Friend {
   int get textMeetings =>
       meetings.where((m) => m.type == MeetingType.texted).length;
 
-  /// Get last meeting date
+  /// Get the most recent meeting date of ANY type
   DateTime? get lastMeetingDate {
     if (meetings.isEmpty) return null;
     meetings.sort((a, b) => b.date.compareTo(a.date));
     return meetings.first.date;
   }
 
-  /// Add a meeting record with battery boost based on meeting type
+  /// Get the most recent IN-PERSON meeting date (used for "Last seen" display)
+  DateTime? get lastSeenInPersonDate {
+    final inPerson = meetings.where((m) => m.type == MeetingType.metInPerson).toList();
+    if (inPerson.isEmpty) return null;
+    inPerson.sort((a, b) => b.date.compareTo(a.date));
+    return inPerson.first.date;
+  }
+
+  /// Add a meeting record and update battery accordingly:
+  /// - metInPerson → full recharge (100%), decay restarts from meeting date
+  /// - called / texted → add boost to current battery, decay restarts from interaction date
   void addMeeting(Meeting meeting) {
     meetings.add(meeting);
-    // Use meeting date as the reference point so decay is calculated from the actual last-seen date
-    battery = meeting.type.batteryBoost.clamp(0.0, 1.0);
-    lastUpdated = meeting.date;
+    if (meeting.type == MeetingType.metInPerson) {
+      battery = 1.0;
+      lastUpdated = meeting.date;
+    } else {
+      // Compute current decayed battery, then add the boost
+      battery = (currentBattery + meeting.type.batteryBoost).clamp(0.0, 1.0);
+      lastUpdated = meeting.date;
+    }
   }
 
   /// Update battery level manually (e.g. from slider)

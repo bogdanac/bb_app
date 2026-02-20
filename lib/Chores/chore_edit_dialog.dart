@@ -31,7 +31,6 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
   late int _intervalValue;
   late String _intervalUnit;
   late double _condition;
-  late DateTime _lastCompleted;
   late int _energyLevel;
   int? _activeMonth;
   List<ChoreCategory> _categories = [];
@@ -47,7 +46,6 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
     _intervalValue = widget.chore?.intervalValue ?? 7;
     _intervalUnit = widget.chore?.intervalUnit ?? 'days';
     _condition = widget.chore?.currentCondition ?? 1.0;
-    _lastCompleted = widget.chore?.lastCompleted ?? DateTime.now();
     _energyLevel = widget.chore?.energyLevel ?? 0;
     _activeMonth = widget.chore?.activeMonth;
     _loadCategories();
@@ -90,9 +88,10 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
       return;
     }
 
-    // Reverse decay: slider shows currentCondition, but we store the base
-    // value so that currentCondition getter reproduces the slider value.
-    // storedCondition = sliderValue + daysSince * decayRate
+    // Store condition=1.0 and compute a synthetic lastCompleted so that
+    // currentCondition getter returns exactly _condition (the slider value).
+    // currentCondition = 1.0 - daysBack * (1/intervalDays) = _condition
+    // → daysBack = (1 - _condition) * intervalDays
     final int totalIntervalDays;
     switch (_intervalUnit) {
       case 'weeks': totalIntervalDays = _intervalValue * 7; break;
@@ -100,9 +99,8 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
       case 'years': totalIntervalDays = _intervalValue * 365; break;
       default: totalIntervalDays = _intervalValue;
     }
-    final daysSince = DateTime.now().difference(_lastCompleted).inDays;
-    final decayRate = 1.0 / totalIntervalDays;
-    final storedCondition = (_condition + daysSince * decayRate).clamp(0.0, 1.0);
+    final daysBack = ((1.0 - _condition) * totalIntervalDays).round();
+    final syntheticLastCompleted = DateTime.now().subtract(Duration(days: daysBack));
 
     final effectiveActiveMonth = _intervalUnit == 'years' ? _activeMonth : null;
 
@@ -111,8 +109,8 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
           category: _selectedCategory,
           intervalValue: _intervalValue,
           intervalUnit: _intervalUnit,
-          condition: storedCondition,
-          lastCompleted: _lastCompleted,
+          condition: 1.0,
+          lastCompleted: syntheticLastCompleted,
           notes: _notesController.text.trim().isEmpty
               ? null
               : _notesController.text.trim(),
@@ -125,8 +123,8 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
           category: _selectedCategory,
           intervalValue: _intervalValue,
           intervalUnit: _intervalUnit,
-          condition: _condition, // New chore: no decay to reverse
-          lastCompleted: _lastCompleted,
+          condition: 1.0,
+          lastCompleted: syntheticLastCompleted,
           notes: _notesController.text.trim().isEmpty
               ? null
               : _notesController.text.trim(),
@@ -271,7 +269,8 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Center(
+      body: Align(
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 600),
         child: SingleChildScrollView(
@@ -441,12 +440,15 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
                             ),
                             SizedBox(
                               width: 40,
-                              child: Text(
-                                '$_intervalValue',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+                              height: 48,
+                              child: Center(
+                                child: Text(
+                                  '$_intervalValue',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ),

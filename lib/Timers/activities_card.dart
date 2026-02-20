@@ -180,17 +180,20 @@ class ActivitiesCardState extends State<ActivitiesCard> {
     return '${s}s';
   }
 
+  Color _modeColor(Activity activity) {
+    switch (activity.energyMode) {
+      case ActivityEnergyMode.recharging: return AppColors.successGreen;
+      case ActivityEnergyMode.draining: return AppColors.orange;
+      case ActivityEnergyMode.neutral: return AppColors.purple;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_isLoading || _activities.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    if (_activities.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    // Show top 3 most used activities
     final displayActivities = _activities.take(3).toList();
 
     return Card(
@@ -202,128 +205,110 @@ class ActivitiesCardState extends State<ActivitiesCard> {
           color: AppColors.homeCardBackground,
         ),
         child: Column(
-        children: [
-          // Header
-          GestureDetector(
-            onTap: widget.onNavigateToTimers,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.timer_rounded,
-                    color: AppColors.purple,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Activities',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header — matches food card style
+            GestureDetector(
+              onTap: widget.onNavigateToTimers,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.timer_rounded, color: AppColors.purple, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _runningActivityId != null ? 'Timer running' : 'Activities',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                       ),
                     ),
-                  ),
-                  if (_runningActivityId != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.purple.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: AppColors.purple,
-                              shape: BoxShape.circle,
+                    if (_runningActivityId != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.purple.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6, height: 6,
+                              decoration: BoxDecoration(color: AppColors.purple, shape: BoxShape.circle),
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatElapsed(_activityElapsed),
-                            style: TextStyle(
-                              color: AppColors.purple,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatElapsed(_activityElapsed),
+                              style: TextStyle(color: AppColors.purple, fontSize: 12, fontWeight: FontWeight.w600),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.grey300,
-                    size: 20,
-                  ),
-                ],
+                      const SizedBox(width: 4),
+                    ],
+                    Icon(Icons.chevron_right_rounded, color: AppColors.grey300, size: 20),
+                  ],
+                ),
               ),
             ),
-          ),
 
-          // Activities list
-          ...displayActivities.map((activity) {
-            final isRunning = _runningActivityId == activity.id;
-            return _buildActivityRow(activity, isRunning);
-          }),
+            const Divider(height: 1, color: AppColors.white24),
 
-          const SizedBox(height: 4),
-        ],
+            // Activity rows
+            ...displayActivities.map((activity) => _buildActivityRow(activity)),
+
+            const SizedBox(height: 6),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildActivityRow(Activity activity, bool isRunning) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+  Widget _buildActivityRow(Activity activity) {
+    final isRunning = _runningActivityId == activity.id;
+    final color = _modeColor(activity);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 12, 0),
       child: Row(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  activity.name,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: isRunning ? FontWeight.w600 : FontWeight.w500,
-                    color: isRunning ? AppColors.purple : null,
-                  ),
-                ),
-                if (isRunning)
-                  Text(
-                    _formatElapsed(_activityElapsed),
-                    style: TextStyle(
-                      color: AppColors.purple,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-              ],
+          // Energy mode dot
+          Container(
+            width: 8, height: 8,
+            decoration: BoxDecoration(
+              color: isRunning ? color : color.withValues(alpha: 0.5),
+              shape: BoxShape.circle,
             ),
           ),
-          // Play/Stop button
-          IconButton(
-            icon: Icon(
-              isRunning ? Icons.stop_circle_outlined : Icons.play_circle_outline,
+          const SizedBox(width: 10),
+          // Activity name
+          Expanded(
+            child: Text(
+              activity.name,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isRunning ? FontWeight.w600 : FontWeight.w400,
+                color: isRunning ? color : null,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            onPressed: () {
-              if (isRunning) {
-                _stopActivityTimer(save: true);
-              } else {
-                _startActivityTimer(activity.id);
-              }
-            },
-            iconSize: 24,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            color: isRunning ? AppColors.deleteRed : AppColors.purple,
+          ),
+          // Circle play/stop button
+          GestureDetector(
+            onTap: () => isRunning ? _stopActivityTimer(save: true) : _startActivityTimer(activity.id),
+            child: Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(
+                color: (isRunning ? AppColors.deleteRed : color).withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isRunning ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                size: 18,
+                color: isRunning ? AppColors.deleteRed : color,
+              ),
+            ),
           ),
         ],
       ),

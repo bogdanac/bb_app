@@ -111,26 +111,26 @@ class ChoresCardState extends State<ChoresCard> {
       return const SizedBox.shrink();
     }
 
-    final displayChores = _todayChores;
+    final displayChores = _todayChores.take(2).toList();
+    final extraCount = _todayChores.length - displayChores.length;
 
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: Card(
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: AppStyles.borderRadiusLarge,
-              color: AppColors.homeCardBackground,
-            ),
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: AppStyles.borderRadiusLarge,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: AppStyles.borderRadiusLarge,
+            color: AppColors.homeCardBackground,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+              padding: const EdgeInsets.fromLTRB(16, 8, 12, 4),
               child: Row(
                 children: [
                   Icon(Icons.cleaning_services_rounded,
@@ -175,18 +175,25 @@ class ChoresCardState extends State<ChoresCard> {
 
             // Chores list
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Column(
                 children: [
                   ...displayChores.map((chore) => _buildChoreItem(chore)),
                 ],
               ),
             ),
+            if (extraCount > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  '+$extraCount more',
+                  style: TextStyle(fontSize: 12, color: AppColors.greyText),
+                ),
+              ),
           ],
         ),
       ),
-      ),
-      ),
+    ),
     );
   }
 

@@ -1316,7 +1316,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             );
           }
-          widgets.add(const SizedBox(height: 4));
+          widgets.add(const SizedBox(height: 2));
         }
       }
     }

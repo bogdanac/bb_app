@@ -325,12 +325,12 @@ class _ChoresScreenState extends State<ChoresScreen> {
             color: Colors.red.withValues(alpha: 0.2),
           ),
           // Priority chores list
-          ...priorityChores.take(5).map((chore) => _buildPriorityTile(chore)),
-          if (priorityChores.length > 5)
+          ...priorityChores.take(3).map((chore) => _buildPriorityTile(chore)),
+          if (priorityChores.length > 3)
             Padding(
               padding: const EdgeInsets.all(12),
               child: Text(
-                '+${priorityChores.length - 5} more',
+                '+${priorityChores.length - 3} more',
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.greyText,
