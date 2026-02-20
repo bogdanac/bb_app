@@ -110,7 +110,7 @@ class FriendNotificationService {
     }
   }
 
-  /// Schedule a daily check for low battery at 10 AM
+  /// Schedule a weekly check for low battery at 10 AM
   Future<void> _scheduleLowBatteryCheck(Friend friend) async {
     try {
       final notificationId = _lowBatteryBaseId + friend.id.hashCode.abs() % 500;
@@ -118,6 +118,18 @@ class FriendNotificationService {
       // Check current battery - if already low, show notification
       final batteryLevel = friend.currentBattery;
       if (batteryLevel < 0.30) {
+        // Enforce 7-day cooldown per friend (same rule as checkLowBatteryNotifications)
+        final prefs = await SharedPreferences.getInstance();
+        final lastNotifiedKey = 'friend_low_battery_notified_${friend.id}';
+        final lastNotified = prefs.getString(lastNotifiedKey);
+        if (lastNotified != null) {
+          try {
+            final lastNotifiedDate = DateTime.parse(lastNotified);
+            final daysSinceNotified = DateTime.now().difference(lastNotifiedDate).inDays;
+            if (daysSinceNotified < 7) return; // Already notified this week
+          } catch (_) {}
+        }
+
         // Schedule a reminder for tomorrow at 10 AM if battery is low
         final now = DateTime.now();
         var reminderTime = DateTime(now.year, now.month, now.day, 10, 0);
@@ -148,9 +160,15 @@ class FriendNotificationService {
               presentSound: true,
             ),
           ),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          androidScheduleMode: AndroidScheduleMode.exact,
           uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
           payload: 'friend_low_battery_${friend.id}',
+        );
+        // Record timestamp so the 7-day cooldown starts now
+        final prefs2 = await SharedPreferences.getInstance();
+        await prefs2.setString(
+          'friend_low_battery_notified_${friend.id}',
+          DateTime.now().toIso8601String(),
         );
       }
     } catch (e, stackTrace) {

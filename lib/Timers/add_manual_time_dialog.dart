@@ -232,7 +232,7 @@ class _AddManualTimeDialogState extends State<AddManualTimeDialog> {
                               value: _minutes.toDouble(),
                               min: 0,
                               max: 60,
-                              divisions: 12,
+                              divisions: 60,
                               onChanged: (value) {
                                 setState(() => _minutes = value.round());
                               },

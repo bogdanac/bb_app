@@ -209,6 +209,7 @@ class _ProductivityCardState extends State<ProductivityCard> {
             _remaining = savedRemaining - timeSinceSave;
             if (_remaining.isNegative || _remaining == Duration.zero) {
               _remaining = Duration.zero;
+              _isRunning = true;
               _onTimerComplete();
               return;
             }
@@ -454,6 +455,7 @@ class _ProductivityCardState extends State<ProductivityCard> {
   }
 
   String _formatTime(Duration d) {
+    if (d.isNegative) d = Duration.zero;
     final h = d.inHours;
     final m = d.inMinutes.remainder(60);
     final s = d.inSeconds.remainder(60);
@@ -578,10 +580,8 @@ class _ProductivityCardState extends State<ProductivityCard> {
   Widget _buildIdleState() {
     return Column(
       children: [
-        // Mode selector - wrapped to prevent Dismissible from stealing taps
-        GestureDetector(
-          onHorizontalDragUpdate: (_) {},
-          child: Row(
+        // Mode selector
+        Row(
             children: [
               Expanded(
                 child: GestureDetector(
@@ -678,7 +678,6 @@ class _ProductivityCardState extends State<ProductivityCard> {
               ),
             ],
           ),
-        ),
 
         // Activity selector (only show if activities exist)
         if (_activities.isNotEmpty) ...[
@@ -789,10 +788,11 @@ class _ProductivityCardState extends State<ProductivityCard> {
                 alignment: Alignment.center,
                 children: [
                   if (isTimerMode)
-                    // Pulsing ring for count-up timer
+                    // Static ring for count-up timer
                     CircularProgressIndicator(
-                      value: null, // Indeterminate
+                      value: 1.0,
                       strokeWidth: 4,
+                      backgroundColor: AppColors.grey300.withValues(alpha: 0.2),
                       valueColor: AlwaysStoppedAnimation<Color>(
                         _isPaused
                             ? AppColors.grey300.withValues(alpha: 0.3)
@@ -838,9 +838,14 @@ class _ProductivityCardState extends State<ProductivityCard> {
                   Text(
                     _isPaused
                         ? 'Paused'
-                        : isTimerMode
-                            ? _formatTime(_elapsed)
-                            : '${_formatTime(_remaining)} remaining',
+                        : _linkedActivityId != null
+                            ? _activities
+                                .where((a) => a.id == _linkedActivityId)
+                                .map((a) => a.name)
+                                .firstOrNull ?? 'Activity'
+                            : isTimerMode
+                                ? 'Open-ended session'
+                                : '${_formatTime(_remaining)} remaining',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.grey300,

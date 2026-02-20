@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../shared/error_logger.dart';
 import '../Routines/routine_recovery_helper.dart';
+import '../Tasks/repositories/task_repository.dart';
 
 /// Real-time sync service for granular collection syncing
 /// Handles high-frequency data (Tasks, Routines, Habits, Energy) with Firestore real-time listeners
@@ -339,6 +340,12 @@ class RealtimeSyncService {
         }
       }
       await prefs.setStringList('tasks', tasksStringList);
+
+      // Mark web data as verified — Firestore listener confirmed fresh data,
+      // so future saves from TaskRepository can safely sync back to Firestore
+      if (kIsWeb) {
+        TaskRepository().markWebDataVerified();
+      }
 
       if (kDebugMode) {
         await ErrorLogger.logError(

@@ -170,6 +170,7 @@ class AppCustomizationService {
       icon: Icons.bolt_rounded,
       color: AppColors.coral,
       canBeDisabled: true,
+      showInNavigation: false, // Home feature only - no dedicated tab
     ),
     ModuleInfo(
       key: moduleWater,
@@ -196,6 +197,7 @@ class AppCustomizationService {
       icon: Icons.restaurant_rounded,
       color: AppColors.pastelGreen,
       canBeDisabled: true,
+      showInNavigation: false, // Home feature only - no dedicated tab
     ),
     ModuleInfo(
       key: moduleChores,

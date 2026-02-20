@@ -165,10 +165,12 @@ class Friend {
   /// Add a meeting record with battery boost based on meeting type
   void addMeeting(Meeting meeting) {
     meetings.add(meeting);
-    updateBattery(meeting.type.batteryBoost);
+    // Use meeting date as the reference point so decay is calculated from the actual last-seen date
+    battery = meeting.type.batteryBoost.clamp(0.0, 1.0);
+    lastUpdated = meeting.date;
   }
 
-  /// Update battery level manually
+  /// Update battery level manually (e.g. from slider)
   void updateBattery(double newBattery) {
     battery = newBattery.clamp(0.0, 1.0);
     lastUpdated = DateTime.now();

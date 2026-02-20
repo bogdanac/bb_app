@@ -23,6 +23,7 @@ import '../Energy/energy_calculator.dart';
 import '../Energy/energy_celebrations.dart';
 import '../Energy/flow_calculator.dart';
 import '../Settings/app_customization_service.dart';
+import '../Services/realtime_sync_service.dart';
 
 class TodoScreen extends StatefulWidget {
   final bool showFilters;
@@ -822,6 +823,9 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     // Listen for task changes to update UI in real-time
     _taskService.addTaskChangeListener(_onTasksChanged);
 
+    // Listen for remote sync events (e.g., phone edited tasks while web tab was open)
+    RealtimeSyncService().addSyncEventListener(_onRemoteSyncEvent);
+
     _loadData();
     _loadEnergyModuleState();
   }
@@ -838,6 +842,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     _searchController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _taskService.removeTaskChangeListener(_onTasksChanged);
+    RealtimeSyncService().removeSyncEventListener(_onRemoteSyncEvent);
     super.dispose();
   }
 
@@ -849,10 +854,20 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     }
   }
 
+  /// Called when remote data arrives (e.g., phone synced new tasks while web tab was open)
+  void _onRemoteSyncEvent() {
+    if (mounted && !_isUpdatingTasks) {
+      debugPrint('TodoScreen: Remote sync detected — reloading tasks');
+      _loadTasks().then((_) => _updateDisplayTasks());
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Removed automatic refresh on app resume to prevent unwanted UI updates
-    // Tasks will refresh only when explicitly triggered by user actions
+    // Reload tasks on resume to pick up changes made on other devices
+    if (mounted && state == AppLifecycleState.resumed) {
+      _loadTasks().then((_) => _updateDisplayTasks());
+    }
   }
 
   Future<void> _loadData() async {

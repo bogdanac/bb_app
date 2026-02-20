@@ -1005,15 +1005,17 @@ class _TimersScreenState extends State<TimersScreen>
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _productivityTimerActive
-                        ? null
-                        : () {
-                            setState(() {
-                              _isFocusMode = false;
-                              _remainingTime =
-                                  Duration(minutes: _workMinutes);
-                            });
-                          },
+                    onPressed: () async {
+                      if (_productivityTimerActive) {
+                        await _resetProductivityTimer();
+                      }
+                      if (mounted) {
+                        setState(() {
+                          _isFocusMode = false;
+                          _remainingTime = Duration(minutes: _workMinutes);
+                        });
+                      }
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: !_isFocusMode
                           ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.1 : 0.25)
@@ -1052,15 +1054,18 @@ class _TimersScreenState extends State<TimersScreen>
                 const SizedBox(width: 4),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _productivityTimerActive
-                        ? null
-                        : () {
-                            setState(() {
-                              _isFocusMode = true;
-                              _focusElapsed = Duration.zero;
-                              _remainingTime = Duration.zero;
-                            });
-                          },
+                    onPressed: () async {
+                      if (_productivityTimerActive) {
+                        await _resetProductivityTimer();
+                      }
+                      if (mounted) {
+                        setState(() {
+                          _isFocusMode = true;
+                          _focusElapsed = Duration.zero;
+                          _remainingTime = Duration.zero;
+                        });
+                      }
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _isFocusMode
                           ? AppColors.purple.withValues(alpha: _productivityTimerActive ? 0.1 : 0.25)
@@ -1260,7 +1265,7 @@ class _TimersScreenState extends State<TimersScreen>
                   width: 220,
                   height: 220,
                   child: CircularProgressIndicator(
-                    value: _isFocusMode ? null : (_isInFlowState ? 1.0 : (progress ?? 0.0).clamp(0.0, 1.0)),
+                    value: _isFocusMode ? 1.0 : (_isInFlowState ? 1.0 : (progress ?? 0.0).clamp(0.0, 1.0)),
                     strokeWidth: 8,
                     backgroundColor: AppColors.grey700,
                     valueColor: AlwaysStoppedAnimation<Color>(

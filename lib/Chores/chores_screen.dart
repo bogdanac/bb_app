@@ -6,6 +6,8 @@ import 'category_manager_dialog.dart';
 import 'chore_settings_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
+import '../shared/date_picker_utils.dart';
+import '../shared/date_format_utils.dart';
 
 class ChoresScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
@@ -95,6 +97,42 @@ class _ChoresScreenState extends State<ChoresScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<void> _setLastDoneDate(Chore chore) async {
+    final now = DateTime.now();
+    final initialDate = chore.lastCompleted.isAfter(now) ? now : chore.lastCompleted;
+
+    final picked = await DatePickerUtils.showStyledDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: chore.createdAt,
+      lastDate: now,
+    );
+
+    if (picked == null || !mounted) return;
+
+    final pickedDateTime = DateTime(picked.year, picked.month, picked.day, 12);
+    final updatedChore = chore.copyWith(
+      lastCompleted: pickedDateTime,
+      condition: 1.0,
+      completionHistory: [
+        ...chore.completionHistory,
+        ChoreCompletion(completedAt: pickedDateTime),
+      ],
+    );
+
+    await ChoreService.updateChore(updatedChore);
+    await _loadData();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('"${chore.name}" marked as done ${DateFormatUtils.formatRelative(picked)}'),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -343,6 +381,7 @@ class _ChoresScreenState extends State<ChoresScreen> {
                 ],
               ),
             ),
+            _buildChorePopupMenu(chore),
             IconButton(
               icon: const Icon(Icons.check_circle_outline_rounded),
               onPressed: () => _completeChore(chore),
@@ -473,70 +512,85 @@ class _ChoresScreenState extends State<ChoresScreen> {
     );
   }
 
-  Future<void> _showChoreOptions(Chore chore) async {
-    final result = await showModalBottomSheet<String>(
+  Future<void> _confirmDeleteChore(Chore chore) async {
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit_rounded),
-              title: const Text('Edit'),
-              onTap: () => Navigator.pop(context, 'edit'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.check_circle_rounded, color: Colors.green),
-              title: const Text('Complete'),
-              onTap: () => Navigator.pop(context, 'complete'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_rounded, color: Colors.red),
-              title: const Text('Delete', style: TextStyle(color: Colors.red)),
-              onTap: () => Navigator.pop(context, 'delete'),
-            ),
-          ],
-        ),
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Chore'),
+        content: Text('Delete "${chore.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
-
-    if (!mounted) return;
-
-    if (result == 'edit') {
-      _editChore(chore);
-    } else if (result == 'complete') {
-      _completeChore(chore);
-    } else if (result == 'delete') {
-      if (!mounted) return;
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Delete Chore'),
-          content: Text('Delete "${chore.name}"?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
-            ),
-          ],
-        ),
-      );
-      if (confirmed == true) {
-        await ChoreService.deleteChore(chore.id);
-        await _loadData();
-      }
+    if (confirmed == true && mounted) {
+      await ChoreService.deleteChore(chore.id);
+      await _loadData();
     }
+  }
+
+  Widget _buildChorePopupMenu(Chore chore) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert_rounded, color: AppColors.grey300, size: 20),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
+      color: AppColors.normalCardBackground,
+      onSelected: (value) {
+        if (value == 'edit') {
+          _editChore(chore);
+        } else if (value == 'set_last_done') {
+          _setLastDoneDate(chore);
+        } else if (value == 'delete') {
+          _confirmDeleteChore(chore);
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem<String>(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Icons.edit_rounded, size: 18),
+              SizedBox(width: 12),
+              Text('Edit'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'set_last_done',
+          child: Row(
+            children: [
+              Icon(Icons.event_available_rounded, size: 18, color: Colors.blue),
+              const SizedBox(width: 12),
+              Text('Set last done date', style: TextStyle(color: Colors.blue)),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_rounded, size: 18, color: Colors.red),
+              const SizedBox(width: 12),
+              Text('Delete', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildChoreTile(Chore chore) {
     return InkWell(
       onTap: () => _editChore(chore),
-      onLongPress: () => _showChoreOptions(chore),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
@@ -607,7 +661,8 @@ class _ChoresScreenState extends State<ChoresScreen> {
               ),
             ),
 
-            const SizedBox(width: 8),
+            // Options menu
+            _buildChorePopupMenu(chore),
 
             // Complete button
             IconButton(

@@ -58,6 +58,10 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
     final categories = await ChoreService.loadCategories();
     setState(() {
       _categories = categories;
+      // For new chores, default to the first category instead of hardcoded 'House'
+      if (widget.chore == null && categories.isNotEmpty) {
+        _selectedCategory = categories.first.name;
+      }
       _isLoading = false;
     });
   }
@@ -754,6 +758,6 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
     if (condition >= 0.6) return 'Good';
     if (condition >= 0.4) return 'Fair';
     if (condition >= 0.2) return 'Needs attention';
-    return 'Overdue';
+    return 'Poor';
   }
 }

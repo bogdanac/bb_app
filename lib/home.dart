@@ -35,6 +35,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:bb_app/Services/realtime_sync_service.dart';
 
 // HOME SCREEN
 class HomeScreen extends StatefulWidget {
@@ -61,6 +62,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _loadCardSettings();
   }
 
+  /// Refresh data-driven cards (called when switching back to Home tab)
+  void refreshCards() {
+    _choresCardKey.currentState?.refresh();
+    _activitiesCardKey.currentState?.refresh();
+  }
+
   int waterIntake = 0;
   int _waterGoal = 1500; // Default water goal
   bool showFastingSection = false;
@@ -79,6 +86,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _endOfDayReviewEnabled = false;
   Set<String> _cardsHiddenForToday = {}; // Cards swiped away for today
   double? _expandedTasksHeight; // Calculated height to fill remaining space
+  Key _dailyTasksKey = UniqueKey(); // Force rebuild of DailyTasksCard on sync
 
   // Method channel for communicating with Android widget
   static const platform = MethodChannel('com.bb.bb_app/water_widget');
@@ -98,6 +106,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Key to access EndOfDayReviewCard for refresh when tasks change
   final GlobalKey<EndOfDayReviewCardState> _endOfDayReviewCardKey = GlobalKey<EndOfDayReviewCardState>();
 
+  // Keys to access ChoresCard and ActivitiesCard for refresh when returning to Home
+  final GlobalKey<ChoresCardState> _choresCardKey = GlobalKey<ChoresCardState>();
+  final GlobalKey<ActivitiesCardState> _activitiesCardKey = GlobalKey<ActivitiesCardState>();
+
   @override
   void initState() {
     super.initState();
@@ -106,14 +118,28 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _checkBackupStatus();
     _startWaterSyncTimer();
     _loadCardSettings();
+    // Listen for remote sync events (e.g., phone edited a task while web was open)
+    RealtimeSyncService().addSyncEventListener(_onRemoteSyncEvent);
   }
 
   @override
   void dispose() {
     _isDisposed = true;
     _waterSyncTimer?.cancel();
+    RealtimeSyncService().removeSyncEventListener(_onRemoteSyncEvent);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  /// Called when remote data changes arrive (e.g., phone synced new tasks)
+  void _onRemoteSyncEvent() {
+    if (!_isDisposed && mounted) {
+      setState(() {
+        // Force rebuild DailyTasksCard with fresh data
+        _dailyTasksKey = UniqueKey();
+      });
+      debugPrint('HomeScreen: Remote sync detected — refreshing cards');
+    }
   }
 
   Future<void> _initializeData() async {
@@ -324,6 +350,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _refreshMenstrualCycleData();
       // Refresh backup status when returning to the app
       _checkBackupStatus();
+      // Refresh tasks — on web this is critical to pick up changes from phone
+      // while this tab was in the background
+      setState(() {
+        _dailyTasksKey = UniqueKey();
+      });
       // Note: RoutineCard handles its own refresh via WidgetsBindingObserver._refreshRoutine()
       // Do NOT reassign _routineCardKey here - it destroys and rebuilds the card, showing a loading spinner
       debugPrint('App resumed - refreshed all home screen data');
@@ -1182,6 +1213,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       AppCustomizationService.cardDailyTasks: () {
         if (!_isCardVisible(AppCustomizationService.cardDailyTasks)) return null;
         return DailyTasksCard(
+          key: _dailyTasksKey,
           height: _expandedTasksHeight,
           onTasksChanged: () {
             // Refresh EndOfDayReviewCard when tasks change
@@ -1192,6 +1224,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       AppCustomizationService.cardChores: () {
         if (!_isCardVisible(AppCustomizationService.cardChores)) return null;
         return ChoresCard(
+          key: _choresCardKey,
           onTap: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleChores),
           onChoreCompleted: _onChoreCompleted,
         );
@@ -1199,6 +1232,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       AppCustomizationService.cardActivities: () {
         if (!_isCardVisible(AppCustomizationService.cardActivities)) return null;
         return ActivitiesCard(
+          key: _activitiesCardKey,
           onNavigateToTimers: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleTimers),
         );
       },
@@ -1237,46 +1271,52 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (builder != null) {
         final builtWidget = builder();
         if (builtWidget != null) {
-          // Wrap with Dismissible for swipe-to-hide
-          widgets.add(
-            Dismissible(
-              key: ValueKey('dismissible_$cardKey'),
-              direction: DismissDirection.endToStart,
-              background: Container(
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 20),
-                decoration: BoxDecoration(
-                  color: AppColors.coral.withValues(alpha: 0.2),
-                  borderRadius: AppStyles.borderRadiusLarge,
+          // ProductivityCard has its own hide button and interactive tabs —
+          // skip Dismissible to avoid gesture conflicts
+          if (cardKey == AppCustomizationService.cardProductivity) {
+            widgets.add(builtWidget);
+          } else {
+            // Wrap with Dismissible for swipe-to-hide
+            widgets.add(
+              Dismissible(
+                key: ValueKey('dismissible_$cardKey'),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20),
+                  decoration: BoxDecoration(
+                    color: AppColors.coral.withValues(alpha: 0.2),
+                    borderRadius: AppStyles.borderRadiusLarge,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Hidden for today',
+                        style: TextStyle(color: AppColors.coral, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.visibility_off_rounded, color: AppColors.coral),
+                    ],
+                  ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      'Hidden for today',
-                      style: TextStyle(color: AppColors.coral, fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(Icons.visibility_off_rounded, color: AppColors.coral),
-                  ],
-                ),
+                confirmDismiss: (direction) async {
+                  HapticFeedback.lightImpact();
+                  return true;
+                },
+                onDismissed: (direction) {
+                  _hideCardForToday(cardKey);
+                  SnackBarUtils.showSuccess(
+                    context,
+                    'Card hidden for today',
+                    duration: const Duration(seconds: 2),
+                  );
+                },
+                child: builtWidget,
               ),
-              confirmDismiss: (direction) async {
-                HapticFeedback.lightImpact();
-                return true;
-              },
-              onDismissed: (direction) {
-                _hideCardForToday(cardKey);
-                SnackBarUtils.showSuccess(
-                  context,
-                  'Card hidden for today',
-                  duration: const Duration(seconds: 2),
-                );
-              },
-              child: builtWidget,
-            ),
-          );
-          widgets.add(const SizedBox(height: 8));
+            );
+          }
+          widgets.add(const SizedBox(height: 4));
         }
       }
     }
@@ -1670,6 +1710,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       AppCustomizationService.cardDailyTasks: () {
         if (!_isCardVisible(AppCustomizationService.cardDailyTasks)) return null;
         return DailyTasksCard(
+          key: _dailyTasksKey,
           height: _expandedTasksHeight,
           onTasksChanged: () {
             // Refresh EndOfDayReviewCard when tasks change
@@ -1680,6 +1721,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       AppCustomizationService.cardChores: () {
         if (!_isCardVisible(AppCustomizationService.cardChores)) return null;
         return ChoresCard(
+          key: _choresCardKey,
           onTap: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleChores),
           onChoreCompleted: _onChoreCompleted,
         );
@@ -1687,6 +1729,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       AppCustomizationService.cardActivities: () {
         if (!_isCardVisible(AppCustomizationService.cardActivities)) return null;
         return ActivitiesCard(
+          key: _activitiesCardKey,
           onNavigateToTimers: () => widget.onNavigateToModule?.call(AppCustomizationService.moduleTimers),
         );
       },

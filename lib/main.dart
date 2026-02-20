@@ -907,6 +907,12 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
             _selectedIndex = index;
           });
           _animationController.reverse();
+
+          // Refresh home cards when switching back to Home tab
+          final tabs = _isDesktop(context) ? _allEnabledTabConfigs : _primaryTabConfigs;
+          if (index < tabs.length && tabs[index].isHome) {
+            _homeScreenKey.currentState?.refreshCards();
+          }
         }
       });
     }

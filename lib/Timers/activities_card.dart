@@ -13,12 +13,13 @@ class ActivitiesCard extends StatefulWidget {
   const ActivitiesCard({super.key, this.onNavigateToTimers});
 
   @override
-  State<ActivitiesCard> createState() => _ActivitiesCardState();
+  State<ActivitiesCard> createState() => ActivitiesCardState();
 }
 
-class _ActivitiesCardState extends State<ActivitiesCard> {
+class ActivitiesCardState extends State<ActivitiesCard> {
+  /// Refresh activities data from outside (e.g., when returning to Home tab)
+  void refresh() => _loadData();
   List<Activity> _activities = [];
-  bool _isExpanded = false;
   bool _isLoading = true;
 
   // Running activity timer state
@@ -45,6 +46,15 @@ class _ActivitiesCardState extends State<ActivitiesCard> {
   Future<void> _loadData() async {
     final activities = await TimerService.loadActivities();
     await _restoreActiveTimer();
+
+    // Sort by most used (session count)
+    final sessions = await TimerService.loadSessions();
+    final sessionCounts = <String, int>{};
+    for (final s in sessions) {
+      sessionCounts[s.activityId] = (sessionCounts[s.activityId] ?? 0) + 1;
+    }
+    activities.sort((a, b) =>
+        (sessionCounts[b.id] ?? 0).compareTo(sessionCounts[a.id] ?? 0));
 
     if (mounted) {
       setState(() {
@@ -180,11 +190,8 @@ class _ActivitiesCardState extends State<ActivitiesCard> {
       return const SizedBox.shrink();
     }
 
-    // Show max 3 activities when collapsed, all when expanded
-    final displayActivities = _isExpanded
-        ? _activities
-        : _activities.take(3).toList();
-    final hasMore = _activities.length > 3;
+    // Show top 3 most used activities
+    final displayActivities = _activities.take(3).toList();
 
     return Card(
       elevation: 4,
@@ -200,7 +207,7 @@ class _ActivitiesCardState extends State<ActivitiesCard> {
           GestureDetector(
             onTap: widget.onNavigateToTimers,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 4, 12, 0),
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),
               child: Row(
                 children: [
                   Icon(
@@ -265,38 +272,7 @@ class _ActivitiesCardState extends State<ActivitiesCard> {
             return _buildActivityRow(activity, isRunning);
           }),
 
-          // Expand/collapse button
-          if (hasMore)
-            GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                setState(() {
-                  _isExpanded = !_isExpanded;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      _isExpanded
-                          ? 'Show less'
-                          : 'Show ${_activities.length - 3} more',
-                      style: TextStyle(
-                        color: AppColors.purple,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                ),
-              ),
-            ),
-
-          if (!hasMore)
-            const SizedBox(height: 4),
+          const SizedBox(height: 4),
         ],
         ),
       ),
@@ -305,7 +281,7 @@ class _ActivitiesCardState extends State<ActivitiesCard> {
 
   Widget _buildActivityRow(Activity activity, bool isRunning) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
       child: Row(
         children: [
           Expanded(
@@ -333,29 +309,21 @@ class _ActivitiesCardState extends State<ActivitiesCard> {
             ),
           ),
           // Play/Stop button
-          GestureDetector(
-            onTap: () {
+          IconButton(
+            icon: Icon(
+              isRunning ? Icons.stop_circle_outlined : Icons.play_circle_outline,
+            ),
+            onPressed: () {
               if (isRunning) {
                 _stopActivityTimer(save: true);
               } else {
                 _startActivityTimer(activity.id);
               }
             },
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: isRunning
-                    ? AppColors.deleteRed.withValues(alpha: 0.15)
-                    : AppColors.purple.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                isRunning ? Icons.stop_rounded : Icons.play_arrow_rounded,
-                color: isRunning ? AppColors.deleteRed : AppColors.purple,
-                size: 22,
-              ),
-            ),
+            iconSize: 24,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            color: isRunning ? AppColors.deleteRed : AppColors.purple,
           ),
         ],
       ),

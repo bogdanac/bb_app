@@ -75,21 +75,23 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
-  Future<void> _addEntry(FoodType type) async {
+  Future<void> _addEntry(FoodType type, {DateTime? forDate}) async {
     HapticFeedback.lightImpact();
+    final targetDate = forDate ?? DateTime.now();
     final entry = FoodEntry(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       type: type,
-      timestamp: DateTime.now(),
+      timestamp: DateTime(targetDate.year, targetDate.month, targetDate.day,
+          DateTime.now().hour, DateTime.now().minute),
     );
     await FoodTrackingService.addEntry(entry);
     await _loadEntries();
 
-    // Select today to show the new entry
-    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    // Keep the selected date on the date we just added to
+    final selectedDay = DateTime(targetDate.year, targetDate.month, targetDate.day);
     setState(() {
-      _selectedDate = today;
-      _focusedMonth = DateTime(today.year, today.month, 1);
+      _selectedDate = selectedDay;
+      _focusedMonth = DateTime(selectedDay.year, selectedDay.month, 1);
     });
 
     if (mounted) {
@@ -100,7 +102,10 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     }
   }
 
-  void _showAddFoodBottomSheet() {
+  void _showAddFoodBottomSheet({DateTime? forDate}) {
+    final isToday = forDate == null ||
+        DateFormatUtils.isSameDay(forDate, DateTime.now());
+    final dateLabel = isToday ? 'today' : DateFormatUtils.formatFullDate(forDate!);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -122,9 +127,9 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const Text(
-              'Add Food Entry',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              'Add Food Entry — $dateLabel',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
             Row(
@@ -136,7 +141,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
                     color: AppColors.successGreen,
                     onTap: () {
                       Navigator.pop(context);
-                      _addEntry(FoodType.healthy);
+                      _addEntry(FoodType.healthy, forDate: forDate);
                     },
                   ),
                 ),
@@ -148,7 +153,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
                     color: AppColors.orange,
                     onTap: () {
                       Navigator.pop(context);
-                      _addEntry(FoodType.processed);
+                      _addEntry(FoodType.processed, forDate: forDate);
                     },
                   ),
                 ),
@@ -305,7 +310,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
         final isDropTarget = candidateData.isNotEmpty;
 
         return GestureDetector(
-          onTap: hasEntries ? () => setState(() => _selectedDate = date) : null,
+          onTap: isFuture ? null : () => setState(() => _selectedDate = date),
           child: Container(
             decoration: BoxDecoration(
               color: isDropTarget
@@ -402,7 +407,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
         padding: const EdgeInsets.all(24),
         child: Center(
           child: Text(
-            'Tap a day with entries to view details',
+            'Tap a day to view or add entries',
             style: TextStyle(color: AppColors.greyText, fontSize: 13),
           ),
         ),
@@ -413,11 +418,24 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     if (entries.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(24),
-        child: Center(
-          child: Text(
-            'No entries for this day',
-            style: TextStyle(color: AppColors.greyText, fontSize: 13),
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'No entries for ${DateFormatUtils.formatFullDate(_selectedDate!)}',
+              style: TextStyle(color: AppColors.greyText, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () => _showAddFoodBottomSheet(forDate: _selectedDate),
+              icon: const Icon(Icons.add),
+              label: const Text('Add entry for this day'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.successGreen,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
         ),
       );
     }

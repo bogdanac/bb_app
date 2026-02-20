@@ -14,6 +14,15 @@ class TaskRepository {
 
   final _realtimeSync = RealtimeSyncService();
 
+  // On web, tracks whether we loaded fresh data from Firestore.
+  // If false, we fell back to stale localStorage — don't push it back to Firestore.
+  bool _webDataVerified = false;
+
+  /// Mark web data as verified (called when Firestore listener confirms fresh data)
+  void markWebDataVerified() {
+    _webDataVerified = true;
+  }
+
   /// Load tasks from SharedPreferences (or Firestore on web)
   Future<List<Task>> loadTasks() async {
     try {
@@ -26,6 +35,7 @@ class TaskRepository {
         if (firestoreTasks != null && firestoreTasks.isNotEmpty) {
           debugPrint('TaskRepository.loadTasks: WEB - got ${firestoreTasks.length} tasks from Firestore');
           tasksJson = firestoreTasks;
+          _webDataVerified = true; // Data came from Firestore — safe to sync back
           // Cache Firestore data to SharedPreferences so fallback is fresh
           final prefs = await SharedPreferences.getInstance();
           await prefs.setStringList('tasks', firestoreTasks);
@@ -34,6 +44,12 @@ class TaskRepository {
 
       // Fallback to SharedPreferences (always used on mobile, fallback on web)
       if (tasksJson.isEmpty) {
+        if (kIsWeb) {
+          // On web, Firestore fetch failed (auth not ready, network error, etc.)
+          // Mark data as unverified — don't push stale localStorage back to Firestore
+          _webDataVerified = false;
+          debugPrint('TaskRepository.loadTasks: WEB - Firestore unavailable, using stale localStorage (sync disabled until verified)');
+        }
         final prefs = await SharedPreferences.getInstance();
         try {
           tasksJson = prefs.getStringList('tasks') ?? [];
@@ -83,6 +99,14 @@ class TaskRepository {
           .map((task) => jsonEncode(task.toJson()))
           .toList();
       await prefs.setStringList('tasks', tasksJson);
+
+      // On web, only sync to Firestore if our data is verified fresh.
+      // This prevents stale localStorage data from overwriting phone edits
+      // when Chrome restores a tab before auth/network is ready.
+      if (kIsWeb && !_webDataVerified) {
+        debugPrint('TaskRepository.saveTasks: WEB - skipping Firestore sync (data not verified from Firestore yet)');
+        return;
+      }
 
       // Sync to Firestore real-time collection (non-blocking)
       _realtimeSync.syncTasks(jsonEncode(tasksJson)).catchError((e, stackTrace) async {

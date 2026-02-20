@@ -17,11 +17,14 @@ class ChoresCard extends StatefulWidget {
   });
 
   @override
-  State<ChoresCard> createState() => _ChoresCardState();
+  State<ChoresCard> createState() => ChoresCardState();
 }
 
-class _ChoresCardState extends State<ChoresCard> {
+class ChoresCardState extends State<ChoresCard> {
+  /// Refresh chores data from outside (e.g., when returning to Home tab)
+  void refresh() => _loadChores();
   List<Chore> _todayChores = [];
+  List<ChoreCategory> _categories = [];
   bool _isLoading = true;
   bool _isLowEnergy = false;
 
@@ -43,6 +46,7 @@ class _ChoresCardState extends State<ChoresCard> {
       return;
     }
 
+    final categories = await ChoreService.loadCategories();
     var chores = await ChoreService.getTodayChores();
 
     // Energy-aware filtering: if energy module active and battery is low,
@@ -72,6 +76,7 @@ class _ChoresCardState extends State<ChoresCard> {
     }
 
     setState(() {
+      _categories = categories;
       _todayChores = chores;
       _isLoading = false;
     });
@@ -106,8 +111,7 @@ class _ChoresCardState extends State<ChoresCard> {
       return const SizedBox.shrink();
     }
 
-    final displayChores = _todayChores.take(3).toList();
-    final hasMore = _todayChores.length > 3;
+    final displayChores = _todayChores;
 
     return GestureDetector(
       onTap: widget.onTap,
@@ -175,16 +179,6 @@ class _ChoresCardState extends State<ChoresCard> {
               child: Column(
                 children: [
                   ...displayChores.map((chore) => _buildChoreItem(chore)),
-                  if (hasMore) ...[
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: widget.onTap,
-                      child: Text(
-                        'View all (${_todayChores.length})',
-                        style: TextStyle(color: AppColors.waterBlue),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -196,132 +190,79 @@ class _ChoresCardState extends State<ChoresCard> {
     );
   }
 
+  IconData _getCategoryIcon(String categoryName) {
+    for (final c in _categories) {
+      if (c.name == categoryName) return c.icon;
+    }
+    return Icons.category_rounded;
+  }
+
   Widget _buildChoreItem(Chore chore) {
-    final categories = ChoreService.loadCategories();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          // Category icon
+          Icon(_getCategoryIcon(chore.category), size: 16, color: AppColors.greyText),
+          const SizedBox(width: 8),
 
-    return FutureBuilder<List<ChoreCategory>>(
-      future: categories,
-      builder: (context, snapshot) {
-        final categoryIcon = snapshot.hasData
-            ? snapshot.data!
-                .firstWhere(
-                  (c) => c.name == chore.category,
-                  orElse: () => ChoreCategory(
-                    id: 'default',
-                    name: chore.category,
-                    icon: Icons.category_rounded,
-                  ),
-                )
-                .icon
-            : Icons.category_rounded;
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            children: [
-              // Category icon
-              Icon(categoryIcon, size: 16, color: AppColors.greyText),
-              const SizedBox(width: 8),
-
-              // Chore name and condition bar
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // Chore name and condition bar
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  chore.name,
+                  style: const TextStyle(fontSize: 14),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            chore.name,
-                            style: const TextStyle(fontSize: 14),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: AppStyles.borderRadiusSmall,
+                        child: LinearProgressIndicator(
+                          value: chore.currentCondition,
+                          minHeight: 6,
+                          backgroundColor: AppColors.grey300.withValues(alpha: 0.3),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            chore.conditionColor,
                           ),
                         ),
-                        if (chore.isCritical)
-                          Container(
-                            width: 8,
-                            height: 8,
-                            margin: const EdgeInsets.only(left: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.orange,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        if (chore.isOverdue && !chore.isCritical)
-                          Container(
-                            width: 8,
-                            height: 8,
-                            margin: const EdgeInsets.only(left: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.grey300,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                      ],
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: AppStyles.borderRadiusSmall,
-                            child: LinearProgressIndicator(
-                              value: chore.currentCondition,
-                              minHeight: 6,
-                              backgroundColor: AppColors.grey300,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                chore.conditionColor,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${chore.conditionPercentage}%',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: chore.conditionColor,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _daysAgoText(chore),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: AppColors.grey300,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(width: 6),
+                    Text(
+                      '${chore.conditionPercentage}%',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: chore.conditionColor,
+                      ),
                     ),
                   ],
                 ),
-              ),
-
-              const SizedBox(width: 8),
-
-              // Complete button
-              IconButton(
-                icon: const Icon(Icons.check_circle_outline),
-                onPressed: () => _completeChore(chore),
-                iconSize: 24,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                tooltip: 'Complete',
-                color: chore.conditionColor,
-              ),
-            ],
+              ],
+            ),
           ),
-        );
-      },
+
+          const SizedBox(width: 8),
+
+          // Complete button
+          IconButton(
+            icon: const Icon(Icons.check_circle_outline),
+            onPressed: () => _completeChore(chore),
+            iconSize: 24,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            tooltip: 'Complete',
+            color: AppColors.successGreen,
+          ),
+        ],
+      ),
     );
   }
 
-  String _daysAgoText(Chore chore) {
-    final days = DateTime.now().difference(chore.lastCompleted).inDays;
-    if (days == 0) return 'today';
-    if (days == 1) return '1d ago';
-    return '${days}d ago';
-  }
 }

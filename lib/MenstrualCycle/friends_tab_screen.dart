@@ -68,8 +68,8 @@ class FriendsTabScreenState extends State<FriendsTabScreen> {
 
   Future<void> _loadFriends() async {
     final friends = await FriendService.loadFriends();
-    // Refresh battery levels based on decay
-    await FriendService.refreshAllBatteries(friends);
+    // Do NOT call refreshAllBatteries here - it stores decayed battery without updating
+    // lastUpdated, causing double-decay on every load. currentBattery getter computes dynamically.
 
     if (mounted) {
       setState(() {

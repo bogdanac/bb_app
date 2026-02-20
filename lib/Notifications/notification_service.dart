@@ -715,8 +715,8 @@ class NotificationService {
             'fasting_progress',
             'Fasting Progress',
             channelDescription: 'Ongoing fasting progress updates',
-            importance: Importance.max, // Higher importance to survive overnight
-            priority: Priority.high, // High priority to stay active
+            importance: Importance.low, // Silent ongoing notification - ongoing:true keeps it in tray
+            priority: Priority.low,
             icon: '@mipmap/ic_launcher',
             color: const Color(0xFFF98834), // Orange
             ongoing: true, // Makes it a permanent notification
