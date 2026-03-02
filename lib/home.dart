@@ -42,14 +42,14 @@ class HomeScreen extends StatefulWidget {
   final void Function(int)? onNavigateToTab;
   final void Function(String moduleKey)? onNavigateToModule;
   final Future<void> Function()? onReloadSettings;
-  final VoidCallback? onOpenDrawer;
+  final Widget Function()? drawerBuilder;
 
   const HomeScreen({
     super.key,
     this.onNavigateToTab,
     this.onNavigateToModule,
     this.onReloadSettings,
-    this.onOpenDrawer,
+    this.drawerBuilder,
   });
 
   @override
@@ -248,6 +248,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       SnackBarUtils.hide(context);
 
       if (backupPath != null) {
+        // Also update auto backup timestamp since this IS an auto backup
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('last_auto_backup', DateTime.now().toIso8601String());
+
+        if (!mounted) return;
+
         // Show success message briefly
         SnackBarUtils.showSuccess(
           context,
@@ -350,11 +356,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _refreshMenstrualCycleData();
       // Refresh backup status when returning to the app
       _checkBackupStatus();
-      // Refresh tasks — on web this is critical to pick up changes from phone
-      // while this tab was in the background
-      setState(() {
-        _dailyTasksKey = UniqueKey();
-      });
+      // Note: DailyTasksCard embeds a TodoScreen which handles its own lifecycle refresh
+      // via didChangeAppLifecycleState(resumed) → _loadTasks(fromResume: true).
+      // Do NOT reassign _dailyTasksKey here - it destroys and rebuilds the TodoScreen,
+      // which would load stale local data without pulling from Firestore first.
       // Note: RoutineCard handles its own refresh via WidgetsBindingObserver._refreshRoutine()
       // Do NOT reassign _routineCardKey here - it destroys and rebuilds the card, showing a loading spinner
       debugPrint('App resumed - refreshed all home screen data');
@@ -1012,6 +1017,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (oldIntake < goal && newIntake >= goal && mounted) {
           SnackBarUtils.showSuccess(context, '🎉 Daily water goal achieved! Great job!');
         }
+
+        // Refresh EndOfDayReviewCard to show updated water percentage
+        _endOfDayReviewCardKey.currentState?.refresh();
       }
     } catch (e) {
       debugPrint('ERROR adding water: $e');
@@ -1346,16 +1354,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: widget.drawerBuilder?.call(),
       appBar: AppBar(
-        automaticallyImplyLeading: false,
-        // Menu button on left (mobile only)
-        leading: widget.onOpenDrawer != null
-            ? IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Colors.white),
-                onPressed: widget.onOpenDrawer,
-                tooltip: 'Menu',
-              )
-            : null,
         title: const Text('bbetter',
             style: TextStyle(fontWeight: FontWeight.w500)),
         backgroundColor: AppColors.transparent,
@@ -1415,7 +1415,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
           // Settings button on desktop (no drawer, direct access)
-          if (widget.onOpenDrawer == null)
+          if (widget.drawerBuilder == null)
             Padding(
               padding: const EdgeInsets.only(right: 16),
               child: IconButton(
@@ -1484,60 +1484,75 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _expandedTasksHeight = null; // Desktop uses default height
     final cards = _buildAllCardsForDesktopWithKeys();
 
-    // Cards that should be double-width on desktop
-    const doubleWidthCards = {
-      AppCustomizationService.cardCalendar,
-      AppCustomizationService.cardDailyTasks,
-    };
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth - 32; // 16px padding each side
 
-    const singleWidth = 380.0;
-    const doubleWidth = 772.0; // 380 * 2 + 12 (spacing)
+        // Responsive column count
+        int columnCount;
+        if (availableWidth >= 1900) {
+          columnCount = 4;
+        } else if (availableWidth >= 1400) {
+          columnCount = 3;
+        } else {
+          columnCount = 2;
+        }
 
-    // Get card metadata for collapsible wrappers
-    final cardInfoMap = {
-      for (final info in AppCustomizationService.allCards) info.key: info
-    };
+        // Distribute cards round-robin across columns
+        final columns = List.generate(columnCount, (_) => <(String, Widget)>[]);
+        for (var i = 0; i < cards.length; i++) {
+          columns[i % columnCount].add(cards[i]);
+        }
 
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: cards.map((entry) {
-          final cardKey = entry.$1;
-          final cardWidget = entry.$2;
-          final isDoubleWidth = doubleWidthCards.contains(cardKey);
-          final cardInfo = cardInfoMap[cardKey];
-          final cardWidth = isDoubleWidth ? doubleWidth : singleWidth;
-
-          Widget wrappedCard = cardWidget;
-
-          // Wrap with collapsible wrapper if we have card info
-          if (cardInfo != null) {
-            wrappedCard = CollapsibleCardWrapper(
-              cardKey: cardKey,
-              title: cardInfo.label,
-              icon: cardInfo.icon,
-              iconColor: cardInfo.color,
-              child: cardWidget,
-            );
-          }
-
-          // Wrap with drag-and-drop support
-          return _buildDraggableCard(
-            cardKey: cardKey,
-            width: cardWidth,
-            child: wrappedCard,
-          );
-        }).toList(),
-      ),
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var col = 0; col < columnCount; col++) ...[
+                if (col > 0) const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final entry in columns[col])
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _buildDraggableCard(
+                            cardKey: entry.$1,
+                            child: _wrapWithCollapsible(entry.$1, entry.$2),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
+  }
+
+  Widget _wrapWithCollapsible(String cardKey, Widget cardWidget) {
+    final allCards = AppCustomizationService.allCards;
+    for (final info in allCards) {
+      if (info.key == cardKey) {
+        return CollapsibleCardWrapper(
+          cardKey: cardKey,
+          title: info.label,
+          icon: info.icon,
+          iconColor: info.color,
+          child: cardWidget,
+        );
+      }
+    }
+    return cardWidget;
   }
 
   Widget _buildDraggableCard({
     required String cardKey,
-    required double width,
     required Widget child,
   }) {
     final isDragging = _draggedCardKey == cardKey;
@@ -1548,7 +1563,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final draggedKey = details.data;
         final targetKey = cardKey;
 
-        // Reorder the cards
         final newOrder = List<String>.from(_cardOrder);
         final draggedIndex = newOrder.indexOf(draggedKey);
         final targetIndex = newOrder.indexOf(targetKey);
@@ -1557,7 +1571,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           newOrder.removeAt(draggedIndex);
           newOrder.insert(targetIndex, draggedKey);
 
-          // Save new order
           await AppCustomizationService.saveCardOrder(newOrder);
 
           if (mounted) {
@@ -1574,10 +1587,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Insertion indicator line shown above the target card
+            // Drop indicator line
             if (isTarget)
               Container(
-                width: width,
                 height: 3,
                 margin: const EdgeInsets.only(bottom: 4),
                 decoration: BoxDecoration(
@@ -1585,49 +1597,61 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            LongPressDraggable<String>(
-              data: cardKey,
-              delay: const Duration(milliseconds: 150),
-              onDragStarted: () {
-                HapticFeedback.mediumImpact();
-                setState(() => _draggedCardKey = cardKey);
-              },
-              onDragEnd: (_) {
-                setState(() => _draggedCardKey = null);
-              },
-              feedback: Material(
-                elevation: 8,
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: width, maxHeight: 200),
-                    child: Opacity(
-                      opacity: 0.85,
-                      child: child,
+            // Card with drag handle overlay
+            Stack(
+              children: [
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: isDragging ? 0.3 : 1.0,
+                  child: child,
+                ),
+                // Drag handle in top-right corner
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Draggable<String>(
+                    data: cardKey,
+                    onDragStarted: () {
+                      HapticFeedback.mediumImpact();
+                      setState(() => _draggedCardKey = cardKey);
+                    },
+                    onDragEnd: (_) {
+                      setState(() => _draggedCardKey = null);
+                    },
+                    feedback: Material(
+                      elevation: 8,
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 300, maxHeight: 150),
+                          child: Opacity(
+                            opacity: 0.85,
+                            child: child,
+                          ),
+                        ),
+                      ),
+                    ),
+                    childWhenDragging: const SizedBox.shrink(),
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.grab,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppColors.grey800.withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          Icons.drag_indicator_rounded,
+                          color: AppColors.grey300,
+                          size: 18,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              childWhenDragging: Opacity(
-                opacity: 0.3,
-                child: SizedBox(width: width, height: 60, child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.normalCardBackground,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.purple.withValues(alpha: 0.3), width: 1),
-                  ),
-                )),
-              ),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: width,
-                transform: isDragging
-                    ? Matrix4.diagonal3Values(1.02, 1.02, 1.0)
-                    : Matrix4.identity(),
-                child: child,
-              ),
+              ],
             ),
           ],
         );
@@ -1659,10 +1683,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (!_isCardVisible(AppCustomizationService.cardBatteryFlow)) return null;
         return BatteryFlowHomeCard(key: _batteryFlowCardKey);
       },
-      AppCustomizationService.cardCalendar: () {
-        if (!_isCardVisible(AppCustomizationService.cardCalendar)) return null;
-        return CalendarEventsCard(key: _calendarEventsKey);
-      },
+      // Calendar events card removed from desktop dashboard
+      AppCustomizationService.cardCalendar: () => null,
       AppCustomizationService.cardFasting: () {
         if (!_isCardVisible(AppCustomizationService.cardFasting)) return null;
         if (!showFastingSection) return null;

@@ -834,8 +834,20 @@ class BackupService {
         status['cloud_overdue'] = true; // Never shared to cloud
       }
 
-      // Set overall overdue flag
-      status['any_overdue'] = status['manual_overdue'] || status['auto_overdue'] || status['cloud_overdue'];
+      // Set overall overdue flag based on MOST RECENT backup of any type
+      // If any backup type was done recently, the user's data is safe
+      DateTime? mostRecentBackup;
+      for (final ts in [lastManual, lastAuto, lastCloudShare]) {
+        if (ts != null) {
+          final date = DateTime.parse(ts);
+          if (mostRecentBackup == null || date.isAfter(mostRecentBackup)) {
+            mostRecentBackup = date;
+          }
+        }
+      }
+      final anyRecentBackup = mostRecentBackup != null &&
+          now.difference(mostRecentBackup).inDays <= overdueThreshold;
+      status['any_overdue'] = !anyRecentBackup;
 
       return status;
     } catch (e) {

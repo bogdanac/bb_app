@@ -1,8 +1,9 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'chore_data_models.dart';
 import '../Services/firebase_backup_service.dart';
+import '../Services/realtime_sync_service.dart';
 import '../shared/error_logger.dart';
 import '../Settings/app_customization_service.dart';
 import '../Energy/energy_service.dart';
@@ -15,16 +16,46 @@ class ChoreService {
 
   // ==================== Chores CRUD ====================
 
-  /// Load all chores from SharedPreferences
+  static final _realtimeSync = RealtimeSyncService();
+
+  /// Load all chores from SharedPreferences (or Firestore on web)
   static Future<List<Chore>> loadChores() async {
-    final prefs = await SharedPreferences.getInstance();
-    final choresJson = prefs.getStringList(_choresKey) ?? [];
+    List<String> choresJson = [];
+
+    // On web, try Firestore first since SharedPreferences doesn't persist reliably
+    if (kIsWeb) {
+      final firestoreChores = await _realtimeSync.fetchChoresFromFirestore();
+      if (firestoreChores != null && firestoreChores.isNotEmpty) {
+        debugPrint('ChoreService.loadChores: WEB - got ${firestoreChores.length} chores from Firestore');
+        choresJson = firestoreChores;
+        // Cache to SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList(_choresKey, firestoreChores);
+      }
+    }
+
+    // Fallback to SharedPreferences
+    if (choresJson.isEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      choresJson = prefs.getStringList(_choresKey) ?? [];
+    }
 
     if (choresJson.isEmpty) return [];
 
     try {
       final chores =
           choresJson.map((json) => Chore.fromJson(jsonDecode(json))).toList();
+
+      // On mobile, sync to Firestore for web access
+      if (!kIsWeb && chores.isNotEmpty) {
+        _realtimeSync.syncChores(jsonEncode(choresJson)).catchError((e, stackTrace) {
+          ErrorLogger.logError(
+            source: 'ChoreService.loadChores',
+            error: 'Background chore sync failed: $e',
+            stackTrace: stackTrace.toString(),
+          );
+        });
+      }
 
       return chores;
     } catch (e, stackTrace) {
@@ -37,7 +68,7 @@ class ChoreService {
     }
   }
 
-  /// Save chores to SharedPreferences
+  /// Save chores to SharedPreferences and sync to Firestore
   static Future<void> saveChores(List<Chore> chores) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -45,7 +76,28 @@ class ChoreService {
         chores.map((chore) => jsonEncode(chore.toJson())).toList();
     await prefs.setStringList(_choresKey, choresJson);
 
-    // Backup to Firebase
+    // Sync to Firestore — await on web to ensure data persists before refresh
+    if (kIsWeb) {
+      try {
+        await _realtimeSync.syncChores(jsonEncode(choresJson));
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'ChoreService.saveChores',
+          error: 'Firestore sync failed: $e',
+          stackTrace: stackTrace.toString(),
+        );
+      }
+    } else {
+      _realtimeSync.syncChores(jsonEncode(choresJson)).catchError((e, stackTrace) {
+        ErrorLogger.logError(
+          source: 'ChoreService.saveChores',
+          error: 'Background sync failed: $e',
+          stackTrace: stackTrace.toString(),
+        );
+      });
+    }
+
+    // Also backup via legacy service
     FirebaseBackupService.triggerBackup();
   }
 
@@ -187,27 +239,59 @@ class ChoreService {
       }
     }
 
-    return conditionFactor + overdueFactor + criticalBonus + activeMonthBonus + categoryBonus;
+    // Shorter interval = more frequent = small priority boost (max ~3.6 pts for daily)
+    final intervalBonus = 365.0 / chore.intervalDays.clamp(1, 365);
+
+    return conditionFactor + overdueFactor + criticalBonus + activeMonthBonus + categoryBonus + intervalBonus;
   }
 
   // ==================== Categories Management ====================
 
-  /// Load categories from SharedPreferences
+  /// Load categories from SharedPreferences (or Firestore on web)
   static Future<List<ChoreCategory>> loadCategories() async {
-    final prefs = await SharedPreferences.getInstance();
-    final categoriesJson = prefs.getStringList(_categoriesKey);
+    List<String>? categoriesJson;
+
+    // On web, try Firestore first
+    if (kIsWeb) {
+      final firestoreCategories = await _realtimeSync.fetchChoreCategoriesFromFirestore();
+      if (firestoreCategories != null && firestoreCategories.isNotEmpty) {
+        debugPrint('ChoreService.loadCategories: WEB - got ${firestoreCategories.length} categories from Firestore');
+        categoriesJson = firestoreCategories;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList(_categoriesKey, firestoreCategories);
+      }
+    }
+
+    // Fallback to SharedPreferences
+    if (categoriesJson == null || categoriesJson.isEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      categoriesJson = prefs.getStringList(_categoriesKey);
+    }
 
     if (categoriesJson == null || categoriesJson.isEmpty) {
       // Return defaults if none saved
       final defaults = ChoreCategory.getDefaults();
-      await saveCategories(defaults); // Save defaults
+      await saveCategories(defaults);
       return defaults;
     }
 
     try {
-      return categoriesJson
+      final categories = categoriesJson
           .map((json) => ChoreCategory.fromJson(jsonDecode(json)))
           .toList();
+
+      // On mobile, sync to Firestore for web access
+      if (!kIsWeb && categories.isNotEmpty) {
+        _realtimeSync.syncChoreCategories(jsonEncode(categoriesJson)).catchError((e, stackTrace) {
+          ErrorLogger.logError(
+            source: 'ChoreService.loadCategories',
+            error: 'Background category sync failed: $e',
+            stackTrace: stackTrace.toString(),
+          );
+        });
+      }
+
+      return categories;
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'ChoreService.loadCategories',
@@ -218,12 +302,33 @@ class ChoreService {
     }
   }
 
-  /// Save categories to SharedPreferences
+  /// Save categories to SharedPreferences and sync to Firestore
   static Future<void> saveCategories(List<ChoreCategory> categories) async {
     final prefs = await SharedPreferences.getInstance();
     final categoriesJson =
         categories.map((cat) => jsonEncode(cat.toJson())).toList();
     await prefs.setStringList(_categoriesKey, categoriesJson);
+
+    if (kIsWeb) {
+      try {
+        await _realtimeSync.syncChoreCategories(jsonEncode(categoriesJson));
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'ChoreService.saveCategories',
+          error: 'Firestore sync failed: $e',
+          stackTrace: stackTrace.toString(),
+        );
+      }
+    } else {
+      _realtimeSync.syncChoreCategories(jsonEncode(categoriesJson)).catchError((e, stackTrace) {
+        ErrorLogger.logError(
+          source: 'ChoreService.saveCategories',
+          error: 'Background sync failed: $e',
+          stackTrace: stackTrace.toString(),
+        );
+      });
+    }
+
     FirebaseBackupService.triggerBackup();
   }
 
@@ -253,24 +358,76 @@ class ChoreService {
 
   // ==================== Settings Management ====================
 
-  /// Load settings
+  /// Load settings (from Firestore on web, SharedPreferences otherwise)
   static Future<ChoreSettings> loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final settingsJson = prefs.getString(_settingsKey);
+    String? settingsJson;
+
+    // On web, try Firestore first
+    if (kIsWeb) {
+      final firestoreSettings = await _realtimeSync.fetchChoreSettingsFromFirestore();
+      if (firestoreSettings != null) {
+        debugPrint('ChoreService.loadSettings: WEB - got settings from Firestore');
+        settingsJson = firestoreSettings;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_settingsKey, firestoreSettings);
+      }
+    }
+
+    // Fallback to SharedPreferences
+    if (settingsJson == null) {
+      final prefs = await SharedPreferences.getInstance();
+      settingsJson = prefs.getString(_settingsKey);
+    }
+
     if (settingsJson == null) {
       return ChoreSettings(); // Return default
     }
     try {
-      return ChoreSettings.fromJson(jsonDecode(settingsJson));
+      final settings = ChoreSettings.fromJson(jsonDecode(settingsJson));
+
+      // On mobile, sync to Firestore for web access
+      if (!kIsWeb) {
+        _realtimeSync.syncChoreSettings(settingsJson).catchError((e, stackTrace) {
+          ErrorLogger.logError(
+            source: 'ChoreService.loadSettings',
+            error: 'Background settings sync failed: $e',
+            stackTrace: stackTrace.toString(),
+          );
+        });
+      }
+
+      return settings;
     } catch (e) {
       return ChoreSettings(); // Return default on error
     }
   }
 
-  /// Save settings
+  /// Save settings and sync to Firestore
   static Future<void> saveSettings(ChoreSettings settings) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_settingsKey, jsonEncode(settings.toJson()));
+    final json = jsonEncode(settings.toJson());
+    await prefs.setString(_settingsKey, json);
+
+    if (kIsWeb) {
+      try {
+        await _realtimeSync.syncChoreSettings(json);
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'ChoreService.saveSettings',
+          error: 'Firestore sync failed: $e',
+          stackTrace: stackTrace.toString(),
+        );
+      }
+    } else {
+      _realtimeSync.syncChoreSettings(json).catchError((e, stackTrace) {
+        ErrorLogger.logError(
+          source: 'ChoreService.saveSettings',
+          error: 'Background sync failed: $e',
+          stackTrace: stackTrace.toString(),
+        );
+      });
+    }
+
     FirebaseBackupService.triggerBackup();
   }
 

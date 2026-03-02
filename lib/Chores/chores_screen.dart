@@ -8,11 +8,13 @@ import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import '../shared/date_picker_utils.dart';
 import '../shared/date_format_utils.dart';
+import '../Settings/app_customization_service.dart';
+import '../Tasks/task_card_utils.dart';
 
 class ChoresScreen extends StatefulWidget {
-  final VoidCallback? onOpenDrawer;
+  final Widget Function()? drawerBuilder;
 
-  const ChoresScreen({super.key, this.onOpenDrawer});
+  const ChoresScreen({super.key, this.drawerBuilder});
 
   @override
   State<ChoresScreen> createState() => _ChoresScreenState();
@@ -22,6 +24,7 @@ class _ChoresScreenState extends State<ChoresScreen> {
   List<Chore> _chores = [];
   List<ChoreCategory> _categories = [];
   bool _isLoading = true;
+  bool _energyModuleEnabled = false;
   Set<String> _expandedCategories = {};
 
   @override
@@ -37,6 +40,8 @@ class _ChoresScreenState extends State<ChoresScreen> {
 
     final chores = await ChoreService.loadChores();
     final categories = await ChoreService.loadCategories();
+    final states = await AppCustomizationService.loadAllModuleStates();
+    final energyEnabled = states[AppCustomizationService.moduleEnergy] ?? false;
 
     // Expand categories that have critical or overdue chores by default
     final expandedByDefault = <String>{};
@@ -49,6 +54,7 @@ class _ChoresScreenState extends State<ChoresScreen> {
     setState(() {
       _chores = chores;
       _categories = categories;
+      _energyModuleEnabled = energyEnabled;
       _expandedCategories = expandedByDefault;
       _isLoading = false;
     });
@@ -60,9 +66,14 @@ class _ChoresScreenState extends State<ChoresScreen> {
       grouped.putIfAbsent(chore.category, () => []).add(chore);
     }
 
-    // Sort chores within each category by condition (worst first)
+    // Sort chores within each category by condition (worst first),
+    // then by interval days ascending (more frequent chores first) as tiebreaker
     for (final list in grouped.values) {
-      list.sort((a, b) => a.currentCondition.compareTo(b.currentCondition));
+      list.sort((a, b) {
+        final cmp = a.currentCondition.compareTo(b.currentCondition);
+        if (cmp != 0) return cmp;
+        return a.intervalDays.compareTo(b.intervalDays);
+      });
     }
 
     return grouped;
@@ -156,14 +167,9 @@ class _ChoresScreenState extends State<ChoresScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: widget.drawerBuilder?.call(),
       appBar: AppBar(
         title: const Text('Chores'),
-        leading: widget.onOpenDrawer != null
-            ? IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: widget.onOpenDrawer,
-              )
-            : null,
         actions: [
           IconButton(
             icon: const Icon(Icons.category_rounded),
@@ -215,14 +221,20 @@ class _ChoresScreenState extends State<ChoresScreen> {
       );
     }
 
-    // Get priority chores (sorted by condition, worst first)
+    final categoryOrder = _categories.map((c) => c.name).toList();
+
+    // Get priority chores (sorted by priority algorithm, highest first)
     final priorityChores = _chores
         .where((c) => c.isCritical || c.isOverdue)
         .toList()
-      ..sort((a, b) => a.currentCondition.compareTo(b.currentCondition));
+      ..sort((a, b) {
+        final aPriority = ChoreService.calculatePriority(a, categoryOrder: categoryOrder);
+        final bPriority = ChoreService.calculatePriority(b, categoryOrder: categoryOrder);
+        if (aPriority != bPriority) return bPriority.compareTo(aPriority);
+        return a.intervalDays.compareTo(b.intervalDays); // shorter interval = higher priority
+      });
 
     final grouped = _groupByCategory();
-    final categoryOrder = _categories.map((c) => c.name).toList();
 
     // Sort categories by defined order
     final sortedCategories = grouped.keys.toList()
@@ -371,12 +383,22 @@ class _ChoresScreenState extends State<ChoresScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  Text(
-                    '${chore.conditionPercentage}% • ${_daysAgoText(chore)} • ${_getDueText(chore)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: chore.isOverdue ? Colors.red : AppColors.greyText,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '${chore.conditionPercentage}% • ${_daysAgoText(chore)} • ${_getDueText(chore)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: chore.isOverdue ? Colors.red : AppColors.greyText,
+                          ),
+                        ),
+                      ),
+                      if (_energyModuleEnabled && chore.energyLevel != 0) ...[
+                        const SizedBox(width: 6),
+                        TaskCardUtils.buildEnergyChip(chore.energyLevel),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -647,6 +669,10 @@ class _ChoresScreenState extends State<ChoresScreen> {
                           color: chore.isOverdue ? Colors.red : AppColors.greyText,
                         ),
                       ),
+                      if (_energyModuleEnabled && chore.energyLevel != 0) ...[
+                        const SizedBox(width: 8),
+                        TaskCardUtils.buildEnergyChip(chore.energyLevel),
+                      ],
                       const Spacer(),
                       Text(
                         chore.intervalDisplayText,
@@ -681,7 +707,10 @@ class _ChoresScreenState extends State<ChoresScreen> {
   }
 
   String _daysAgoText(Chore chore) {
-    final days = DateTime.now().difference(chore.lastCompleted).inDays;
+    final now = DateTime.now();
+    final nowDate = DateTime(now.year, now.month, now.day);
+    final lastDate = DateTime(chore.lastCompleted.year, chore.lastCompleted.month, chore.lastCompleted.day);
+    final days = nowDate.difference(lastDate).inDays;
     if (days == 0) return 'today';
     if (days == 1) return '1d ago';
     return '${days}d ago';

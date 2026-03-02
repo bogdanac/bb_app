@@ -199,24 +199,24 @@ class Chore {
     return Colors.red;
   }
 
-  /// Get next due date
+  /// Get next due date (date-only, based on the calendar date of lastCompleted)
   DateTime get nextDueDate {
-    return lastCompleted.add(Duration(days: intervalDays));
+    final lastDate = DateTime(lastCompleted.year, lastCompleted.month, lastCompleted.day);
+    return lastDate.add(Duration(days: intervalDays));
   }
 
-  /// Check if chore is overdue (past due date)
+  /// Check if chore is overdue (past due date, date-only comparison)
   bool get isOverdue {
     final now = DateTime.now();
-    return now.isAfter(nextDueDate);
+    final nowDate = DateTime(now.year, now.month, now.day);
+    return nowDate.isAfter(nextDueDate);
   }
 
   /// Get days until next due (negative if overdue)
   int get daysUntilDue {
     final now = DateTime.now();
     final nowDate = DateTime(now.year, now.month, now.day);
-    final dueDate =
-        DateTime(nextDueDate.year, nextDueDate.month, nextDueDate.day);
-    return dueDate.difference(nowDate).inDays;
+    return nextDueDate.difference(nowDate).inDays;
   }
 
   /// Check if chore is critical (condition < 40%)

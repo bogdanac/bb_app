@@ -17,7 +17,7 @@ class TaskBuilder {
     required bool hasUserModifiedScheduledDate,
     required Task? currentTask,
     bool? isCompleted, // Explicit completion status from edit screen
-    int energyLevel = -1,
+    int energyLevel = 0,
   }) {
     // Calculate effective scheduled date
     final DateTime? effectiveScheduledDate = hasUserModifiedScheduledDate

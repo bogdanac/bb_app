@@ -31,7 +31,7 @@ class TodoScreen extends StatefulWidget {
   final bool enableRefresh; // Whether to enable pull-to-refresh
   final VoidCallback? onTasksChanged; // Callback when tasks are modified
   final bool? initialShowAllTasks; // Initial state for menstrual cycle filtering
-  final VoidCallback? onOpenDrawer;
+  final Widget Function()? drawerBuilder;
 
   const TodoScreen({
     super.key,
@@ -40,7 +40,7 @@ class TodoScreen extends StatefulWidget {
     this.enableRefresh = true,
     this.onTasksChanged,
     this.initialShowAllTasks,
-    this.onOpenDrawer,
+    this.drawerBuilder,
   });
 
   @override
@@ -864,9 +864,9 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Reload tasks on resume to pick up changes made on other devices
+    // Reload tasks on resume — pull from Firestore first to pick up changes made on other devices
     if (mounted && state == AppLifecycleState.resumed) {
-      _loadTasks().then((_) => _updateDisplayTasks());
+      _loadTasks(fromResume: true).then((_) => _updateDisplayTasks());
     }
   }
 
@@ -939,8 +939,8 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
     await _taskService.saveSelectedCategoryFilters(_selectedCategoryFilters);
   }
 
-  Future<void> _loadTasks() async {
-    final tasks = await _taskService.loadTasks();
+  Future<void> _loadTasks({bool fromResume = false}) async {
+    final tasks = await _taskService.loadTasks(fromResume: fromResume);
 
     // Clean up duplicates by keeping only the latest version of each unique ID
     final Map<String, Task> uniqueTasks = {};
@@ -1292,19 +1292,16 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         task.recurrence!.types.contains(RecurrenceType.yearly);
 
     // Special handling for PURE menstrual phase tasks (no schedule-based recurrence):
-    // These should NOT auto-recalculate to avoid scheduling to past dates.
-    // User will manually recalculate when next period comes.
-    // BUT if it has schedule recurrence (daily, weekly, monthly), it should reschedule.
+    // Mark as completed for this cycle. When the user records a new period start,
+    // _updateMenstrualTaskPriorities() will auto-reset and reschedule for the new cycle.
     if (isMenstrualPhaseTask && !hasScheduleRecurrence) {
-      // For pure menstrual phase tasks, clear scheduledDate and mark as completed.
-      // This prevents the broken getNextDueDate logic from scheduling to past dates.
       final updatedTask = Task(
         id: task.id,
         title: task.title,
         description: task.description,
         categoryIds: List.from(task.categoryIds),
         deadline: task.deadline,
-        scheduledDate: null, // Clear scheduled date - will be recalculated later
+        scheduledDate: null, // Clear scheduled date - auto-recalculated on new cycle
         reminderTime: task.reminderTime,
         isImportant: task.isImportant,
         isPostponed: false,
@@ -1927,6 +1924,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
               onPostpone: task.isCompleted ? null : () => _postponeTask(task), // No postpone for completed tasks
               priorityReason: priorityReason.isNotEmpty ? priorityReason : null,
               priorityColor: priorityColor,
+              energyEnabled: _energyModuleEnabled,
             );
           },
         );
@@ -1939,10 +1937,8 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
+        drawer: widget.drawerBuilder?.call(),
         appBar: widget.showFilters ? AppBar(
-          leading: widget.onOpenDrawer != null
-              ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
-              : null,
           title: const Text('Tasks'),
           backgroundColor: Colors.transparent,
         ) : null,
@@ -1955,10 +1951,8 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
 
   Widget _buildMainScaffold(List<Task> prioritizedTasks) {
     return Scaffold(
+      drawer: widget.drawerBuilder?.call(),
       appBar: widget.showFilters ? AppBar(
-        leading: widget.onOpenDrawer != null
-            ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
-            : null,
         title: _isSearching
             ? TextField(
                 controller: _searchController,

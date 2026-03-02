@@ -244,6 +244,9 @@ class FirebaseBackupService {
     'routines',
     'habits',
     'energy_settings',
+    'chores',
+    'chores_categories',
+    'chores_settings',
   };
 
   // Keys that should NEVER be restored from remote because they represent

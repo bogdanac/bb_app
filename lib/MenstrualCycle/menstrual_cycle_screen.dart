@@ -19,8 +19,8 @@ import 'package:bb_app/Fasting/scheduled_fastings_service.dart';
 import 'package:bb_app/Settings/app_customization_service.dart';
 
 class MenstrualCycleScreen extends StatefulWidget {
-  final VoidCallback? onOpenDrawer;
-  const MenstrualCycleScreen({super.key, this.onOpenDrawer});
+  final Widget Function()? drawerBuilder;
+  const MenstrualCycleScreen({super.key, this.drawerBuilder});
 
   @override
   State<MenstrualCycleScreen> createState() => _MenstrualCycleScreenState();
@@ -526,10 +526,8 @@ class _MenstrualCycleScreenState extends State<MenstrualCycleScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: widget.drawerBuilder?.call(),
       appBar: AppBar(
-        leading: widget.onOpenDrawer != null
-            ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
-            : null,
         title: const Text('Menstrual Cycle'),
         backgroundColor: AppColors.transparent,
         actions: [

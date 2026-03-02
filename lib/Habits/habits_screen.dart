@@ -9,8 +9,8 @@ import 'package:bb_app/theme/app_styles.dart';
 import 'package:bb_app/Habits/habit_service.dart';
 
 class HabitsScreen extends StatefulWidget {
-  final VoidCallback? onOpenDrawer;
-  const HabitsScreen({super.key, this.onOpenDrawer});
+  final Widget Function()? drawerBuilder;
+  const HabitsScreen({super.key, this.drawerBuilder});
 
   @override
   State<HabitsScreen> createState() => _HabitsScreenState();
@@ -135,14 +135,10 @@ class _HabitsScreenState extends State<HabitsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final drawerLeading = widget.onOpenDrawer != null
-        ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
-        : null;
-
     if (_isLoading) {
       return Scaffold(
+        drawer: widget.drawerBuilder?.call(),
         appBar: AppBar(
-          leading: drawerLeading,
           title: const Text('Habits'),
           backgroundColor: Colors.transparent,
         ),
@@ -151,8 +147,8 @@ class _HabitsScreenState extends State<HabitsScreen> {
     }
 
     return Scaffold(
+      drawer: widget.drawerBuilder?.call(),
       appBar: AppBar(
-        leading: drawerLeading,
         title: const Text('Habits'),
         backgroundColor: Colors.transparent,
         actions: [

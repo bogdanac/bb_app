@@ -199,66 +199,20 @@ class ActivitiesCardState extends State<ActivitiesCard> {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: AppStyles.borderRadiusLarge,
-          color: AppColors.homeCardBackground,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header — matches food card style
-            GestureDetector(
-              onTap: widget.onNavigateToTimers,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
-                child: Row(
-                  children: [
-                    Icon(Icons.timer_rounded, color: AppColors.purple, size: 24),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _runningActivityId != null ? 'Timer running' : 'Activities',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    if (_runningActivityId != null) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.purple.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 6, height: 6,
-                              decoration: BoxDecoration(color: AppColors.purple, shape: BoxShape.circle),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _formatElapsed(_activityElapsed),
-                              style: TextStyle(color: AppColors.purple, fontSize: 12, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                    ],
-                    Icon(Icons.chevron_right_rounded, color: AppColors.grey300, size: 20),
-                  ],
-                ),
-              ),
+      child: GestureDetector(
+        onTap: widget.onNavigateToTimers,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: AppStyles.borderRadiusLarge,
+            color: AppColors.homeCardBackground,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: displayActivities.map((activity) => _buildActivityRow(activity)).toList(),
             ),
-
-            const Divider(height: 1, color: AppColors.white24),
-
-            // Activity rows
-            ...displayActivities.map((activity) => _buildActivityRow(activity)),
-
-            const SizedBox(height: 6),
-          ],
+          ),
         ),
       ),
     );
@@ -269,7 +223,7 @@ class ActivitiesCardState extends State<ActivitiesCard> {
     final color = _modeColor(activity);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 12, 0),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
           // Energy mode dot
@@ -294,6 +248,31 @@ class ActivitiesCardState extends State<ActivitiesCard> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          // Running timer badge inline
+          if (isRunning) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.purple.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 6, height: 6,
+                    decoration: BoxDecoration(color: AppColors.purple, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _formatElapsed(_activityElapsed),
+                    style: TextStyle(color: AppColors.purple, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           // Circle play/stop button
           GestureDetector(
             onTap: () => isRunning ? _stopActivityTimer(save: true) : _startActivityTimer(activity.id),

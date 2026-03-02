@@ -12,6 +12,7 @@ import 'fasting_utils.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import '../shared/date_picker_utils.dart';
+import '../shared/date_format_utils.dart';
 import '../shared/time_picker_utils.dart';
 import 'fasting_stage_timeline.dart';
 import 'scheduled_fastings_service.dart';
@@ -23,8 +24,8 @@ import 'extended_fast_guide_screen.dart';
 import 'fasting_guide_screen.dart';
 
 class FastingScreen extends StatefulWidget {
-  final VoidCallback? onOpenDrawer;
-  const FastingScreen({super.key, this.onOpenDrawer});
+  final Widget Function()? drawerBuilder;
+  const FastingScreen({super.key, this.drawerBuilder});
 
   @override
   State<FastingScreen> createState() => _FastingScreenState();
@@ -210,6 +211,15 @@ class _FastingScreenState extends State<FastingScreen>
 
     // Notifică toate componentele că starea s-a schimbat
     _notifier.notifyFastingStateChanged();
+  }
+
+  String _formatEndTime(DateTime endTime) {
+    final time = '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}';
+    final now = DateTime.now();
+    if (DateFormatUtils.isSameDay(endTime, now)) {
+      return 'Ends at $time';
+    }
+    return 'Ends at $time, ${DateFormatUtils.formatShort(endTime)}';
   }
 
   void _calculateFastingProgress() {
@@ -1346,7 +1356,7 @@ class _FastingScreenState extends State<FastingScreen>
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Ends at ${_currentFastEnd!.hour.toString().padLeft(2, '0')}:${_currentFastEnd!.minute.toString().padLeft(2, '0')}',
+                          _formatEndTime(_currentFastEnd!),
                           style: const TextStyle(
                             fontSize: 12,
                             color: AppColors.white54,
@@ -1385,10 +1395,8 @@ class _FastingScreenState extends State<FastingScreen>
     final showPostponeButton = !_isFasting && recommendedFast.isNotEmpty;
 
     return Scaffold(
+      drawer: widget.drawerBuilder?.call(),
       appBar: AppBar(
-        leading: widget.onOpenDrawer != null
-            ? IconButton(icon: const Icon(Icons.menu_rounded), onPressed: widget.onOpenDrawer)
-            : null,
         title: const Text('Fasting'),
         backgroundColor: AppColors.transparent,
         actions: [

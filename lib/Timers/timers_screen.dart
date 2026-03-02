@@ -15,8 +15,8 @@ import 'timer_global_history_screen.dart';
 import 'productivity_assistant.dart';
 
 class TimersScreen extends StatefulWidget {
-  final VoidCallback? onOpenDrawer;
-  const TimersScreen({super.key, this.onOpenDrawer});
+  final Widget Function()? drawerBuilder;
+  const TimersScreen({super.key, this.drawerBuilder});
 
   @override
   State<TimersScreen> createState() => _TimersScreenState();
@@ -877,15 +877,8 @@ class _TimersScreenState extends State<TimersScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: widget.drawerBuilder?.call(),
       appBar: AppBar(
-        automaticallyImplyLeading: false,
-        leading: widget.onOpenDrawer != null
-            ? IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Colors.white),
-                onPressed: widget.onOpenDrawer,
-                tooltip: 'Menu',
-              )
-            : null,
         title: const Text('Timers'),
         backgroundColor: Colors.transparent,
         actions: [

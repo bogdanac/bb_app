@@ -3,6 +3,7 @@ import 'end_of_day_review_data.dart';
 import 'end_of_day_review_service.dart';
 import 'end_of_day_review_screen.dart';
 import '../Settings/app_customization_service.dart';
+import '../Tasks/task_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 
@@ -27,6 +28,17 @@ class EndOfDayReviewCardState extends State<EndOfDayReviewCard> {
   void initState() {
     super.initState();
     _loadQuickSummary();
+    TaskService().addTaskChangeListener(_onTasksChanged);
+  }
+
+  @override
+  void dispose() {
+    TaskService().removeTaskChangeListener(_onTasksChanged);
+    super.dispose();
+  }
+
+  void _onTasksChanged() {
+    refresh();
   }
 
   Future<void> _loadQuickSummary() async {
@@ -40,13 +52,15 @@ class EndOfDayReviewCardState extends State<EndOfDayReviewCard> {
     }
   }
 
-  void _openFullReview() {
-    Navigator.push(
+  void _openFullReview() async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => const EndOfDayReviewScreen(),
       ),
     );
+    // Refresh when returning from the full review screen
+    refresh();
   }
 
   @override

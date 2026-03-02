@@ -752,6 +752,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               onReorder: (oldIndex, newIndex) {
+                // Adjust indices to skip the Home item at midpoint
+                final homeMidpoint = (_primaryTabs.length / 2).ceil();
+                if (oldIndex >= homeMidpoint) oldIndex--;
+                if (newIndex > homeMidpoint) newIndex--;
+                if (oldIndex < 0 || oldIndex >= allModules.length) return;
+                if (newIndex < 0) newIndex = 0;
+                if (newIndex > allModules.length) newIndex = allModules.length;
+
                 setState(() {
                   if (oldIndex < newIndex) newIndex -= 1;
                   final item = allModules.removeAt(oldIndex);
@@ -764,7 +772,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _savePrimaryTabs();
                 _saveSecondaryTabsOrder();
               },
-              itemCount: allModules.length,
+              itemCount: allModules.length + 1, // +1 for Home
               proxyDecorator: (child, index, animation) {
                 return AnimatedBuilder(
                   animation: animation,
@@ -781,12 +789,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               },
               itemBuilder: (context, index) {
-                final moduleKey = allModules[index];
+                // Insert Home at midpoint of primary tabs
+                final homeMidpoint = (_primaryTabs.length / 2).ceil();
+                if (index == homeMidpoint) {
+                  // Fixed Home item (not draggable)
+                  return Container(
+                    key: const ValueKey('__home__'),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: AppColors.normalCardBackground, width: 0.5),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      child: Row(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Icon(Icons.lock_rounded, color: AppColors.grey300.withValues(alpha: 0.3), size: 20),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.pink.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.home_rounded, color: AppColors.pink, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Home', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                                Text('Bottom bar', style: TextStyle(fontSize: 11, color: AppColors.pink.withValues(alpha: 0.7))),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.pink.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text('Fixed', style: TextStyle(fontSize: 11, color: AppColors.pink, fontWeight: FontWeight.w500)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                // Map display index to actual module index (skip Home)
+                final moduleIndex = index > homeMidpoint ? index - 1 : index;
+                if (moduleIndex >= allModules.length) return SizedBox.shrink(key: ValueKey('empty_$index'));
+                final moduleKey = allModules[moduleIndex];
                 final module = _getModuleInfo(moduleKey);
                 if (module == null) return SizedBox.shrink(key: ValueKey(moduleKey));
 
                 final isEnabled = _moduleStates[moduleKey] ?? false;
-                final isPrimary = index < 4;
+                final isPrimary = moduleIndex < 4;
 
                 return _buildUnifiedModuleItem(
                   key: ValueKey(moduleKey),

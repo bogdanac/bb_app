@@ -181,7 +181,7 @@ class Task {
       isCompleted: json['isCompleted'] ?? false,
       completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt']) : null,
       createdAt: DateTime.parse(json['createdAt']),
-      energyLevel: json['energyLevel'] ?? -1,
+      energyLevel: json['energyLevel'] ?? 0,
     );
   }
 }

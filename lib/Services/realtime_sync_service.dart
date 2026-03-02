@@ -28,6 +28,7 @@ class RealtimeSyncService {
   StreamSubscription<DocumentSnapshot>? _routinesListener;
   StreamSubscription<DocumentSnapshot>? _habitsListener;
   StreamSubscription<DocumentSnapshot>? _energyListener;
+  StreamSubscription<DocumentSnapshot>? _choresListener;
 
   // Track last sync timestamps to prevent loops
   final Map<String, int> _lastSyncTimestamps = {};
@@ -37,6 +38,7 @@ class RealtimeSyncService {
   bool _isRestoringRoutines = false;
   bool _isRestoringHabits = false;
   bool _isRestoringEnergy = false;
+  bool _isRestoringChores = false;
 
   // Sync event callbacks for UI refresh
   final List<VoidCallback> _syncEventListeners = [];
@@ -151,6 +153,7 @@ class RealtimeSyncService {
       _setupRoutinesListener();
       _setupHabitsListener();
       _setupEnergyListener();
+      _setupChoresListener();
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'RealtimeSyncService._onAuthStateChanged',
@@ -165,11 +168,13 @@ class RealtimeSyncService {
     await _routinesListener?.cancel();
     await _habitsListener?.cancel();
     await _energyListener?.cancel();
+    await _choresListener?.cancel();
 
     _tasksListener = null;
     _routinesListener = null;
     _habitsListener = null;
     _energyListener = null;
+    _choresListener = null;
   }
 
   void setSyncEnabled(bool enabled) {
@@ -316,30 +321,43 @@ class RealtimeSyncService {
 
   Future<void> _restoreTasksData(Map<String, dynamic> data) async {
     try {
-      final tasksJson = data['tasks'] as String?;
-      if (tasksJson == null) return;
-
       final prefs = await SharedPreferences.getInstance();
-      // Decode the outer JSON array
-      final List<dynamic> tasksList = jsonDecode(tasksJson);
 
-      // Process each item - could be a Map (object) or String (already JSON)
-      final List<String> tasksStringList = [];
-      for (final item in tasksList) {
-        if (item is Map) {
-          // Item is a parsed object, encode it
-          tasksStringList.add(jsonEncode(item));
-        } else if (item is String) {
-          // Item is already a JSON string, use as-is (validate first)
-          try {
-            jsonDecode(item); // Validate it's valid JSON
-            tasksStringList.add(item);
-          } catch (_) {
-            // Invalid JSON string, skip
+      // Restore tasks
+      final tasksJson = data['tasks'] as String?;
+      if (tasksJson != null) {
+        final List<dynamic> tasksList = jsonDecode(tasksJson);
+        final List<String> tasksStringList = [];
+        for (final item in tasksList) {
+          if (item is Map) {
+            tasksStringList.add(jsonEncode(item));
+          } else if (item is String) {
+            try {
+              jsonDecode(item);
+              tasksStringList.add(item);
+            } catch (_) {}
           }
         }
+        await prefs.setStringList('tasks', tasksStringList);
       }
-      await prefs.setStringList('tasks', tasksStringList);
+
+      // Also restore categories if present in the same doc
+      final categoriesJson = data['categories'] as String?;
+      if (categoriesJson != null) {
+        final List<dynamic> categoriesList = jsonDecode(categoriesJson);
+        final List<String> categoriesStringList = [];
+        for (final item in categoriesList) {
+          if (item is Map) {
+            categoriesStringList.add(jsonEncode(item));
+          } else if (item is String) {
+            try {
+              jsonDecode(item);
+              categoriesStringList.add(item);
+            } catch (_) {}
+          }
+        }
+        await prefs.setStringList('task_categories', categoriesStringList);
+      }
 
       // Mark web data as verified — Firestore listener confirmed fresh data,
       // so future saves from TaskRepository can safely sync back to Firestore
@@ -348,11 +366,7 @@ class RealtimeSyncService {
       }
 
       if (kDebugMode) {
-        await ErrorLogger.logError(
-          source: 'RealtimeSyncService._restoreTasksData',
-          error: 'Tasks restored from Firestore',
-          stackTrace: '',
-        );
+        debugPrint('RealtimeSyncService._restoreTasksData: Tasks + categories restored from Firestore');
       }
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
@@ -896,6 +910,334 @@ class RealtimeSyncService {
       await ErrorLogger.logError(
         source: 'RealtimeSyncService.fetchHabitsFromFirestore',
         error: 'Failed to fetch habits from Firestore: $e',
+        stackTrace: stackTrace.toString(),
+      );
+      return null;
+    }
+  }
+
+  // ========================
+  // CHORES SYNC
+  // ========================
+
+  void _setupChoresListener() {
+    if (_userId == null || !_syncEnabled) return;
+
+    _choresListener = _firestore
+        .collection('users')
+        .doc(_userId)
+        .collection('data')
+        .doc('chores')
+        .snapshots()
+        .listen((snapshot) async {
+      if (!snapshot.exists || _isRestoringChores) return;
+
+      try {
+        final data = snapshot.data();
+        if (data == null) return;
+
+        final lastSync = data['lastSync'] as Timestamp?;
+        if (lastSync == null) return;
+
+        final remoteTimestamp = lastSync.millisecondsSinceEpoch;
+        final localTimestamp = _lastSyncTimestamps['chores'] ?? 0;
+
+        // Skip if this is our own sync (use 2s tolerance for server timestamp drift)
+        if (localTimestamp > 0 && (remoteTimestamp - localTimestamp).abs() < 2000) {
+          return;
+        }
+        // Skip if remote is older than our last sync
+        if (remoteTimestamp < localTimestamp) {
+          return;
+        }
+
+        if (kDebugMode) {
+          debugPrint('RealtimeSyncService: Chores changed remotely - syncing...');
+        }
+
+        _isRestoringChores = true;
+        await _restoreChoresData(data);
+        await Future.delayed(const Duration(milliseconds: 100));
+        _isRestoringChores = false;
+
+        _notifySyncEvent();
+      } catch (e, stackTrace) {
+        await ErrorLogger.logError(
+          source: 'RealtimeSyncService._setupChoresListener',
+          error: 'Chores sync error: $e',
+          stackTrace: stackTrace.toString(),
+        );
+        _isRestoringChores = false;
+      }
+    });
+  }
+
+  /// Sync chores data to Firestore
+  Future<void> syncChores(String choresJson) async {
+    final userId = _userId ?? _auth.currentUser?.uid;
+    if (!_syncEnabled || userId == null || _isRestoringChores) return;
+
+    try {
+      _lastSyncTimestamps['chores'] = DateTime.now().millisecondsSinceEpoch;
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('data')
+          .doc('chores')
+          .set({
+        'chores': choresJson,
+        'lastSync': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (kDebugMode) {
+        debugPrint('RealtimeSyncService.syncChores: Chores synced to Firestore');
+      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService.syncChores',
+        error: 'Chores sync failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }
+  }
+
+  /// Sync chore categories to Firestore (stored in the same 'chores' document)
+  Future<void> syncChoreCategories(String categoriesJson) async {
+    final userId = _userId ?? _auth.currentUser?.uid;
+    if (!_syncEnabled || userId == null) return;
+
+    try {
+      _lastSyncTimestamps['chore_categories'] = DateTime.now().millisecondsSinceEpoch;
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('data')
+          .doc('chores')
+          .set({
+        'categories': categoriesJson,
+        'lastSync': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (kDebugMode) {
+        debugPrint('RealtimeSyncService.syncChoreCategories: Chore categories synced to Firestore');
+      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService.syncChoreCategories',
+        error: 'Chore categories sync failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }
+  }
+
+  /// Sync chore settings to Firestore (stored in the same 'chores' document)
+  Future<void> syncChoreSettings(String settingsJson) async {
+    final userId = _userId ?? _auth.currentUser?.uid;
+    if (!_syncEnabled || userId == null) return;
+
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('data')
+          .doc('chores')
+          .set({
+        'settings': settingsJson,
+        'lastSync': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (kDebugMode) {
+        debugPrint('RealtimeSyncService.syncChoreSettings: Chore settings synced to Firestore');
+      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService.syncChoreSettings',
+        error: 'Chore settings sync failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }
+  }
+
+  Future<void> _restoreChoresData(Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Restore chores
+      final choresJson = data['chores'] as String?;
+      if (choresJson != null) {
+        final List<dynamic> choresList = jsonDecode(choresJson);
+        final List<String> choresStringList = [];
+        for (final item in choresList) {
+          if (item is Map) {
+            choresStringList.add(jsonEncode(item));
+          } else if (item is String) {
+            try {
+              jsonDecode(item);
+              choresStringList.add(item);
+            } catch (_) {}
+          }
+        }
+        await prefs.setStringList('chores', choresStringList);
+      }
+
+      // Restore chore categories
+      final categoriesJson = data['categories'] as String?;
+      if (categoriesJson != null) {
+        final List<dynamic> categoriesList = jsonDecode(categoriesJson);
+        final List<String> categoriesStringList = [];
+        for (final item in categoriesList) {
+          if (item is Map) {
+            categoriesStringList.add(jsonEncode(item));
+          } else if (item is String) {
+            try {
+              jsonDecode(item);
+              categoriesStringList.add(item);
+            } catch (_) {}
+          }
+        }
+        await prefs.setStringList('chores_categories', categoriesStringList);
+      }
+
+      // Restore chore settings
+      final settingsJson = data['settings'] as String?;
+      if (settingsJson != null) {
+        await prefs.setString('chores_settings', settingsJson);
+      }
+
+      if (kDebugMode) {
+        debugPrint('RealtimeSyncService: Chores data restored from Firestore');
+      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService._restoreChoresData',
+        error: 'Chores restore failed: $e',
+        stackTrace: stackTrace.toString(),
+      );
+    }
+  }
+
+  /// Fetch chores directly from Firestore (for web)
+  Future<List<String>?> fetchChoresFromFirestore() async {
+    final user = _auth.currentUser;
+    final userId = user?.uid ?? _userId;
+
+    if (userId == null) {
+      debugPrint('RealtimeSyncService.fetchChoresFromFirestore: No user logged in');
+      return null;
+    }
+
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('data')
+          .doc('chores')
+          .get();
+
+      if (!doc.exists) return null;
+
+      final data = doc.data();
+      if (data == null) return null;
+
+      final choresJson = data['chores'] as String?;
+      if (choresJson == null) return null;
+
+      final List<dynamic> choresList = jsonDecode(choresJson);
+      final List<String> choresStringList = [];
+      for (final item in choresList) {
+        if (item is Map) {
+          choresStringList.add(jsonEncode(item));
+        } else if (item is String) {
+          try {
+            jsonDecode(item);
+            choresStringList.add(item);
+          } catch (_) {}
+        }
+      }
+      return choresStringList;
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService.fetchChoresFromFirestore',
+        error: 'Failed to fetch chores from Firestore: $e',
+        stackTrace: stackTrace.toString(),
+      );
+      return null;
+    }
+  }
+
+  /// Fetch chore categories directly from Firestore (for web)
+  Future<List<String>?> fetchChoreCategoriesFromFirestore() async {
+    final user = _auth.currentUser;
+    final userId = user?.uid ?? _userId;
+
+    if (userId == null) return null;
+
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('data')
+          .doc('chores')
+          .get();
+
+      if (!doc.exists) return null;
+
+      final data = doc.data();
+      if (data == null) return null;
+
+      final categoriesJson = data['categories'] as String?;
+      if (categoriesJson == null) return null;
+
+      final List<dynamic> categoriesList = jsonDecode(categoriesJson);
+      final List<String> categoriesStringList = [];
+      for (final item in categoriesList) {
+        if (item is Map) {
+          categoriesStringList.add(jsonEncode(item));
+        } else if (item is String) {
+          try {
+            jsonDecode(item);
+            categoriesStringList.add(item);
+          } catch (_) {}
+        }
+      }
+      return categoriesStringList;
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService.fetchChoreCategoriesFromFirestore',
+        error: 'Failed to fetch chore categories from Firestore: $e',
+        stackTrace: stackTrace.toString(),
+      );
+      return null;
+    }
+  }
+
+  /// Fetch chore settings directly from Firestore (for web)
+  Future<String?> fetchChoreSettingsFromFirestore() async {
+    final user = _auth.currentUser;
+    final userId = user?.uid ?? _userId;
+
+    if (userId == null) return null;
+
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('data')
+          .doc('chores')
+          .get();
+
+      if (!doc.exists) return null;
+
+      final data = doc.data();
+      if (data == null) return null;
+
+      return data['settings'] as String?;
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'RealtimeSyncService.fetchChoreSettingsFromFirestore',
+        error: 'Failed to fetch chore settings from Firestore: $e',
         stackTrace: stackTrace.toString(),
       );
       return null;

@@ -1095,14 +1095,14 @@ class NotificationService {
       }
 
       const androidDetails = AndroidNotificationDetails(
-        'food_tracking',
+        'food_tracking_silent',
         'Food Tracking Reminders',
         channelDescription: 'Daily reminders to track your food intake',
-        importance: Importance.high,
-        priority: Priority.high,
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
         showWhen: true,
-        playSound: true,
-        enableVibration: true,
+        playSound: false,
+        enableVibration: false,
         icon: '@mipmap/ic_launcher',
         color: Color(0xFF4CAF50), // Green
       );
@@ -1133,13 +1133,12 @@ class NotificationService {
       await flutterLocalNotificationsPlugin.zonedSchedule(
         7770,
         '🍽️ Food Tracking Time',
-        'Don\'t forget to log what you ate today! Tap to track your meals.',
+        'Don\'t forget to log what you ate today!',
         TimezoneUtils.forNotification(todayReminder),
         notificationDetails,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time, // Repeat daily at 8 PM
-        payload: 'food_tracking_reminder',
       );
 
       // Backup: Schedule individual notifications for next 7 days (more reliable on some devices)
@@ -1152,12 +1151,11 @@ class NotificationService {
         await flutterLocalNotificationsPlugin.zonedSchedule(
           notificationId,
           '🍽️ Food Tracking Time',
-          'Don\'t forget to log what you ate today! Tap to track your meals.',
+          'Don\'t forget to log what you ate today!',
           TimezoneUtils.forNotification(reminderTime),
           notificationDetails,
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
           uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-          payload: 'food_tracking_reminder',
         );
       }
 

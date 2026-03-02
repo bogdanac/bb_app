@@ -47,9 +47,12 @@ class TaskService {
   }
 
   /// Load tasks with auto-migration logic
-  Future<List<Task>> loadTasks() async {
+  ///
+  /// [fromResume] - set true when loading after app resume from background.
+  /// Ensures mobile pulls from Firestore first to avoid overwriting web changes.
+  Future<List<Task>> loadTasks({bool fromResume = false}) async {
     try {
-      final tasks = await _repository.loadTasks();
+      final tasks = await _repository.loadTasks(fromResume: fromResume);
 
 
       // AUTO-MIGRATION: Fix recurring tasks during load
@@ -703,11 +706,52 @@ class TaskService {
 
     bool tasksUpdated = false;
 
-    for (final task in tasks) {
+    final periodStartDate = DateTime(
+      lastPeriodStart.year,
+      lastPeriodStart.month,
+      lastPeriodStart.day,
+    );
+
+    for (int i = 0; i < tasks.length; i++) {
+      final task = tasks[i];
       if (task.recurrence == null ||
           task.recurrence!.phaseDay == null ||
           !_isMenstrualCycleTask(task.recurrence!)) {
         continue;
+      }
+
+      // Reset completed pure menstrual tasks when a new cycle begins.
+      // A task completed before the current lastPeriodStart was from a previous cycle.
+      if (task.isCompleted && task.completedAt != null) {
+        final hasScheduleRecurrence = task.recurrence!.types.any((type) =>
+            type == RecurrenceType.daily ||
+            type == RecurrenceType.weekly ||
+            type == RecurrenceType.monthly ||
+            type == RecurrenceType.yearly);
+
+        if (!hasScheduleRecurrence) {
+          final completedDate = DateTime(
+            task.completedAt!.year,
+            task.completedAt!.month,
+            task.completedAt!.day,
+          );
+
+          if (completedDate.isBefore(periodStartDate)) {
+            // Completed in a previous cycle - reset for the new cycle
+            final newScheduledDate = await _recurrenceCalculator
+                .calculateMenstrualTaskScheduledDate(task, prefs);
+
+            if (newScheduledDate != null) {
+              tasks[i] = task.copyWith(
+                isCompleted: false,
+                clearCompletedAt: true,
+                scheduledDate: newScheduledDate,
+              );
+              tasksUpdated = true;
+            }
+          }
+        }
+        continue; // Skip further processing for completed tasks
       }
 
       if (task.scheduledDate != null && task.scheduledDate!.isAfter(todayDate)) {
@@ -727,19 +771,10 @@ class TaskService {
       );
 
       if (currentDayInPhase == task.recurrence!.phaseDay) {
-        // Only auto-schedule if:
-        // 1. Task has a scheduledDate that needs updating
-        // Don't reschedule tasks that were intentionally skipped (scheduledDate == null)
         if (task.scheduledDate != null && !_isSameDay(task.scheduledDate!, todayDate)) {
-          // Update existing scheduledDate to today
-          final taskIndex = tasks.indexOf(task);
-          if (taskIndex != -1) {
-            tasks[taskIndex] = task.copyWith(scheduledDate: todayDate);
-            tasksUpdated = true;
-          }
+          tasks[i] = task.copyWith(scheduledDate: todayDate);
+          tasksUpdated = true;
         }
-        // Note: We do NOT auto-schedule menstrual tasks with scheduledDate == null
-        // This allows skipped tasks to remain unscheduled until the next cycle
       }
     }
 

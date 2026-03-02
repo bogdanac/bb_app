@@ -12,6 +12,7 @@ import 'fasting_phases.dart';
 import 'scheduled_fastings_service.dart';
 import '../shared/snackbar_utils.dart';
 import '../shared/date_picker_utils.dart';
+import '../shared/date_format_utils.dart';
 import '../MenstrualCycle/menstrual_cycle_utils.dart';
 
 class FastingCard extends StatefulWidget {
@@ -409,6 +410,15 @@ class _FastingCardState extends State<FastingCard> {
     SnackBarUtils.showSuccess(context, '🚀 $recommendedFast started!');
   }
 
+  String _formatEndTime(DateTime endTime) {
+    final time = '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}';
+    final now = DateTime.now();
+    if (DateFormatUtils.isSameDay(endTime, now)) {
+      return 'Ends at $time';
+    }
+    return 'Ends at $time, ${DateFormatUtils.formatShort(endTime)}';
+  }
+
   // Calculate progress percentage
   double _getProgress() {
     if (!isFasting || fastingStartTime == null || fastingEndTime == null) return 0.0;
@@ -484,7 +494,7 @@ class _FastingCardState extends State<FastingCard> {
                         ),
                         if (fastingEndTime != null)
                           Text(
-                            'Ends at ${fastingEndTime!.hour.toString().padLeft(2, '0')}:${fastingEndTime!.minute.toString().padLeft(2, '0')}',
+                            _formatEndTime(fastingEndTime!),
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.white54,

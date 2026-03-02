@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import '../Settings/app_customization_service.dart';
 import '../Energy/energy_service.dart';
+import '../Tasks/task_card_utils.dart';
 
 class ChoresCard extends StatefulWidget {
   final VoidCallback? onTap;
@@ -24,9 +25,9 @@ class ChoresCardState extends State<ChoresCard> {
   /// Refresh chores data from outside (e.g., when returning to Home tab)
   void refresh() => _loadChores();
   List<Chore> _todayChores = [];
-  List<ChoreCategory> _categories = [];
   bool _isLoading = true;
   bool _isLowEnergy = false;
+  bool _energyModuleEnabled = false;
 
   @override
   void initState() {
@@ -46,13 +47,14 @@ class ChoresCardState extends State<ChoresCard> {
       return;
     }
 
-    final categories = await ChoreService.loadCategories();
     var chores = await ChoreService.getTodayChores();
 
     // Energy-aware filtering: if energy module active and battery is low,
     // prefer chores with lower effort (energyLevel closer to 0 or positive)
     final states = await AppCustomizationService.loadAllModuleStates();
     final energyEnabled = states[AppCustomizationService.moduleEnergy] ?? false;
+
+    _energyModuleEnabled = energyEnabled;
 
     if (energyEnabled && chores.isNotEmpty) {
       final record = await EnergyService.getTodayRecord();
@@ -76,7 +78,6 @@ class ChoresCardState extends State<ChoresCard> {
     }
 
     setState(() {
-      _categories = categories;
       _todayChores = chores;
       _isLoading = false;
     });
@@ -125,83 +126,26 @@ class ChoresCardState extends State<ChoresCard> {
             borderRadius: AppStyles.borderRadiusLarge,
             color: AppColors.homeCardBackground,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 12, 4),
-              child: Row(
-                children: [
-                  Icon(Icons.cleaning_services_rounded,
-                      color: AppColors.waterBlue, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        const Text(
-                          'Chores',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (_isLowEnergy) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.orange.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'Easy mode',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: AppColors.orange,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...displayChores.map((chore) => _buildChoreItem(chore)),
+                if (extraCount > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      '+$extraCount more',
+                      style: TextStyle(fontSize: 12, color: AppColors.greyText),
                     ),
                   ),
-                  Icon(Icons.chevron_right_rounded,
-                      color: AppColors.grey300, size: 20),
-                ],
-              ),
+              ],
             ),
-
-            // Chores list
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Column(
-                children: [
-                  ...displayChores.map((chore) => _buildChoreItem(chore)),
-                ],
-              ),
-            ),
-            if (extraCount > 0)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text(
-                  '+$extraCount more',
-                  style: TextStyle(fontSize: 12, color: AppColors.greyText),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
-    ),
     );
-  }
-
-  IconData _getCategoryIcon(String categoryName) {
-    for (final c in _categories) {
-      if (c.name == categoryName) return c.icon;
-    }
-    return Icons.category_rounded;
   }
 
   Widget _buildChoreItem(Chore chore) {
@@ -209,63 +153,47 @@ class ChoresCardState extends State<ChoresCard> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          // Category icon
-          Icon(_getCategoryIcon(chore.category), size: 16, color: AppColors.greyText),
-          const SizedBox(width: 8),
+          // Condition dot (matches activity row style)
+          Container(
+            width: 8, height: 8,
+            decoration: BoxDecoration(
+              color: chore.conditionColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
 
-          // Chore name and condition bar
+          // Chore name
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  chore.name,
-                  style: const TextStyle(fontSize: 14),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: AppStyles.borderRadiusSmall,
-                        child: LinearProgressIndicator(
-                          value: chore.currentCondition,
-                          minHeight: 6,
-                          backgroundColor: AppColors.grey300.withValues(alpha: 0.3),
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            chore.conditionColor,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${chore.conditionPercentage}%',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: chore.conditionColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+            child: Text(
+              chore.name,
+              style: const TextStyle(fontSize: 14),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
 
-          const SizedBox(width: 8),
+          // Energy chip
+          if (_energyModuleEnabled && chore.energyLevel != 0) ...[
+            TaskCardUtils.buildEnergyChip(chore.energyLevel),
+            const SizedBox(width: 8),
+          ],
 
-          // Complete button
-          IconButton(
-            icon: const Icon(Icons.check_circle_outline),
-            onPressed: () => _completeChore(chore),
-            iconSize: 24,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            tooltip: 'Complete',
-            color: AppColors.successGreen,
+          // Complete button (matches activity row circle style)
+          GestureDetector(
+            onTap: () => _completeChore(chore),
+            child: Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.successGreen.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check_rounded,
+                size: 18,
+                color: AppColors.successGreen,
+              ),
+            ),
           ),
         ],
       ),

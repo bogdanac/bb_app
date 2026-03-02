@@ -3,8 +3,8 @@ import 'package:bb_app/theme/app_colors.dart';
 import 'package:bb_app/MenstrualCycle/friends_tab_screen.dart';
 
 class FriendsScreen extends StatefulWidget {
-  final VoidCallback? onOpenDrawer;
-  const FriendsScreen({super.key, this.onOpenDrawer});
+  final Widget Function()? drawerBuilder;
+  const FriendsScreen({super.key, this.drawerBuilder});
 
   @override
   State<FriendsScreen> createState() => _FriendsScreenState();
@@ -40,15 +40,8 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: widget.drawerBuilder?.call(),
       appBar: AppBar(
-        automaticallyImplyLeading: false,
-        leading: widget.onOpenDrawer != null
-            ? IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Colors.white),
-                onPressed: widget.onOpenDrawer,
-                tooltip: 'Menu',
-              )
-            : null,
         title: const Text('Social'),
         backgroundColor: Colors.transparent,
         actions: [

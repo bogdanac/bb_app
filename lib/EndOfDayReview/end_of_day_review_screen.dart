@@ -798,36 +798,112 @@ class _EndOfDayReviewScreenState extends State<EndOfDayReviewScreen> {
         _buildModuleHeader(
           summary,
           trailing: helper.completedToday > 0
-              ? Icon(Icons.check_circle_rounded, color: AppColors.successGreen, size: 20)
+              ? Icon(Icons.check_circle_rounded,
+                  color: AppColors.successGreen, size: 20)
               : null,
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _buildStatBox(
-                  '${helper.completedToday}',
-                  'Done today',
-                  helper.completedToday > 0 ? AppColors.successGreen : AppColors.greyText,
-                ),
+              // Headline: completed count + home condition
+              Row(
+                children: [
+                  Text(
+                    '${helper.completedToday}',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: helper.completedToday > 0
+                          ? AppColors.waterBlue
+                          : AppColors.greyText,
+                    ),
+                  ),
+                  Text(
+                    ' done today',
+                    style: TextStyle(fontSize: 16, color: AppColors.greyText),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${helper.avgCondition.toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: _getConditionColor(helper.avgCondition),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'home condition',
+                    style: TextStyle(fontSize: 12, color: AppColors.greyText),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatBox(
-                  '${helper.avgCondition.toStringAsFixed(0)}%',
-                  'Avg condition',
-                  _getConditionColor(helper.avgCondition),
+              // List completed chore names
+              if (helper.completedNames.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ...helper.completedNames.map((name) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_rounded,
+                              color: AppColors.waterBlue, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: TextStyle(
+                                  color: AppColors.grey100, fontSize: 13),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+              ],
+              // Show overdue chores needing attention
+              if (helper.overdueNames.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '${helper.overdueCount} overdue',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.error,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatBox(
-                  '${helper.criticalCount}',
-                  'Critical',
-                  helper.criticalCount > 0 ? AppColors.error : AppColors.greyText,
-                ),
-              ),
+                const SizedBox(height: 4),
+                ...helper.overdueNames.take(3).map((name) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded,
+                              color: AppColors.error, size: 14),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: TextStyle(
+                                  color: AppColors.greyText, fontSize: 13),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+                if (helper.overdueNames.length > 3)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 22),
+                    child: Text(
+                      '+${helper.overdueNames.length - 3} more',
+                      style: TextStyle(
+                          color: AppColors.greyText, fontSize: 12),
+                    ),
+                  ),
+              ],
             ],
           ),
         ),

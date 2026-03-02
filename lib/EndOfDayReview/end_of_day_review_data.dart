@@ -239,7 +239,10 @@ class ChoresSummaryHelper {
   double get avgCondition => summary.data['avgCondition'] ?? 0.0;
   int get completedToday => summary.getInt('completedToday');
   int get overdueCount => summary.getInt('overdueCount');
-  int get criticalCount => summary.getInt('criticalCount');
+  List<String> get completedNames =>
+      List<String>.from(summary.data['completedNames'] ?? []);
+  List<String> get overdueNames =>
+      List<String>.from(summary.data['overdueNames'] ?? []);
 
   bool get hasActivity => completedToday > 0;
 }

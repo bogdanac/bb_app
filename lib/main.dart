@@ -588,67 +588,68 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
   int _selectedIndex = 0; // Will be set to Home index after settings load
   bool _settingsLoaded = false; // Prevent rendering until Home index is determined
   late AnimationController _animationController;
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _homeScreenKey = GlobalKey<HomeScreenState>();
   Map<String, bool> _moduleStates = {};
   List<String> _primaryTabs = [];
   List<String> _secondaryTabsOrder = [];
 
-  void _openDrawer() => _scaffoldKey.currentState?.openDrawer();
+  /// Builds the navigation drawer — passed as a builder to module screens
+  /// so each module's own Scaffold can host the drawer directly.
+  Widget _buildModuleDrawer() => _buildDrawer(_secondaryTabConfigs);
 
   // Map of all possible module configs
   Map<String, _TabConfig> get _allModuleConfigs => {
     AppCustomizationService.moduleFasting: _TabConfig(
-      screen: FastingScreen(onOpenDrawer: _openDrawer),
+      screen: FastingScreen(drawerBuilder: _buildModuleDrawer),
       icon: Icons.local_fire_department,
       label: 'Fasting',
       color: AppColors.successGreen,
       moduleKey: AppCustomizationService.moduleFasting,
     ),
     AppCustomizationService.moduleMenstrual: _TabConfig(
-      screen: MenstrualCycleScreen(onOpenDrawer: _openDrawer),
+      screen: MenstrualCycleScreen(drawerBuilder: _buildModuleDrawer),
       icon: Icons.local_florist_rounded,
       label: 'Cycle',
       color: AppColors.red,
       moduleKey: AppCustomizationService.moduleMenstrual,
     ),
     AppCustomizationService.moduleFriends: _TabConfig(
-      screen: FriendsScreen(onOpenDrawer: _openDrawer),
+      screen: FriendsScreen(drawerBuilder: _buildModuleDrawer),
       icon: Icons.people_rounded,
       label: 'Social',
       color: AppColors.lightPurple,
       moduleKey: AppCustomizationService.moduleFriends,
     ),
     AppCustomizationService.moduleTasks: _TabConfig(
-      screen: TodoScreen(onOpenDrawer: _openDrawer),
+      screen: TodoScreen(drawerBuilder: _buildModuleDrawer),
       icon: Icons.task_alt_rounded,
       label: 'Tasks',
       color: AppColors.coral,
       moduleKey: AppCustomizationService.moduleTasks,
     ),
     AppCustomizationService.moduleRoutines: _TabConfig(
-      screen: RoutinesScreen(onOpenDrawer: _openDrawer),
+      screen: RoutinesScreen(drawerBuilder: _buildModuleDrawer),
       icon: Icons.auto_awesome_rounded,
       label: 'Routines',
       color: AppColors.orange,
       moduleKey: AppCustomizationService.moduleRoutines,
     ),
     AppCustomizationService.moduleHabits: _TabConfig(
-      screen: HabitsScreen(onOpenDrawer: _openDrawer),
+      screen: HabitsScreen(drawerBuilder: _buildModuleDrawer),
       icon: Icons.track_changes_rounded,
       label: 'Habits',
       color: AppColors.yellow,
       moduleKey: AppCustomizationService.moduleHabits,
     ),
     AppCustomizationService.moduleTimers: _TabConfig(
-      screen: TimersScreen(onOpenDrawer: _openDrawer),
+      screen: TimersScreen(drawerBuilder: _buildModuleDrawer),
       icon: Icons.timer_rounded,
       label: 'Timers',
       color: AppColors.purple,
       moduleKey: AppCustomizationService.moduleTimers,
     ),
     AppCustomizationService.moduleChores: _TabConfig(
-      screen: ChoresScreen(onOpenDrawer: _openDrawer),
+      screen: ChoresScreen(drawerBuilder: _buildModuleDrawer),
       icon: Icons.checklist_rounded,
       label: 'Chores',
       color: AppColors.waterBlue,
@@ -675,7 +676,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
         key: _homeScreenKey,
         onNavigateToModule: _navigateToModule,
         onReloadSettings: reloadCustomizationSettings,
-        onOpenDrawer: _openDrawer,
+        drawerBuilder: _buildModuleDrawer,
       ),
       icon: Icons.home_rounded,
       label: 'Home',
@@ -703,24 +704,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
     return configs;
   }
 
-  // All enabled tabs (for desktop side nav): Home first, then primary + secondary
+  // All enabled tabs (for desktop side nav): primary tabs with Home in middle, then secondary
   List<_TabConfig> get _allEnabledTabConfigs {
     final configs = <_TabConfig>[];
     final allConfigs = _allModuleConfigs;
-
-    // Add Home first
-    configs.add(_TabConfig(
-      screen: HomeScreen(
-        key: _homeScreenKey,
-        onNavigateToModule: _navigateToModule,
-        onReloadSettings: reloadCustomizationSettings,
-        onOpenDrawer: _openDrawer,
-      ),
-      icon: Icons.home_rounded,
-      label: 'Home',
-      color: AppColors.pink,
-      isHome: true,
-    ));
 
     // Add all primary tabs in order
     for (final moduleKey in _primaryTabs) {
@@ -728,6 +715,21 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
         configs.add(allConfigs[moduleKey]!);
       }
     }
+
+    // Insert Home at midpoint of primary tabs (same as mobile)
+    final homeMidpoint = (configs.length / 2).ceil();
+    configs.insert(homeMidpoint, _TabConfig(
+      screen: HomeScreen(
+        key: _homeScreenKey,
+        onNavigateToModule: _navigateToModule,
+        onReloadSettings: reloadCustomizationSettings,
+        drawerBuilder: _buildModuleDrawer,
+      ),
+      icon: Icons.home_rounded,
+      label: 'Home',
+      color: AppColors.pink,
+      isHome: true,
+    ));
 
     // Add all secondary tabs
     for (final moduleKey in _secondaryTabsOrder) {
@@ -759,11 +761,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             setState(() {
-              // Set initial tab to Home
-              // For web/desktop: Home is always at index 0 in _allEnabledTabConfigs
-              // For mobile: Find Home in primary tabs
+              // Set initial tab to Home (at midpoint on both mobile and desktop)
               if (kIsWeb || MediaQuery.of(context).size.width > 800) {
-                _selectedIndex = 0;
+                final homeIndex = _allEnabledTabConfigs.indexWhere((c) => c.isHome);
+                _selectedIndex = homeIndex >= 0 ? homeIndex : 0;
               } else {
                 final homeIndex = _primaryTabConfigs.indexWhere((c) => c.isHome);
                 _selectedIndex = homeIndex >= 0 ? homeIndex : 0;
@@ -961,8 +962,6 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin, 
         }
       },
       child: Scaffold(
-        key: _scaffoldKey,
-        drawer: _buildDrawer(secondaryTabs), // Always show drawer (Settings is always accessible)
         body: AnimatedSwitcher(
           duration: const Duration(milliseconds: 300),
           child: primaryTabs[safeIndex].screen,

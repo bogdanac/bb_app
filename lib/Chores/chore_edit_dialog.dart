@@ -31,6 +31,7 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
   late int _intervalValue;
   late String _intervalUnit;
   late double _condition;
+  late double _initialCondition;
   late int _energyLevel;
   int? _activeMonth;
   List<ChoreCategory> _categories = [];
@@ -46,6 +47,7 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
     _intervalValue = widget.chore?.intervalValue ?? 7;
     _intervalUnit = widget.chore?.intervalUnit ?? 'days';
     _condition = widget.chore?.currentCondition ?? 1.0;
+    _initialCondition = _condition;
     _energyLevel = widget.chore?.energyLevel ?? 0;
     _activeMonth = widget.chore?.activeMonth;
     _loadCategories();
@@ -88,29 +90,35 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
       return;
     }
 
-    // Store condition=1.0 and compute a synthetic lastCompleted so that
-    // currentCondition getter returns exactly _condition (the slider value).
-    // currentCondition = 1.0 - daysBack * (1/intervalDays) = _condition
-    // → daysBack = (1 - _condition) * intervalDays
-    final int totalIntervalDays;
-    switch (_intervalUnit) {
-      case 'weeks': totalIntervalDays = _intervalValue * 7; break;
-      case 'months': totalIntervalDays = _intervalValue * 30; break;
-      case 'years': totalIntervalDays = _intervalValue * 365; break;
-      default: totalIntervalDays = _intervalValue;
-    }
-    final daysBack = ((1.0 - _condition) * totalIntervalDays).round();
-    final syntheticLastCompleted = DateTime.now().subtract(Duration(days: daysBack));
-
     final effectiveActiveMonth = _intervalUnit == 'years' ? _activeMonth : null;
+    final bool conditionChanged = (_condition - _initialCondition).abs() > 0.005;
+
+    // When editing an existing chore and only interval changed (not condition),
+    // preserve the original lastCompleted so the "last done" date stays accurate.
+    // Only compute synthetic lastCompleted when condition slider was adjusted
+    // or when creating a new chore.
+    final DateTime lastCompleted;
+    if (widget.chore != null && !conditionChanged) {
+      lastCompleted = widget.chore!.lastCompleted;
+    } else {
+      final int totalIntervalDays;
+      switch (_intervalUnit) {
+        case 'weeks': totalIntervalDays = _intervalValue * 7; break;
+        case 'months': totalIntervalDays = _intervalValue * 30; break;
+        case 'years': totalIntervalDays = _intervalValue * 365; break;
+        default: totalIntervalDays = _intervalValue;
+      }
+      final daysBack = ((1.0 - _condition) * totalIntervalDays).round();
+      lastCompleted = DateTime.now().subtract(Duration(days: daysBack));
+    }
 
     final chore = widget.chore?.copyWith(
           name: _nameController.text.trim(),
           category: _selectedCategory,
           intervalValue: _intervalValue,
           intervalUnit: _intervalUnit,
-          condition: 1.0,
-          lastCompleted: syntheticLastCompleted,
+          condition: conditionChanged ? 1.0 : null,
+          lastCompleted: lastCompleted,
           notes: _notesController.text.trim().isEmpty
               ? null
               : _notesController.text.trim(),
@@ -124,7 +132,7 @@ class _ChoreEditDialogState extends State<ChoreEditDialog> {
           intervalValue: _intervalValue,
           intervalUnit: _intervalUnit,
           condition: 1.0,
-          lastCompleted: syntheticLastCompleted,
+          lastCompleted: lastCompleted,
           notes: _notesController.text.trim().isEmpty
               ? null
               : _notesController.text.trim(),

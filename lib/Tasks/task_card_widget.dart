@@ -17,6 +17,7 @@ class TaskCard extends StatefulWidget {
   final VoidCallback? onPostpone;
   final String? priorityReason;
   final Color? priorityColor;
+  final bool energyEnabled;
   const TaskCard({
     super.key,
     required this.task,
@@ -27,6 +28,7 @@ class TaskCard extends StatefulWidget {
     this.onPostpone,
     this.priorityReason,
     this.priorityColor,
+    this.energyEnabled = true,
   });
 
   @override
@@ -445,7 +447,8 @@ class _TaskCardState extends State<TaskCard> {
                                     }).where((chip) => chip != null).cast<Widget>(),
                                   ],
                                   // Energy level chip (last)
-                                  TaskCardUtils.buildEnergyChip(widget.task.energyLevel),
+                                  if (widget.energyEnabled)
+                                    TaskCardUtils.buildEnergyChip(widget.task.energyLevel),
                                 ],
                               ),
                             ],

@@ -17,32 +17,44 @@ class TaskRepository {
   // On web, tracks whether we loaded fresh data from Firestore.
   // If false, we fell back to stale localStorage — don't push it back to Firestore.
   bool _webDataVerified = false;
+  bool _webCategoriesVerified = false;
 
   /// Mark web data as verified (called when Firestore listener confirms fresh data)
   void markWebDataVerified() {
     _webDataVerified = true;
+    _webCategoriesVerified = true;
   }
 
-  /// Load tasks from SharedPreferences (or Firestore on web)
-  Future<List<Task>> loadTasks() async {
+  /// Load tasks from SharedPreferences (or Firestore on web/mobile resume)
+  ///
+  /// [fromResume] - set true when loading after app resume from background.
+  /// On mobile resume, this fetches from Firestore first to avoid pushing
+  /// stale local data that would overwrite changes made on web.
+  Future<List<Task>> loadTasks({bool fromResume = false}) async {
     try {
       List<String> tasksJson = [];
+      bool loadedFromFirestore = false;
 
-      // On web, try to load from Firestore first since SharedPreferences doesn't persist
-      if (kIsWeb) {
-        debugPrint('TaskRepository.loadTasks: WEB - trying Firestore first...');
-        final firestoreTasks = await _realtimeSync.fetchTasksFromFirestore();
-        if (firestoreTasks != null && firestoreTasks.isNotEmpty) {
-          debugPrint('TaskRepository.loadTasks: WEB - got ${firestoreTasks.length} tasks from Firestore');
-          tasksJson = firestoreTasks;
-          _webDataVerified = true; // Data came from Firestore — safe to sync back
-          // Cache Firestore data to SharedPreferences so fallback is fresh
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setStringList('tasks', firestoreTasks);
+      // On web OR mobile resume, try Firestore first to get the latest data
+      if (kIsWeb || fromResume) {
+        debugPrint('TaskRepository.loadTasks: ${kIsWeb ? "WEB" : "MOBILE RESUME"} - trying Firestore first...');
+        try {
+          final firestoreTasks = await _realtimeSync.fetchTasksFromFirestore();
+          if (firestoreTasks != null && firestoreTasks.isNotEmpty) {
+            debugPrint('TaskRepository.loadTasks: Got ${firestoreTasks.length} tasks from Firestore');
+            tasksJson = firestoreTasks;
+            loadedFromFirestore = true;
+            if (kIsWeb) _webDataVerified = true;
+            // Cache Firestore data to SharedPreferences so local is fresh
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setStringList('tasks', firestoreTasks);
+          }
+        } catch (e) {
+          debugPrint('TaskRepository.loadTasks: Firestore fetch failed: $e');
         }
       }
 
-      // Fallback to SharedPreferences (always used on mobile, fallback on web)
+      // Fallback to SharedPreferences (always used on mobile, fallback on web/resume)
       if (tasksJson.isEmpty) {
         if (kIsWeb) {
           // On web, Firestore fetch failed (auth not ready, network error, etc.)
@@ -69,7 +81,8 @@ class TaskRepository {
           .toList();
 
       // On mobile, ensure tasks are synced to Firestore for web access
-      if (!kIsWeb && tasks.isNotEmpty) {
+      // BUT skip if we just loaded from Firestore (resume) — no need to push back what we just pulled
+      if (!kIsWeb && tasks.isNotEmpty && !loadedFromFirestore) {
         _realtimeSync.syncTasks(jsonEncode(tasksJson)).catchError((e, stackTrace) {
           ErrorLogger.logError(
             source: 'TaskRepository.loadTasks',
@@ -108,14 +121,26 @@ class TaskRepository {
         return;
       }
 
-      // Sync to Firestore real-time collection (non-blocking)
-      _realtimeSync.syncTasks(jsonEncode(tasksJson)).catchError((e, stackTrace) async {
-        await ErrorLogger.logError(
-          source: 'TaskRepository.saveTasks',
-          error: 'Real-time sync failed: $e',
-          stackTrace: stackTrace.toString(),
-        );
-      });
+      // Sync to Firestore — await on web to ensure data persists before refresh
+      if (kIsWeb) {
+        try {
+          await _realtimeSync.syncTasks(jsonEncode(tasksJson));
+        } catch (e, stackTrace) {
+          await ErrorLogger.logError(
+            source: 'TaskRepository.saveTasks',
+            error: 'Real-time sync failed: $e',
+            stackTrace: stackTrace.toString(),
+          );
+        }
+      } else {
+        _realtimeSync.syncTasks(jsonEncode(tasksJson)).catchError((e, stackTrace) async {
+          await ErrorLogger.logError(
+            source: 'TaskRepository.saveTasks',
+            error: 'Real-time sync failed: $e',
+            stackTrace: stackTrace.toString(),
+          );
+        });
+      }
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'TaskRepository.saveTasks',
@@ -127,25 +152,34 @@ class TaskRepository {
     }
   }
 
-  /// Load categories from SharedPreferences (or Firestore on web)
-  Future<List<TaskCategory>> loadCategories() async {
+  /// Load categories from SharedPreferences (or Firestore on web/mobile resume)
+  Future<List<TaskCategory>> loadCategories({bool fromResume = false}) async {
     try {
       List<String> categoriesJson = [];
+      bool loadedFromFirestore = false;
 
-      // On web, try to load from Firestore first since SharedPreferences doesn't persist
-      if (kIsWeb) {
-        debugPrint('TaskRepository.loadCategories: WEB - trying Firestore first...');
-        final firestoreCategories = await _realtimeSync.fetchCategoriesFromFirestore();
-        if (firestoreCategories != null && firestoreCategories.isNotEmpty) {
-          debugPrint('TaskRepository.loadCategories: WEB - got ${firestoreCategories.length} categories from Firestore');
-          categoriesJson = firestoreCategories;
-          // Cache Firestore data to SharedPreferences so fallback is fresh
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setStringList('task_categories', firestoreCategories);
+      // On web OR mobile resume, try Firestore first to get the latest data
+      if (kIsWeb || fromResume) {
+        debugPrint('TaskRepository.loadCategories: ${kIsWeb ? "WEB" : "MOBILE RESUME"} - trying Firestore first...');
+        try {
+          final firestoreCategories = await _realtimeSync.fetchCategoriesFromFirestore();
+          if (firestoreCategories != null && firestoreCategories.isNotEmpty) {
+            debugPrint('TaskRepository.loadCategories: Got ${firestoreCategories.length} categories from Firestore');
+            categoriesJson = firestoreCategories;
+            loadedFromFirestore = true;
+            if (kIsWeb) _webCategoriesVerified = true;
+            // Cache Firestore data to SharedPreferences so local is fresh
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setStringList('task_categories', firestoreCategories);
+          } else {
+            debugPrint('TaskRepository.loadCategories: Firestore unavailable, categories sync disabled until verified');
+          }
+        } catch (e) {
+          debugPrint('TaskRepository.loadCategories: Firestore fetch failed: $e');
         }
       }
 
-      // Fallback to SharedPreferences (always used on mobile, fallback on web)
+      // Fallback to SharedPreferences (always used on mobile, fallback on web/resume)
       if (categoriesJson.isEmpty) {
         final prefs = await SharedPreferences.getInstance();
         try {
@@ -170,7 +204,8 @@ class TaskRepository {
           .toList();
 
       // On mobile, ensure categories are synced to Firestore for web access
-      if (!kIsWeb && categories.isNotEmpty) {
+      // BUT skip if we just loaded from Firestore (resume)
+      if (!kIsWeb && categories.isNotEmpty && !loadedFromFirestore) {
         _realtimeSync.syncCategories(jsonEncode(categoriesJson)).catchError((e, stackTrace) {
           ErrorLogger.logError(
             source: 'TaskRepository.loadCategories',
@@ -201,14 +236,29 @@ class TaskRepository {
           .toList();
       await prefs.setStringList('task_categories', categoriesJson);
 
-      // Sync to Firestore real-time collection (non-blocking)
-      _realtimeSync.syncCategories(jsonEncode(categoriesJson)).catchError((e, stackTrace) async {
-        await ErrorLogger.logError(
-          source: 'TaskRepository.saveCategories',
-          error: 'Real-time sync failed: $e',
-          stackTrace: stackTrace.toString(),
-        );
-      });
+      // On web, only sync if we verified data from Firestore first.
+      // Prevents defaults from overwriting phone's real categories when auth isn't ready.
+      if (kIsWeb && !_webCategoriesVerified) {
+        debugPrint('TaskRepository.saveCategories: WEB - skipping Firestore sync (categories not verified from Firestore yet)');
+      } else if (kIsWeb) {
+        try {
+          await _realtimeSync.syncCategories(jsonEncode(categoriesJson));
+        } catch (e, stackTrace) {
+          await ErrorLogger.logError(
+            source: 'TaskRepository.saveCategories',
+            error: 'Real-time sync failed: $e',
+            stackTrace: stackTrace.toString(),
+          );
+        }
+      } else {
+        _realtimeSync.syncCategories(jsonEncode(categoriesJson)).catchError((e, stackTrace) async {
+          await ErrorLogger.logError(
+            source: 'TaskRepository.saveCategories',
+            error: 'Real-time sync failed: $e',
+            stackTrace: stackTrace.toString(),
+          );
+        });
+      }
     } catch (e, stackTrace) {
       await ErrorLogger.logError(
         source: 'TaskRepository.saveCategories',

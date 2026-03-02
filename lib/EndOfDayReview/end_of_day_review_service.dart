@@ -433,20 +433,31 @@ class EndOfDayReviewService {
   /// Get chores summary for today
   Future<ModuleSummary> _getChoresSummary() async {
     final chores = await ChoreService.loadChores();
-    final stats = await ChoreService.getStats();
 
-    // Count chores completed today
     final today = DateTime.now();
     final todayStart = DateTime(today.year, today.month, today.day);
     final todayEnd = todayStart.add(const Duration(days: 1));
 
-    int completedToday = 0;
+    // Collect names of chores completed today
+    final completedNames = <String>[];
     for (final chore in chores) {
       if (chore.lastCompleted.isAfter(todayStart) &&
           chore.lastCompleted.isBefore(todayEnd)) {
-        completedToday++;
+        completedNames.add(chore.name);
       }
     }
+
+    // Collect overdue chore names (sorted by most overdue first)
+    final overdueChores = chores.where((c) => c.isOverdue).toList()
+      ..sort((a, b) => a.daysUntilDue.compareTo(b.daysUntilDue));
+    final overdueNames = overdueChores.map((c) => c.name).toList();
+
+    // Calculate average condition as 0-100 percentage
+    final avgCondition = chores.isEmpty
+        ? 0.0
+        : (chores.fold<double>(0.0, (sum, c) => sum + c.currentCondition) /
+                chores.length) *
+            100;
 
     return ModuleSummary(
       moduleKey: AppCustomizationService.moduleChores,
@@ -454,11 +465,12 @@ class EndOfDayReviewService {
       icon: Icons.cleaning_services_rounded,
       color: AppColors.waterBlue,
       data: {
-        'totalChores': stats['totalChores'],
-        'avgCondition': stats['avgCondition'],
-        'completedToday': completedToday,
-        'overdueCount': stats['overdueCount'],
-        'criticalCount': stats['criticalCount'],
+        'totalChores': chores.length,
+        'avgCondition': avgCondition,
+        'completedToday': completedNames.length,
+        'completedNames': completedNames,
+        'overdueCount': overdueChores.length,
+        'overdueNames': overdueNames,
       },
     );
   }
