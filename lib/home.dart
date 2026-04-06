@@ -36,6 +36,9 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:bb_app/Services/realtime_sync_service.dart';
+import 'package:bb_app/Notifications/engagement_notification_service.dart';
+import 'package:bb_app/FoodTracking/food_tracking_service.dart';
+import 'package:bb_app/Notifications/notification_service.dart';
 
 // HOME SCREEN
 class HomeScreen extends StatefulWidget {
@@ -118,6 +121,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _checkBackupStatus();
     _startWaterSyncTimer();
     _loadCardSettings();
+    _cancelCheckInNotification();
     // Listen for remote sync events (e.g., phone edited a task while web was open)
     RealtimeSyncService().addSyncEventListener(_onRemoteSyncEvent);
   }
@@ -129,6 +133,17 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     RealtimeSyncService().removeSyncEventListener(_onRemoteSyncEvent);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  /// Cancel today's check-in notification since the user opened the app
+  Future<void> _cancelCheckInNotification() async {
+    try {
+      final notificationService = NotificationService();
+      final engagementService = EngagementNotificationService(notificationService);
+      await engagementService.onAppOpened();
+    } catch (e) {
+      // Non-critical - silently fail
+    }
   }
 
   /// Called when remote data changes arrive (e.g., phone synced new tasks)
@@ -1016,6 +1031,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         // Show congratulations when goal is reached
         if (oldIntake < goal && newIntake >= goal && mounted) {
           SnackBarUtils.showSuccess(context, '🎉 Daily water goal achieved! Great job!');
+          // Also show a celebration notification
+          EngagementNotificationService.showWaterGoalCelebration(goal);
         }
 
         // Refresh EndOfDayReviewCard to show updated water percentage
@@ -1036,6 +1053,46 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         showRoutine = false;
       });
+
+      // Habit stacking: suggest the next thing to do after routine
+      _showHabitStackingSuggestion();
+    }
+  }
+
+  /// Show a habit stacking suggestion after completing a routine
+  Future<void> _showHabitStackingSuggestion() async {
+    try {
+      final modules = await AppCustomizationService.loadAllModuleStates();
+      String suggestion = '';
+
+      // Check what hasn't been done yet today
+      final prefs = await SharedPreferences.getInstance();
+      final todayStr = DateFormatUtils.formatISO(DateFormatUtils.stripTime(DateTime.now())).split('T')[0];
+      final waterIntakeToday = prefs.getInt('water_$todayStr') ?? 0;
+      final waterGoal = (await WaterSettings.load()).dailyGoal;
+
+      if (modules[AppCustomizationService.moduleFood] == true) {
+        final entries = await FoodTrackingService.getEntriesForDay(DateTime.now());
+        if (entries.isEmpty) {
+          suggestion = 'How about logging your breakfast? 🍽️';
+        }
+      }
+
+      if (suggestion.isEmpty && modules[AppCustomizationService.moduleWater] == true) {
+        if (waterIntakeToday < waterGoal * 0.2) {
+          suggestion = 'Start the day with a glass of water! 💧';
+        }
+      }
+
+      if (suggestion.isEmpty && modules[AppCustomizationService.moduleTasks] == true) {
+        suggestion = 'Check your tasks for today! 📋';
+      }
+
+      if (suggestion.isNotEmpty && mounted) {
+        SnackBarUtils.showSuccess(context, 'Routine done! $suggestion');
+      }
+    } catch (_) {
+      // Non-critical
     }
   }
 

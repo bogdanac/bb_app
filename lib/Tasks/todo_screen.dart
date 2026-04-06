@@ -24,6 +24,7 @@ import '../Energy/energy_celebrations.dart';
 import '../Energy/flow_calculator.dart';
 import '../Settings/app_customization_service.dart';
 import '../Services/realtime_sync_service.dart';
+import '../Notifications/engagement_notification_service.dart';
 
 class TodoScreen extends StatefulWidget {
   final bool showFilters;
@@ -809,6 +810,8 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
   bool _isUpdatingTasks = false; // Flag to prevent duplicate refreshes
   bool _isSearching = false;
   String _searchQuery = '';
+  bool _showTodayOnly = false;
+  bool _sortByCreatedDate = false; // When true, sort by created date desc instead of priority
   final TextEditingController _searchController = TextEditingController();
   final TaskService _taskService = TaskService();
   bool _energyModuleEnabled = true;
@@ -918,8 +921,44 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       );
       setState(() {});
     }
+
+    // Apply created date sort if enabled (overrides priority sort)
+    if (_sortByCreatedDate && !_showCompleted) {
+      _displayTasks.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      setState(() {});
+    }
+
+    // Check if all daily tasks are completed for celebration
+    _checkAllTasksCompletedCelebration();
   }
 
+  /// Check if all tasks due today are completed and show celebration
+  Future<void> _checkAllTasksCompletedCelebration() async {
+    try {
+      final dueTodayTasks = _tasks.where((t) => t.isDueToday() && !t.isCompleted).toList();
+      final completedTodayTasks = _tasks.where((t) =>
+        t.isCompleted &&
+        t.completedAt != null &&
+        t.completedAt!.year == DateTime.now().year &&
+        t.completedAt!.month == DateTime.now().month &&
+        t.completedAt!.day == DateTime.now().day
+      ).toList();
+
+      // All due-today tasks done AND at least 1 was completed today
+      if (dueTodayTasks.isEmpty && completedTodayTasks.isNotEmpty) {
+        // Only celebrate once per day
+        final prefs = await SharedPreferences.getInstance();
+        final today = '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}';
+        final lastCelebration = prefs.getString('tasks_celebration_date');
+        if (lastCelebration != today) {
+          await prefs.setString('tasks_celebration_date', today);
+          await EngagementNotificationService.showTasksCelebration(completedTodayTasks.length);
+        }
+      }
+    } catch (_) {
+      // Non-critical - silently fail
+    }
+  }
 
   Future<void> _loadCategories() async {
     final categories = await _taskService.loadCategories();
@@ -1720,6 +1759,11 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
       ).toList();
     }
 
+    // Apply "Today" filter - show only tasks due today
+    if (_showTodayOnly) {
+      filtered = filtered.where((task) => task.isDueToday()).toList();
+    }
+
     return filtered;
   }
 
@@ -1756,6 +1800,11 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
         return _selectedCategoryFilters.every((selectedCategoryId) =>
           task.categoryIds.contains(selectedCategoryId));
       }).toList();
+    }
+
+    // Apply "Today" filter - show only tasks due today
+    if (_showTodayOnly) {
+      filtered = filtered.where((task) => task.isDueToday()).toList();
     }
 
     return filtered;
@@ -2156,8 +2205,29 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                   runSpacing: 6,
                   children: [
                     FilterChip(
+                      label: Text('Today', style: TextStyle(fontSize: kIsWeb ? 13 : 11, fontWeight: _showTodayOnly ? FontWeight.bold : FontWeight.normal)),
+                      selected: _showTodayOnly,
+                      backgroundColor: Colors.green.withValues(alpha: 0.1),
+                      selectedColor: Colors.green.withValues(alpha: 0.3),
+                      checkmarkColor: Colors.green,
+                      side: BorderSide(color: Colors.green.withValues(alpha: 0.5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: AppStyles.borderRadiusMedium,
+                      ),
+                      padding: EdgeInsets.symmetric(horizontal: kIsWeb ? 8 : 4, vertical: kIsWeb ? 4 : 0),
+                      labelPadding: EdgeInsets.symmetric(horizontal: kIsWeb ? 8 : 4),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: kIsWeb ? const VisualDensity(horizontal: -2, vertical: -2) : const VisualDensity(horizontal: -4, vertical: -4),
+                      onSelected: (selected) {
+                        setState(() {
+                          _showTodayOnly = selected;
+                        });
+                        _updateDisplayTasks();
+                      },
+                    ),
+                    FilterChip(
                       label: Text('All', style: TextStyle(fontSize: kIsWeb ? 13 : 11)),
-                      selected: _selectedCategoryFilters.isEmpty,
+                      selected: _selectedCategoryFilters.isEmpty && !_showTodayOnly,
                       backgroundColor: Colors.grey.withValues(alpha: 0.1),
                       selectedColor: Colors.grey.withValues(alpha: 0.3),
                       checkmarkColor: Colors.grey,
@@ -2172,6 +2242,7 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                       onSelected: (selected) {
                         setState(() {
                           _selectedCategoryFilters.clear();
+                          _showTodayOnly = false;
                         });
                         _saveCategoryFilters();
                         _updateDisplayTasks();
@@ -2203,6 +2274,36 @@ class _TodoScreenState extends State<TodoScreen> with WidgetsBindingObserver {
                         _updateDisplayTasks();
                       },
                     )),
+                    // Sort toggle: priority vs created date
+                    FilterChip(
+                      label: Text(
+                        _sortByCreatedDate ? 'Newest' : 'Priority',
+                        style: TextStyle(fontSize: kIsWeb ? 13 : 11),
+                      ),
+                      avatar: Icon(
+                        _sortByCreatedDate ? Icons.schedule : Icons.sort,
+                        size: kIsWeb ? 16 : 14,
+                        color: Colors.blueGrey,
+                      ),
+                      selected: _sortByCreatedDate,
+                      backgroundColor: Colors.blueGrey.withValues(alpha: 0.1),
+                      selectedColor: Colors.blueGrey.withValues(alpha: 0.3),
+                      checkmarkColor: Colors.blueGrey,
+                      side: BorderSide(color: Colors.blueGrey.withValues(alpha: 0.5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: AppStyles.borderRadiusMedium,
+                      ),
+                      padding: EdgeInsets.symmetric(horizontal: kIsWeb ? 8 : 4, vertical: kIsWeb ? 4 : 0),
+                      labelPadding: EdgeInsets.symmetric(horizontal: kIsWeb ? 4 : 2),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: kIsWeb ? const VisualDensity(horizontal: -2, vertical: -2) : const VisualDensity(horizontal: -4, vertical: -4),
+                      onSelected: (selected) {
+                        setState(() {
+                          _sortByCreatedDate = selected;
+                        });
+                        _updateDisplayTasks();
+                      },
+                    ),
                   ],
                 ),
               ],

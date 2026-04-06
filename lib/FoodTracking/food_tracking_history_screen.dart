@@ -7,6 +7,8 @@ import '../shared/calendar_widget.dart';
 import 'food_tracking_service.dart';
 import 'food_tracking_data_models.dart';
 import 'food_tracking_goal_history_screen.dart';
+import 'food_tracking_settings_screen.dart';
+import '../MenstrualCycle/cycle_calorie_settings_screen.dart';
 import '../shared/snackbar_utils.dart';
 import '../shared/dialog_utils.dart';
 
@@ -21,6 +23,8 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   List<FoodEntry> _entries = [];
   bool _isLoading = true;
   Map<DateTime, List<FoodEntry>> _entriesByDate = {};
+  Map<DateTime, Map<String, int>> _dailySummaries = {};
+  bool _calorieTrackerEnabled = false;
 
   // Calendar state
   DateTime _focusedMonth = DateTime.now();
@@ -35,6 +39,8 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   Future<void> _loadEntries() async {
     setState(() => _isLoading = true);
     final entries = await FoodTrackingService.getAllEntries();
+    final dailySummaries = await FoodTrackingService.getDailySummaries();
+    final calorieEnabled = await FoodTrackingService.getCalorieTrackerEnabled();
     _entriesByDate = _groupEntriesByDate(entries);
 
     // Auto-select today if it has entries, otherwise most recent day with entries
@@ -48,6 +54,8 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
 
     setState(() {
       _entries = entries;
+      _dailySummaries = dailySummaries;
+      _calorieTrackerEnabled = calorieEnabled;
       _selectedDate = dateToSelect;
       _isLoading = false;
     });
@@ -244,10 +252,21 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
 
   Color _getDayColor(DateTime date) {
     final entries = _entriesByDate[date];
-    if (entries == null || entries.isEmpty) return Colors.transparent;
+    int healthyCount;
+    int total;
 
-    final healthyCount = entries.where((e) => e.type == FoodType.healthy).length;
-    final total = entries.length;
+    if (entries != null && entries.isNotEmpty) {
+      healthyCount = entries.where((e) => e.type == FoodType.healthy).length;
+      total = entries.length;
+    } else {
+      // Check daily summaries for past data
+      final summary = _dailySummaries[date];
+      if (summary == null) return Colors.transparent;
+      healthyCount = summary['healthy'] ?? 0;
+      total = healthyCount + (summary['processed'] ?? 0);
+      if (total == 0) return Colors.transparent;
+    }
+
     final percentage = (healthyCount / total * 100).round();
 
     if (percentage >= 80) return AppColors.successGreen;
@@ -267,7 +286,8 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
             });
           },
           dayBuilder: (date) => _buildDayCell(date),
-          allowFutureMonths: false,
+          allowFutureMonths: true,
+          maxFutureMonths: 3,
           cellAspectRatio: 1.2,
           cellSpacing: 2.0,
         ),
@@ -292,13 +312,14 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   Widget _buildDayCell(DateTime date) {
     final isToday = DateFormatUtils.isSameDay(date, DateTime.now());
     final isSelected = _selectedDate != null && DateFormatUtils.isSameDay(date, _selectedDate!);
-    final isFuture = date.isAfter(DateTime.now());
-    final hasEntries = _entriesByDate.containsKey(date);
     final dayColor = _getDayColor(date);
     final entries = _entriesByDate[date] ?? [];
+    final summary = _dailySummaries[date];
+    final hasEntries = entries.isNotEmpty || (summary != null && (summary['healthy']! + summary['processed']!) > 0);
+    final displayCount = entries.isNotEmpty ? entries.length : (summary != null ? summary['healthy']! + summary['processed']! : 0);
 
     return DragTarget<FoodEntry>(
-      onWillAcceptWithDetails: (details) => !isFuture,
+      onWillAcceptWithDetails: (details) => true,
       onAcceptWithDetails: (details) {
         _moveEntryToDate(details.data, date);
       },
@@ -306,16 +327,16 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
         final isDropTarget = candidateData.isNotEmpty;
 
         return GestureDetector(
-          onTap: isFuture ? null : () => setState(() => _selectedDate = date),
+          onTap: () => setState(() => _selectedDate = date),
           child: Container(
             decoration: BoxDecoration(
               color: isDropTarget
                   ? AppColors.successGreen.withValues(alpha: 0.3)
-                  : isSelected
-                      ? AppColors.successGreen.withValues(alpha: 0.2)
+                  : isToday
+                      ? AppColors.white.withValues(alpha: 0.06)
                       : Colors.transparent,
               borderRadius: BorderRadius.circular(6),
-              border: isToday
+              border: isSelected
                   ? Border.all(color: AppColors.waterBlue, width: 1.5)
                   : isDropTarget
                       ? Border.all(color: AppColors.successGreen, width: 2)
@@ -329,11 +350,9 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: isToday || isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isFuture
-                        ? AppColors.greyText.withValues(alpha: 0.4)
-                        : isToday
-                            ? AppColors.waterBlue
-                            : Colors.white,
+                    color: isToday
+                        ? AppColors.waterBlue
+                        : Colors.white,
                   ),
                 ),
                 if (hasEntries)
@@ -352,7 +371,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
                         ),
                         const SizedBox(width: 2),
                         Text(
-                          '${entries.length}',
+                          '$displayCount',
                           style: TextStyle(
                             fontSize: 8,
                             color: dayColor,
@@ -446,6 +465,80 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
     }
 
     final entries = _entriesByDate[_selectedDate!] ?? [];
+    final summary = _dailySummaries[_selectedDate!];
+
+    if (entries.isEmpty && summary != null && (summary['healthy']! + summary['processed']!) > 0) {
+      // Show archived summary for past days
+      final sHealthy = summary['healthy']!;
+      final sProcessed = summary['processed']!;
+      final sTotal = sHealthy + sProcessed;
+      final sPercentage = sTotal > 0 ? (sHealthy / sTotal * 100).round() : 0;
+      final statusColor = sPercentage >= 80
+          ? AppColors.successGreen
+          : sPercentage >= 60
+              ? AppColors.yellow
+              : AppColors.orange;
+
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.normalCardBackground,
+              borderRadius: AppStyles.borderRadiusMedium,
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today_rounded, color: statusColor, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    DateFormatUtils.formatFullDate(_selectedDate!),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$sPercentage% healthy',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: statusColor),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.restaurant, size: 14, color: AppColors.successGreen),
+                const SizedBox(width: 4),
+                Text('$sHealthy healthy', style: const TextStyle(color: AppColors.successGreen, fontSize: 13)),
+                const SizedBox(width: 16),
+                Icon(Icons.fastfood, size: 14, color: AppColors.orange),
+                const SizedBox(width: 4),
+                Text('$sProcessed processed', style: const TextStyle(color: AppColors.orange, fontSize: 13)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Archived period data',
+            style: TextStyle(color: AppColors.greyText.withValues(alpha: 0.6), fontSize: 11),
+          ),
+          _buildQuickAddButtons(forDate: _selectedDate!),
+        ],
+      );
+    }
 
     if (entries.isEmpty) {
       return Column(
@@ -624,11 +717,54 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
   }
 
 
+  Widget _buildCalorieSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(Icons.local_fire_department, color: AppColors.orange, size: 20),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Calorie Tracker',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+          ),
+          if (_calorieTrackerEnabled)
+            IconButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CycleCalorieSettingsScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.edit_rounded, size: 18),
+              tooltip: 'Phase Calorie Settings',
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              padding: EdgeInsets.zero,
+            ),
+          Switch(
+            value: _calorieTrackerEnabled,
+            onChanged: (value) async {
+              await FoodTrackingService.setCalorieTrackerEnabled(value);
+              setState(() {
+                _calorieTrackerEnabled = value;
+              });
+            },
+            activeTrackColor: AppColors.orange,
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Food History'),
+        title: const Text('Food Tracking'),
         backgroundColor: AppColors.successGreen.withValues(alpha: 0.2),
         actions: [
           IconButton(
@@ -642,6 +778,18 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
             },
             icon: const Icon(Icons.emoji_events_rounded),
             tooltip: 'Goal Achievement History',
+          ),
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const FoodTrackingSettingsScreen(),
+                ),
+              ).then((_) => _loadEntries());
+            },
+            icon: const Icon(Icons.settings_rounded),
+            tooltip: 'Food Tracking Settings',
           ),
           if (_entries.isNotEmpty)
             IconButton(
@@ -668,7 +816,7 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _entries.isEmpty
+          : _entries.isEmpty && _dailySummaries.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -696,6 +844,8 @@ class _FoodTrackingHistoryScreenState extends State<FoodTrackingHistoryScreen> {
                   child: Column(
                     children: [
                       _buildCalendar(),
+                      const Divider(height: 1),
+                      _buildCalorieSection(),
                       const Divider(height: 1),
                       _buildSelectedDaySection(),
                       const SizedBox(height: 80),

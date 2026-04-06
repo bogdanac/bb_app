@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import 'package:bb_app/shared/date_format_utils.dart';
 import 'package:bb_app/MenstrualCycle/menstrual_cycle_utils.dart';
-import 'package:bb_app/MenstrualCycle/cycle_calorie_settings_screen.dart';
 import 'package:bb_app/MenstrualCycle/intercourse_data_model.dart';
 import 'package:bb_app/MenstrualCycle/intercourse_editor_dialog.dart';
 import 'package:bb_app/MenstrualCycle/period_history_screen.dart';
@@ -547,21 +546,6 @@ class _MenstrualCycleScreenState extends State<MenstrualCycleScreen> {
                 await _calculateAverageCycleLength();
               },
               tooltip: 'Period History',
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: IconButton(
-              icon: const Icon(Icons.local_fire_department),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CycleCalorieSettingsScreen(),
-                  ),
-                );
-              },
-              tooltip: 'Calorie Settings',
             ),
           ),
         ],

@@ -26,6 +26,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
   int _processedCount = 0;
   String _resetInfo = '';
   int _currentPhaseCalories = 0;
+  bool _calorieTrackerEnabled = false;
   int _targetGoal = 80;
   int _daysUntilReset = 0;
 
@@ -83,27 +84,40 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
   }
 
   Future<void> _loadCalories() async {
+    final calorieEnabled = await FoodTrackingService.getCalorieTrackerEnabled();
+
+    if (!calorieEnabled) {
+      if (mounted) {
+        setState(() {
+          _calorieTrackerEnabled = false;
+          _currentPhaseCalories = 0;
+        });
+      }
+      return;
+    }
+
     final prefs = await SharedPreferences.getInstance();
-    
+
     // Load menstrual cycle data
     final lastStartStr = prefs.getString('last_period_start');
     final lastEndStr = prefs.getString('last_period_end');
     final averageCycleLength = prefs.getInt('average_cycle_length') ?? 31;
-    
+
     DateTime? lastPeriodStart;
     DateTime? lastPeriodEnd;
     if (lastStartStr != null) lastPeriodStart = DateTime.parse(lastStartStr);
     if (lastEndStr != null) lastPeriodEnd = DateTime.parse(lastEndStr);
-    
+
     // Load current phase calories
     final calories = await MenstrualCycleUtils.getCurrentPhaseCalories(
-      lastPeriodStart, 
-      lastPeriodEnd, 
+      lastPeriodStart,
+      lastPeriodEnd,
       averageCycleLength
     );
-    
+
     if (mounted) {
       setState(() {
+        _calorieTrackerEnabled = true;
         _currentPhaseCalories = calories;
       });
     }
@@ -136,7 +150,10 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
       MaterialPageRoute(
         builder: (context) => const FoodTrackingHistoryScreen(),
       ),
-    ).then((_) => _loadCurrentPeriodCounts());
+    ).then((_) {
+      _loadCurrentPeriodCounts();
+      _loadCalories();
+    });
   }
 
   double _getHealthyPercentage() {
@@ -194,7 +211,7 @@ class _FoodTrackingCardState extends State<FoodTrackingCard>
                         ],
                       ),
                     ),
-                    if (_currentPhaseCalories > 0) ...[
+                    if (_calorieTrackerEnabled && _currentPhaseCalories > 0) ...[
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

@@ -12,7 +12,6 @@ class FoodTrackingGoalHistoryScreen extends StatefulWidget {
 
 class _FoodTrackingGoalHistoryScreenState extends State<FoodTrackingGoalHistoryScreen> {
   List<Map<String, dynamic>> _periodHistory = [];
-  int _targetGoal = 80;
   bool _isLoading = true;
 
   @override
@@ -24,10 +23,8 @@ class _FoodTrackingGoalHistoryScreenState extends State<FoodTrackingGoalHistoryS
   Future<void> _loadHistory() async {
     setState(() => _isLoading = true);
     final periodHistory = await FoodTrackingService.getPeriodHistory();
-    final targetGoal = await FoodTrackingService.getTargetGoal();
     setState(() {
       _periodHistory = periodHistory;
-      _targetGoal = targetGoal;
       _isLoading = false;
     });
   }
@@ -38,7 +35,9 @@ class _FoodTrackingGoalHistoryScreenState extends State<FoodTrackingGoalHistoryS
 
     for (final period in _periodHistory) {
       final percentage = period['percentage'] as int;
-      if (percentage >= _targetGoal) {
+      // Use the goal that was set at the time of that period, default 80% for old records
+      final periodGoal = period['targetGoal'] as int? ?? 80;
+      if (percentage >= periodGoal) {
         reached.add(period);
       } else {
         notReached.add(period);
@@ -54,6 +53,7 @@ class _FoodTrackingGoalHistoryScreenState extends State<FoodTrackingGoalHistoryS
     final processed = period['processed'] as int;
     final periodLabel = period['periodLabel'] as String;
     final frequency = period['frequency'] as String;
+    final periodGoal = period['targetGoal'] as int? ?? 80;
 
     Color statusColor;
     IconData statusIcon;
@@ -129,7 +129,7 @@ class _FoodTrackingGoalHistoryScreenState extends State<FoodTrackingGoalHistoryS
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${frequency == "monthly" ? "Monthly" : "Weekly"} tracking period',
+                    '${frequency == "monthly" ? "Monthly" : "Weekly"} • Goal: $periodGoal%',
                     style: TextStyle(color: AppColors.white.withValues(alpha: 0.6), fontSize: 12),
                   ),
                   const SizedBox(height: 4),
@@ -243,7 +243,7 @@ class _FoodTrackingGoalHistoryScreenState extends State<FoodTrackingGoalHistoryS
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Reached your $_targetGoal% goal',
+                                  'Reached their goal',
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: AppColors.white.withValues(alpha: 0.7),

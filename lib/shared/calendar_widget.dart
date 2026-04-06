@@ -28,6 +28,9 @@ class CalendarWidget extends StatefulWidget {
   /// Whether to allow navigating to future months
   final bool allowFutureMonths;
 
+  /// Maximum number of months ahead allowed (only used when allowFutureMonths is true)
+  final int maxFutureMonths;
+
   /// Whether to show the month navigation header
   final bool showHeader;
 
@@ -50,6 +53,7 @@ class CalendarWidget extends StatefulWidget {
     this.dayBuilder,
     this.onDayTap,
     this.allowFutureMonths = false,
+    this.maxFutureMonths = 0,
     this.showHeader = true,
     this.minDate,
     this.cellAspectRatio = 1.0,
@@ -110,14 +114,8 @@ class _CalendarWidgetState extends State<CalendarWidget> {
   }
 
   void _goToNextMonth() {
+    if (!_canGoToNextMonth) return;
     final newMonth = DateTime(widget.focusedMonth.year, widget.focusedMonth.month + 1, 1);
-
-    // Check future month constraint
-    if (!widget.allowFutureMonths) {
-      final currentMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
-      if (newMonth.isAfter(currentMonth)) return;
-    }
-
     widget.onMonthChanged?.call(newMonth);
   }
 
@@ -129,9 +127,15 @@ class _CalendarWidgetState extends State<CalendarWidget> {
   }
 
   bool get _canGoToNextMonth {
-    if (widget.allowFutureMonths) return true;
     final nextMonth = DateTime(widget.focusedMonth.year, widget.focusedMonth.month + 1, 1);
     final currentMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+
+    if (widget.allowFutureMonths && widget.maxFutureMonths > 0) {
+      final maxMonth = DateTime(currentMonth.year, currentMonth.month + widget.maxFutureMonths, 1);
+      return !nextMonth.isAfter(maxMonth);
+    }
+
+    if (widget.allowFutureMonths) return true;
     return !nextMonth.isAfter(currentMonth);
   }
 
@@ -148,7 +152,16 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     final weeksNeeded = (totalCells / 7).ceil();
     final actualItemCount = weeksNeeded * 7;
 
-    return Column(
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        if (details.primaryVelocity == null) return;
+        if (details.primaryVelocity! < -100 && _canGoToNextMonth) {
+          _goToNextMonth();
+        } else if (details.primaryVelocity! > 100 && _canGoToPreviousMonth) {
+          _goToPreviousMonth();
+        }
+      },
+      child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         // Month navigation header
@@ -254,6 +267,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           ),
         ),
       ],
+    ),
     );
   }
 

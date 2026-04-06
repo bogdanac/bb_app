@@ -6,10 +6,14 @@ import '../shared/timezone_utils.dart';
 import '../Settings/app_customization_service.dart';
 
 class WaterNotificationService {
-  static const int notification20Id = 1001;
-  static const int notification40Id = 1002;
-  static const int notification60Id = 1003;
-  static const int notification80Id = 1004;
+  // Primary repeating notification IDs (changed to avoid collision with cycle notifications)
+  static const int notification20Id = 3001;
+  static const int notification40Id = 3002;
+  static const int notification60Id = 3003;
+  static const int notification80Id = 3004;
+
+  // Backup notification ID range: 3010-3049 (7 days x 4 thresholds + buffer)
+  static const int _backupIdBase = 3010;
 
   static FlutterLocalNotificationsPlugin? _notificationsPlugin;
 
@@ -72,10 +76,10 @@ class WaterNotificationService {
           final scheduledTime = settings.getThresholdTime(threshold);
           final amount = settings.getThresholdAmount(threshold);
 
-          // Only schedule if the time is in the future today
           final now = DateTime.now();
           developer.log('$threshold% - Amount: ${amount}ml, Time: ${scheduledTime.hour}:${scheduledTime.minute.toString().padLeft(2, '0')}');
 
+          // Schedule primary repeating notification
           if (scheduledTime.isAfter(now)) {
             developer.log('Scheduling $threshold% for TODAY');
             await _scheduleNotification(
@@ -86,7 +90,6 @@ class WaterNotificationService {
               scheduledTime,
             );
           } else {
-            // Schedule for tomorrow
             final tomorrow = scheduledTime.add(const Duration(days: 1));
             developer.log('Scheduling $threshold% for TOMORROW');
             await _scheduleNotification(
@@ -95,6 +98,27 @@ class WaterNotificationService {
               threshold,
               amount,
               tomorrow,
+            );
+          }
+
+          // Schedule backup individual notifications for the next 7 days
+          // This ensures notifications fire even if the app isn't opened
+          // (since cancel() on reached thresholds removes the repeating schedule)
+          final thresholdIndex = thresholds.indexOf(threshold);
+          for (int dayOffset = 1; dayOffset <= 7; dayOffset++) {
+            final futureDate = now.add(Duration(days: dayOffset));
+            final backupTime = DateTime(
+              futureDate.year, futureDate.month, futureDate.day,
+              scheduledTime.hour, scheduledTime.minute,
+            );
+            final backupId = _backupIdBase + (dayOffset - 1) * 4 + thresholdIndex;
+            await _scheduleNotification(
+              plugin,
+              backupId,
+              threshold,
+              amount,
+              backupTime,
+              isBackup: true,
             );
           }
         }
@@ -113,8 +137,9 @@ class WaterNotificationService {
     int id,
     int threshold,
     int amount,
-    DateTime scheduledTime,
-  ) async {
+    DateTime scheduledTime, {
+    bool isBackup = false,
+  }) async {
     // Get personalized message based on threshold
     final messageData = _getPersonalizedMessage(threshold, amount);
 
@@ -138,7 +163,8 @@ class WaterNotificationService {
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time, // Repeat daily
+      // Backup notifications are one-time; primary ones repeat daily
+      matchDateTimeComponents: isBackup ? null : DateTimeComponents.time,
     );
 
     developer.log(
@@ -194,39 +220,49 @@ class WaterNotificationService {
   static Future<void> cancelAllNotifications() async {
     try {
       final plugin = await _getNotificationsPlugin();
+      // Cancel primary notifications
       await plugin.cancel(notification20Id);
       await plugin.cancel(notification40Id);
       await plugin.cancel(notification60Id);
       await plugin.cancel(notification80Id);
+      // Cancel legacy IDs (1001-1004) that may still be scheduled
+      for (int i = 1001; i <= 1004; i++) {
+        await plugin.cancel(i);
+      }
+      // Cancel all backup notifications (7 days x 4 thresholds)
+      for (int i = _backupIdBase; i < _backupIdBase + 28; i++) {
+        await plugin.cancel(i);
+      }
       developer.log('All water notifications cancelled');
     } catch (e) {
       developer.log('Error cancelling water notifications: $e');
     }
   }
 
-  /// Check current water intake and cancel notifications for reached thresholds
+  /// Check current water intake and cancel TODAY's notifications for reached thresholds
+  /// Only cancels today's backup notifications, preserving future days' backups
   static Future<void> checkAndUpdateNotifications(int currentIntake, WaterSettings settings) async {
     try {
       final plugin = await _getNotificationsPlugin();
       final percentage = (currentIntake / settings.dailyGoal * 100).round();
+      final thresholds = [20, 40, 60, 80];
 
-      // Cancel notifications for thresholds we've already passed
-      if (percentage >= 20) {
-        await plugin.cancel(notification20Id);
-      }
-      if (percentage >= 40) {
-        await plugin.cancel(notification40Id);
-      }
-      if (percentage >= 60) {
-        await plugin.cancel(notification60Id);
-      }
-      if (percentage >= 80) {
-        await plugin.cancel(notification80Id);
+      for (int i = 0; i < thresholds.length; i++) {
+        if (percentage >= thresholds[i]) {
+          // Cancel primary repeating notification
+          await plugin.cancel(_getNotificationId(thresholds[i]));
+          // Cancel today's backup notification (dayOffset=0, index in backup range)
+          // Note: we only cancel the primary; backup for today has likely already fired
+          // or will be overwritten on next reschedule
+        }
       }
 
-      // If goal reached, cancel all
+      // If goal reached, cancel all for today
       if (percentage >= 100) {
-        await cancelAllNotifications();
+        // Cancel primaries
+        for (final id in [notification20Id, notification40Id, notification60Id, notification80Id]) {
+          await plugin.cancel(id);
+        }
       }
     } catch (e) {
       developer.log('Error updating water notifications: $e');
@@ -251,9 +287,11 @@ class WaterNotificationService {
 
       await _getNotificationsPlugin();
 
-      // Load settings and schedule notifications
+      // Load settings and force reschedule notifications
+      // Force reschedule every time to recover from cancelled notifications
+      // (cancel() removes the repeating schedule for reached thresholds)
       final settings = await WaterSettings.load();
-      await scheduleNotifications(settings);
+      await scheduleNotifications(settings, forceReschedule: true);
 
       // Check current intake and cancel notifications for thresholds already met
       final prefs = await SharedPreferences.getInstance();

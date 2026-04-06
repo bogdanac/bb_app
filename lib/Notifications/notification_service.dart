@@ -6,7 +6,9 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import '../Tasks/task_service.dart';
 import '../Tasks/task_edit_screen.dart';
+import '../Tasks/task_builder.dart';
 import '../EndOfDayReview/end_of_day_review_screen.dart';
+import '../FoodTracking/food_tracking_history_screen.dart';
 import '../main.dart' show navigatorKey;
 import '../shared/timezone_utils.dart';
 import '../shared/error_logger.dart';
@@ -147,6 +149,9 @@ class NotificationService {
       } else if (actionId == 'postpone_tomorrow') {
         _handleTaskPostponeTomorrow(taskId);
         return;
+      } else if (actionId == 'complete_task') {
+        _handleTaskComplete(taskId);
+        return;
       }
 
       // Main notification tap - open task edit screen
@@ -156,12 +161,10 @@ class NotificationService {
       // Morning routine notification tapped
     } else if (payload.startsWith('routine_reminder_')) {
       // Routine reminder notification tapped
-      // You can add navigation logic here if needed
     } else if (payload.contains('water_')) {
       // Water reminder notification tapped
     } else if (payload == 'fasting_progress') {
-      // Fasting progress notification tapped - navigate to fasting screen
-      // You can add navigation logic here if needed
+      // Fasting progress notification tapped
     } else if (payload == 'fasting_completed') {
       // Fasting completed notification tapped
     } else if (payload == 'fasting_started') {
@@ -175,10 +178,13 @@ class NotificationService {
     } else if (payload == 'cloud_backup_reminder') {
       // Cloud backup reminder notification tapped
     } else if (payload == 'food_tracking_reminder') {
-      // Food tracking reminder notification tapped
-    } else if (payload == 'end_of_day_review') {
-      // End of day review notification tapped
+      // Food tracking reminder notification tapped - open food history with calendar
+      _navigateToFoodHistory();
+    } else if (payload == 'end_of_day_review' || payload == 'weekly_insights' || payload == 'monthly_summary') {
+      // End of day review / weekly insights / monthly summary - open review screen
       _navigateToEndOfDayReview();
+    } else if (payload == 'check_in' || payload == 'celebration_tasks' || payload == 'celebration_water') {
+      // Check-in and celebration notifications - just open the app (default behavior)
     }
   }
 
@@ -221,6 +227,26 @@ class NotificationService {
         error: 'Error navigating to task: $e',
         stackTrace: stackTrace.toString(),
         context: {'taskId': taskId},
+      );
+    }
+  }
+
+  /// Navigate to food tracking history screen when notification is tapped
+  Future<void> _navigateToFoodHistory() async {
+    try {
+      final navigator = navigatorKey.currentState;
+      if (navigator != null) {
+        navigator.push(
+          MaterialPageRoute(
+            builder: (context) => const FoodTrackingHistoryScreen(),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService._navigateToFoodHistory',
+        error: 'Error navigating to food history: $e',
+        stackTrace: stackTrace.toString(),
       );
     }
   }
@@ -306,6 +332,37 @@ class NotificationService {
       await ErrorLogger.logError(
         source: 'NotificationService._handleTaskPostponeTomorrow',
         error: 'Error postponing task to tomorrow: $e',
+        stackTrace: stackTrace.toString(),
+        context: {'taskId': taskId},
+      );
+    }
+  }
+
+  /// Handle complete task action from notification
+  Future<void> _handleTaskComplete(String taskId) async {
+    try {
+      final taskService = TaskService();
+      final tasks = await taskService.loadTasks();
+      final taskIndex = tasks.indexWhere((t) => t.id == taskId);
+
+      if (taskIndex == -1) return;
+
+      final task = tasks[taskIndex];
+
+      // Mark the task as completed
+      final completedTask = TaskBuilder.complete(task);
+      tasks[taskIndex] = completedTask;
+      await taskService.saveTasks(tasks);
+
+      // Cancel the notification
+      await cancelTaskNotification(taskId);
+
+      // For recurring tasks, the next occurrence will be calculated
+      // automatically by TaskService when tasks are loaded next time
+    } catch (e, stackTrace) {
+      await ErrorLogger.logError(
+        source: 'NotificationService._handleTaskComplete',
+        error: 'Error completing task from notification: $e',
         stackTrace: stackTrace.toString(),
         context: {'taskId': taskId},
       );
@@ -398,7 +455,7 @@ class NotificationService {
             channelDescription: 'Reminders for scheduled tasks',
             importance: Importance.high,
             priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notif_task',
             color: Color(0xFFF98834), // Orange
             enableVibration: true,
             playSound: true,
@@ -412,6 +469,12 @@ class NotificationService {
               AndroidNotificationAction(
                 'postpone_tomorrow',
                 'Tomorrow',
+                showsUserInterface: false,
+                cancelNotification: true,
+              ),
+              AndroidNotificationAction(
+                'complete_task',
+                'Done ✓',
                 showsUserInterface: false,
                 cancelNotification: true,
               ),
@@ -533,6 +596,15 @@ class NotificationService {
         channelDescription: 'Important menstrual cycle reminders',
         importance: Importance.high,
         priority: Priority.high,
+        icon: '@drawable/ic_notif_cycle',
+        color: Color(0xFFE91E63), // Pink
+        enableVibration: true,
+        playSound: true,
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
       ),
     );
   }
@@ -546,7 +618,7 @@ class NotificationService {
         channelDescription: 'End of day summary notifications',
         importance: Importance.high,
         priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
+        icon: '@drawable/ic_notif_review',
         color: Color(0xFF9C27B0), // Purple
         enableVibration: true,
         playSound: true,
@@ -598,7 +670,7 @@ class NotificationService {
             channelDescription: 'Daily reminders for your routines',
             importance: Importance.high,
             priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notif_routine',
             color: Color(0xFFF98834), // Coral color
           ),
           iOS: DarwinNotificationDetails(),
@@ -717,7 +789,7 @@ class NotificationService {
             channelDescription: 'Ongoing fasting progress updates',
             importance: Importance.low, // Silent ongoing notification - ongoing:true keeps it in tray
             priority: Priority.low,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notif_fasting',
             color: const Color(0xFFF98834), // Orange
             ongoing: true, // Makes it a permanent notification
             autoCancel: false, // Prevents swipe to dismiss
@@ -792,7 +864,7 @@ class NotificationService {
             channelDescription: 'Notifications when fasting is completed',
             importance: Importance.high,
             priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notif_fasting',
             color: Color(0xFF4CAF50), // Green
             enableVibration: true,
             playSound: true,
@@ -834,7 +906,7 @@ class NotificationService {
             channelDescription: 'Notifications when fasting starts',
             importance: Importance.high,
             priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notif_fasting',
             color: Color(0xFF2196F3), // Blue
             enableVibration: true,
             playSound: true,
@@ -878,7 +950,7 @@ class NotificationService {
             channelDescription: 'Notifications for fasting phase milestones',
             importance: Importance.high,
             priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notif_fasting',
             color: Color(0xFFFF9800), // Orange
             enableVibration: true,
             playSound: true,
@@ -929,7 +1001,7 @@ class NotificationService {
             channelDescription: 'Reminders for scheduled fasting sessions',
             importance: Importance.high,
             priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notif_fasting',
             color: Color(0xFF9C27B0), // Purple
             enableVibration: true,
             playSound: true,
@@ -1015,7 +1087,7 @@ class NotificationService {
             channelDescription: 'Reminders to prepare for extended fasts',
             importance: Importance.high,
             priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notif_fasting',
             color: Color(0xFFE91E63), // Pink
             enableVibration: true,
             playSound: true,
@@ -1103,8 +1175,9 @@ class NotificationService {
         showWhen: true,
         playSound: false,
         enableVibration: false,
-        icon: '@mipmap/ic_launcher',
+        icon: '@drawable/ic_notif_food',
         color: Color(0xFF4CAF50), // Green
+        autoCancel: true,
       );
 
       const iosDetails = DarwinNotificationDetails(
@@ -1139,6 +1212,7 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time, // Repeat daily at 8 PM
+        payload: 'food_tracking_reminder',
       );
 
       // Backup: Schedule individual notifications for next 7 days (more reliable on some devices)
@@ -1156,6 +1230,7 @@ class NotificationService {
           notificationDetails,
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
           uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          payload: 'food_tracking_reminder',
         );
       }
 

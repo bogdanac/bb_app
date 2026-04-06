@@ -13,6 +13,8 @@ class FoodTrackingService {
   static const String _periodHistoryKey = 'food_tracking_period_history';
   static const String _targetGoalKey = 'food_tracking_target_goal';
   static const String _autoResetEnabledKey = 'food_tracking_auto_reset_enabled';
+  static const String _dailySummariesKey = 'food_tracking_daily_summaries';
+  static const String _calorieTrackerEnabledKey = 'food_tracking_calorie_enabled';
 
   static Future<List<FoodEntry>> getAllEntries() async {
     final prefs = await SharedPreferences.getInstance();
@@ -201,6 +203,9 @@ class FoodTrackingService {
       newestEntry.timestamp,
     );
 
+    // Save daily summaries before clearing
+    await _saveDailySummaries(entries);
+
     // Clear all entries
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_entriesKey);
@@ -283,15 +288,85 @@ class FoodTrackingService {
     await _deleteEntriesBeforeDate(_getCurrentPeriodStart(frequency, DateTime.now()));
   }
 
-  // Delete entries before a specific date
+  // Delete entries before a specific date, saving daily summaries first
   static Future<void> _deleteEntriesBeforeDate(DateTime date) async {
     final entries = await getAllEntries();
+
+    // Save daily summaries for entries being deleted
+    final entriesToDelete = entries.where((entry) =>
+        entry.timestamp.isBefore(date) && !entry.timestamp.isAtSameMomentAs(date)).toList();
+    if (entriesToDelete.isNotEmpty) {
+      await _saveDailySummaries(entriesToDelete);
+    }
+
     final filteredEntries = entries.where((entry) =>
         entry.timestamp.isAfter(date) || entry.timestamp.isAtSameMomentAs(date)).toList();
 
     final prefs = await SharedPreferences.getInstance();
     final entriesJson = filteredEntries.map((entry) => entry.toJsonString()).toList();
     await prefs.setStringList(_entriesKey, entriesJson);
+  }
+
+  // Save per-day summaries so calendar can show colors for past months
+  static Future<void> _saveDailySummaries(List<FoodEntry> entries) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Load existing summaries
+    final existingJson = prefs.getStringList(_dailySummariesKey) ?? [];
+    final summaries = <String, Map<String, dynamic>>{};
+    for (final json in existingJson) {
+      final map = Map<String, dynamic>.from(jsonDecode(json));
+      summaries[map['date'] as String] = map;
+    }
+
+    // Group new entries by date
+    final groups = <String, List<FoodEntry>>{};
+    for (final entry in entries) {
+      final key = '${entry.timestamp.year}-${entry.timestamp.month.toString().padLeft(2, '0')}-${entry.timestamp.day.toString().padLeft(2, '0')}';
+      groups[key] ??= [];
+      groups[key]!.add(entry);
+    }
+
+    // Save summaries
+    for (final entry in groups.entries) {
+      final healthy = entry.value.where((e) => e.type == FoodType.healthy).length;
+      final processed = entry.value.where((e) => e.type == FoodType.processed).length;
+      summaries[entry.key] = {
+        'date': entry.key,
+        'healthy': healthy,
+        'processed': processed,
+      };
+    }
+
+    // Keep only last 6 months of summaries
+    final cutoff = DateTime.now().subtract(const Duration(days: 180));
+    final cutoffKey = '${cutoff.year}-${cutoff.month.toString().padLeft(2, '0')}-${cutoff.day.toString().padLeft(2, '0')}';
+    summaries.removeWhere((key, _) => key.compareTo(cutoffKey) < 0);
+
+    final updatedJson = summaries.values.map((s) => jsonEncode(s)).toList();
+    await prefs.setStringList(_dailySummariesKey, updatedJson);
+  }
+
+  // Get daily summaries for calendar display
+  static Future<Map<DateTime, Map<String, int>>> getDailySummaries() async {
+    final prefs = await SharedPreferences.getInstance();
+    final summariesJson = prefs.getStringList(_dailySummariesKey) ?? [];
+    final result = <DateTime, Map<String, int>>{};
+
+    for (final json in summariesJson) {
+      final map = Map<String, dynamic>.from(jsonDecode(json));
+      final dateStr = map['date'] as String;
+      final parts = dateStr.split('-');
+      if (parts.length == 3) {
+        final date = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        result[date] = {
+          'healthy': map['healthy'] as int,
+          'processed': map['processed'] as int,
+        };
+      }
+    }
+
+    return result;
   }
 
   static Future<void> _savePeriodToHistory(FoodTrackingResetFrequency frequency, Map<String, int> counts, DateTime periodStart, DateTime periodEnd) async {
@@ -305,6 +380,9 @@ class FoodTrackingService {
 
     final percentage = (healthy / total * 100).round();
 
+    // Get the target goal at the time of saving
+    final targetGoal = await getTargetGoal();
+
     // Create period record with the correct period dates
     final periodRecord = {
       'percentage': percentage,
@@ -313,6 +391,7 @@ class FoodTrackingService {
       'total': total,
       'frequency': frequency.name,
       'endDate': periodEnd.toIso8601String(),
+      'targetGoal': targetGoal,
       'periodLabel': frequency == FoodTrackingResetFrequency.monthly
           ? _getMonthLabel(periodStart)
           : _getWeekLabel(periodStart, periodEnd)
@@ -540,6 +619,18 @@ class FoodTrackingService {
   static Future<void> setTargetGoal(int percentage) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_targetGoalKey, percentage);
+    FirebaseBackupService.triggerBackup();
+  }
+
+  // Calorie tracker toggle
+  static Future<bool> getCalorieTrackerEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_calorieTrackerEnabledKey) ?? false;
+  }
+
+  static Future<void> setCalorieTrackerEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_calorieTrackerEnabledKey, enabled);
     FirebaseBackupService.triggerBackup();
   }
 

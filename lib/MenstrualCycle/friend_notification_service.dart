@@ -130,9 +130,9 @@ class FriendNotificationService {
           } catch (_) {}
         }
 
-        // Schedule a reminder for tomorrow at 10 AM if battery is low
+        // Schedule a reminder for tomorrow at 3 PM if battery is low
         final now = DateTime.now();
-        var reminderTime = DateTime(now.year, now.month, now.day, 10, 0);
+        var reminderTime = DateTime(now.year, now.month, now.day, 15, 0);
         if (reminderTime.isBefore(now)) {
           reminderTime = reminderTime.add(const Duration(days: 1));
         }
@@ -149,7 +149,7 @@ class FriendNotificationService {
               channelDescription: 'Reminders when friendship battery is low',
               importance: Importance.high,
               priority: Priority.high,
-              icon: '@mipmap/ic_launcher',
+              icon: '@drawable/ic_notif_friend',
               color: friend.color,
               enableVibration: true,
               playSound: true,
@@ -207,7 +207,7 @@ class FriendNotificationService {
             channelDescription: 'Reminders when friendship battery is low',
             importance: Importance.high,
             priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notif_friend',
             color: friend.color,
             enableVibration: true,
             playSound: true,
@@ -271,7 +271,7 @@ class FriendNotificationService {
             channelDescription: 'Reminders for upcoming friend birthdays',
             importance: Importance.high,
             priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_notif_friend',
             color: friend.color,
             enableVibration: true,
             playSound: true,
